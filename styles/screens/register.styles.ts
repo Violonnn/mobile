@@ -1,62 +1,53 @@
-import { StyleSheet, Dimensions } from 'react-native';
-import {fontSizes, fontWeights, radius, spacing } from '../theme';
+import { StyleSheet } from 'react-native';
+import { colors as themeColors, fontSizes, fontWeights, radius, spacing } from '../theme';
+import { layout, scaleByWidth } from '../../lib/layout';
 
-const { width } = Dimensions.get('window');
-
-export const colors = {
+export const registerColors = {
   background: '#ffffff',
   stepNode: '#e8f2ff',
-  navyLight: '#1A3260',
   accent: '#000000',
-  accentLight: '#FF6B4A',
   white: '#ffffff',
-  offWhite: '#F5F7FA',
   gray: '#8A94A6',
   grayLight: '#D1D9E6',
   grayMuted: '#BCC5D3',
   text: '#1C2B4B',
   textLight: '#5A6A85',
-  success: '#22C55E',
   error: '#EF4444',
   inputBg: '#ffffff',
   inputBorder: '#D1D9E6',
-  inputBorderFocus: '#0F2044',
-  primary: '#1A56DB',
+  primary: themeColors.primary,
 };
 
 export const registerStyles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: registerColors.background,
   },
 
-  // ─── Header image area ───────────────────────────────────────────────
-  imageContainer: {
-    width: '100%',
-    height: 350,
-    alignItems: 'center',
+  fixedContent: {
+    flex: 1,
     justifyContent: 'center',
-    overflow: 'hidden',
-  },
-  imagePlaceholder: {
-    width: '100%',
-    height: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  imagePlaceholderText: {
-    color: colors.grayMuted,
-    fontSize: 13,
-    fontWeight: '500',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
   },
 
-  // ─── Back button ──────────────────────────────────────────────────────
+  centeredBlock: {
+    width: '100%',
+  },
+
+  fixedScrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    paddingBottom: spacing.md,
+  },
+
+  scrollContent: {
+    flexGrow: 1,
+    paddingBottom: spacing.lg,
+  },
+
   backButton: {
     position: 'absolute',
-    top: 52,
-    left: 20,
+    top: spacing.sm,
+    left: spacing.md,
     zIndex: 10,
     width: 38,
     height: 38,
@@ -66,18 +57,38 @@ export const registerStyles = StyleSheet.create({
     justifyContent: 'center',
   },
   backButtonText: {
-    color: colors.white,
+    color: registerColors.white,
     fontSize: 18,
     lineHeight: 20,
     marginTop: -1,
   },
 
-  // ─── Stepper ──────────────────────────────────────────────────────────
+  screenTitle: {
+    fontSize: scaleByWidth(28),
+    fontWeight: '800',
+    textAlign: 'center',
+    color: registerColors.text,
+    marginTop: spacing.sm,
+    marginBottom: spacing.xs,
+    letterSpacing: -1,
+  },
+
+  imageContainer: {
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  imagePlaceholder: {
+    width: '100%',
+    height: '100%',
+  },
+
   stepperWrapper: {
-    paddingTop: 28,
-    paddingBottom: 8,
-    paddingHorizontal: 36,
-    backgroundColor: colors.white,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.xs,
+    paddingHorizontal: spacing.lg,
+    backgroundColor: registerColors.white,
     alignItems: 'center',
   },
   stepperRow: {
@@ -85,283 +96,500 @@ export const registerStyles = StyleSheet.create({
     alignItems: 'center',
     width: '100%',
     justifyContent: 'center',
+    position: 'relative',
   },
-  stepNode: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+  stepMarkerSlot: {
+    width: 40,
+    height: 40,
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 1,
   },
-  stepNodeInactive: {
-    backgroundColor: colors.grayLight,
-    borderWidth: 2,
-    borderColor: colors.grayLight,
+  stepMarkerPlaceholder: {
+    width: 28,
+    height: 28,
   },
-  stepNodeActive: {
-    backgroundColor: colors.accent,
-    borderWidth: 2,
-    borderColor: colors.accent,
-    shadowColor: colors.accent,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.45,
-    shadowRadius: 8,
-    elevation: 6,
+  activeMarkerLayer: {
+    position: 'absolute',
+    top: 2,
+    left: 0,
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 3,
   },
-  stepNodeDone: {
-    backgroundColor: colors.stepNode,
-    borderWidth: 2,
-    borderColor: colors.stepNode,
-  },
-  stepNodeText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: colors.white,
-  },
-  stepNodeTextInactive: {
-    color: colors.gray,
-  },
-  stepConnector: {
+  stepConnectorTrack: {
     flex: 1,
     height: 3,
-    borderRadius: 2,
     marginHorizontal: 4,
+    position: 'relative',
+    justifyContent: 'center',
+  },
+  stepConnector: {
+    height: 3,
+    borderRadius: 2,
+  },
+  stepConnectorFill: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    width: '100%',
+    transformOrigin: 'left',
   },
   stepConnectorInactive: {
-    backgroundColor: colors.grayLight,
+    backgroundColor: registerColors.grayLight,
+    width: '100%',
   },
   stepConnectorDone: {
-    backgroundColor: colors.stepNode,
+    backgroundColor: registerColors.primary,
   },
   stepLabelsRow: {
     flexDirection: 'row',
     width: '100%',
     justifyContent: 'space-between',
-    marginTop: 8,
-    paddingHorizontal: 2,
+    marginTop: spacing.sm,
   },
   stepLabel: {
-    fontSize: 10,
+    fontSize: 9,
     textAlign: 'center',
-    width: 70,
+    flex: 1,
   },
   stepLabelInactive: {
-    color: colors.grayMuted,
+    color: registerColors.grayMuted,
   },
   stepLabelActive: {
-    color: colors.accent,
+    color: registerColors.accent,
     fontWeight: '700',
   },
   stepLabelDone: {
-    color: colors.stepNode,
+    color: registerColors.primary,
     fontWeight: '600',
   },
 
-  // ─── Scroll container (centered) ─────────────────────────────────────
-  scrollContent: {
-    flexGrow: 1,
-    justifyContent: 'center',
-    paddingVertical: 48,
-  },
-
-  // ─── Card / content ────────────────────────────────────────────────────
   card: {
-    backgroundColor: colors.white,
-    paddingHorizontal: 28,
-    paddingTop: 8,
-    paddingBottom: 32,
+    backgroundColor: registerColors.white,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.xs,
+    paddingBottom: spacing.sm,
   },
 
-  divider: {
-    height: 1,
-    backgroundColor: colors.grayLight,
-    marginBottom: 28,
+  stepContent: {
+    width: '100%',
+    alignItems: 'stretch',
   },
-stepContent: {
-  width: '100%',
-  alignItems: 'center',
-},
-  // ─── Step 1: Phone ────────────────────────────────────────────────────
+
   stepTitle: {
-    fontSize: 32,
+    fontSize: scaleByWidth(26),
     fontWeight: '800',
     textAlign: 'center',
-    color: colors.text,
-    marginBottom: 6,
-    letterSpacing: -1.7,
+    color: registerColors.text,
+    marginBottom: 4,
+    letterSpacing: -1,
   },
   stepSubtitle: {
-    fontSize: 16,
-    letterSpacing: 1,
-    color: colors.primary,
-    lineHeight: 21,
-    marginBottom: 32,
+    fontSize: fontSizes.md,
+    letterSpacing: 0.5,
+    color: registerColors.primary,
+    lineHeight: 20,
+    marginBottom: spacing.md,
     textAlign: 'center',
   },
   stepSubtitleBold: {
     fontWeight: '900',
-    color: colors.primary,
+    color: registerColors.primary,
   },
 
   fieldLabel: {
-    fontSize: 12,
+    fontSize: fontSizes.sm,
     fontWeight: '700',
-    color: colors.textLight,
-    letterSpacing: 0.8,
-    marginBottom: 10,
+    color: registerColors.textLight,
+    letterSpacing: 0.5,
+    marginBottom: spacing.sm,
     textAlign: 'center',
-  },
- phoneRow: {
-  flexDirection: 'row',
-  alignItems: 'center',
-  backgroundColor: 'rgb(255, 255, 255)',  // semi-transparent
-  borderRadius: 14,
-  paddingHorizontal: 10,
-  paddingVertical: 13,
-  marginHorizontal: 95,
-  // Shadow
-  shadowColor: '#000',
-  shadowOffset: { width: 0, height: 4 },
-  shadowOpacity: 0.12,
-  shadowRadius: 10,
-  elevation: 5,
-},
-  phoneRowFocused: {
-  shadowOpacity: 0.2,
-  shadowRadius: 14,
-  elevation: 8,
-  backgroundColor: 'rgb(255, 255, 255)',  // slightly more visible on focus
-},
- phonePrefixBox: {
-  paddingRight: 10,
-  borderRightWidth: 1,
-  borderRightColor: 'rgb(255, 255, 255)',  // subtle divider
-  marginRight: 10,
-},
- phonePrefixText: {
-  color: colors.text,
-  fontSize: 25,
-  fontWeight: '600',
-},
- phoneInput: {
-  color: colors.text,
-  flex: 1, 
-  fontSize: 25,
-  paddingVertical: 0,
-  backgroundColor: 'transparent',  // ← important
-},
-  phoneHint: {
-    fontSize: 11,
-    color: colors.gray,
-    marginBottom: 36,
-    marginTop: 2,
-  },
-  phoneHintError: {
-    color: colors.error,
   },
 
-  // ─── Step 2: OTP ──────────────────────────────────────────────────────
-  otpTargetText: {
-    fontSize: 14,
-    color: colors.textLight,
-    lineHeight: 21,
+  phoneRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'center',
+    width: '100%',
+    maxWidth: 340,
+    minHeight: 64,
+    backgroundColor: registerColors.white,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    elevation: 5,
+  },
+  phoneRowFocused: {
+    shadowOpacity: 0.2,
+    shadowRadius: 14,
+    elevation: 8,
+  },
+  phonePrefixBox: {
+    paddingRight: spacing.sm,
+    borderRightWidth: 1,
+    borderRightColor: registerColors.grayLight,
+    marginRight: spacing.sm,
+  },
+  phonePrefixText: {
+    color: registerColors.text,
+    fontSize: scaleByWidth(20),
+    fontWeight: '600',
+  },
+  phoneInput: {
+    flex: 1,
+    minWidth: 0,
+    color: registerColors.text,
+    fontSize: scaleByWidth(20),
+    paddingVertical: 0,
+    backgroundColor: 'transparent',
+  },
+  phoneHint: {
+    fontSize: fontSizes.xs,
+    color: registerColors.gray,
+    marginTop: spacing.xs,
     textAlign: 'center',
-    marginBottom: 32,
+  },
+  phoneHintLarge: {
+    fontSize: fontSizes.lg,
+    marginTop: spacing.sm,
+    lineHeight: 22,
+  },
+  phoneHintError: {
+    color: registerColors.error,
+  },
+  continueVerificationButton: {
+    paddingVertical: spacing.sm,
+    alignItems: 'center',
+    marginTop: spacing.xs,
+  },
+  continueVerificationText: {
+    color: registerColors.primary,
+    fontSize: fontSizes.sm,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+
+  otpTargetText: {
+    fontSize: fontSizes.md,
+    color: registerColors.textLight,
+    lineHeight: 20,
+    textAlign: 'center',
+    marginBottom: spacing.lg,
   },
   otpTargetNumber: {
     fontWeight: '700',
-    color: colors.text,
+    color: registerColors.text,
   },
   otpBoxRow: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: 14,
-    marginBottom: 32,
+    alignSelf: 'center',
+    width: '100%',
+    marginBottom: spacing.lg,
   },
   otpBox: {
-    width: 62,
-    height: 72,
-    borderRadius: 14,
+    borderRadius: radius.md,
     borderWidth: 1.5,
-    borderColor: colors.inputBorder,
-    backgroundColor: colors.inputBg,
+    borderColor: registerColors.inputBorder,
+    backgroundColor: registerColors.inputBg,
     alignItems: 'center',
     justifyContent: 'center',
   },
   otpBoxFilled: {
-    borderColor: colors.stepNode,
-    backgroundColor: colors.white,
-    shadowColor: colors.stepNode,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    elevation: 3,
+    borderColor: registerColors.stepNode,
+    backgroundColor: registerColors.white,
   },
   otpBoxActive: {
-    borderColor: colors.accent,
-    backgroundColor: colors.white,
+    borderColor: registerColors.primary,
+    borderWidth: 2,
   },
   otpBoxText: {
-    fontSize: 26,
     fontWeight: '800',
-    color: colors.text,
-    letterSpacing: 0,
+    color: registerColors.text,
   },
+
   resendRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 36,
+    flexWrap: 'wrap',
+    marginBottom: spacing.lg,
     gap: 4,
   },
   resendLabel: {
-    fontSize: 13,
-    color: colors.textLight,
+    fontSize: fontSizes.sm,
+    color: registerColors.textLight,
   },
   resendButton: {
-    fontSize: 13,
+    fontSize: fontSizes.sm,
     fontWeight: '700',
-    color: colors.accent,
+    color: registerColors.accent,
   },
   resendButtonDisabled: {
-    color: colors.grayMuted,
+    color: registerColors.grayMuted,
   },
   resendTimer: {
-    fontSize: 13,
+    fontSize: fontSizes.sm,
     fontWeight: '600',
-    color: colors.gray,
+    color: registerColors.gray,
   },
 
-  // ─── Primary button ───────────────────────────────────────────────────
   primaryButton: {
-  paddingVertical: 20,
-   backgroundColor: colors.accent,
-  marginTop: spacing.xxl,
-  width: '100%',
-  borderRadius: radius.full,
-  alignItems: 'center',
-  shadowColor: colors.text,
-  shadowOffset: { width: 0, height: 6 },
-  shadowOpacity: 0.35,
-  shadowRadius: 12,
-  elevation: 8,
-  flexDirection: 'row',
-  justifyContent: 'center',
-  gap: 5,
-},
+    paddingVertical: spacing.lg,
+    backgroundColor: registerColors.accent,
+    marginTop: spacing.lg,
+    width: '100%',
+    borderRadius: radius.full,
+    alignItems: 'center',
+    shadowColor: registerColors.text,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 5,
+  },
   primaryButtonDisabled: {
-    backgroundColor: colors.grayLight,
+    backgroundColor: registerColors.grayLight,
     shadowOpacity: 0,
     elevation: 0,
   },
- primaryButtonText: {
-  color: colors.white,
-  fontSize: fontSizes.lg,
-  fontWeight: fontWeights.bold,
-  letterSpacing: 0.5,
-},
+  primaryButtonText: {
+    color: registerColors.white,
+    fontSize: fontSizes.lg,
+    fontWeight: fontWeights.bold,
+    letterSpacing: 0.5,
+  },
   primaryButtonTextDisabled: {
-    color: colors.gray,
+    color: registerColors.gray,
+  },
+
+  detailsScroll: {
+    flex: 1,
+  },
+  detailsScrollContent: {
+    paddingBottom: spacing.xl,
+  },
+
+  fieldGroup: {
+    marginBottom: spacing.md,
+  },
+  label: {
+    fontSize: fontSizes.xl,
+    fontWeight: '700',
+    color: registerColors.text,
+    marginBottom: 2,
+    marginLeft: spacing.sm,
+  },
+  required: {
+    color: registerColors.error,
+  },
+  input: {
+    backgroundColor: '#F5F6F8',
+    borderRadius: radius.xl,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    fontSize: fontSizes.lg,
+    color: registerColors.text,
+    minHeight: 52,
+  },
+  inputFocused: {
+    borderWidth: 1.5,
+    borderColor: '#acacac',
+    backgroundColor: registerColors.white,
+  },
+  inputError: {
+    borderWidth: 1.5,
+    borderColor: registerColors.error,
+  },
+  dropdownInput: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  disabledInput: {
+    backgroundColor: '#EAEAEA',
+    justifyContent: 'center',
+  },
+  row: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  flex1: {
+    flex: 1,
+  },
+  errorText: {
+    color: registerColors.error,
+    fontSize: fontSizes.md,
+    marginBottom: spacing.sm,
+    textAlign: 'center',
+    fontWeight: '500',
+  },
+
+  modernCheckboxContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.lg,
+    marginTop: spacing.xs,
+    paddingHorizontal: spacing.xs,
+  },
+  circularCheckbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: '#CCC',
+    marginRight: spacing.sm,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: registerColors.white,
+  },
+  circularCheckboxActive: {
+    backgroundColor: registerColors.primary,
+    borderColor: registerColors.primary,
+  },
+  checkboxText: {
+    flex: 1,
+    fontSize: fontSizes.sm,
+    color: registerColors.textLight,
+  },
+  linkText: {
+    color: registerColors.primary,
+    fontWeight: '600',
+  },
+
+  modernButton: {
+    backgroundColor: registerColors.accent,
+    borderRadius: radius.full,
+    paddingVertical: spacing.lg,
+    alignItems: 'center',
+    marginTop: spacing.sm,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  modernButtonText: {
+    color: registerColors.white,
+    fontSize: fontSizes.xl,
+    fontWeight: '700',
+  },
+
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalSheet: {
+    backgroundColor: registerColors.white,
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
+    maxHeight: '60%',
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.xl,
+    paddingTop: spacing.sm,
+  },
+  modalHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: registerColors.grayLight,
+    borderRadius: 999,
+    alignSelf: 'center',
+    marginBottom: spacing.md,
+  },
+  modalTitle: {
+    fontSize: fontSizes.lg,
+    fontWeight: 'bold',
+    marginBottom: spacing.md,
+    textAlign: 'center',
+  },
+  modalDivider: {
+    height: 1,
+    backgroundColor: '#f0f0f0',
+  },
+  modalOption: {
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.sm,
+  },
+  modalOptionSelected: {
+    backgroundColor: registerColors.stepNode,
+    borderRadius: radius.md,
+  },
+  modalOptionText: {
+    fontSize: fontSizes.lg,
+    color: registerColors.text,
+    textAlign: 'center',
+  },
+  modalOptionTextSelected: {
+    color: registerColors.primary,
+    fontWeight: '700',
+  },
+  modalCloseButton: {
+    marginTop: spacing.md,
+    paddingVertical: spacing.sm,
+    backgroundColor: '#f5f5f5',
+    borderRadius: radius.sm,
+  },
+  modalCloseText: {
+    textAlign: 'center',
+    fontSize: fontSizes.lg,
+    fontWeight: 'bold',
+    color: registerColors.error,
+  },
+
+  dropdown: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F5F6F8',
+    borderRadius: radius.xl,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    minHeight: 52,
+    justifyContent: 'space-between',
+  },
+  dropdownText: {
+    fontSize: fontSizes.lg,
+    color: registerColors.text,
+    flex: 1,
+  },
+  dropdownPlaceholder: {
+    fontSize: fontSizes.lg,
+    color: '#aaa',
+    flex: 1,
+  },
+  dropdownIcon: {
+    fontSize: fontSizes.lg,
+    color: '#aaa',
+  },
+
+  pinHintRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 6,
+    marginBottom: spacing.sm,
+    paddingHorizontal: spacing.xs,
+  },
+  pinHintText: {
+    flex: 1,
+    fontSize: fontSizes.sm,
+    color: registerColors.gray,
+    lineHeight: 18,
+  },
+  pinInputInner: {
+    flex: 1,
+    fontSize: fontSizes.lg,
+    color: registerColors.text,
+    paddingVertical: 0,
+    letterSpacing: 6,
+    backgroundColor: 'transparent',
   },
 });

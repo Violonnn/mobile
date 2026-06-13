@@ -1,11 +1,4 @@
-// lib
-import React, { useState, useRef, useEffect } from 'react'; 
-import { validatePHNumber } from '../../lib/validation/phone';
-// components
-import Stepper from '../../components/register/Stepper';
-import OTPInput from '../../components/register/OTPInput';
-import PhoneStep from '../../components/register/PhoneStep'; // 💡 Your newly extracted component!
-
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -13,221 +6,178 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
-  Alert,
+  Image,
+  Keyboard,
+  TouchableWithoutFeedback,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { responsiveImageHeight } from '../../lib/layout';
+import { useRegistrationFlow } from '../../hooks/useRegistrationFlow';
+import { useRegistrationBackHandler } from '../../hooks/useRegistrationBackHandler';
+import { RegistrationStep } from '../../types/registration';
 import { registerStyles as styles } from '../../styles/screens/register.styles';
-import { Image } from 'react-native';
+import Stepper from '../../components/register/Stepper';
+import PhoneStep from '../../components/register/PhoneStep';
+import OTPStep from '../../components/register/OTPStep';
+import DetailsStep from '../../components/register/DetailsStep';
+import PINStep from '../../components/register/PINStep';
 
-type Step = 0 | 1 | 2;
-const OTP_LENGTH = 6;
+const STEP_IMAGES: Record<RegistrationStep, number> = {
+  0: require('../../assets/images/inputPhone.png'),
+  1: require('../../assets/images/inputVerify.png'),
+  2: require('../../assets/images/inputDetails.png'),
+  3: require('../../assets/images/inputPIN.png'),
+};
 
 export default function RegisterScreen() {
-  const router = useRouter();
-  const [step, setStep] = useState<Step>(0);
-
-  // Step 1 States
-  const [phoneDigits, setPhoneDigits] = useState(''); 
   const [phoneFocused, setPhoneFocused] = useState(false);
-  const [phoneError, setPhoneError] = useState('');
 
-  // Step 2 States
-  const [otp, setOtp] = useState('');
-  const [resendCooldown, setResendCooldown] = useState(0);
-  const [sendingOTP, setSendingOTP] = useState(false);
-  const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const flow = useRegistrationFlow();
+  const {
+    step,
+    isComplete,
+    phoneDigits,
+    phoneError,
+    phoneValidation,
+    displayNumber,
+    otp,
+    details,
+    pin,
+    confirmPin,
+    resendCooldown,
+    otpSendCount,
+    otpLimitReached,
+    hasPendingOtp,
+    canRequestOtp,
+    sendingOTP,
+    setOtp,
+    setPin,
+    setConfirmPin,
+    updateDetails,
+    handlePhoneInput,
+    handleGetOTP,
+    continueToOtpVerification,
+    verifyOTP,
+    handleResend,
+    goToDetailsNext,
+    goBack,
+    completeRegistration,
+  } = flow;
 
-  const displayNumber = `0${phoneDigits}`;
-  const validation = validatePHNumber(phoneDigits);
+  // Android hardware back uses the same logic as the on-screen back button.
+  useRegistrationBackHandler(goBack, !isComplete);
 
-  // ─── Cooldown timer ────────────────────────────────────────────────────
-  function startCooldown(seconds = 60) {
-    setResendCooldown(seconds);
-    if (cooldownRef.current) clearInterval(cooldownRef.current);
-    cooldownRef.current = setInterval(() => {
-      setResendCooldown((prev) => {
-        if (prev <= 1) {
-          clearInterval(cooldownRef.current!);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-  }
+  const isDetailsStep = step === 2;
+  const isPinStep = step === 3;
+  const imageHeight = responsiveImageHeight(isDetailsStep ? 0.2 : 0.22);
 
-  useEffect(() => {
-    return () => {
-      if (cooldownRef.current) clearInterval(cooldownRef.current);
-    };
-  }, []);
+  const header = (
+    <>
+      <Text style={styles.screenTitle}>Registration</Text>
+      <View style={[styles.imageContainer, { height: imageHeight }]}>
+        <Image
+          source={STEP_IMAGES[step]}
+          style={styles.imagePlaceholder}
+          resizeMode="contain"
+        />
+      </View>
+      <Stepper current={step} />
+    </>
+  );
 
-  // ─── Supabase OTP send ─────────────────────────────────────────────────
-  async function sendOTP() {
-    if (!validation.valid) return;
-    setSendingOTP(true);
+  const stepContent = (
+    <View style={styles.card}>
+      {step === 0 && (
+        <PhoneStep
+          phoneDigits={phoneDigits}
+          onChangePhone={handlePhoneInput}
+          phoneFocused={phoneFocused}
+          onFocus={() => setPhoneFocused(true)}
+          onBlur={() => setPhoneFocused(false)}
+          onSubmit={handleGetOTP}
+          onContinueVerification={continueToOtpVerification}
+          isValid={phoneValidation.valid}
+          sendingOTP={sendingOTP}
+          resendCooldown={resendCooldown}
+          canRequestOtp={canRequestOtp}
+          hasPendingOtp={hasPendingOtp}
+          otpLimitReached={otpLimitReached}
+          otpSendCount={otpSendCount}
+          phoneError={phoneError}
+        />
+      )}
+      {step === 1 && (
+        <OTPStep
+          displayNumber={displayNumber}
+          otp={otp}
+          onChangeOtp={setOtp}
+          resendCooldown={resendCooldown}
+          sendingOTP={sendingOTP}
+          onResend={handleResend}
+          onVerify={verifyOTP}
+        />
+      )}
+      {step === 2 && (
+        <DetailsStep
+          details={details}
+          onUpdateDetails={updateDetails}
+          onSubmit={goToDetailsNext}
+        />
+      )}
+      {step === 3 && (
+        <PINStep
+          phoneNumber={displayNumber}
+          pin={pin}
+          confirmPin={confirmPin}
+          onChangePin={setPin}
+          onChangeConfirmPin={setConfirmPin}
+          onSubmit={completeRegistration}
+        />
+      )}
+    </View>
+  );
 
-    try {
-      await new Promise((res) => setTimeout(res, 1200)); // placeholder delay
-      setOtp('');
-      startCooldown(60);
-      setStep(1);
-    } catch (err: any) {
-      Alert.alert('Failed to send OTP', err?.message || 'Please try again.');
-    } finally {
-      setSendingOTP(false);
-    }
-  }
+  const centeredBody = (
+    <View style={styles.centeredBlock}>
+      {header}
+      {stepContent}
+    </View>
+  );
 
-  // ─── Supabase OTP verify ───────────────────────────────────────────────
-  async function verifyOTP() {
-    if (otp.length < OTP_LENGTH) return;
-
-    try {
-      await new Promise((res) => setTimeout(res, 900)); // placeholder delay
-      setStep(2);
-    } catch (err: any) {
-      Alert.alert('Invalid OTP', err?.message || 'Please check the code and try again.');
-    }
-  }
-
-  async function handleResend() {
-    if (resendCooldown > 0) return;
-    setOtp('');
-    await sendOTP();
-  }
-
-  // ─── Input handler ─────────────────────────────────────────────────────
-  const handlePhoneInput = (text: string) => {
-    const cleaned = text.replace(/\D/g, '').slice(0, 10);
-    setPhoneDigits(formatPhone(cleaned));
-  };
-
-  const formatPhone = (digits: string) => {
-    if (digits.length <= 3) return digits;
-    if (digits.length <= 6) return `${digits.slice(0, 3)} ${digits.slice(3, 6)}`;
-    return `${digits.slice(0, 3)} ${digits.slice(3, 6)} ${digits.slice(6)}`;
-  };
-
-  function handleGetOTP() {
-    const v = validatePHNumber(phoneDigits);
-    if (!v.valid) {
-      setPhoneError(v.message || 'Enter a valid Philippine mobile number');
-      return;
-    }
-    sendOTP();
-  }
-
-  function handleBack() {
-    if (step > 0) {
-      setStep((prev) => (prev - 1) as Step);
-    } else {
-      router.back();
-    }
-  }
-
- const imageSource =
-  step === 0
-    ? require('../../assets/images/inputPhone.png')
-    : step === 1
-    ? require('../../assets/images/inputVerify.png')
-    : require('../../assets/images/inputDetails.png');
-
-  // ─── Render remaining steps inline until you extract them ───────────────
-
-  function renderOTPStep() {
-    const otpComplete = otp.replace(/\s/g, '').length === OTP_LENGTH;
-    return (
-      <>
-        <Text style={styles.stepTitle}>OTP Verification</Text>
-        <Text style={styles.otpTargetText}>
-          Enter the OTP sent to{' '}
-          <Text style={styles.otpTargetNumber}>{displayNumber}</Text>
-        </Text>
-
-        <OTPInput value={otp} onChange={setOtp} />
-
-        <View style={styles.resendRow}>
-          <Text style={styles.resendLabel}>Didn't receive the OTP? </Text>
-          {resendCooldown > 0 ? (
-            <Text style={styles.resendTimer}>Resend in {resendCooldown}s</Text>
-          ) : (
-            <TouchableOpacity onPress={handleResend} disabled={sendingOTP}>
-              <Text style={[styles.resendButton, sendingOTP && styles.resendButtonDisabled]}>
-                RESEND OTP
-              </Text>
-            </TouchableOpacity>
-          )}
-        </View>
-
-        <TouchableOpacity
-          style={[
-            styles.primaryButton,
-            !otpComplete && styles.primaryButtonDisabled,
-          ]}
-          onPress={verifyOTP}
-          disabled={!otpComplete}
-          activeOpacity={0.8}
-        >
-          <Text style={[styles.primaryButtonText, !otpComplete && styles.primaryButtonTextDisabled]}>
-            VERIFY &amp; PROCEED
-          </Text>
-        </TouchableOpacity>
-      </>
-    );
-  }
-
-  function renderDetailsStep() {
-    return (
-      <>
-        <Text style={styles.stepTitle}>Enter Your Details</Text>
-        <Text style={styles.stepSubtitle}>
-          Almost there. Fill in your information to complete registration.
-        </Text>
-      </>
-    );
-  }
-
-  // ─── Main View Template ─────────────────────────────────────────────────
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
-    >
-      <TouchableOpacity style={styles.backButton} onPress={handleBack} activeOpacity={0.8}>
-        <Text style={styles.backButtonText}>‹</Text>
-      </TouchableOpacity>
-
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}
       >
-              <Text style={styles.stepTitle}>Registration</Text>
-            
-        <View style={styles.imageContainer}>
-          <Image source={imageSource} style={styles.imagePlaceholder} resizeMode="contain" />
-        </View>
+        <TouchableOpacity style={styles.backButton} onPress={goBack} activeOpacity={0.8}>
+          <Text style={styles.backButtonText}>‹</Text>
+        </TouchableOpacity>
 
-        <Stepper current={step} />
-
-        <View style={styles.card}>
-          {/* 💡 Step 0 calls your clean component directly instead of a local layout function */}
-          {step === 0 && (
-            <PhoneStep
-              phoneDigits={phoneDigits}
-              onChangePhone={handlePhoneInput}
-              phoneFocused={phoneFocused}
-              onFocus={() => setPhoneFocused(true)}
-              onBlur={() => setPhoneFocused(false)}
-              onSubmit={handleGetOTP}
-              isValid={validation.valid}
-              sendingOTP={sendingOTP}
-            />
-          )}
-          {step === 1 && renderOTPStep()}
-          {step === 2 && renderDetailsStep()}
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+        {isDetailsStep ? (
+          <ScrollView
+            contentContainerStyle={styles.scrollContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            {centeredBody}
+          </ScrollView>
+        ) : (
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+            <ScrollView
+              contentContainerStyle={styles.fixedScrollContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+              bounces={false}
+              scrollEnabled={isPinStep}
+              keyboardDismissMode="on-drag"
+            >
+              {centeredBody}
+            </ScrollView>
+          </TouchableWithoutFeedback>
+        )}
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }

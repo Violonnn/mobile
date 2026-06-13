@@ -1,7 +1,9 @@
 import React from 'react';
 import { View, Text, TextInput, TouchableOpacity, ActivityIndicator } from 'react-native';
-import Ionicons from '@expo/vector-icons/Ionicons';
-import { registerStyles as styles, colors } from '../../styles/screens/register.styles';
+import { Ionicons } from '@expo/vector-icons';
+import { registerStyles as styles, registerColors } from '../../styles/screens/register.styles';
+import { OTP_MAX_SENDS_PER_SESSION } from '../../types/registration';
+import NumericKeyboardAccessory, { NUMERIC_ACCESSORY_ID } from '../ui/NumericKeyboardAccessory';
 
 type Props = {
   phoneDigits: string;
@@ -10,8 +12,15 @@ type Props = {
   onFocus: () => void;
   onBlur: () => void;
   onSubmit: () => void;
+  onContinueVerification: () => void;
   isValid: boolean;
   sendingOTP: boolean;
+  resendCooldown: number;
+  canRequestOtp: boolean;
+  hasPendingOtp: boolean;
+  otpLimitReached: boolean;
+  otpSendCount: number;
+  phoneError?: string;
 };
 
 export default function PhoneStep({
@@ -21,14 +30,24 @@ export default function PhoneStep({
   onFocus,
   onBlur,
   onSubmit,
+  onContinueVerification,
   isValid,
   sendingOTP,
+  resendCooldown,
+  canRequestOtp,
+  hasPendingOtp,
+  otpLimitReached,
+  otpSendCount,
+  phoneError = '',
 }: Props) {
+  const getOtpDisabled = !isValid || sendingOTP || !canRequestOtp;
+
   return (
     <View style={styles.stepContent}>
       <Text style={styles.stepTitle}>Verify Your Number</Text>
       <Text style={styles.stepSubtitle}>
-        We will send you a <Text style={styles.stepSubtitleBold}>One Time Password (OTP)</Text>
+        We will send you a{' '}
+        <Text style={styles.stepSubtitleBold}>One Time Password (OTP)</Text>
       </Text>
 
       <Text style={styles.fieldLabel}>Enter Mobile Number</Text>
@@ -44,27 +63,74 @@ export default function PhoneStep({
           onBlur={onBlur}
           keyboardType="number-pad"
           placeholder="9XX XXX XXXX"
-          placeholderTextColor={colors.grayMuted}
+          placeholderTextColor={registerColors.grayMuted}
           maxLength={12}
           returnKeyType="done"
-          onSubmitEditing={onSubmit}
+          inputAccessoryViewID={NUMERIC_ACCESSORY_ID}
+          onSubmitEditing={() => {
+            onBlur();
+            if (!getOtpDisabled) onSubmit();
+          }}
         />
       </View>
 
+      {!!phoneError && (
+        <Text style={[styles.phoneHint, styles.phoneHintLarge, styles.phoneHintError]}>
+          {phoneError}
+        </Text>
+      )}
+
+      {!phoneError && resendCooldown > 0 && (
+        <Text style={[styles.phoneHint, styles.phoneHintLarge]}>
+          Wait {resendCooldown}s before requesting another OTP.
+        </Text>
+      )}
+
+      {!phoneError && otpLimitReached && (
+        <Text style={[styles.phoneHint, styles.phoneHintLarge, styles.phoneHintError]}>
+          OTP limit reached ({OTP_MAX_SENDS_PER_SESSION} requests). Try again later.
+        </Text>
+      )}
+
+      {!phoneError && !otpLimitReached && otpSendCount > 0 && (
+        <Text style={[styles.phoneHint, styles.phoneHintLarge]}>
+          OTP requests used: {otpSendCount}/{OTP_MAX_SENDS_PER_SESSION}
+        </Text>
+      )}
+
       <TouchableOpacity
-        style={[styles.primaryButton, (!isValid || sendingOTP) && styles.primaryButtonDisabled]}
+        style={[styles.primaryButton, getOtpDisabled && styles.primaryButtonDisabled]}
         onPress={onSubmit}
-        disabled={!isValid || sendingOTP}
+        disabled={getOtpDisabled}
         activeOpacity={0.8}
       >
         {sendingOTP ? (
-          <ActivityIndicator color={colors.white} />
+          <ActivityIndicator color={registerColors.white} />
+        ) : resendCooldown > 0 ? (
+          <Text style={styles.primaryButtonText}>WAIT {resendCooldown}s</Text>
         ) : (
-          <Text style={[styles.primaryButtonText, !isValid && styles.primaryButtonTextDisabled]}>
-            <Ionicons name="chevron-forward-outline" size={18} color={colors.white} /> GET OTP
-          </Text>
+          <>
+            <Ionicons name="chevron-forward-outline" size={18} color={registerColors.white} />
+            <Text style={[styles.primaryButtonText, !isValid && styles.primaryButtonTextDisabled]}>
+              GET OTP
+            </Text>
+          </>
         )}
       </TouchableOpacity>
+
+      {hasPendingOtp && (
+        <TouchableOpacity
+          style={styles.continueVerificationButton}
+          onPress={onContinueVerification}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.continueVerificationText}>
+            Already have a code? Continue verification →
+          </Text>
+        </TouchableOpacity>
+      )}
+
+      <NumericKeyboardAccessory />
     </View>
   );
 }

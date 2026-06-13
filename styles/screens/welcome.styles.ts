@@ -1,173 +1,121 @@
-// styles/screens/welcome.styles.ts
-// Styles specific to the Welcome / Landing screen only
-
-import { StyleSheet, Dimensions } from "react-native";
-import { colors, fontSizes, fontWeights, radius, spacing } from "../theme";
-
-const { width, height } = Dimensions.get("window");
+import { StyleSheet } from 'react-native';
+import { colors, fontSizes, fontWeights, radius, spacing } from '../theme';
+import { layout, scaleByWidth } from '../../lib/layout';
 
 export const styles = StyleSheet.create({
-
-  // ─── Root ───────────────────────────────────────────────
   container: {
     flex: 1,
     backgroundColor: colors.background,
   },
-  scrollContent: {
-    paddingBottom: spacing.xxl,
+  content: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    gap: spacing.md,
   },
 
-  // ─── Header / Logo ──────────────────────────────────────
   header: {
-    alignItems: "center",
-    paddingTop: 100,
+    alignItems: 'center',
   },
   logo: {
-    width: 180,
-    height: 120,
-    resizeMode: "contain",
+    width: scaleByWidth(160),
+    height: scaleByWidth(100),
+    resizeMode: 'contain',
   },
 
-
-  // ─── Hero Text ──────────────────────────────────────────
   heroSection: {
-    paddingHorizontal: spacing.xl,
-    paddingBottom: spacing.xxl,
-    alignItems: "center",
+    alignItems: 'center',
   },
   heroTitle: {
-    fontSize: fontSizes.xxxl,
+    fontSize: scaleByWidth(30),
     fontWeight: fontWeights.extrabold,
     color: colors.text,
-    textAlign: "center",
-    lineHeight: 42,
+    textAlign: 'center',
+    lineHeight: scaleByWidth(36),
   },
   heroTitleAccent: {
-    fontSize: fontSizes.xxl,
+    fontSize: scaleByWidth(26),
     fontWeight: fontWeights.extrabold,
     color: colors.primary,
-    textAlign: "center",
-    lineHeight: 42,
+    textAlign: 'center',
+    lineHeight: scaleByWidth(32),
   },
   heroSubtitle: {
     fontSize: fontSizes.md,
     color: colors.textMuted,
-    textAlign: "center",
+    textAlign: 'center',
     lineHeight: 22,
-    marginTop: spacing.lg,
-    paddingHorizontal: spacing.md,
+    marginTop: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    marginBottom: spacing.md,
   },
 
- 
-  Concept: {
-  position: "relative",
-  width: width * 0.9,
-  aspectRatio: 1.2,         
-  backgroundColor: colors.primaryLight,
-  borderRadius: 40,
-  overflow: "hidden",
-  alignSelf: "center",
-  marginBottom: spacing.xl,
-},
+  conceptSection: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: '100%',
+  },
+  conceptImageWrapper: {
+    width: '100%',
+    maxWidth: layout.screenWidth * 0.88,
+    aspectRatio: 1.15,
+    backgroundColor: colors.primaryLight,
+    borderRadius: radius.xl,
+    overflow: 'hidden',
+  },
+  conceptImage: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'contain',
+  },
 
-conceptImage: {
-  width: "100%",
-  height: "100%",
-  resizeMode: "cover",
-  position: "absolute",  
-  top: 0,                 
-  left: 0,               
-},
-  
- featuresRow: {
-  flexDirection: "row",
-  justifyContent: "space-around",
-  paddingHorizontal: spacing.sm,
-  paddingVertical: spacing.sm,
-  backgroundColor: colors.card,
-  marginHorizontal: spacing.lg,
-  borderRadius: radius.lg,
-  shadowColor: "#000",
-  shadowOffset: { width: 0, height: 1 },
-  shadowOpacity: 0.06,
-  shadowRadius: 6,
-  elevation: 2,
-  marginBottom: spacing.lg,
-},
-featureItem: {
-  alignItems: "center",
-  flex: 1,
-},
-
-featureLabel: {
-  fontSize: fontSizes.xs,
-  color: colors.textMuted,
-  textAlign: "center",
-  lineHeight: 16,
-  fontWeight: fontWeights.medium,
-},
-featureIconImage: {
-  width: 40,
-  height: 40,
-  resizeMode: "contain",
-  marginBottom: spacing.xs,
-},
-
-buttonsSection: {
-  paddingHorizontal: spacing.xl,
-  gap: spacing.md,
-  paddingBottom: spacing.lg,
-},
-
-getStartedButton: {
-  paddingVertical: 20,
-  borderRadius: radius.full,    
-  alignItems: "center",
-  shadowColor: colors.text,
-  shadowOffset: { width: 0, height: 6 },
-  shadowOpacity: 0.35,
-  shadowRadius: 12,
-  elevation: 8,
-  flexDirection: "row",
-  justifyContent: "center",
-  gap: 8,
-},
-getStartedText: {
-  color: colors.white,
-  fontSize: fontSizes.lg,
-  fontWeight: fontWeights.bold,
-  letterSpacing: 0.5,
-},
-
-loginButton: {
-  paddingVertical: 20,
-  borderRadius: radius.full,
-  alignItems: "center",
-  borderWidth: 1.5,
-  borderColor: colors.primary,
-  backgroundColor: colors.primaryLight, 
-  shadowColor: "#000",
-  shadowOffset: { width: 0, height: 2 },
-  shadowOpacity: 0.06,
-  shadowRadius: 6,
-  elevation: 2,
-},
-loginText: {
-  color: colors.primary,
-  fontSize: fontSizes.lg,
-  fontWeight: fontWeights.semibold,
-  letterSpacing: 0.3,
-},
-
-guestButton: {
-  paddingVertical: spacing.sm,
-  alignItems: "center",
-},
-guestText: {
-  color: colors.textMuted,            
-  fontSize: fontSizes.md,
-  fontWeight: fontWeights.medium,
-  textDecorationLine: "underline",    
-  letterSpacing: 0.2,
-},
+  buttonsSection: {
+    gap: spacing.sm,
+    paddingTop: spacing.sm,
+  },
+  getStartedButton: {
+    paddingVertical: spacing.lg,
+    borderRadius: radius.full,
+    alignItems: 'center',
+    shadowColor: colors.text,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 6,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  getStartedText: {
+    color: colors.white,
+    fontSize: fontSizes.lg,
+    fontWeight: fontWeights.bold,
+    letterSpacing: 0.5,
+  },
+  loginButton: {
+    paddingVertical: spacing.lg,
+    borderRadius: radius.full,
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: colors.primary,
+    backgroundColor: colors.primaryLight,
+  },
+  loginText: {
+    color: colors.primary,
+    fontSize: fontSizes.lg,
+    fontWeight: fontWeights.semibold,
+    letterSpacing: 0.3,
+  },
+  guestButton: {
+    paddingVertical: spacing.lg,
+    alignItems: 'center',
+  },
+  guestText: {
+    color: colors.textMuted,
+    fontSize: fontSizes.md,
+    fontWeight: fontWeights.medium,
+    textDecorationLine: 'underline',
+    letterSpacing: 0.2,
+  },
 });

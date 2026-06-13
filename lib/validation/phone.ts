@@ -2,6 +2,25 @@ export function formatLocalPH(raw: string): string {
   return raw.replace(/\D/g, '');
 }
 
+export function formatPhoneDisplay(digits: string): string {
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 6) return `${digits.slice(0, 3)} ${digits.slice(3, 6)}`;
+  return `${digits.slice(0, 3)} ${digits.slice(3, 6)} ${digits.slice(6)}`;
+}
+
+/** Formats an 11-digit PH mobile number as 09XX XXX XXXX */
+export function formatFullPHMobile(raw: string): string {
+  const digits = raw.replace(/\D/g, '');
+  if (digits.length <= 4) return digits;
+  if (digits.length <= 7) return `${digits.slice(0, 4)} ${digits.slice(4)}`;
+  return `${digits.slice(0, 4)} ${digits.slice(4, 7)} ${digits.slice(7, 11)}`;
+}
+
+export function sanitizePhoneInput(text: string): string {
+  const cleaned = text.replace(/\D/g, '').slice(0, 10);
+  return formatPhoneDisplay(cleaned);
+}
+
 export function validatePHNumber(digits: string): { valid: boolean; message: string } {
   const cleaned = digits.replace(/\s/g, ''); // ← strip spaces first
 
