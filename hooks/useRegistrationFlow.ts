@@ -2,6 +2,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Keyboard } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
+  completeRegistrationProfile,
+  requestRegistrationOtp,
+  signOutAfterRegistrationFailure,
+  verifyRegistrationOtp,
+} from '../lib/registration';
+import {
   formatFullPHMobile,
   sanitizePhoneInput,
   validatePHNumber,
@@ -42,11 +48,14 @@ export function useRegistrationFlow() {
   const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const cleanedPhone = phoneDigits.replace(/\s/g, '');
-  const displayNumber = formatFullPHMobile(`0${cleanedPhone}`);
+  // Safely format to E.164 for Supabase (+639xxxxxxxxx)
+  const e164Number = `+63${cleanedPhone.replace(/^0+/, '')}`;
+  const displayNumber = formatFullPHMobile(`0${cleanedPhone.replace(/^0+/, '')}`);
+  
   const phoneValidation = validatePHNumber(phoneDigits);
   const otpLimitReached = otpSendCount >= OTP_MAX_SENDS_PER_SESSION;
   const hasPendingOtp =
-    otpSentPhone === cleanedPhone && otpSendCount > 0 && cleanedPhone.length === 10;
+    otpSentPhone === cleanedPhone && otpSendCount > 0 && cleanedPhone.replace(/^0+/, '').length === 10;
   const canRequestOtp = resendCooldown === 0 && !otpLimitReached;
 
   useEffect(() => {
@@ -120,7 +129,9 @@ export function useRegistrationFlow() {
     setPhoneError('');
 
     try {
-      await new Promise((res) => setTimeout(res, 1200));
+      const { error } = await requestRegistrationOtp(e164Number);
+      if (error) throw new Error(error);
+
       setOtp('');
       setOtpSentPhone(cleanedPhone);
       setOtpSendCount((count) => count + 1);
@@ -134,6 +145,7 @@ export function useRegistrationFlow() {
     }
   }, [
     cleanedPhone,
+    e164Number,
     otpSendCount,
     phoneValidation.valid,
     resendCooldown,
@@ -157,14 +169,17 @@ export function useRegistrationFlow() {
 
   const verifyOTP = useCallback(async () => {
     if (otp.length < 6) return;
+
     try {
-      await new Promise((res) => setTimeout(res, 900));
+      const { error } = await verifyRegistrationOtp(e164Number, otp);
+      if (error) throw new Error(error);
+
       setStep(2);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Please check the code and try again.';
       Alert.alert('Invalid OTP', message);
     }
-  }, [otp]);
+  }, [otp, e164Number]);
 
   const handleResend = useCallback(async () => {
     if (resendCooldown > 0) return;
@@ -200,20 +215,49 @@ export function useRegistrationFlow() {
   }, [isComplete, router, step]);
 
   const completeRegistration = useCallback(
-    (_pin: string) => {
-      setIsComplete(true);
-      // TODO: send payload to Supabase here (phone, details, hashed PIN)
+    async (submittedPin: string) => {
+      try {
+        const { error } = await completeRegistrationProfile({
+          phone: e164Number,
+          details,
+          pin: submittedPin,
+        });
 
-      Alert.alert('Success!', 'Account created successfully!', [
-        {
-          text: 'OK',
-          onPress: () => {
-            router.replace('/');
+        if (error) throw new Error(error);
+
+        setIsComplete(true);
+
+        Alert.alert('Success!', 'Account created successfully!', [
+          {
+            text: 'OK',
+            onPress: () => {
+              router.replace('/');
+            },
           },
-        },
-      ]);
+        ]);
+      } catch (err: unknown) {
+        const message =
+          err instanceof Error ? err.message : 'Registration could not be completed.';
+        Alert.alert('Registration failed', message);
+
+        const needsReauth = /unauthorized|session expired|verify your phone/i.test(message);
+        const alreadyRegistered = /already registered/i.test(message);
+
+        if (alreadyRegistered) {
+          await signOutAfterRegistrationFailure();
+          router.replace('/(auth)/login');
+          return;
+        }
+
+        if (needsReauth) {
+          await signOutAfterRegistrationFailure();
+          setOtp('');
+          setStep(1);
+          return;
+        }
+      }
     },
-    [router],
+    [router, details, e164Number],
   );
 
   return {

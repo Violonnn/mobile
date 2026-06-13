@@ -1,0 +1,17 @@
+[functions.unisms-hook]
+enabled = true
+verify_jwt = false
+import_map = "./functions/unisms-hook/deno.json"
+entrypoint = "./functions/unisms-hook/index.ts"
+
+[functions.complete-registration]
+enabled = true
+verify_jwt = true
+import_map = "./functions/complete-registration/deno.json"
+entrypoint = "./functions/complete-registration/index.ts"
+
+[functions.verify-login]
+enabled = true
+verify_jwt = false
+import_map = "./functions/verify-login/deno.json"
+entrypoint = "./functions/verify-login/index.ts"

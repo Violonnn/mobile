@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "allowImportingTsExtensions": true,
+    "paths": {
+      "@supabase/supabase-js": ["../../node_modules/@supabase/supabase-js"],
+      "standardwebhooks": ["./types/standardwebhooks.d.ts"],
+      "bcryptjs": ["./types/bcryptjs.d.ts"]
+    }
+  },
+  "include": ["./**/*.ts", "./deno-shim.d.ts", "./types/**/*.d.ts"]
+}
