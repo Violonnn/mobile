@@ -395,7 +395,7 @@ stepLabelSpacer: {
     marginBottom: spacing.md,
   },
   label: {
-    fontSize: fontSizes.xl,
+    fontSize: fontSizes.md,
     fontWeight: '700',
     color: registerColors.text,
     marginBottom: 2,

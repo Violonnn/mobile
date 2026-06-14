@@ -69,6 +69,13 @@ export default function BarangayDropdown({
                 );
               }}
             />
+
+            <TouchableOpacity
+              style={styles.modalCloseButton}
+              onPress={() => setVisible(false)}
+            >
+              <Text style={styles.modalCloseText}>Cancel</Text>
+            </TouchableOpacity>
           </Pressable>
         </Pressable>
       </Modal>

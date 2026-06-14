@@ -9,7 +9,7 @@ import SelectModal from './SelectModal';
 
 const MINGLANILLA_BARANGAYS = [
   'Cadulawan', 'Calajo-an', 'Camp 7', 'Camp 8', 'Cuanos', 'Guindaruhan',
-  'Linao', 'Lipata', 'Manduang', 'Pakigne', 'Poblacion Ward I',
+  'Linao-Lipata', 'Manduang', 'Pakigne', 'Poblacion Ward I',
   'Poblacion Ward II', 'Poblacion Ward III', 'Poblacion Ward IV',
   'Tubod', 'Tulay', 'Tunghaan', 'Tungkil', 'Tungkop', 'Vito',
 ];
@@ -86,14 +86,12 @@ export default function DetailsStep({ details, onUpdateDetails, onSubmit }: Deta
 
       <LabeledInput
         label="Last Name"
-        required
         placeholder="e.g. Dela Cruz"
         value={lastName}
         onChangeText={(text) => onUpdateDetails({ lastName: text })}
       />
       <LabeledInput
         label="First Name"
-        required
         placeholder="e.g. Juan"
         value={firstName}
         onChangeText={(text) => onUpdateDetails({ firstName: text })}
@@ -107,7 +105,7 @@ export default function DetailsStep({ details, onUpdateDetails, onSubmit }: Deta
 
       <View style={styles.row}>
         <View style={styles.flex1}>
-          <Text style={styles.label}>Birth Month *</Text>
+          <Text style={styles.label}>Birth Month</Text>
           <TouchableOpacity
             style={[styles.input, styles.dropdownInput]}
             onPress={() => setShowMonthDropdown(true)}
@@ -120,7 +118,7 @@ export default function DetailsStep({ details, onUpdateDetails, onSubmit }: Deta
         </View>
 
         <View style={styles.flex1}>
-          <Text style={styles.label}>Birth Year *</Text>
+          <Text style={styles.label}>Birth Year</Text>
           <TouchableOpacity
             style={[styles.input, styles.dropdownInput]}
             onPress={() => setShowYearDropdown(true)}
@@ -133,15 +131,9 @@ export default function DetailsStep({ details, onUpdateDetails, onSubmit }: Deta
         </View>
       </View>
 
-      <View style={styles.fieldGroup}>
-        <Text style={styles.label}>Municipality</Text>
-        <View style={[styles.input, styles.disabledInput]}>
-          <Text style={{ color: '#888' }}>Minglanilla (Fixed)</Text>
-        </View>
-      </View>
 
       <View style={styles.fieldGroup}>
-        <Text style={styles.label}>Barangay *</Text>
+        <Text style={styles.label}>Barangay</Text>
         <BarangayDropdown
           value={barangay}
           options={MINGLANILLA_BARANGAYS}
