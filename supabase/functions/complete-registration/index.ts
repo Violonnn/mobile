@@ -23,8 +23,7 @@ const GENERIC_VALIDATION_ERROR =
 const PHONE_SESSION_ERROR =
   "Your verified phone does not match. Please restart registration.";
 
-const PROFILE_EXISTS_ERROR =
-  "This phone number is already registered. Try logging in instead.";
+const PROFILE_EXISTS_ERROR = 'This phone number is already registered.';
 
 type RegistrationPayload = {
   phone?: string;

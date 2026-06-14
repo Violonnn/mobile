@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { registerStyles as styles, registerColors } from '../../styles/screens/register.styles';
 import { OTP_MAX_SENDS_PER_SESSION } from '../../types/registration';
 import NumericKeyboardAccessory, { NUMERIC_ACCESSORY_ID } from '../ui/NumericKeyboardAccessory';
+import FieldError from './FieldError';
 
 type Props = {
   phoneDigits: string;
@@ -41,6 +42,7 @@ export default function PhoneStep({
   phoneError = '',
 }: Props) {
   const getOtpDisabled = !isValid || sendingOTP || !canRequestOtp;
+  const hasPhoneError = !!phoneError;
 
   return (
     <View style={styles.stepContent}>
@@ -50,35 +52,41 @@ export default function PhoneStep({
         <Text style={styles.stepSubtitleBold}>One Time Password (OTP)</Text>
       </Text>
 
-      <Text style={styles.fieldLabel}>Enter Mobile Number</Text>
-      <View style={[styles.phoneRow, phoneFocused && styles.phoneRowFocused]}>
-        <View style={styles.phonePrefixBox}>
-          <Text style={styles.phonePrefixText}>+63</Text>
+      <View style={styles.loginFieldWrap}>
+        <Text style={styles.loginFieldLabel}>Enter Mobile Number</Text>
+        <View
+          style={[
+            styles.phoneRow,
+            phoneFocused && styles.phoneRowFocused,
+            hasPhoneError && styles.inputError,
+          ]}
+        >
+          <View style={styles.pinIconBox}>
+            <Ionicons name="call-outline" size={20} color={registerColors.textLight} />
+          </View>
+          <View style={styles.phonePrefixBox}>
+            <Text style={styles.phonePrefixText}>+63</Text>
+          </View>
+          <TextInput
+            style={styles.phoneInput}
+            value={phoneDigits}
+            onChangeText={onChangePhone}
+            onFocus={onFocus}
+            onBlur={onBlur}
+            keyboardType="number-pad"
+            placeholder="9XX XXX XXXX"
+            placeholderTextColor={registerColors.grayMuted}
+            maxLength={12}
+            returnKeyType="done"
+            inputAccessoryViewID={NUMERIC_ACCESSORY_ID}
+            onSubmitEditing={() => {
+              onBlur();
+              if (!getOtpDisabled) onSubmit();
+            }}
+          />
         </View>
-        <TextInput
-          style={styles.phoneInput}
-          value={phoneDigits}
-          onChangeText={onChangePhone}
-          onFocus={onFocus}
-          onBlur={onBlur}
-          keyboardType="number-pad"
-          placeholder="9XX XXX XXXX"
-          placeholderTextColor={registerColors.grayMuted}
-          maxLength={12}
-          returnKeyType="done"
-          inputAccessoryViewID={NUMERIC_ACCESSORY_ID}
-          onSubmitEditing={() => {
-            onBlur();
-            if (!getOtpDisabled) onSubmit();
-          }}
-        />
+        <FieldError message={phoneError} />
       </View>
-
-      {!!phoneError && (
-        <Text style={[styles.phoneHint, styles.phoneHintLarge, styles.phoneHintError]}>
-          {phoneError}
-        </Text>
-      )}
 
       {!phoneError && resendCooldown > 0 && (
         <Text style={[styles.phoneHint, styles.phoneHintLarge]}>
@@ -87,9 +95,9 @@ export default function PhoneStep({
       )}
 
       {!phoneError && otpLimitReached && (
-        <Text style={[styles.phoneHint, styles.phoneHintLarge, styles.phoneHintError]}>
-          OTP limit reached ({OTP_MAX_SENDS_PER_SESSION} requests). Try again later.
-        </Text>
+        <FieldError
+          message={`OTP limit reached (${OTP_MAX_SENDS_PER_SESSION} requests). Try again later.`}
+        />
       )}
 
       {!phoneError && !otpLimitReached && otpSendCount > 0 && (

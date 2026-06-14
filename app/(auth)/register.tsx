@@ -41,6 +41,7 @@ export default function RegisterScreen() {
     phoneValidation,
     displayNumber,
     otp,
+    otpError,
     details,
     pin,
     confirmPin,
@@ -112,6 +113,7 @@ export default function RegisterScreen() {
         <OTPStep
           displayNumber={displayNumber}
           otp={otp}
+          otpError={otpError}
           onChangeOtp={setOtp}
           resendCooldown={resendCooldown}
           sendingOTP={sendingOTP}

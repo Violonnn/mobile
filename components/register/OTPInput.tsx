@@ -5,9 +5,9 @@ import { getOtpDimensions } from '../../lib/layout';
 
 const OTP_LENGTH = 6;
 
-type Props = { value: string; onChange: (v: string) => void };
+type Props = { value: string; onChange: (v: string) => void; hasError?: boolean };
 
-export default function OTPInput({ value, onChange }: Props) {
+export default function OTPInput({ value, onChange, hasError = false }: Props) {
   const hiddenInputRef = useRef<TextInput>(null);
   const { boxWidth, boxHeight, gap, fontSize } = getOtpDimensions(OTP_LENGTH);
 
@@ -29,7 +29,8 @@ export default function OTPInput({ value, onChange }: Props) {
                 styles.otpBox,
                 { width: boxWidth, height: boxHeight },
                 !!digit && styles.otpBoxFilled,
-                isActive && styles.otpBoxActive,
+                isActive && !hasError && styles.otpBoxActive,
+                hasError && styles.otpBoxError,
               ]}
             >
               <Text style={[styles.otpBoxText, { fontSize }]}>{digit}</Text>

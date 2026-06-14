@@ -138,7 +138,7 @@ export default function WelcomeScreen() {
             <Animated.View style={[loadingStyles.line, lineStyle]} />
           </View>
           <Animated.Text style={[loadingStyles.footer, taglineStyle]}>
-            Minglanilla Disaster Response
+            Minglanilla Disaster and Risk Report
           </Animated.Text>
         </Animated.View>
       )}

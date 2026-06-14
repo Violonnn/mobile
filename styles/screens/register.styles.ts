@@ -324,6 +324,10 @@ stepLabelSpacer: {
     borderColor: registerColors.primary,
     borderWidth: 2,
   },
+  otpBoxError: {
+    borderColor: registerColors.error,
+    borderWidth: 2,
+  },
   otpBoxText: {
     fontWeight: '800',
     color: registerColors.text,
@@ -446,6 +450,59 @@ stepLabelSpacer: {
     marginBottom: spacing.sm,
     textAlign: 'center',
     fontWeight: '500',
+  },
+  fieldErrorRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 6,
+    marginTop: spacing.xs,
+    marginBottom: spacing.sm,
+    alignSelf: 'stretch',
+  },
+  fieldErrorText: {
+    flex: 1,
+    color: registerColors.error,
+    fontSize: fontSizes.sm,
+    lineHeight: 18,
+    textAlign: 'left',
+  },
+  inputWithIconRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F5F6F8',
+    borderRadius: radius.xl,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    minHeight: 52,
+    borderWidth: 1.5,
+    borderColor: 'transparent',
+  },
+  inputWithIconRowFocused: {
+    borderColor: '#acacac',
+    backgroundColor: registerColors.white,
+  },
+  inputWithIconRowError: {
+    borderColor: registerColors.error,
+    backgroundColor: registerColors.white,
+  },
+  fieldLeadingIconBox: {
+    paddingRight: spacing.sm,
+    borderRightWidth: 1,
+    borderRightColor: registerColors.grayLight,
+    marginRight: spacing.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  inputWithIconField: {
+    flex: 1,
+    minWidth: 0,
+    fontSize: fontSizes.lg,
+    color: registerColors.text,
+    paddingVertical: 0,
+  },
+  checkboxError: {
+    borderWidth: 1.5,
+    borderColor: registerColors.error,
   },
 
   modernCheckboxContainer: {

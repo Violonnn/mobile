@@ -107,7 +107,7 @@ export function useLoginFlow() {
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Login failed. Please try again.';
       setPinError(message);
-      Alert.alert('Login failed', message);
+      Alert.alert('Incorrect PIN', message);
     } finally {
       setSubmitting(false);
     }

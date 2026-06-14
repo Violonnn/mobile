@@ -15,3 +15,9 @@ enabled = true
 verify_jwt = false
 import_map = "./functions/verify-login/deno.json"
 entrypoint = "./functions/verify-login/index.ts"
+
+[functions.request-registration-otp]
+enabled = true
+verify_jwt = false
+import_map = "./functions/request-registration-otp/deno.json"
+entrypoint = "./functions/request-registration-otp/index.ts"

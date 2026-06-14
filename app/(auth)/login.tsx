@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -16,11 +16,13 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import LottieView from 'lottie-react-native';
+import { useFocusEffect } from 'expo-router';
 import { useLoginFlow } from '../../hooks/useLoginFlow';
 import { responsiveLoginImageHeight } from '../../lib/layout';
 import { registerStyles as styles, registerColors } from '../../styles/screens/register.styles';
 import NumericKeyboardAccessory, { NUMERIC_ACCESSORY_ID } from '../../components/ui/NumericKeyboardAccessory';
 import { FacebookIcon, TikTokIcon } from '../../components/ui/SocialBrandIcons';
+import FieldError from '../../components/register/FieldError';
 
 export default function LoginScreen() {
   const phoneRef = useRef<TextInput>(null);
@@ -29,6 +31,7 @@ export default function LoginScreen() {
   const [swapPressed, setSwapPressed] = useState(false);
   const [pinFocused, setPinFocused] = useState(false);
   const [pinVisible, setPinVisible] = useState(false);
+  const [signUpLoading, setSignUpLoading] = useState(false);
 
   const {
     phoneDigits,
@@ -50,6 +53,12 @@ export default function LoginScreen() {
   const imageHeight = responsiveLoginImageHeight();
   const phoneFieldActive = !phoneLocked && phoneFocused;
 
+  useFocusEffect(
+    useCallback(() => {
+      setSignUpLoading(false);
+    }, []),
+  );
+
   function handleSwapPhonePress() {
     Alert.alert(
       'Change mobile number?',
@@ -65,6 +74,11 @@ export default function LoginScreen() {
         },
       ],
     );
+  }
+
+  function handleSignUp() {
+    setSignUpLoading(true);
+    goToRegister();
   }
 
   return (
@@ -104,7 +118,16 @@ export default function LoginScreen() {
 
                   <View style={styles.loginFieldWrap}>
                     <Text style={styles.loginFieldLabel}>Mobile Number</Text>
-                    <View style={[styles.phoneRow, phoneFieldActive && styles.phoneRowFocused]}>
+                    <View
+                      style={[
+                        styles.phoneRow,
+                        phoneFieldActive && styles.phoneRowFocused,
+                        !!phoneError && styles.inputError,
+                      ]}
+                    >
+                      <View style={styles.pinIconBox}>
+                        <Ionicons name="call-outline" size={20} color={registerColors.textLight} />
+                      </View>
                       <View style={styles.phonePrefixBox}>
                         <Text style={styles.phonePrefixText}>+63</Text>
                       </View>
@@ -159,16 +182,7 @@ export default function LoginScreen() {
 
                   {!!phoneError && (
                     <View style={styles.loginFieldWrap}>
-                      <Text
-                        style={[
-                          styles.phoneHint,
-                          styles.phoneHintLarge,
-                          styles.phoneHintError,
-                          { textAlign: 'left', marginTop: 0 },
-                        ]}
-                      >
-                        {phoneError}
-                      </Text>
+                      <FieldError message={phoneError} />
                     </View>
                   )}
 
@@ -230,7 +244,7 @@ export default function LoginScreen() {
                         />
                       </TouchableOpacity>
                     </View>
-                    {!!pinError && <Text style={styles.errorText}>{pinError}</Text>}
+                    {!!pinError && <FieldError message={pinError} />}
                   </View>
 
                   <TouchableOpacity
@@ -269,10 +283,15 @@ export default function LoginScreen() {
                   <View style={styles.socialFollowSection}>
                     <TouchableOpacity
                       style={styles.loginSignUpButton}
-                      onPress={goToRegister}
+                      onPress={handleSignUp}
+                      disabled={signUpLoading}
                       activeOpacity={0.7}
                     >
-                      <Text style={styles.loginSignUpButtonText}>SIGN UP</Text>
+                      {signUpLoading ? (
+                        <ActivityIndicator color={registerColors.accent} />
+                      ) : (
+                        <Text style={styles.loginSignUpButtonText}>SIGN UP</Text>
+                      )}
                     </TouchableOpacity>
 
                     <View style={styles.socialFollowRow}>

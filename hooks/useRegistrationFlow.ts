@@ -3,10 +3,13 @@ import { Alert, Keyboard } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
   completeRegistrationProfile,
+  fetchRegistrationOtpStatus,
   requestRegistrationOtp,
   signOutAfterRegistrationFailure,
   verifyRegistrationOtp,
 } from '../lib/registration';
+import { clearOtpSession, loadOtpSession, saveOtpSession } from '../lib/otpSession';
+import { formatPhoneRegistrationError } from '../lib/registrationErrors';
 import { setSavedPhone } from '../lib/savedPhone';
 import {
   formatFullPHMobile,
@@ -21,13 +24,17 @@ import {
   RegistrationStep,
 } from '../types/registration';
 
+type OtpLimitMeta = {
+  sendCount?: number;
+  cooldownSeconds?: number;
+  limitReached?: boolean;
+};
+
 /**
  * Single source of truth for the registration wizard.
  *
- * OTP frontend guards (not a substitute for server rate limits):
- * - Shared cooldown on GET OTP and RESEND OTP
- * - Max sends per phone number per registration session
- * - "Continue verification" so users can go back without triggering a new send
+ * OTP limits are enforced on the server (request-registration-otp) and mirrored
+ * locally via AsyncStorage so counters survive app restarts.
  */
 export function useRegistrationFlow() {
   const router = useRouter();
@@ -37,6 +44,7 @@ export function useRegistrationFlow() {
 
   const [phoneDigits, setPhoneDigits] = useState('');
   const [phoneError, setPhoneError] = useState('');
+  const [otpError, setOtpError] = useState('');
   const [otp, setOtp] = useState('');
   const [details, setDetails] = useState<RegistrationDetails>(EMPTY_DETAILS);
   const [pin, setPin] = useState('');
@@ -49,12 +57,12 @@ export function useRegistrationFlow() {
   const [verifyingOTP, setVerifyingOTP] = useState(false);
   const [submittingRegistration, setSubmittingRegistration] = useState(false);
   const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const hydratedPhoneRef = useRef('');
 
   const cleanedPhone = phoneDigits.replace(/\s/g, '');
-  // Safely format to E.164 for Supabase (+639xxxxxxxxx)
   const e164Number = `+63${cleanedPhone.replace(/^0+/, '')}`;
   const displayNumber = formatFullPHMobile(`0${cleanedPhone.replace(/^0+/, '')}`);
-  
+
   const phoneValidation = validatePHNumber(phoneDigits);
   const otpLimitReached = otpSendCount >= OTP_MAX_SENDS_PER_SESSION;
   const hasPendingOtp =
@@ -74,6 +82,11 @@ export function useRegistrationFlow() {
   }, []);
 
   const startCooldown = useCallback((seconds = OTP_COOLDOWN_SECONDS) => {
+    if (seconds <= 0) {
+      clearCooldownTimer();
+      return;
+    }
+
     setResendCooldown(seconds);
     if (cooldownRef.current) clearInterval(cooldownRef.current);
     cooldownRef.current = setInterval(() => {
@@ -86,13 +99,37 @@ export function useRegistrationFlow() {
         return prev - 1;
       });
     }, 1000);
-  }, []);
+  }, [clearCooldownTimer]);
+
+  const applyOtpLimits = useCallback(
+    async (phone: string, meta: OtpLimitMeta) => {
+      if (meta.sendCount !== undefined) {
+        setOtpSendCount(meta.sendCount);
+        if (meta.sendCount > 0) {
+          setOtpSentPhone(phone);
+        }
+      }
+
+      if (meta.cooldownSeconds && meta.cooldownSeconds > 0) {
+        startCooldown(meta.cooldownSeconds);
+      } else if (meta.cooldownSeconds === 0) {
+        clearCooldownTimer();
+      }
+
+      if (meta.sendCount !== undefined) {
+        await saveOtpSession(phone, meta.sendCount, meta.cooldownSeconds ?? 0);
+      }
+    },
+    [clearCooldownTimer, startCooldown],
+  );
 
   const resetOtpSession = useCallback(() => {
     setOtpSendCount(0);
     setOtpSentPhone('');
     setOtp('');
     clearCooldownTimer();
+    clearOtpSession();
+    hydratedPhoneRef.current = '';
   }, [clearCooldownTimer]);
 
   const updateDetails = useCallback((patch: Partial<RegistrationDetails>) => {
@@ -110,10 +147,65 @@ export function useRegistrationFlow() {
         resetOtpSession();
       }
 
+      if (nextClean !== prevClean) {
+        hydratedPhoneRef.current = '';
+      }
+
       setPhoneDigits(next);
     },
     [phoneDigits, otpSentPhone, resetOtpSession],
   );
+
+  useEffect(() => {
+    if (!phoneValidation.valid) return;
+    if (hydratedPhoneRef.current === cleanedPhone) return;
+
+    let mounted = true;
+    hydratedPhoneRef.current = cleanedPhone;
+
+    async function hydrateOtpState() {
+      const cached = await loadOtpSession(cleanedPhone);
+      if (!mounted) return;
+
+      if (cached) {
+        setOtpSendCount(cached.sendCount);
+        if (cached.hasPendingOtp) {
+          setOtpSentPhone(cleanedPhone);
+        }
+        if (cached.cooldownSeconds > 0) {
+          startCooldown(cached.cooldownSeconds);
+        }
+      }
+
+      const status = await fetchRegistrationOtpStatus(e164Number);
+      if (!mounted) return;
+
+      if (status.error) {
+        if (/already registered/i.test(status.error)) {
+          setPhoneError(formatPhoneRegistrationError(status.error));
+          setOtpSendCount(0);
+          setOtpSentPhone('');
+          clearCooldownTimer();
+          await clearOtpSession();
+        } else if (status.sendCount !== undefined) {
+          await applyOtpLimits(cleanedPhone, status);
+        }
+        return;
+      }
+
+      await applyOtpLimits(cleanedPhone, {
+        sendCount: status.sendCount ?? 0,
+        cooldownSeconds: status.cooldownSeconds ?? 0,
+        limitReached: status.limitReached,
+      });
+    }
+
+    hydrateOtpState();
+
+    return () => {
+      mounted = false;
+    };
+  }, [applyOtpLimits, cleanedPhone, clearCooldownTimer, e164Number, phoneValidation.valid, startCooldown]);
 
   const sendOTP = useCallback(async () => {
     if (!phoneValidation.valid) return;
@@ -132,27 +224,44 @@ export function useRegistrationFlow() {
     setPhoneError('');
 
     try {
-      const { error } = await requestRegistrationOtp(e164Number);
-      if (error) throw new Error(error);
+      const result = await requestRegistrationOtp(e164Number);
+
+      if (result.error) {
+        setPhoneError(formatPhoneRegistrationError(result.error));
+        await applyOtpLimits(cleanedPhone, {
+          sendCount: result.sendCount,
+          cooldownSeconds: result.cooldownSeconds,
+          limitReached: result.limitReached,
+        });
+        return;
+      }
 
       setOtp('');
       setOtpSentPhone(cleanedPhone);
-      setOtpSendCount((count) => count + 1);
-      startCooldown(OTP_COOLDOWN_SECONDS);
+
+      const sendCount = result.sendCount ?? otpSendCount + 1;
+      const cooldownSeconds = result.cooldownSeconds ?? OTP_COOLDOWN_SECONDS;
+
+      await applyOtpLimits(cleanedPhone, {
+        sendCount,
+        cooldownSeconds,
+        limitReached: result.limitReached,
+      });
+
       setStep(1);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Please try again.';
-      Alert.alert('Failed to send OTP', message);
+      setPhoneError(message);
     } finally {
       setSendingOTP(false);
     }
   }, [
+    applyOtpLimits,
     cleanedPhone,
     e164Number,
     otpSendCount,
     phoneValidation.valid,
     resendCooldown,
-    startCooldown,
   ]);
 
   const handleGetOTP = useCallback(() => {
@@ -170,18 +279,28 @@ export function useRegistrationFlow() {
     setStep(1);
   }, [hasPendingOtp]);
 
+  const handleOtpChange = useCallback((value: string) => {
+    setOtpError('');
+    setOtp(value);
+  }, []);
+
   const verifyOTP = useCallback(async () => {
-    if (otp.length < 6) return;
+    if (otp.length < 6) {
+      setOtpError('Enter the complete 6-digit OTP.');
+      return;
+    }
 
     setVerifyingOTP(true);
+    setOtpError('');
     try {
       const { error } = await verifyRegistrationOtp(e164Number, otp);
       if (error) throw new Error(error);
 
       setStep(2);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Please check the code and try again.';
-      Alert.alert('Invalid OTP', message);
+      const message =
+        err instanceof Error ? err.message : 'Invalid or expired OTP. Please try again.';
+      setOtpError(message);
     } finally {
       setVerifyingOTP(false);
     }
@@ -191,10 +310,7 @@ export function useRegistrationFlow() {
     if (resendCooldown > 0) return;
 
     if (otpSendCount >= OTP_MAX_SENDS_PER_SESSION) {
-      Alert.alert(
-        'OTP limit reached',
-        `You can only request ${OTP_MAX_SENDS_PER_SESSION} codes per session. Please try again later.`,
-      );
+      setPhoneError('Too many OTP requests. Please try again later.');
       return;
     }
 
@@ -233,6 +349,7 @@ export function useRegistrationFlow() {
         if (error) throw new Error(error);
 
         await setSavedPhone(phoneDigits);
+        await clearOtpSession();
         setIsComplete(true);
         router.replace({ pathname: '/(main)/home', params: { welcome: '1' } });
       } catch (err: unknown) {
@@ -270,6 +387,7 @@ export function useRegistrationFlow() {
     phoneValidation,
     displayNumber,
     otp,
+    otpError,
     details,
     pin,
     confirmPin,
@@ -281,7 +399,7 @@ export function useRegistrationFlow() {
     sendingOTP,
     verifyingOTP,
     submittingRegistration,
-    setOtp,
+    setOtp: handleOtpChange,
     setPin,
     setConfirmPin,
     updateDetails,

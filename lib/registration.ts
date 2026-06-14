@@ -1,11 +1,23 @@
-import { AuthError, FunctionsHttpError, isAuthRetryableFetchError } from '@supabase/supabase-js';
+import { AuthError, isAuthRetryableFetchError } from '@supabase/supabase-js';
 import { supabase } from './supabase';
+import {
+  parseEdgeFunctionMeta,
+  readEdgeFunctionErrorMessage,
+} from './edgeFunctionErrors';
 import { RegistrationDetails } from '../types/registration';
 
 export type CompleteRegistrationInput = {
   phone: string;
   details: RegistrationDetails;
   pin: string;
+};
+
+export type OtpRequestResult = {
+  error: string | null;
+  sendCount?: number;
+  maxSends?: number;
+  cooldownSeconds?: number;
+  limitReached?: boolean;
 };
 
 function looksLikeRawHttpDump(message: string): boolean {
@@ -30,9 +42,7 @@ function extractMessageFromHttpDump(raw: string): string | null {
   return null;
 }
 
-const GENERIC_EDGE_FUNCTION_ERROR = 'Edge Function returned a non-2xx status code';
-
-function getErrorMessage(error: unknown, fallback: string): string {
+function getAuthErrorMessage(error: unknown, fallback: string): string {
   if (error instanceof AuthError) {
     const message = error.message?.trim();
     if (message && looksLikeRawHttpDump(message)) {
@@ -51,41 +61,65 @@ function getErrorMessage(error: unknown, fallback: string): string {
     return fallback;
   }
 
-  if (error instanceof Error && error.message) {
-    if (looksLikeRawHttpDump(error.message)) return fallback;
-    if (
-      error.message === GENERIC_EDGE_FUNCTION_ERROR ||
-      error.name === 'FunctionsHttpError'
-    ) {
-      return fallback;
-    }
+  if (error instanceof Error && error.message && !looksLikeRawHttpDump(error.message)) {
     return error.message;
-  }
-
-  if (typeof error === 'object' && error !== null && 'message' in error) {
-    const message = (error as { message?: unknown }).message;
-    if (typeof message === 'string' && message.length > 0 && !looksLikeRawHttpDump(message)) {
-      return message;
-    }
   }
 
   return fallback;
 }
 
-export async function requestRegistrationOtp(phone: string): Promise<{ error: string | null }> {
-  const { error } = await supabase.auth.signInWithOtp({
-    phone,
-    options: {
-      channel: 'sms',
-      shouldCreateUser: true,
+export async function fetchRegistrationOtpStatus(phone: string): Promise<OtpRequestResult> {
+  const { data, error, response } = await supabase.functions.invoke(
+    'request-registration-otp',
+    {
+      body: { phone, statusOnly: true },
     },
-  });
+  );
 
   if (error) {
-    return { error: getErrorMessage(error, 'Unable to send OTP. Please try again.') };
+    const message = await readEdgeFunctionErrorMessage(
+      error,
+      response,
+      'Unable to check OTP status.',
+    );
+    const meta = parseEdgeFunctionMeta(data);
+    return { error: message, ...meta };
   }
 
-  return { error: null };
+  if (data?.error) {
+    return { error: String(data.error), ...parseEdgeFunctionMeta(data) };
+  }
+
+  return {
+    error: null,
+    ...parseEdgeFunctionMeta(data),
+  };
+}
+
+export async function requestRegistrationOtp(phone: string): Promise<OtpRequestResult> {
+  const { data, error, response } = await supabase.functions.invoke(
+    'request-registration-otp',
+    {
+      body: { phone },
+    },
+  );
+
+  const meta = parseEdgeFunctionMeta(data);
+
+  if (error) {
+    const message = await readEdgeFunctionErrorMessage(
+      error,
+      response,
+      'Unable to send OTP. Please try again.',
+    );
+    return { error: message, ...meta };
+  }
+
+  if (data?.error) {
+    return { error: String(data.error), ...meta };
+  }
+
+  return { error: null, ...meta };
 }
 
 export async function verifyRegistrationOtp(
@@ -99,7 +133,7 @@ export async function verifyRegistrationOtp(
   });
 
   if (error) {
-    return { error: getErrorMessage(error, 'Invalid or expired OTP. Please try again.') };
+    return { error: getAuthErrorMessage(error, 'Invalid or expired OTP. Please try again.') };
   }
 
   if (!data.session?.access_token) {
@@ -128,43 +162,6 @@ async function getActiveSession() {
   }
 
   return session;
-}
-
-async function getEdgeFunctionErrorMessage(
-  response: Response | undefined,
-  fallback: string,
-): Promise<string> {
-  if (!response) return fallback;
-
-  try {
-    const body = (await response.clone().json()) as { error?: unknown };
-    if (typeof body.error === 'string' && body.error.trim()) {
-      return body.error.trim();
-    }
-  } catch {
-    // response body was not JSON
-  }
-
-  return fallback;
-}
-
-async function readEdgeFunctionErrorMessage(
-  error: unknown,
-  response: Response | undefined,
-  fallback: string,
-): Promise<string> {
-  if (error instanceof FunctionsHttpError && error.context instanceof Response) {
-    try {
-      const body = (await error.context.clone().json()) as { error?: unknown };
-      if (typeof body.error === 'string' && body.error.trim()) {
-        return body.error.trim();
-      }
-    } catch {
-      // response body was not JSON
-    }
-  }
-
-  return getEdgeFunctionErrorMessage(response, fallback);
 }
 
 export async function completeRegistrationProfile(

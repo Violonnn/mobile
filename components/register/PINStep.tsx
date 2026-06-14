@@ -3,6 +3,7 @@ import { View, Text, TextInput, TouchableOpacity, Keyboard, Pressable, ActivityI
 import { Ionicons } from '@expo/vector-icons';
 import { registerStyles as styles, registerColors } from '../../styles/screens/register.styles';
 import NumericKeyboardAccessory, { NUMERIC_ACCESSORY_ID } from '../ui/NumericKeyboardAccessory';
+import FieldError from './FieldError';
 
 type Props = {
   phoneNumber: string;
@@ -32,13 +33,14 @@ export default function PINStep({
   const [confirmFocused, setConfirmFocused] = useState(false);
   const [error, setError] = useState('');
 
-  const isComplete = pin.length === 6 && confirmPin.length === 6;
+  const pinHasError = error === 'PIN must be 6 digits.';
+  const confirmHasError = error === 'PINs do not match. Please try again.' || pinHasError;
 
   useEffect(() => {
-    if (isComplete) {
+    if (pin.length === 6 && confirmPin.length === 6) {
       Keyboard.dismiss();
     }
-  }, [isComplete]);
+  }, [pin.length, confirmPin.length]);
 
   function handlePinChange(text: string) {
     const cleaned = text.replace(/\D/g, '').slice(0, 6);
@@ -79,10 +81,19 @@ export default function PINStep({
         <Text style={styles.stepSubtitleBold}>{phoneNumber}</Text>
       </Text>
 
-      <View style={styles.fieldGroup}>
-        <Text style={styles.label}>PIN</Text>
-        <View style={[styles.input, styles.dropdownInput, pinFocused && styles.inputFocused]}>
-          <Pressable style={styles.pinInputWrapper} onPress={() => pinRef.current?.focus()}>
+      <View style={styles.loginFieldWrap}>
+        <Text style={styles.loginFieldLabel}>PIN</Text>
+        <View
+          style={[
+            styles.phoneRow,
+            pinFocused && styles.phoneRowFocused,
+            pinHasError && styles.inputError,
+          ]}
+        >
+          <View style={styles.pinIconBox}>
+            <Ionicons name="keypad-outline" size={20} color={registerColors.textLight} />
+          </View>
+          <Pressable style={[styles.pinInputWrapper, styles.loginPinRow]} onPress={() => pinRef.current?.focus()}>
             <Text
               style={[styles.pinDisplayText, pin.length === 0 && { color: '#9CA3AF' }]}
               pointerEvents="none"
@@ -121,22 +132,24 @@ export default function PINStep({
         </View>
       </View>
 
-      <View style={styles.fieldGroup}>
-        <Text style={styles.label}>Confirm PIN</Text>
+      <View style={styles.loginFieldWrap}>
+        <Text style={styles.loginFieldLabel}>Confirm PIN</Text>
         <View
           style={[
-            styles.input,
-            styles.dropdownInput,
-            confirmFocused && styles.inputFocused,
-            error !== '' && styles.inputError,
+            styles.phoneRow,
+            confirmFocused && styles.phoneRowFocused,
+            confirmHasError && styles.inputError,
           ]}
         >
-          <Pressable style={styles.pinInputWrapper} onPress={() => confirmRef.current?.focus()}>
+          <View style={styles.pinIconBox}>
+            <Ionicons name="lock-closed-outline" size={20} color={registerColors.textLight} />
+          </View>
+          <Pressable
+            style={[styles.pinInputWrapper, styles.loginPinRow]}
+            onPress={() => confirmRef.current?.focus()}
+          >
             <Text
-              style={[
-                styles.pinDisplayText,
-                confirmPin.length === 0 && { color: '#9CA3AF' },
-              ]}
+              style={[styles.pinDisplayText, confirmPin.length === 0 && { color: '#9CA3AF' }]}
               pointerEvents="none"
             >
               {confirmPin.length === 0
@@ -161,7 +174,7 @@ export default function PINStep({
               inputAccessoryViewID={NUMERIC_ACCESSORY_ID}
               returnKeyType="done"
               blurOnSubmit
-              onSubmitEditing={Keyboard.dismiss}
+              onSubmitEditing={handleSubmit}
             />
           </Pressable>
           <TouchableOpacity
@@ -175,7 +188,7 @@ export default function PINStep({
             />
           </TouchableOpacity>
         </View>
-        {error !== '' && <Text style={styles.errorText}>{error}</Text>}
+        <FieldError message={error} />
       </View>
 
       <View style={styles.pinHintRow}>
@@ -186,21 +199,17 @@ export default function PINStep({
       </View>
 
       <TouchableOpacity
-        style={[styles.primaryButton, (!isComplete || submitting) && styles.primaryButtonDisabled]}
+        style={[styles.primaryButton, submitting && styles.primaryButtonDisabled]}
         onPress={handleSubmit}
-        disabled={!isComplete || submitting}
+        disabled={submitting}
         activeOpacity={0.8}
       >
         {submitting ? (
           <ActivityIndicator color={registerColors.white} />
         ) : (
           <>
-            <Text style={[styles.primaryButtonText, !isComplete && styles.primaryButtonTextDisabled]}>
-              CREATE ACCOUNT
-            </Text>
-            {isComplete && (
-              <Ionicons name="checkmark-circle-outline" size={20} color="#fff" />
-            )}
+            <Text style={styles.primaryButtonText}>CREATE ACCOUNT</Text>
+            <Ionicons name="checkmark-circle-outline" size={20} color="#fff" />
           </>
         )}
       </TouchableOpacity>
