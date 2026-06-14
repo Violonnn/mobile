@@ -626,4 +626,74 @@ stepLabelSpacer: {
     padding: 0,
     margin: 0,
   },
+  legalModalSheet: {
+    backgroundColor: registerColors.white,
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
+    height: '85%',
+    paddingBottom: spacing.xl,
+  },
+  legalModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: registerColors.grayLight,
+  },
+  legalModalTitle: {
+    fontSize: fontSizes.lg,
+    fontWeight: '700',
+    color: registerColors.text,
+  },
+  legalModalClose: {
+    padding: 4,
+  },
+  legalModalScroll: {
+    flex: 1,
+  },
+  legalModalScrollContent: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.sm,
+  },
+  legalModalBody: {
+    fontSize: fontSizes.sm,
+    color: registerColors.textLight,
+    lineHeight: 22,
+  },
+  legalModalScrollAnchor: {
+    height: 1,
+  },
+  legalScrollHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: spacing.xs,
+  },
+  legalScrollHintText: {
+    fontSize: fontSizes.xs,
+    color: registerColors.gray,
+  },
+  legalAcceptButton: {
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.sm,
+    backgroundColor: registerColors.accent,
+    borderRadius: radius.full,
+    paddingVertical: spacing.md,
+    alignItems: 'center',
+  },
+  legalAcceptButtonDisabled: {
+    backgroundColor: registerColors.grayLight,
+  },
+  legalAcceptButtonText: {
+    color: registerColors.white,
+    fontSize: fontSizes.md,
+    fontWeight: '700',
+  },
+  legalAcceptButtonTextDisabled: {
+    color: registerColors.gray,
+  },
 });

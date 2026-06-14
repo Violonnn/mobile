@@ -6,6 +6,7 @@ import { RegistrationDetails } from '../../types/registration';
 import LabeledInput from './LabeledInput';
 import BarangayDropdown from './BarangayDropdown';
 import SelectModal from './SelectModal';
+import LegalModal from './LegalModal';
 
 const MINGLANILLA_BARANGAYS = [
   'Cadulawan', 'Calajo-an', 'Camp 7', 'Camp 8', 'Cuanos', 'Guindaruhan',
@@ -36,6 +37,13 @@ export default function DetailsStep({ details, onUpdateDetails, onSubmit }: Deta
   const [showMonthDropdown, setShowMonthDropdown] = useState(false);
   const [showYearDropdown, setShowYearDropdown] = useState(false);
   const [error, setError] = useState('');
+  // const [legalModal, setLegalModal] = useState<{ visible: boolean; type: 'terms' | 'privacy' }>({
+  //   visible: false,
+  //   type: 'terms',
+  // });
+  // const [agreedTerms, setAgreedTerms] = useState(false);
+  // const [agreedPrivacy, setAgreedPrivacy] = useState(false);
+  const [showLegal, setShowLegal] = useState(false);
 
   const {
     lastName,
@@ -142,17 +150,23 @@ export default function DetailsStep({ details, onUpdateDetails, onSubmit }: Deta
       </View>
 
       <TouchableOpacity
-        style={styles.modernCheckboxContainer}
-        onPress={() => onUpdateDetails({ agreedToTerms: !agreedToTerms })}
-      >
-        <View style={[styles.circularCheckbox, agreedToTerms && styles.circularCheckboxActive]}>
-          {agreedToTerms && <Ionicons name="checkmark" size={12} color="white" />}
-        </View>
-        <Text style={styles.checkboxText}>
-          I agree to the <Text style={styles.linkText}>Terms & Conditions</Text> and{' '}
-          <Text style={styles.linkText}>Privacy Policy</Text>
-        </Text>
-      </TouchableOpacity>
+  style={styles.modernCheckboxContainer}
+  onPress={() => {
+    if (agreedToTerms) {
+      onUpdateDetails({ agreedToTerms: false });
+    } else {
+      setShowLegal(true);
+    }
+  }}
+>
+  <View style={[styles.circularCheckbox, agreedToTerms && styles.circularCheckboxActive]}>
+    {agreedToTerms && <Ionicons name="checkmark" size={12} color="white" />}
+  </View>
+  <Text style={styles.checkboxText}>
+    I agree to the <Text style={styles.linkText}>Terms & Conditions</Text> and{' '}
+    <Text style={styles.linkText}>Privacy Policy</Text>
+  </Text>
+</TouchableOpacity>
 
       <TouchableOpacity style={styles.modernButton} onPress={validateAndSubmit}>
         <Text style={styles.modernButtonText}>PROCEED</Text>
@@ -172,6 +186,13 @@ export default function DetailsStep({ details, onUpdateDetails, onSubmit }: Deta
         onSelect={(value) => onUpdateDetails({ birthYear: String(value) })}
         onClose={() => setShowYearDropdown(false)}
       />
+     <LegalModal
+  visible={showLegal}
+  onAccept={() => {
+    onUpdateDetails({ agreedToTerms: true });
+    setShowLegal(false);
+  }}
+/>
     </View>
   );
 }
