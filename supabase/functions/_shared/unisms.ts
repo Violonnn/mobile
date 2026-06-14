@@ -141,7 +141,7 @@ export async function sendUniSms(
 }
 
 export function buildOtpMessage(otp: string): string {
-  return `DisasterLink code: ${otp}. Valid 10 min. Do not share.`;
+  return `Hello! Please verify your phone number using the code ${otp} valid for 10 min - DisasterLink`;
 }
 
 export function isE164Phone(phone: string): boolean {
