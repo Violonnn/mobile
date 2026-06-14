@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Keyboard } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, Keyboard, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { registerStyles as styles } from '../../styles/screens/register.styles';
 import NumericKeyboardAccessory, { NUMERIC_ACCESSORY_ID } from '../ui/NumericKeyboardAccessory';
@@ -80,7 +80,7 @@ export default function PINStep({
       <View style={styles.fieldGroup}>
         <Text style={styles.label}>PIN</Text>
         <View style={[styles.input, styles.dropdownInput, pinFocused && styles.inputFocused]}>
-                    <View style={styles.pinInputWrapper}>
+          <Pressable style={styles.pinInputWrapper} onPress={() => pinRef.current?.focus()}>
             <Text
               style={[styles.pinDisplayText, pin.length === 0 && { color: '#9CA3AF' }]}
               pointerEvents="none"
@@ -105,7 +105,7 @@ export default function PINStep({
               blurOnSubmit={false}
               onSubmitEditing={() => confirmRef.current?.focus()}
             />
-          </View>
+          </Pressable>
           <TouchableOpacity
             onPress={() => setPinVisible(!pinVisible)}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -129,7 +129,7 @@ export default function PINStep({
             error !== '' && styles.inputError,
           ]}
         >
-                    <View style={styles.pinInputWrapper}>
+          <Pressable style={styles.pinInputWrapper} onPress={() => confirmRef.current?.focus()}>
             <Text
               style={[
                 styles.pinDisplayText,
@@ -161,7 +161,7 @@ export default function PINStep({
               blurOnSubmit
               onSubmitEditing={Keyboard.dismiss}
             />
-          </View>
+          </Pressable>
           <TouchableOpacity
             onPress={() => setConfirmVisible(!confirmVisible)}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}

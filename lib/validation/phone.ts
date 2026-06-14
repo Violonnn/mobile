@@ -33,9 +33,9 @@ export function validatePHNumber(digits: string): { valid: boolean; message: str
     917, 926, 927, 935, 936, 937, 945, 955, 956, 965, 966, 967, 975, 976, 977,
     978, 979, 995, 996, 997, 908, 918, 919, 920, 921, 928, 929, 930, 938, 939,
     940, 946, 947, 948, 949, 950, 951, 961, 998, 999, 895, 896, 897, 898, 991,
-    992, 993, 994,
+    992, 993, 994, 916, 906
   ];
-
+  
   if (!validPrefixes.includes(prefix)) {
     return { valid: false, message: 'Enter a valid Philippine mobile number' };
   }

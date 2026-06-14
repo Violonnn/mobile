@@ -148,7 +148,10 @@ export default function Stepper({ current }: { current: RegistrationStep }) {
         })}
 
         {markerCenters[current] != null && (
-          <Animated.View style={[styles.activeMarkerLayer, activeMarkerStyle]}>
+          <Animated.View
+            pointerEvents="none"
+            style={[styles.activeMarkerLayer, activeMarkerStyle]}
+          >
             <Ionicons
               name="location-sharp"
               size={ACTIVE_MARKER_SIZE}
@@ -159,22 +162,28 @@ export default function Stepper({ current }: { current: RegistrationStep }) {
       </View>
 
       <View style={styles.stepLabelsRow}>
-        {STEP_LABELS.map((label, i) => (
-          <Text
-            key={label}
-            style={[
-              styles.stepLabel,
-              i < current
-                ? styles.stepLabelDone
-                : i === current
-                  ? styles.stepLabelActive
-                  : styles.stepLabelInactive,
-            ]}
-          >
-            {label}
-          </Text>
-        ))}
-      </View>
+  {STEP_LABELS.map((label, i) => {
+    const isLast = i === STEP_LABELS.length - 1;
+    return (
+      <React.Fragment key={label}>
+        <Text
+          style={[
+            styles.stepLabel,
+            i < current
+              ? styles.stepLabelDone
+              : i === current
+                ? styles.stepLabelActive
+                : styles.stepLabelInactive,
+          ]}
+        >
+          {label}
+        </Text>
+        {!isLast && <View style={styles.stepLabelSpacer} />}
+      </React.Fragment>
+    );
+  })}
+</View>
+
     </View>
   );
 }

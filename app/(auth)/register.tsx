@@ -155,11 +155,12 @@ export default function RegisterScreen() {
           <Text style={styles.backButtonText}>‹</Text>
         </TouchableOpacity>
 
-        {isDetailsStep ? (
+        {isDetailsStep || isPinStep ? (
           <ScrollView
-            contentContainerStyle={styles.scrollContent}
-            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={isDetailsStep ? styles.scrollContent : styles.fixedScrollContent}
+            keyboardShouldPersistTaps="always"
             showsVerticalScrollIndicator={false}
+            keyboardDismissMode="on-drag"
           >
             {centeredBody}
           </ScrollView>
@@ -170,8 +171,7 @@ export default function RegisterScreen() {
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
               bounces={false}
-              scrollEnabled={isPinStep}
-              keyboardDismissMode="on-drag"
+              scrollEnabled={false}
             >
               {centeredBody}
             </ScrollView>

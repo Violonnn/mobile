@@ -147,14 +147,26 @@ export const registerStyles = StyleSheet.create({
   stepLabelsRow: {
     flexDirection: 'row',
     width: '100%',
-    justifyContent: 'space-between',
     marginTop: spacing.sm,
   },
-  stepLabel: {
+    stepColumn: {
+    width: 40,
+    alignItems: 'center',
+  },
+  stepLabelUnderMarker: {
     fontSize: 9,
     textAlign: 'center',
-    flex: 1,
+    marginTop: 4,
+    width: 52, // a bit wider so "Details" fits; still centered under marker
   },
+ stepLabel: {
+  fontSize: 9,
+  textAlign: 'center',
+  width: 40,        // match stepMarkerSlot width exactly
+},
+stepLabelSpacer: {
+  flex: 1,
+},
   stepLabelInactive: {
     color: registerColors.grayMuted,
   },
@@ -595,7 +607,8 @@ export const registerStyles = StyleSheet.create({
   pinInputWrapper: {
     flex: 1,
     justifyContent: 'center',
-    minHeight: 28,
+    alignSelf: 'stretch',
+    position: 'relative',
   },
   pinDisplayText: {
     fontSize: fontSizes.lg,
@@ -607,7 +620,9 @@ export const registerStyles = StyleSheet.create({
   },
   pinHiddenInput: {
     ...StyleSheet.absoluteFillObject,
-    opacity: 0,
+    color: 'transparent',
+    fontSize: fontSizes.lg,
+    letterSpacing: 6,
     padding: 0,
     margin: 0,
   },
