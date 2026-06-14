@@ -80,26 +80,32 @@ export default function PINStep({
       <View style={styles.fieldGroup}>
         <Text style={styles.label}>PIN</Text>
         <View style={[styles.input, styles.dropdownInput, pinFocused && styles.inputFocused]}>
-          <TextInput
-            ref={pinRef}
-            style={styles.pinInputInner}
-            value={pin}
-            onChangeText={handlePinChange}
-            onFocus={() => setPinFocused(true)}
-            onBlur={() => setPinFocused(false)}
-            placeholder="······"
-            placeholderTextColor="#9CA3AF"
-            keyboardType="number-pad"
-            secureTextEntry={!pinVisible}
-            maxLength={6}
-            autoCorrect={false}
-            autoComplete="off"
-            textContentType="oneTimeCode"
-            inputAccessoryViewID={NUMERIC_ACCESSORY_ID}
-            returnKeyType="next"
-            blurOnSubmit={false}
-            onSubmitEditing={() => confirmRef.current?.focus()}
-          />
+                    <View style={styles.pinInputWrapper}>
+            <Text
+              style={[styles.pinDisplayText, pin.length === 0 && { color: '#9CA3AF' }]}
+              pointerEvents="none"
+            >
+              {pin.length === 0 ? '······' : pinVisible ? pin : '•'.repeat(pin.length)}
+            </Text>
+            <TextInput
+              ref={pinRef}
+              style={styles.pinHiddenInput}
+              value={pin}
+              onChangeText={handlePinChange}
+              onFocus={() => setPinFocused(true)}
+              onBlur={() => setPinFocused(false)}
+              keyboardType="number-pad"
+              maxLength={6}
+              autoCorrect={false}
+              autoComplete="off"
+              textContentType="none"
+              caretHidden
+              inputAccessoryViewID={NUMERIC_ACCESSORY_ID}
+              returnKeyType="next"
+              blurOnSubmit={false}
+              onSubmitEditing={() => confirmRef.current?.focus()}
+            />
+          </View>
           <TouchableOpacity
             onPress={() => setPinVisible(!pinVisible)}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -123,26 +129,39 @@ export default function PINStep({
             error !== '' && styles.inputError,
           ]}
         >
-          <TextInput
-            ref={confirmRef}
-            style={styles.pinInputInner}
-            value={confirmPin}
-            onChangeText={handleConfirmPinChange}
-            onFocus={() => setConfirmFocused(true)}
-            onBlur={() => setConfirmFocused(false)}
-            placeholder="······"
-            placeholderTextColor="#9CA3AF"
-            keyboardType="number-pad"
-            secureTextEntry={!confirmVisible}
-            maxLength={6}
-            autoCorrect={false}
-            autoComplete="off"
-            textContentType="oneTimeCode"
-            inputAccessoryViewID={NUMERIC_ACCESSORY_ID}
-            returnKeyType="done"
-            blurOnSubmit
-            onSubmitEditing={Keyboard.dismiss}
-          />
+                    <View style={styles.pinInputWrapper}>
+            <Text
+              style={[
+                styles.pinDisplayText,
+                confirmPin.length === 0 && { color: '#9CA3AF' },
+              ]}
+              pointerEvents="none"
+            >
+              {confirmPin.length === 0
+                ? '······'
+                : confirmVisible
+                  ? confirmPin
+                  : '•'.repeat(confirmPin.length)}
+            </Text>
+            <TextInput
+              ref={confirmRef}
+              style={styles.pinHiddenInput}
+              value={confirmPin}
+              onChangeText={handleConfirmPinChange}
+              onFocus={() => setConfirmFocused(true)}
+              onBlur={() => setConfirmFocused(false)}
+              keyboardType="number-pad"
+              maxLength={6}
+              autoCorrect={false}
+              autoComplete="off"
+              textContentType="none"
+              caretHidden
+              inputAccessoryViewID={NUMERIC_ACCESSORY_ID}
+              returnKeyType="done"
+              blurOnSubmit
+              onSubmitEditing={Keyboard.dismiss}
+            />
+          </View>
           <TouchableOpacity
             onPress={() => setConfirmVisible(!confirmVisible)}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}

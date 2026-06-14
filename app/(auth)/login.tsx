@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
   Keyboard,
   TouchableWithoutFeedback,
+  StyleSheet,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -103,7 +104,7 @@ export default function LoginScreen() {
                     </Text>
                   )}
 
-                  <View style={styles.fieldGroup}>
+<View style={styles.fieldGroup}>
                     <Text style={styles.label}>PIN</Text>
                     <View
                       style={[
@@ -113,26 +114,39 @@ export default function LoginScreen() {
                         !!pinError && styles.inputError,
                       ]}
                     >
-                      <TextInput
-                        style={styles.pinInputInner}
-                        value={pin}
-                        onChangeText={handlePinChange}
-                        onFocus={() => setPinFocused(true)}
-                        onBlur={() => setPinFocused(false)}
-                        placeholder="······"
-                        placeholderTextColor="#9CA3AF"
-                        keyboardType="number-pad"
-                        secureTextEntry={!pinVisible}
-                        maxLength={6}
-                        autoCorrect={false}
-                        autoComplete="off"
-                        textContentType="oneTimeCode"
-                        inputAccessoryViewID={NUMERIC_ACCESSORY_ID}
-                        returnKeyType="done"
-                        onSubmitEditing={() => {
-                          if (canSubmit) submitLogin();
-                        }}
-                      />
+                                            <View style={styles.pinInputWrapper}>
+                        <Text
+                          style={[
+                            styles.pinDisplayText,
+                            pin.length === 0 && { color: '#9CA3AF' },
+                          ]}
+                          pointerEvents="none"
+                        >
+                          {pin.length === 0
+                            ? '······'
+                            : pinVisible
+                              ? pin
+                              : '•'.repeat(pin.length)}
+                        </Text>
+                        <TextInput
+                          style={styles.pinHiddenInput}
+                          value={pin}
+                          onChangeText={handlePinChange}
+                          onFocus={() => setPinFocused(true)}
+                          onBlur={() => setPinFocused(false)}
+                          keyboardType="number-pad"
+                          maxLength={6}
+                          autoCorrect={false}
+                          autoComplete="off"
+                          textContentType="none"
+                          caretHidden
+                          inputAccessoryViewID={NUMERIC_ACCESSORY_ID}
+                          returnKeyType="done"
+                          onSubmitEditing={() => {
+                            if (canSubmit) submitLogin();
+                          }}
+                        />
+                      </View>
                       <TouchableOpacity
                         onPress={() => setPinVisible(!pinVisible)}
                         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}

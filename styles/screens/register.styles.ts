@@ -592,4 +592,23 @@ export const registerStyles = StyleSheet.create({
     letterSpacing: 6,
     backgroundColor: 'transparent',
   },
+  pinInputWrapper: {
+    flex: 1,
+    justifyContent: 'center',
+    minHeight: 28,
+  },
+  pinDisplayText: {
+    fontSize: fontSizes.lg,
+    color: registerColors.text,
+    paddingVertical: 0,
+    letterSpacing: 6,
+    lineHeight: fontSizes.lg + 6,
+    textAlign: 'left',
+  },
+  pinHiddenInput: {
+    ...StyleSheet.absoluteFillObject,
+    opacity: 0,
+    padding: 0,
+    margin: 0,
+  },
 });
