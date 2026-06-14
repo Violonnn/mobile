@@ -7,6 +7,7 @@ import {
   signOutAfterRegistrationFailure,
   verifyRegistrationOtp,
 } from '../lib/registration';
+import { setSavedPhone } from '../lib/savedPhone';
 import {
   formatFullPHMobile,
   sanitizePhoneInput,
@@ -231,6 +232,7 @@ export function useRegistrationFlow() {
 
         if (error) throw new Error(error);
 
+        await setSavedPhone(phoneDigits);
         setIsComplete(true);
         router.replace({ pathname: '/(main)/home', params: { welcome: '1' } });
       } catch (err: unknown) {
@@ -257,7 +259,7 @@ export function useRegistrationFlow() {
         setSubmittingRegistration(false);
       }
     },
-    [router, details, e164Number],
+    [router, details, e164Number, phoneDigits],
   );
 
   return {

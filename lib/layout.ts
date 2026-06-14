@@ -15,6 +15,13 @@ export function responsiveImageHeight(ratio = 0.24): number {
   return Math.min(max, Math.round(SCREEN_HEIGHT * ratio));
 }
 
+/** Taller hero image for the login screen only */
+export function responsiveLoginImageHeight(): number {
+  const ratio = layout.isSmallScreen ? 0.28 : 0.32;
+  const max = layout.isSmallScreen ? 260 : 340;
+  return Math.min(max, Math.round(SCREEN_HEIGHT * ratio));
+}
+
 export function getOtpDimensions(boxCount = 6, horizontalPadding = 56) {
   const gap = layout.isCompactWidth ? 6 : 8;
   const availableWidth = SCREEN_WIDTH - horizontalPadding;

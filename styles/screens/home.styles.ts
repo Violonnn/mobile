@@ -46,17 +46,6 @@ export const homeStyles = StyleSheet.create({
     color: colors.textMuted,
     marginTop: 1,
   },
-  guestBadge: {
-    backgroundColor: colors.primaryLight,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: radius.full,
-  },
-  guestBadgeText: {
-    fontSize: fontSizes.xs,
-    fontWeight: fontWeights.semibold,
-    color: colors.primary,
-  },
   heroCard: {
     backgroundColor: colors.card,
     borderRadius: radius.xl,
@@ -146,34 +135,6 @@ export const homeStyles = StyleSheet.create({
     backgroundColor: colors.white,
   },
   logoutButtonText: {
-    color: colors.primary,
-    fontSize: fontSizes.lg,
-    fontWeight: fontWeights.semibold,
-  },
-  guestActions: {
-    gap: spacing.sm,
-    marginTop: spacing.md,
-  },
-  guestPrimaryButton: {
-    paddingVertical: spacing.lg,
-    borderRadius: radius.full,
-    alignItems: 'center',
-    backgroundColor: homeColors.accent,
-  },
-  guestPrimaryButtonText: {
-    color: colors.white,
-    fontSize: fontSizes.lg,
-    fontWeight: fontWeights.bold,
-  },
-  guestSecondaryButton: {
-    paddingVertical: spacing.lg,
-    borderRadius: radius.full,
-    alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: colors.primary,
-    backgroundColor: colors.primaryLight,
-  },
-  guestSecondaryButtonText: {
     color: colors.primary,
     fontSize: fontSizes.lg,
     fontWeight: fontWeights.semibold,

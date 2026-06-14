@@ -107,15 +107,4 @@ export const styles = StyleSheet.create({
     fontWeight: fontWeights.semibold,
     letterSpacing: 0.3,
   },
-  guestButton: {
-    paddingVertical: spacing.lg,
-    alignItems: 'center',
-  },
-  guestText: {
-    color: colors.textMuted,
-    fontSize: fontSizes.md,
-    fontWeight: fontWeights.medium,
-    textDecorationLine: 'underline',
-    letterSpacing: 0.2,
-  },
 });

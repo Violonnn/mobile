@@ -114,9 +114,6 @@ export default function WelcomeScreen() {
             <TouchableOpacity style={styles.loginButton} onPress={() => router.push('/(auth)/login')} activeOpacity={0.85}>
               <Text style={styles.loginText}>Login</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.guestButton} onPress={() => router.push('/(main)/home')} activeOpacity={0.7}>
-              <Text style={styles.guestText}>Continue as Guest →</Text>
-            </TouchableOpacity>
           </View>
         </View>
       </SafeAreaView>

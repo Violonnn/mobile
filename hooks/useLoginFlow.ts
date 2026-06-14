@@ -1,7 +1,8 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Alert, Keyboard } from 'react-native';
 import { useRouter } from 'expo-router';
 import { loginWithPin } from '../lib/login';
+import { getSavedPhone, setSavedPhone } from '../lib/savedPhone';
 import {
   formatFullPHMobile,
   sanitizePhoneInput,
@@ -16,21 +17,49 @@ export function useLoginFlow() {
   const router = useRouter();
 
   const [phoneDigits, setPhoneDigits] = useState('');
+  const [savedPhoneDigits, setSavedPhoneDigits] = useState('');
+  const [phoneLocked, setPhoneLocked] = useState(false);
+  const [phoneLoaded, setPhoneLoaded] = useState(false);
   const [phoneError, setPhoneError] = useState('');
   const [pin, setPin] = useState('');
   const [pinError, setPinError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+
+    getSavedPhone().then((saved) => {
+      if (!mounted) return;
+      if (saved) {
+        setPhoneDigits(saved);
+        setSavedPhoneDigits(saved);
+        setPhoneLocked(true);
+      }
+      setPhoneLoaded(true);
+    });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const cleanedPhone = phoneDigits.replace(/\s/g, '');
   const e164Number = `+63${cleanedPhone.replace(/^0+/, '')}`;
   const displayNumber = formatFullPHMobile(`0${cleanedPhone.replace(/^0+/, '')}`);
   const phoneValidation = validatePHNumber(phoneDigits);
   const pinValid = /^\d{6}$/.test(pin);
-  const canSubmit = phoneValidation.valid && pinValid && !submitting;
+  const hasSavedPhone = savedPhoneDigits.length > 0;
 
   const handlePhoneInput = useCallback((text: string) => {
+    if (phoneLocked) return;
     setPhoneError('');
     setPhoneDigits(sanitizePhoneInput(text));
+  }, [phoneLocked]);
+
+  const clearPhoneForEdit = useCallback(() => {
+    setPhoneError('');
+    setPhoneDigits('');
+    setPhoneLocked(false);
   }, []);
 
   const handlePinChange = useCallback((text: string) => {
@@ -39,9 +68,16 @@ export function useLoginFlow() {
   }, []);
 
   const submitLogin = useCallback(async () => {
+    if (submitting) return;
+
     const result = validatePHNumber(phoneDigits);
     if (!result.valid) {
       setPhoneError(result.message || 'Enter a valid Philippine mobile number');
+      return;
+    }
+
+    if (pin.length === 0) {
+      setPinError('Enter your 6-digit PIN.');
       return;
     }
 
@@ -63,6 +99,10 @@ export function useLoginFlow() {
 
       if (error) throw new Error(error);
 
+      await setSavedPhone(phoneDigits);
+      setSavedPhoneDigits(phoneDigits);
+      setPhoneLocked(true);
+
       router.replace('/(main)/home');
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Login failed. Please try again.';
@@ -71,11 +111,19 @@ export function useLoginFlow() {
     } finally {
       setSubmitting(false);
     }
-  }, [e164Number, phoneDigits, pin, pinValid, router]);
+  }, [e164Number, phoneDigits, pin, pinValid, router, submitting]);
 
   const goBack = useCallback(() => {
     router.back();
     return true;
+  }, [router]);
+
+  const goToForgotPassword = useCallback(() => {
+    router.push('/(auth)/forgot-password');
+  }, [router]);
+
+  const goToRegister = useCallback(() => {
+    router.push('/(auth)/register');
   }, [router]);
 
   return {
@@ -86,10 +134,15 @@ export function useLoginFlow() {
     pin,
     pinError,
     submitting,
-    canSubmit,
+    phoneLocked,
+    phoneLoaded,
+    hasSavedPhone,
     handlePhoneInput,
+    clearPhoneForEdit,
     handlePinChange,
     submitLogin,
     goBack,
+    goToForgotPassword,
+    goToRegister,
   };
 }

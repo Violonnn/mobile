@@ -73,6 +73,12 @@ export default function HomeScreen() {
   }, [loadSession]);
 
   useEffect(() => {
+    if (!loading && !isAuthenticated) {
+      router.replace('/');
+    }
+  }, [loading, isAuthenticated, router]);
+
+  useEffect(() => {
     if (welcome === '1' && isAuthenticated && !loading) {
       setShowWelcome(true);
     }
@@ -92,7 +98,7 @@ export default function HomeScreen() {
     }
   }
 
-  if (loading) {
+  if (loading || !isAuthenticated) {
     return (
       <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
         <View style={[styles.scrollContent, { flex: 1, justifyContent: 'center', alignItems: 'center' }]}>
@@ -102,7 +108,7 @@ export default function HomeScreen() {
     );
   }
 
-  const greetingName = firstName.trim() || (isAuthenticated ? 'there' : 'Guest');
+  const greetingName = firstName.trim() || 'there';
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
@@ -114,11 +120,6 @@ export default function HomeScreen() {
             <Text style={styles.headerSubtitle}>Minglanilla, Cebu</Text>
           </View>
         </View>
-        {!isAuthenticated && (
-          <View style={styles.guestBadge}>
-            <Text style={styles.guestBadgeText}>Guest</Text>
-          </View>
-        )}
       </View>
 
       <ScrollView
@@ -126,15 +127,11 @@ export default function HomeScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.heroCard}>
-          <Text style={styles.heroGreeting}>
-            {isAuthenticated ? `Welcome, ${greetingName}!` : 'Browsing as Guest'}
-          </Text>
+          <Text style={styles.heroGreeting}>Welcome, {greetingName}!</Text>
           <Text style={styles.heroText}>
-            {isAuthenticated
-              ? barangay
-                ? `You're signed in and linked to ${barangay}`
-                : "You're signed in. Home features are being prepared for you."
-              : 'Create an account or log in to unlock reporting, alerts, and community tools.'}
+            {barangay
+              ? `You're signed in and linked to ${barangay}`
+              : "You're signed in. Home features are being prepared for you."}
           </Text>
         </View>
 
@@ -154,37 +151,18 @@ export default function HomeScreen() {
           ))}
         </View>
 
-        {isAuthenticated ? (
-          <TouchableOpacity
-            style={styles.logoutButton}
-            onPress={handleLogout}
-            disabled={loggingOut}
-            activeOpacity={0.8}
-          >
-            {loggingOut ? (
-              <ActivityIndicator color={colors.primary} />
-            ) : (
-              <Text style={styles.logoutButtonText}>Log Out</Text>
-            )}
-          </TouchableOpacity>
-        ) : (
-          <View style={styles.guestActions}>
-            <TouchableOpacity
-              style={styles.guestPrimaryButton}
-              onPress={() => router.push('/(auth)/register')}
-              activeOpacity={0.85}
-            >
-              <Text style={styles.guestPrimaryButtonText}>Create Account</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.guestSecondaryButton}
-              onPress={() => router.push('/(auth)/login')}
-              activeOpacity={0.85}
-            >
-              <Text style={styles.guestSecondaryButtonText}>Log In</Text>
-            </TouchableOpacity>
-          </View>
-        )}
+        <TouchableOpacity
+          style={styles.logoutButton}
+          onPress={handleLogout}
+          disabled={loggingOut}
+          activeOpacity={0.8}
+        >
+          {loggingOut ? (
+            <ActivityIndicator color={colors.primary} />
+          ) : (
+            <Text style={styles.logoutButtonText}>Log Out</Text>
+          )}
+        </TouchableOpacity>
       </ScrollView>
 
       <WelcomeModal
