@@ -30,12 +30,24 @@ export function validatePHNumber(digits: string): { valid: boolean; message: str
 
   const prefix = parseInt(cleaned.substring(0, 3), 10); // ← use cleaned
   const validPrefixes = [
-    917, 926, 927, 935, 936, 937, 945, 955, 956, 965, 966, 967, 975, 976, 977,
-    978, 979, 995, 996, 997, 908, 918, 919, 920, 921, 928, 929, 930, 938, 939,
-    940, 946, 947, 948, 949, 950, 951, 961, 998, 999, 895, 896, 897, 898, 991,
-    992, 993, 994, 916, 906
-  ];
-  
+  // Globe / TM
+  817, 904, 905, 906, 915, 916, 917, 926, 927, 935, 936, 937,
+  945, 954, 955, 956, 965, 966, 967, 975, 976, 977, 978, 979,
+
+  // Smart
+  908, 911, 913, 914, 919, 920, 921, 928, 929, 939, 946, 947,
+  949, 951, 961, 963, 968, 969, 970, 981, 998, 999,
+
+  // TNT (Talk N Text)
+  907, 909, 910, 912, 930, 938,
+
+  // Sun Cellular (now under Smart)
+  931, 932, 933, 934, 940, 973, 974, 991,
+
+  // DITO
+  895, 896, 897, 898,
+];
+
   if (!validPrefixes.includes(prefix)) {
     return { valid: false, message: 'Enter a valid Philippine mobile number' };
   }
