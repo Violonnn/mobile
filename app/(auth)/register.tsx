@@ -50,6 +50,8 @@ export default function RegisterScreen() {
     hasPendingOtp,
     canRequestOtp,
     sendingOTP,
+    verifyingOTP,
+    submittingRegistration,
     setOtp,
     setPin,
     setConfirmPin,
@@ -113,6 +115,7 @@ export default function RegisterScreen() {
           onChangeOtp={setOtp}
           resendCooldown={resendCooldown}
           sendingOTP={sendingOTP}
+          verifyingOTP={verifyingOTP}
           onResend={handleResend}
           onVerify={verifyOTP}
         />
@@ -132,6 +135,7 @@ export default function RegisterScreen() {
           onChangePin={setPin}
           onChangeConfirmPin={setConfirmPin}
           onSubmit={completeRegistration}
+          submitting={submittingRegistration}
         />
       )}
     </View>

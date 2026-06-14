@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { registerStyles as styles, registerColors } from '../../styles/screens/register.styles';
 import { RegistrationDetails } from '../../types/registration';
@@ -27,6 +27,39 @@ const MONTHS = [
 const currentYear = new Date().getFullYear();
 const YEARS = Array.from({ length: 100 }, (_, i) => (currentYear - i).toString());
 
+const ERROR_REQUIRED_FIELDS = 'Please fill in all required fields.';
+const ERROR_MIN_AGE = 'You must be 18 years or older to register.';
+const ERROR_TERMS = 'You must agree to the Terms & Conditions.';
+
+function computeAge(birthYear: string, birthMonth: number | null): number | null {
+  if (!birthYear || birthMonth == null) return null;
+  const yearNum = parseInt(birthYear, 10);
+  if (Number.isNaN(yearNum)) return null;
+  const currentMonth = new Date().getMonth() + 1;
+  let age = currentYear - yearNum;
+  if (currentMonth < birthMonth) age--;
+  return age;
+}
+
+function isErrorResolved(
+  message: string,
+  fields: Pick<RegistrationDetails, 'lastName' | 'firstName' | 'birthYear' | 'birthMonth' | 'barangay' | 'agreedToTerms'>,
+): boolean {
+  const { lastName, firstName, birthYear, birthMonth, barangay, agreedToTerms } = fields;
+
+  if (message === ERROR_REQUIRED_FIELDS) {
+    return !!(lastName && firstName && birthYear && birthMonth && barangay);
+  }
+  if (message === ERROR_MIN_AGE) {
+    const age = computeAge(birthYear, birthMonth);
+    return age !== null && age >= 18;
+  }
+  if (message === ERROR_TERMS) {
+    return agreedToTerms;
+  }
+  return false;
+}
+
 interface DetailsStepProps {
   details: RegistrationDetails;
   onUpdateDetails: (patch: Partial<RegistrationDetails>) => void;
@@ -44,6 +77,7 @@ export default function DetailsStep({ details, onUpdateDetails, onSubmit }: Deta
   // const [agreedTerms, setAgreedTerms] = useState(false);
   // const [agreedPrivacy, setAgreedPrivacy] = useState(false);
   const [showLegal, setShowLegal] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   const {
     lastName,
@@ -55,31 +89,32 @@ export default function DetailsStep({ details, onUpdateDetails, onSubmit }: Deta
     agreedToTerms,
   } = details;
 
+  useEffect(() => {
+    if (error && isErrorResolved(error, { lastName, firstName, birthYear, birthMonth, barangay, agreedToTerms })) {
+      setError('');
+    }
+  }, [error, lastName, firstName, birthYear, birthMonth, barangay, agreedToTerms]);
+
   function validateAndSubmit() {
     setError('');
 
     if (!lastName || !firstName || !birthYear || !birthMonth || !barangay) {
-      setError('Please fill in all required fields.');
+      setError(ERROR_REQUIRED_FIELDS);
       return;
     }
 
-    const yearNum = parseInt(birthYear, 10);
-    const currentMonth = new Date().getMonth() + 1;
-    let age = currentYear - yearNum;
-    if (currentMonth < birthMonth) {
-      age--;
-    }
-
-    if (age < 18) {
-      setError('You must be 18 years or older to register.');
+    const age = computeAge(birthYear, birthMonth);
+    if (age === null || age < 18) {
+      setError(ERROR_MIN_AGE);
       return;
     }
 
     if (!agreedToTerms) {
-      setError('You must agree to the Terms & Conditions.');
+      setError(ERROR_TERMS);
       return;
     }
 
+    setSubmitting(true);
     onSubmit();
   }
 
@@ -89,8 +124,6 @@ export default function DetailsStep({ details, onUpdateDetails, onSubmit }: Deta
       <Text style={styles.otpTargetText}>
         Enter your details to create your account
       </Text>
-
-      {!!error && <Text style={styles.errorText}>{error}</Text>}
 
       <LabeledInput
         label="Last Name"
@@ -168,8 +201,19 @@ export default function DetailsStep({ details, onUpdateDetails, onSubmit }: Deta
   </Text>
 </TouchableOpacity>
 
-      <TouchableOpacity style={styles.modernButton} onPress={validateAndSubmit}>
-        <Text style={styles.modernButtonText}>PROCEED</Text>
+      {!!error && <Text style={styles.errorText}>{error}</Text>}
+
+      <TouchableOpacity
+        style={styles.modernButton}
+        onPress={validateAndSubmit}
+        disabled={submitting}
+        activeOpacity={0.8}
+      >
+        {submitting ? (
+          <ActivityIndicator color={registerColors.white} />
+        ) : (
+          <Text style={styles.modernButtonText}>PROCEED</Text>
+        )}
       </TouchableOpacity>
 
       <SelectModal

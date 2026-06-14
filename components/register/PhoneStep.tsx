@@ -106,8 +106,6 @@ export default function PhoneStep({
       >
         {sendingOTP ? (
           <ActivityIndicator color={registerColors.white} />
-        ) : resendCooldown > 0 ? (
-          <Text style={styles.primaryButtonText}>WAIT {resendCooldown}s</Text>
         ) : (
           <>
             <Ionicons name="chevron-forward-outline" size={18} color={registerColors.white} />

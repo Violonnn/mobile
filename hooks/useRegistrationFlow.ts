@@ -45,6 +45,8 @@ export function useRegistrationFlow() {
   const [otpSendCount, setOtpSendCount] = useState(0);
   const [otpSentPhone, setOtpSentPhone] = useState('');
   const [sendingOTP, setSendingOTP] = useState(false);
+  const [verifyingOTP, setVerifyingOTP] = useState(false);
+  const [submittingRegistration, setSubmittingRegistration] = useState(false);
   const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const cleanedPhone = phoneDigits.replace(/\s/g, '');
@@ -170,6 +172,7 @@ export function useRegistrationFlow() {
   const verifyOTP = useCallback(async () => {
     if (otp.length < 6) return;
 
+    setVerifyingOTP(true);
     try {
       const { error } = await verifyRegistrationOtp(e164Number, otp);
       if (error) throw new Error(error);
@@ -178,6 +181,8 @@ export function useRegistrationFlow() {
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Please check the code and try again.';
       Alert.alert('Invalid OTP', message);
+    } finally {
+      setVerifyingOTP(false);
     }
   }, [otp, e164Number]);
 
@@ -216,6 +221,7 @@ export function useRegistrationFlow() {
 
   const completeRegistration = useCallback(
     async (submittedPin: string) => {
+      setSubmittingRegistration(true);
       try {
         const { error } = await completeRegistrationProfile({
           phone: e164Number,
@@ -255,6 +261,8 @@ export function useRegistrationFlow() {
           setStep(1);
           return;
         }
+      } finally {
+        setSubmittingRegistration(false);
       }
     },
     [router, details, e164Number],
@@ -277,6 +285,8 @@ export function useRegistrationFlow() {
     hasPendingOtp,
     canRequestOtp,
     sendingOTP,
+    verifyingOTP,
+    submittingRegistration,
     setOtp,
     setPin,
     setConfirmPin,

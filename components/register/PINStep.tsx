@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Keyboard, Pressable } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, Keyboard, Pressable, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { registerStyles as styles } from '../../styles/screens/register.styles';
+import { registerStyles as styles, registerColors } from '../../styles/screens/register.styles';
 import NumericKeyboardAccessory, { NUMERIC_ACCESSORY_ID } from '../ui/NumericKeyboardAccessory';
 
 type Props = {
@@ -11,6 +11,7 @@ type Props = {
   onChangePin: (value: string) => void;
   onChangeConfirmPin: (value: string) => void;
   onSubmit: (pin: string) => void;
+  submitting?: boolean;
 };
 
 export default function PINStep({
@@ -20,6 +21,7 @@ export default function PINStep({
   onChangePin,
   onChangeConfirmPin,
   onSubmit,
+  submitting = false,
 }: Props) {
   const pinRef = useRef<TextInput>(null);
   const confirmRef = useRef<TextInput>(null);
@@ -184,16 +186,22 @@ export default function PINStep({
       </View>
 
       <TouchableOpacity
-        style={[styles.primaryButton, !isComplete && styles.primaryButtonDisabled]}
+        style={[styles.primaryButton, (!isComplete || submitting) && styles.primaryButtonDisabled]}
         onPress={handleSubmit}
-        disabled={!isComplete}
+        disabled={!isComplete || submitting}
         activeOpacity={0.8}
       >
-        <Text style={[styles.primaryButtonText, !isComplete && styles.primaryButtonTextDisabled]}>
-          CREATE ACCOUNT
-        </Text>
-        {isComplete && (
-          <Ionicons name="checkmark-circle-outline" size={20} color="#fff" />
+        {submitting ? (
+          <ActivityIndicator color={registerColors.white} />
+        ) : (
+          <>
+            <Text style={[styles.primaryButtonText, !isComplete && styles.primaryButtonTextDisabled]}>
+              CREATE ACCOUNT
+            </Text>
+            {isComplete && (
+              <Ionicons name="checkmark-circle-outline" size={20} color="#fff" />
+            )}
+          </>
         )}
       </TouchableOpacity>
 

@@ -11,6 +11,7 @@ type Props = {
   onChangeOtp: (value: string) => void;
   resendCooldown: number;
   sendingOTP: boolean;
+  verifyingOTP: boolean;
   onResend: () => void;
   onVerify: () => void;
 };
@@ -21,6 +22,7 @@ export default function OTPStep({
   onChangeOtp,
   resendCooldown,
   sendingOTP,
+  verifyingOTP,
   onResend,
   onVerify,
 }: Props) {
@@ -50,12 +52,12 @@ export default function OTPStep({
       </View>
 
       <TouchableOpacity
-        style={[styles.primaryButton, !otpComplete && styles.primaryButtonDisabled]}
+        style={[styles.primaryButton, (!otpComplete || verifyingOTP) && styles.primaryButtonDisabled]}
         onPress={onVerify}
-        disabled={!otpComplete}
+        disabled={!otpComplete || verifyingOTP}
         activeOpacity={0.8}
       >
-        {sendingOTP ? (
+        {verifyingOTP ? (
           <ActivityIndicator color={registerColors.white} />
         ) : (
           <Text style={[styles.primaryButtonText, !otpComplete && styles.primaryButtonTextDisabled]}>
