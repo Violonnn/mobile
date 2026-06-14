@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -11,7 +11,7 @@ import {
   ActivityIndicator,
   Keyboard,
   TouchableWithoutFeedback,
-  StyleSheet,
+  Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,6 +21,7 @@ import { registerStyles as styles, registerColors } from '../../styles/screens/r
 import NumericKeyboardAccessory, { NUMERIC_ACCESSORY_ID } from '../../components/ui/NumericKeyboardAccessory';
 
 export default function LoginScreen() {
+  const pinRef = useRef<TextInput>(null);
   const [phoneFocused, setPhoneFocused] = useState(false);
   const [pinFocused, setPinFocused] = useState(false);
   const [pinVisible, setPinVisible] = useState(false);
@@ -55,7 +56,7 @@ export default function LoginScreen() {
         <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
           <ScrollView
             contentContainerStyle={styles.fixedScrollContent}
-            keyboardShouldPersistTaps="handled"
+            keyboardShouldPersistTaps="always"
             showsVerticalScrollIndicator={false}
             bounces={false}
           >
@@ -114,7 +115,7 @@ export default function LoginScreen() {
                         !!pinError && styles.inputError,
                       ]}
                     >
-                                            <View style={styles.pinInputWrapper}>
+                      <Pressable style={styles.pinInputWrapper} onPress={() => pinRef.current?.focus()}>
                         <Text
                           style={[
                             styles.pinDisplayText,
@@ -129,6 +130,7 @@ export default function LoginScreen() {
                               : '•'.repeat(pin.length)}
                         </Text>
                         <TextInput
+                          ref={pinRef}
                           style={styles.pinHiddenInput}
                           value={pin}
                           onChangeText={handlePinChange}
@@ -146,7 +148,7 @@ export default function LoginScreen() {
                             if (canSubmit) submitLogin();
                           }}
                         />
-                      </View>
+                      </Pressable>
                       <TouchableOpacity
                         onPress={() => setPinVisible(!pinVisible)}
                         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}

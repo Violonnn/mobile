@@ -63,12 +63,7 @@ export function useLoginFlow() {
 
       if (error) throw new Error(error);
 
-      Alert.alert('Welcome back!', `Signed in as ${displayNumber}`, [
-        {
-          text: 'OK',
-          onPress: () => router.replace('/'),
-        },
-      ]);
+      router.replace('/(main)/home');
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Login failed. Please try again.';
       setPinError(message);
@@ -76,7 +71,7 @@ export function useLoginFlow() {
     } finally {
       setSubmitting(false);
     }
-  }, [displayNumber, e164Number, phoneDigits, pin, pinValid, router]);
+  }, [e164Number, phoneDigits, pin, pinValid, router]);
 
   const goBack = useCallback(() => {
     router.back();

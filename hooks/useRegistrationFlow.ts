@@ -232,15 +232,7 @@ export function useRegistrationFlow() {
         if (error) throw new Error(error);
 
         setIsComplete(true);
-
-        Alert.alert('Success!', 'Account created successfully!', [
-          {
-            text: 'OK',
-            onPress: () => {
-              router.replace('/');
-            },
-          },
-        ]);
+        router.replace({ pathname: '/(main)/home', params: { welcome: '1' } });
       } catch (err: unknown) {
         const message =
           err instanceof Error ? err.message : 'Registration could not be completed.';

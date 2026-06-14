@@ -621,8 +621,8 @@ stepLabelSpacer: {
   pinHiddenInput: {
     ...StyleSheet.absoluteFillObject,
     color: 'transparent',
-    fontSize: fontSizes.lg,
-    letterSpacing: 6,
+    fontSize: 1,
+    letterSpacing: 0,
     padding: 0,
     margin: 0,
   },
