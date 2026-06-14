@@ -48,7 +48,7 @@ export default function Stepper({ current }: { current: RegistrationStep }) {
   const [markerCenters, setMarkerCenters] = useState<number[]>([]);
   const translateX = useSharedValue(0);
   const scale = useSharedValue(1);
-  const bounce = useSharedValue(0);
+  const leap = useSharedValue(0);
 
   const recordMarkerCenter = useCallback((index: number, event: LayoutChangeEvent) => {
     const { x, width } = event.nativeEvent.layout;
@@ -64,25 +64,51 @@ export default function Stepper({ current }: { current: RegistrationStep }) {
     const target = markerCenters[current];
     if (target == null) return;
 
+    leap.value = withSequence(
+      withTiming(10, { duration: 80 }),
+      withTiming(-22, { duration: 180 }),
+      withTiming(-22, { duration: 80 }),
+      withSpring(0, { damping: 10, stiffness: 160 }),
+    );
+
     translateX.value = withSpring(target, {
       damping: 16,
       stiffness: 170,
       mass: 0.9,
     });
+
     scale.value = withSequence(
-      withSpring(1.18, { damping: 9, stiffness: 220 }),
-      withSpring(1, { damping: 14, stiffness: 180 }),
+      withSpring(1.22, { damping: 8, stiffness: 200 }),
+      withSpring(1, { damping: 13, stiffness: 170 }),
     );
-    bounce.value = withSequence(
-      withTiming(-4, { duration: 140 }),
-      withSpring(0, { damping: 12, stiffness: 200 }),
+  }, [current, markerCenters, translateX, scale, leap]);
+
+  useEffect(() => {
+    scale.value = withSequence(
+      withTiming(1, { duration: 420 }),
+      withSpring(1.4, { damping: 4, stiffness: 180 }),
+      withSpring(1.0, { damping: 6, stiffness: 120 }),
+      withSpring(1.4, { damping: 4, stiffness: 180 }),
+      withSpring(1.0, { damping: 6, stiffness: 120 }),
+      withSpring(1.4, { damping: 4, stiffness: 180 }),
+      withSpring(1.0, { damping: 6, stiffness: 120 }),
+      withSpring(1.4, { damping: 4, stiffness: 180 }),
+      withSpring(1.0, { damping: 6, stiffness: 120 }),
+      withSpring(1.4, { damping: 4, stiffness: 180 }),
+      withSpring(1.0, { damping: 6, stiffness: 120 }),
+      withSpring(1.4, { damping: 4, stiffness: 180 }),
+      withSpring(1.0, { damping: 6, stiffness: 120 }),
+      withSpring(1.4, { damping: 4, stiffness: 180 }),
+      withSpring(1.0, { damping: 6, stiffness: 120 }),
+      withSpring(1.4, { damping: 4, stiffness: 180 }),
+      withSpring(1.0, { damping: 6, stiffness: 120 }),
     );
-  }, [current, markerCenters, translateX, scale, bounce]);
+  }, [current, scale]);
 
   const activeMarkerStyle = useAnimatedStyle(() => ({
     transform: [
       { translateX: translateX.value },
-      { translateY: bounce.value },
+      { translateY: leap.value },
       { scale: scale.value },
     ],
   }));
