@@ -45,7 +45,7 @@ export function validatePHNumber(digits: string): { valid: boolean; message: str
   931, 932, 933, 934, 940, 973, 974, 991,
 
   // DITO
-  895, 896, 897, 898,
+  895, 896, 897, 898, 992
 ];
 
   if (!validPrefixes.includes(prefix)) {
