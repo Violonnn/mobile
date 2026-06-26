@@ -1,37 +1,42 @@
 {
   "expo": {
-    "name": "DisasterLink",
-    "slug": "mobile",
+    "name": "",
+    "slug": "DisasterLink",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/splash-icon.png",
-    "scheme": "mobile",
+    "icon": "./assets/images/iconDL.png",
+    "scheme": "disasterlink",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.yourcompany.disasterlink"
     },
     "android": {
-      "softwareKeyboardLayoutMode": "pan",
+      "package": "com.yourcompany.disasterlink",
       "adaptiveIcon": {
-        "backgroundColor":  "#ffffff",
-        "foregroundImage": "./assets/images/splash-icon.png"
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/images/iconDL.png",
+        "backgroundImage": "./assets/images/iconDL.png"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false
     },
     "web": {
       "output": "static",
-      "favicon": "./assets/images/AppLogo.png"
+      "favicon": "./assets/images/faviconDL.png"
     },
     "plugins": [
       "expo-router",
       [
         "expo-splash-screen",
         {
+          "image": "./assets/images/splash-iconDL.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
           "backgroundColor": "#ffffff",
           "dark": {
-            "backgroundColor": "#ffffff"
+            "backgroundColor": "#000000"
           }
         }
       ],
