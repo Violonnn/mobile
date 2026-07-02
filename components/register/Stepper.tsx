@@ -162,28 +162,27 @@ export default function Stepper({ current }: { current: RegistrationStep }) {
       </View>
 
       <View style={styles.stepLabelsRow}>
-  {STEP_LABELS.map((label, i) => {
-    const isLast = i === STEP_LABELS.length - 1;
-    return (
-      <React.Fragment key={label}>
-        <Text
-          style={[
-            styles.stepLabel,
-            i < current
-              ? styles.stepLabelDone
-              : i === current
-                ? styles.stepLabelActive
-                : styles.stepLabelInactive,
-          ]}
-        >
-          {label}
-        </Text>
-        {!isLast && <View style={styles.stepLabelSpacer} />}
-      </React.Fragment>
-    );
-  })}
-</View>
-
+        {STEP_LABELS.map((label, i) => {
+          const isLast = i === STEP_LABELS.length - 1;
+          return (
+            <React.Fragment key={label}>
+              <Text
+                style={[
+                  styles.stepLabel,
+                  i < current
+                    ? styles.stepLabelDone
+                    : i === current
+                      ? styles.stepLabelActive
+                      : styles.stepLabelInactive,
+                ]}
+              >
+                {label}
+              </Text>
+              {!isLast && <View style={styles.stepLabelSpacer} />}
+            </React.Fragment>
+          );
+        })}
+      </View>
     </View>
   );
 }

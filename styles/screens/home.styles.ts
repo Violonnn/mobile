@@ -17,6 +17,11 @@ export const homeStyles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.xl,
   },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -70,12 +75,6 @@ export const homeStyles = StyleSheet.create({
     color: colors.textMuted,
     lineHeight: 22,
   },
-  sectionTitle: {
-    fontSize: fontSizes.md,
-    fontWeight: fontWeights.bold,
-    color: homeColors.navy,
-    marginBottom: spacing.sm,
-  },
   placeholderGrid: {
     gap: spacing.sm,
     marginBottom: spacing.lg,
@@ -111,19 +110,6 @@ export const homeStyles = StyleSheet.create({
     fontSize: fontSizes.sm,
     color: colors.textMuted,
     marginTop: 2,
-  },
-  comingSoonPill: {
-    alignSelf: 'flex-start',
-    marginTop: spacing.xs,
-    backgroundColor: '#F3F4F6',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderRadius: radius.full,
-  },
-  comingSoonText: {
-    fontSize: fontSizes.xs,
-    fontWeight: fontWeights.semibold,
-    color: colors.textMuted,
   },
   logoutButton: {
     marginTop: 'auto',

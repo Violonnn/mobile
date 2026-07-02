@@ -91,8 +91,16 @@ Deno.serve(async (req) => {
     },
   });
 
+  console.log('attempting signInWithOtp for phone:', phone.slice(0, 6) + '****')
+  
   if (otpError) {
-    console.error("request-registration-otp: signInWithOtp failed", otpError.message);
+    console.error("request-registration-otp: signInWithOtp failed", {
+  message: otpError.message,
+  status: otpError.status,
+  name: otpError.name,
+  cause: otpError.cause,
+  stack: otpError.stack,
+})
 
     if (limitResult.sendCount > 0) {
       const { data: record } = await adminClient
@@ -112,7 +120,7 @@ Deno.serve(async (req) => {
         { onConflict: "phone" },
       );
     }
-
+    
     return jsonResponse({ error: "Unable to send OTP. Please try again." }, 502);
   }
 

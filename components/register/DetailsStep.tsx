@@ -5,6 +5,7 @@ import { registerStyles as styles, registerColors } from '../../styles/screens/r
 import { RegistrationDetails } from '../../types/registration';
 import LabeledInput from './LabeledInput';
 import BarangayDropdown from './BarangayDropdown';
+import SelectField from './SelectField';
 import SelectModal from './SelectModal';
 import LegalModal from './LegalModal';
 import FieldError from './FieldError';
@@ -180,43 +181,20 @@ export default function DetailsStep({ details, onUpdateDetails, onSubmit }: Deta
       />
 
       <View style={styles.row}>
-        <View style={styles.flex1}>
-          <Text style={styles.label}>Birth Month</Text>
-          <TouchableOpacity
-            style={[
-              styles.input,
-              styles.dropdownInput,
-              !!fieldErrors.birthMonth && styles.inputError,
-            ]}
-            onPress={() => setShowMonthDropdown(true)}
-          >
-            <Ionicons name="calendar-outline" size={18} color={registerColors.textLight} />
-            <Text style={{ color: birthMonth ? registerColors.text : '#aaa', flex: 1, marginLeft: 8 }}>
-              {birthMonth ? MONTHS.find((m) => m.value === birthMonth)?.label : 'Select'}
-            </Text>
-            <Ionicons name="chevron-down" size={16} color="#666" />
-          </TouchableOpacity>
-          <FieldError message={fieldErrors.birthMonth ?? ''} />
-        </View>
-
-        <View style={styles.flex1}>
-          <Text style={styles.label}>Birth Year</Text>
-          <TouchableOpacity
-            style={[
-              styles.input,
-              styles.dropdownInput,
-              !!fieldErrors.birthYear && styles.inputError,
-            ]}
-            onPress={() => setShowYearDropdown(true)}
-          >
-            <Ionicons name="calendar-outline" size={18} color={registerColors.textLight} />
-            <Text style={{ color: birthYear ? registerColors.text : '#aaa', flex: 1, marginLeft: 8 }}>
-              {birthYear || 'Select'}
-            </Text>
-            <Ionicons name="chevron-down" size={16} color="#666" />
-          </TouchableOpacity>
-          <FieldError message={fieldErrors.birthYear ?? ''} />
-        </View>
+        <SelectField
+          label="Birth Month"
+          iconName="calendar-outline"
+          value={birthMonth ? MONTHS.find((m) => m.value === birthMonth)?.label ?? null : null}
+          onPress={() => setShowMonthDropdown(true)}
+          error={fieldErrors.birthMonth}
+        />
+        <SelectField
+          label="Birth Year"
+          iconName="calendar-outline"
+          value={birthYear || null}
+          onPress={() => setShowYearDropdown(true)}
+          error={fieldErrors.birthYear}
+        />
       </View>
 
       <View style={styles.fieldGroup}>
