@@ -1,0 +1,69 @@
+---
+description: Core coding standards for DisasterLink (TypeScript, Expo Router, Supabase)
+alwaysApply: true
+---
+
+# Coding Rules
+Always follow these rules unless explicitly instructed otherwise.
+
+## Stack
+- TypeScript for all code (no plain JS files).
+- Expo Router for navigation.
+- Supabase for all backend logic (auth, database, storage), with Row-Level Security (RLS) enabled on all tables.
+
+## Context7
+- Always use Context7 MCP when working with Supabase, Expo Router, or React Native APIs — do not rely on training data for these, as versions and APIs change frequently.
+- Use Context7 automatically for library/API documentation, setup steps, or code examples involving any external package, without needing to be asked explicitly.
+
+## 1. Student-Friendly Code
+- Prefer explicit, readable code over clever one-liners or dense abstractions.
+- Add a short comment above any non-obvious logic (e.g. regex, complex conditionals, workarounds).
+- Use clear, descriptive names for variables, functions, and components — no single-letter names except loop indices.
+- Keep functions and components focused on a single responsibility.
+- "Student-friendly" applies to code clarity only — never to security or data-handling shortcuts. This app is deployed and tested, so treat all security practices as production-grade.
+
+## 2. Guard Clauses, Reusability, Security, No Redundancy
+- Use guard clauses (early returns) instead of deep nesting.
+- Before writing new code: check whether a similar component, hook, or utility already exists — reuse it before creating something new.
+- Only abstract into a shared/reusable piece when it removes real duplication (2+ places), not preemptively.
+- Remove dead, duplicate, or unused code when you encounter it.
+- Never hardcode or expose secrets, API keys, or Supabase service-role keys — always use environment variables.
+- Never bypass RLS policies from client-side code (e.g. never use the service-role key in the app itself — that belongs only in trusted server contexts).
+- Any new Supabase table must have RLS enabled and appropriate policies defined before being used from the client.
+- Validate and sanitize user input, especially anything going into a Supabase query.
+
+## 3. File Architecture
+- Follow and extend the existing folder structure — don't invent a new pattern for a new feature.
+- Place new files in the most fitting existing directory (e.g. components, hooks, screens, lib/supabase).
+- Keep imports organized (external → internal → relative) and remove unused imports.
+- Match existing naming conventions exactly (file casing, component naming, hook naming).
+
+## 4. UI
+- UI should be clean, modern, and "bubbly" — rounded corners, soft shadows, generous spacing — matching whatever style is already established in the app's existing screens/components.
+- Reuse existing design tokens, theme values, and shared UI components instead of hardcoding new colors/spacing.
+- Ensure layouts are responsive (flex-based, avoid hardcoded widths/heights unless truly necessary).
+- Handle keyboard avoidance properly on any screen with text input.
+- Do not redesign or restyle existing screens unless explicitly asked — match, don't reinvent.
+
+## 5. Preserve Existing System Design
+- Preserve existing features, behavior, business logic, navigation, and data flow.
+- Don't refactor unrelated code while completing a task.
+- If a requested change conflicts with the existing architecture or requires a significant refactor, pause and ask before proceeding rather than deciding unilaterally.
+
+## 6. Usage-Friendly
+- Handle loading and error states on every screen that fetches or submits data (no silent failures, no infinite spinners).
+- Give the user clear feedback for actions (success/error messages, disabled buttons during submission, etc.).
+- Keep interactions predictable — no unexpected navigation, no destructive actions without confirmation.
+
+## Before Writing Code
+1. Check whether similar code already exists.
+2. Reuse before creating.
+3. Minimize changes to only what's necessary for the task.
+4. Keep changes localized to the affected feature.
+
+## After Completing a Task
+Briefly summarize:
+- Files modified
+- What changed
+- Why the change was made
+- Any reusable code introduced
