@@ -1,38 +1,33 @@
 // app/+not-found.tsx
 // Shown when user navigates to a route that doesn't exist
 
-import { View, Text, TouchableOpacity, StyleSheet, Dimensions, Image } from "react-native";
+import { Text, TouchableOpacity, StyleSheet, Image } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { colors, fontSizes, fontWeights, radius, spacing } from "../styles/theme";
+import { layout } from "../lib/layout";
 import { Ionicons } from "@expo/vector-icons";
 
-const { height } = Dimensions.get("window");
+// Keep the image large but never wider than the screen on small devices.
+const IMAGE_SIZE = Math.min(400, layout.screenWidth * 0.9);
 
 export default function NotFoundScreen() {
   const router = useRouter();
 
   return (
-    <View style={styles.container}>
-
-        {/* Image */}
+    <SafeAreaView style={styles.container}>
       <Image
         source={require("../assets/images/not-found.png")}
-        style={styles.image}
+        style={[styles.image, { width: IMAGE_SIZE, height: IMAGE_SIZE }]}
       />
 
-
-      {/* Whoops */}
       <Text style={styles.title}>Whoops!</Text>
-      
-    
-      {/* Subtitle */}
+
       <Text style={styles.subtitle}>
         We couldn't find the page{"\n"}you were looking for.
       </Text>
 
-      {/* Back Button */}
       <TouchableOpacity
-      
         style={styles.button}
         onPress={() => router.dismissAll()}
         activeOpacity={0.85}
@@ -40,8 +35,7 @@ export default function NotFoundScreen() {
         <Ionicons name="home" size={18} color={colors.white} />
         <Text style={styles.buttonText}>Go Back Home</Text>
       </TouchableOpacity>
-
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -54,8 +48,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
   },
   image: {
-    width: 400,
-    height: 400,
     resizeMode: "contain",
     marginBottom: -30,
     borderRadius: 500,

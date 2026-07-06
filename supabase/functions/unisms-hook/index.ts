@@ -5,10 +5,6 @@ import {
   sendUniSms,
 } from "../_shared/unisms.ts";
 
-/**
- * Supabase Auth maps ANY HTTP 400 from the hook URL to
- * "Invalid payload sent to hook". Always respond with HTTP 200.
- */
 function hookSuccess() {
   return new Response(JSON.stringify({}), {
     status: 200,
@@ -19,16 +15,8 @@ function hookSuccess() {
 function hookError(message: string, httpCode: number) {
   console.error(`Send SMS hook error [${httpCode}]:`, message);
   return new Response(
-    JSON.stringify({
-      error: {
-        message,
-        http_code: httpCode,
-      },
-    }),
-    {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    },
+    JSON.stringify({ error: { message, http_code: httpCode } }),
+    { status: 200, headers: { "Content-Type": "application/json" } },
   );
 }
 
@@ -37,12 +25,10 @@ function maskPhone(phone: string): string {
   return `${phone.slice(0, 4)}***${phone.slice(-2)}`;
 }
 
-/** Supabase may send +639... or 639... — normalize to E.164 for UniSMS. */
 function normalizePhone(raw: string | undefined): string | null {
   if (!raw) return null;
   const trimmed = raw.trim().replace(/\s/g, "");
   if (!trimmed) return null;
-
   const withPlus = trimmed.startsWith("+") ? trimmed : `+${trimmed}`;
   return isE164Phone(withPlus) ? withPlus : null;
 }
@@ -87,10 +73,18 @@ Deno.serve(async (req) => {
       return hookError("Missing phone or OTP in hook payload", 400);
     }
 
-    // Supabase OTP length can be 6–8 depending on project settings.
     if (!/^\d{6,8}$/.test(otp)) {
       console.error("Hook payload OTP format rejected:", otp.length, "digits");
       return hookError("Invalid OTP format", 400);
+    }
+
+    // ⚠️ TEMPORARY DEV BYPASS — remove once UniSMS sender_id is reactivated.
+    // Set DEV_OTP_BYPASS=true as a Supabase secret to skip real SMS sending
+    // and just log the OTP so you can type it in manually during a demo.
+    const devBypass = Deno.env.get("DEV_OTP_BYPASS")?.trim() === "true";
+    if (devBypass) {
+      console.log(`DEV BYPASS ACTIVE — OTP for ${maskPhone(phone)} is: ${otp}`);
+      return hookSuccess();
     }
 
     const result = await sendUniSms({
@@ -100,10 +94,7 @@ Deno.serve(async (req) => {
 
     if (!result.ok) {
       console.error("UniSMS send failed:", result.body);
-      return hookError(
-        `Failed to dispatch SMS via UniSMS: ${result.body}`,
-        502,
-      );
+      return hookError(`Failed to dispatch SMS via UniSMS: ${result.body}`, 502);
     }
 
     console.log("UniSMS send succeeded for", maskPhone(phone));

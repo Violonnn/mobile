@@ -111,8 +111,13 @@ export async function requestRegistrationOtp(phone: string): Promise<OtpRequestR
       error,
       response,
       'Unable to send OTP. Please try again.',
+      
     );
+    
+      console.log('raw error:', error)
+      console.log('raw response:', response)
     return { error: message, ...meta };
+    
   }
 
   if (data?.error) {

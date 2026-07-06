@@ -1,6 +1,6 @@
 import { StyleSheet } from 'react-native';
 import { colors as themeColors, fontSizes, fontWeights, radius, spacing } from '../theme';
-import { layout, scaleByWidth } from '../../lib/layout';
+import { scaleByWidth } from '../../lib/layout';
 
 export const registerColors = {
   background: '#ffffff',
@@ -22,11 +22,6 @@ export const registerStyles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: registerColors.background,
-  },
-
-  fixedContent: {
-    flex: 1,
-    justifyContent: 'center',
   },
 
   centeredBlock: {
@@ -149,24 +144,14 @@ export const registerStyles = StyleSheet.create({
     width: '100%',
     marginTop: spacing.sm,
   },
-    stepColumn: {
-    width: 40,
-    alignItems: 'center',
-  },
-  stepLabelUnderMarker: {
+  stepLabel: {
     fontSize: 9,
     textAlign: 'center',
-    marginTop: 4,
-    width: 52, // a bit wider so "Details" fits; still centered under marker
+    width: 40, // match stepMarkerSlot width exactly
   },
- stepLabel: {
-  fontSize: 9,
-  textAlign: 'center',
-  width: 40,        // match stepMarkerSlot width exactly
-},
-stepLabelSpacer: {
-  flex: 1,
-},
+  stepLabelSpacer: {
+    flex: 1,
+  },
   stepLabelInactive: {
     color: registerColors.grayMuted,
   },
@@ -274,9 +259,6 @@ stepLabelSpacer: {
     fontSize: fontSizes.lg,
     marginTop: spacing.sm,
     lineHeight: 22,
-  },
-  phoneHintError: {
-    color: registerColors.error,
   },
   continueVerificationButton: {
     paddingVertical: spacing.sm,
@@ -390,13 +372,6 @@ stepLabelSpacer: {
     color: registerColors.gray,
   },
 
-  detailsScroll: {
-    flex: 1,
-  },
-  detailsScrollContent: {
-    paddingBottom: spacing.xl,
-  },
-
   fieldGroup: {
     marginBottom: spacing.md,
   },
@@ -432,6 +407,14 @@ stepLabelSpacer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+  },
+  selectFieldText: {
+    flex: 1,
+    marginLeft: 8,
+    color: registerColors.text,
+  },
+  selectFieldPlaceholder: {
+    color: '#aaa',
   },
   disabledInput: {
     backgroundColor: '#EAEAEA',
@@ -655,14 +638,6 @@ stepLabelSpacer: {
     color: registerColors.gray,
     lineHeight: 18,
   },
-  pinInputInner: {
-    flex: 1,
-    fontSize: fontSizes.lg,
-    color: registerColors.text,
-    paddingVertical: 0,
-    letterSpacing: 6,
-    backgroundColor: 'transparent',
-  },
   pinInputWrapper: {
     flex: 1,
     justifyContent: 'center',
@@ -699,12 +674,7 @@ stepLabelSpacer: {
     letterSpacing: 0.5,
     marginBottom: spacing.sm,
     textAlign: 'left',
-    alignSelf: 'flex-start',
-  },
-  phoneEditIconsCol: {
-    marginLeft: spacing.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignSelf: 'center',
   },
   phoneSwapIconBtn: {
     width: 34,

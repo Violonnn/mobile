@@ -21,16 +21,14 @@ import { useLoginFlow } from '../../hooks/useLoginFlow';
 import { responsiveLoginImageHeight } from '../../lib/layout';
 import { registerStyles as styles, registerColors } from '../../styles/screens/register.styles';
 import NumericKeyboardAccessory, { NUMERIC_ACCESSORY_ID } from '../../components/ui/NumericKeyboardAccessory';
+import PinField from '../../components/ui/PinField';
 import { FacebookIcon, TikTokIcon } from '../../components/ui/SocialBrandIcons';
 import FieldError from '../../components/register/FieldError';
 
 export default function LoginScreen() {
   const phoneRef = useRef<TextInput>(null);
-  const pinRef = useRef<TextInput>(null);
   const [phoneFocused, setPhoneFocused] = useState(false);
   const [swapPressed, setSwapPressed] = useState(false);
-  const [pinFocused, setPinFocused] = useState(false);
-  const [pinVisible, setPinVisible] = useState(false);
   const [signUpLoading, setSignUpLoading] = useState(false);
 
   const {
@@ -85,8 +83,8 @@ export default function LoginScreen() {
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <KeyboardAvoidingView
         style={styles.container}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}
+        behavior={Platform.OS === 'android' ? 'height' : undefined}
+        enabled={Platform.OS === 'android'}
       >
         <TouchableOpacity style={styles.backButton} onPress={goBack} activeOpacity={0.8}>
           <Text style={styles.backButtonText}>‹</Text>
@@ -98,6 +96,7 @@ export default function LoginScreen() {
             keyboardShouldPersistTaps="always"
             showsVerticalScrollIndicator={false}
             bounces={false}
+            automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
           >
             <View style={styles.centeredBlock}>
               <Text style={styles.screenTitle}>Login</Text>
@@ -186,66 +185,16 @@ export default function LoginScreen() {
                     </View>
                   )}
 
-                  <View style={styles.loginFieldWrap}>
-                    <Text style={styles.loginFieldLabel}>PIN</Text>
-                    <View
-                      style={[
-                        styles.phoneRow,
-                        pinFocused && styles.phoneRowFocused,
-                        !!pinError && styles.inputError,
-                      ]}
-                    >
-                      <View style={styles.pinIconBox}>
-                        <Ionicons name="keypad-outline" size={20} color={registerColors.textLight} />
-                      </View>
-                      <Pressable
-                        style={[styles.pinInputWrapper, styles.loginPinRow]}
-                        onPress={() => pinRef.current?.focus()}
-                      >
-                        <Text
-                          style={[
-                            styles.pinDisplayText,
-                            pin.length === 0 && { color: '#9CA3AF' },
-                          ]}
-                          pointerEvents="none"
-                        >
-                          {pin.length === 0
-                            ? '······'
-                            : pinVisible
-                              ? pin
-                              : '•'.repeat(pin.length)}
-                        </Text>
-                        <TextInput
-                          ref={pinRef}
-                          style={styles.pinHiddenInput}
-                          value={pin}
-                          onChangeText={handlePinChange}
-                          onFocus={() => setPinFocused(true)}
-                          onBlur={() => setPinFocused(false)}
-                          keyboardType="number-pad"
-                          maxLength={6}
-                          autoCorrect={false}
-                          autoComplete="off"
-                          textContentType="none"
-                          caretHidden
-                          inputAccessoryViewID={NUMERIC_ACCESSORY_ID}
-                          returnKeyType="done"
-                          onSubmitEditing={submitLogin}
-                        />
-                      </Pressable>
-                      <TouchableOpacity
-                        onPress={() => setPinVisible(!pinVisible)}
-                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                      >
-                        <Ionicons
-                          name={pinVisible ? 'eye-off-outline' : 'eye-outline'}
-                          size={20}
-                          color="#9CA3AF"
-                        />
-                      </TouchableOpacity>
-                    </View>
-                    {!!pinError && <FieldError message={pinError} />}
-                  </View>
+                  <PinField
+                    label="PIN"
+                    iconName="keypad-outline"
+                    value={pin}
+                    onChangeText={handlePinChange}
+                    hasError={!!pinError}
+                    errorMessage={pinError}
+                    returnKeyType="done"
+                    onSubmitEditing={submitLogin}
+                  />
 
                   <TouchableOpacity
                     style={styles.forgotPasswordRow}

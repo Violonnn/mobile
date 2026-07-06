@@ -101,7 +101,7 @@ export default function HomeScreen() {
   if (loading || !isAuthenticated) {
     return (
       <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-        <View style={[styles.scrollContent, { flex: 1, justifyContent: 'center', alignItems: 'center' }]}>
+        <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
       </SafeAreaView>
@@ -144,8 +144,6 @@ export default function HomeScreen() {
               <View style={styles.placeholderBody}>
                 <Text style={styles.placeholderTitle}>{feature.title}</Text>
                 <Text style={styles.placeholderSubtitle}>{feature.subtitle}</Text>
-                <View style={styles.comingSoonPill}>
-                </View>
               </View>
             </View>
           ))}
