@@ -11,10 +11,6 @@ Always follow these rules unless explicitly instructed otherwise.
 - Expo Router for navigation.
 - Supabase for all backend logic (auth, database, storage), with Row-Level Security (RLS) enabled on all tables.
 
-## Context7
-- Always use Context7 MCP when working with Supabase, Expo Router, or React Native APIs — do not rely on training data for these, as versions and APIs change frequently.
-- Use Context7 automatically for library/API documentation, setup steps, or code examples involving any external package, without needing to be asked explicitly.
-
 ## 1. Student-Friendly Code
 - Prefer explicit, readable code over clever one-liners or dense abstractions.
 - Add a short comment above any non-obvious logic (e.g. regex, complex conditionals, workarounds).
