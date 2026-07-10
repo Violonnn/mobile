@@ -1,9 +1,10 @@
 import { Webhook } from "standardwebhooks";
 import {
   buildOtpMessage,
+  e164ToPhilippineLocal,
   isE164Phone,
-  sendUniSms,
-} from "../_shared/unisms.ts";
+  sendIprogSms,
+} from "../_shared/iprogsms.ts";
 
 function hookSuccess() {
   return new Response(JSON.stringify({}), {
@@ -78,7 +79,7 @@ Deno.serve(async (req) => {
       return hookError("Invalid OTP format", 400);
     }
 
-    // ⚠️ TEMPORARY DEV BYPASS — remove once UniSMS sender_id is reactivated.
+    // ⚠️ TEMPORARY DEV BYPASS — remove once a custom sender name is approved.
     // Set DEV_OTP_BYPASS=true as a Supabase secret to skip real SMS sending
     // and just log the OTP so you can type it in manually during a demo.
     const devBypass = Deno.env.get("DEV_OTP_BYPASS")?.trim() === "true";
@@ -87,17 +88,24 @@ Deno.serve(async (req) => {
       return hookSuccess();
     }
 
-    const result = await sendUniSms({
-      recipient: phone,
-      content: buildOtpMessage(otp),
+    // IPROG's send endpoint expects the PH local format (09XXXXXXXXX), not E.164.
+    const localPhone = e164ToPhilippineLocal(phone);
+    if (!localPhone) {
+      console.error("Could not convert phone to PH local format:", maskPhone(phone));
+      return hookError("Invalid phone number format", 400);
+    }
+
+    const result = await sendIprogSms({
+      phoneNumber: localPhone,
+      message: buildOtpMessage(otp),
     });
 
     if (!result.ok) {
-      console.error("UniSMS send failed:", result.body);
-      return hookError(`Failed to dispatch SMS via UniSMS: ${result.body}`, 502);
+      console.error("IPROG send failed:", result.body);
+      return hookError(`Failed to dispatch SMS via IPROG: ${result.body}`, 502);
     }
 
-    console.log("UniSMS send succeeded for", maskPhone(phone));
+    console.log("IPROG send succeeded for", maskPhone(phone));
     return hookSuccess();
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown hook error";

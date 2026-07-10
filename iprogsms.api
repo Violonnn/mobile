@@ -1,0 +1,224 @@
+# IPROG SMS API — DisasterLink Reference
+
+Trimmed reference for the endpoints DisasterLink actually uses. Full docs: https://www.iprogsms.com/api/v1/documentation
+
+## Scope note
+
+DisasterLink does **not** use IPROG's OTP endpoints (`send_otp` / `verify_otp`). OTP generation, storage, expiry, and verification are already handled by our own Supabase-based system. IPROG is used **only as the SMS delivery layer** — sending the OTP text and other messages that our own system generates.
+
+## Auth & security
+
+- Auth is via `api_token`, passed as a query param or in the JSON body.
+- All calls must go through a Supabase Edge Function — **never call IPROG directly from the Expo app**. `api_token` must never be bundled client-side (per project security rules — no exposed secrets).
+- **Project convention:** store the token as `IPROG_SMS_API_TOKEN` (replaces `UNISMS_API_SECRET_KEY`). Keep `.env.example`, `SECURITY.md`, and the Edge Function using this same name.
+
+## ⚠️ Phone number format — read before wiring up the hook
+
+Our `normalizePhone()` hook currently outputs E.164 (`+639171234567`). IPROG's own docs are inconsistent about format:
+- JSON body examples for **send, bulk, reminders, and OTP** all consistently use `09XXXXXXXXX` (leading zero, no country code).
+- The URL query-string sample for send/bulk shows `639109432834` (country code, no `+`, no leading zero) — this appears to just be a query-encoding artifact, not a second accepted format; treat it as unconfirmed.
+- Only the **Network Detection** endpoint explicitly documents accepting *either* `09XXXXXXXXX` or `+639XXXXXXXXX`.
+
+**Rule to implement:** convert `+639XXXXXXXXX` → `09XXXXXXXXX` before calling `sms_messages` / `sms_messages/send_bulk`. Don't assume E.164 works on send just because it works on detect — it isn't documented, so test one real send before relying on it in production.
+
+## ⚠️ `status` field type is inconsistent across endpoints
+
+Some responses return `"status": 200` (integer), others `"status": "success"` / `"status": "error"` (string), and the content-validation invalid-token error returns `"status": 500` (integer) with a completely different shape. **Don't write a single `if (response.status === 200)` check and assume it covers every endpoint** — normalize each endpoint's response shape individually, or check `message`/`data` presence instead of relying on `status` alone.
+
+---
+
+## 1. Send Single SMS
+
+Used for: delivering our own-generated OTP text, single notifications.
+
+```
+POST https://www.iprogsms.com/api/v1/sms_messages
+```
+
+**Params:** `api_token` (required), `phone_number` (required), `message` (required), `sms_provider` (optional, 0/1/2, default 0)
+
+> `sms_provider` values 0/1/2 are **not defined anywhere in IPROG's public docs**. For the OTP migration, leave it unset (defaults to 0). If provider routing ever matters, ask IPROG support directly rather than guessing — don't hardcode a non-default value without confirmation.
+
+```json
+// Request body
+{
+  "api_token": "YOUR_TOKEN",
+  "phone_number": "09345678942",
+  "message": "Your OTP code is 123456."
+}
+```
+
+```json
+// Response
+{
+  "status": 200,
+  "message": "Your SMS message has been successfully added to the queue and will be processed shortly.",
+  "message_id": "iSms-XHYBk"
+}
+```
+
+## 2. Send Bulk SMS
+
+Used for: emergency broadcast to multiple users at once.
+
+```
+POST https://www.iprogsms.com/api/v1/sms_messages/send_bulk
+```
+
+**Params:** `api_token`, `phone_number` (comma-separated), `message`, `sms_provider` (optional)
+
+```json
+// Response
+{
+  "status": 200,
+  "message": "Your bulk SMS messages have been successfully added to the queue and will be processed shortly.",
+  "message_ids": "iSms-rQZvhq,iSms-tZrk96"
+}
+```
+
+## 3. Check SMS Delivery Status
+
+```
+GET https://www.iprogsms.com/api/v1/sms_messages/status?api_token=...&message_id=...
+```
+
+```json
+// Response
+{ "status": 200, "message_status": "pending" }
+```
+
+## 4. Check Remaining Credits
+
+Useful for an admin dashboard warning ("low balance") before a broadcast fails silently.
+
+```
+GET https://www.iprogsms.com/api/v1/account/sms_credits?api_token=...
+```
+
+```json
+// Response
+{ "status": "success", "data": { "load_balance": 10 } }
+```
+
+## 5. Recent SMS Activity
+
+Optional — lets you build a lightweight admin audit log without maintaining your own full send-history table.
+
+```
+GET https://www.iprogsms.com/api/v1/account/recent_sms?api_token=...&limit=10
+```
+`limit` defaults to 10, max 50.
+
+---
+
+## 6. Phone Number Network Detection
+
+**This is the endpoint for the phone validation fix.**
+
+```
+POST https://www.iprogsms.com/api/v1/phone_numbers/detect
+```
+
+**Params:** `api_token`, `phone_number` (format: `09XXXXXXXXX` or `+639XXXXXXXXX`)
+
+```json
+// Valid response
+{
+  "status": "success",
+  "data": {
+    "phone_number": "09123456789",
+    "is_smart_tnt": false,
+    "network": "Globe/TM"
+  }
+}
+```
+
+```json
+// Invalid format response
+{
+  "status": "error",
+  "message": "Invalid phone number format. Philippine mobile numbers must be in format: 09XXXXXXXXX or +639XXXXXXXXX (11 digits total)",
+  "data": { "network": "Invalid Format" }
+}
+```
+
+**Possible `network` values:** `Smart/TNT`, `Globe/TM`, `DITO`, `Unknown Network`, `Invalid Format`
+
+**⚠️ Coverage gap to know about:** the shared sender name (`iprogSMS`) reaches Globe/TM/DITO/GOMO only — **not Smart/TNT**. A custom sender name is required to reach Smart/TNT numbers.
+
+**Confirmed: sender name is account-level, not a per-request parameter.** `sms_messages` and `sms_messages/send_bulk` only accept `api_token`, `phone_number`, `message`, `sms_provider` — there's no `sender_name` field to pass. Your account's approved sender name is applied automatically based on account config (see [Sender Names](https://www.iprogsms.com/sender-names)). This means: for OTP to reach Smart/TNT users at signup (a large share of PH mobile users), you need an **approved custom sender name on the account**, not a code change — this is a business/account setup task, not an implementation detail.
+
+## 7. Message Content Validation
+
+Pre-checks message text for spam/phishing flags before spending credits on a send that might get flagged.
+
+```
+GET https://www.iprogsms.com/api/v1/sms_messages/validate_content?api_token=...&message=...
+```
+
+```json
+// Response
+{ "status": "success", "data": { "passed": true } }
+```
+
+---
+
+## Known error responses (confirmed vs unconfirmed)
+
+**Confirmed from docs:**
+```json
+// Content validation — invalid token (note: status is an INTEGER here, unlike other endpoints)
+{ "status": 500, "message": "Invalid Token" }
+```
+```json
+// Network detection — invalid format
+{
+  "status": "error",
+  "message": "Invalid phone number format. Philippine mobile numbers must be in format: 09XXXXXXXXX or +639XXXXXXXXX (11 digits total)",
+  "data": { "network": "Invalid Format" }
+}
+```
+```json
+// Content validation — failed (spam/phishing check)
+{
+  "status": "error",
+  "message": "Message failed validation",
+  "data": { "passed": false, "errors": ["Message looks suspicious (phishing detected)."] }
+}
+```
+
+**NOT documented anywhere on IPROG's site — treat as unknown until tested:**
+- Insufficient credits on `sms_messages` / `send_bulk`
+- Invalid/malformed `phone_number` on `sms_messages` / `send_bulk` specifically (only `phone_numbers/detect` documents this)
+- Timeout / network-level failures
+
+**Before writing error handling in `lib/registration.ts`:** run one deliberate failing request (e.g. temporarily wrong token, or a bad number) against the real API and log the raw response, rather than guessing the shape. Don't hardcode a `fail_reason`-style field like the UniSMS client used unless you've actually seen IPROG return one.
+
+## Not used in DisasterLink (documented, but out of scope)
+- OTP endpoints (`send_otp`, `verify_otp`, OTP list) — we keep our own OTP system
+- Group Contacts, Campaigns, Message Reminders — not currently needed
+
+## Edge Functions — minimal path vs. future scope
+
+**Minimal path for the UniSMS → IPROG OTP-delivery swap (do this first, nothing more):**
+- Replace `_shared/unisms.ts` → `_shared/iprogsms.ts`
+- Update the existing Send SMS hook to use the new client internally — reuse the existing function/hook, don't create a new one unless you specifically want to rename it
+- This alone is enough to complete the migration. Broadcast and network-detection are separate features — don't build them as part of this swap.
+
+**Future / separate features (build later, only when actually needed):**
+- `send-emergency-broadcast` — wraps `sms_messages/send_bulk`, admin-only, RLS-gated
+- `detect-phone-network` — wraps `phone_numbers/detect`, called at signup/report time for authoritative validation
+
+## Migration checklist (UniSMS → IPROG, OTP delivery only)
+
+Things outside this doc's API reference that the migration still requires:
+- [ ] Supabase Dashboard → Auth → Hooks → update the Send SMS hook URL if the function name/path changes
+- [ ] `supabase secrets set IPROG_SMS_API_TOKEN=...` (and remove the old UniSMS secret once confirmed working)
+- [ ] Update `supabase/config.toml` function entry if the function is renamed
+- [ ] Update user-facing error messages in `lib/registration.ts` to match IPROG's actual error shapes (see "Known error responses" above — test first, don't assume)
+- [ ] Update `SECURITY.md` to reference IPROG instead of UniSMS
+- [ ] Confirm OTP message template stays within a single SMS segment (160 chars GSM-7 / 70 chars if any unicode characters are used) — standard SMS protocol limit, not IPROG-specific, but still applies since longer messages get split into multiple billed segments
+
+## Reminder: no built-in rate limiting
+
+IPROG does not rate-limit sends on their end. Cooldowns, max-attempts, and abuse prevention must be implemented in our own Edge Functions / Supabase tables — same as already planned for OTP.

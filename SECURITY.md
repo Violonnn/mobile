@@ -31,16 +31,17 @@ Go to **Authentication → Rate Limits** (or **Auth → Settings** depending on 
 
 Go to **Authentication → Hooks → Send SMS**:
 
-- Point the hook URL to your deployed `unisms-hook` function.
+- Point the hook URL to your deployed `unisms-hook` function (this function now delivers via IPROG SMS; the name is kept to avoid re-pointing the hook URL).
 - Copy the hook secret and set it as `SEND_SMS_HOOK_SECRET` via `supabase secrets set`.
 
 ### 3. Edge function secrets
 
 ```bash
 supabase secrets set SEND_SMS_HOOK_SECRET="v1,whsec_..."
-supabase secrets set UNISMS_API_SECRET_KEY="your-api-secret-key"
-# Optional — only if UniSMS approved a custom sender ID for your business:
-# supabase secrets set UNISMS_SENDER_ID="YourBrand"
+supabase secrets set IPROG_SMS_API_TOKEN="your-api-token"
+# Note: the IPROG sender name is configured on the IPROG account, not via a secret.
+# A custom approved sender name is required to reach Smart/TNT numbers
+# (see https://www.iprogsms.com/sender-names).
 ```
 
 `complete-registration` and `verify-login` use built-in env vars (`SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`).
@@ -61,7 +62,7 @@ supabase functions deploy verify-login
 
 ```
 Registration (first time):
-  Phone → OTP (SMS via unisms-hook) → verify OTP → profile + PIN
+  Phone → OTP (SMS via unisms-hook → IPROG) → verify OTP → profile + PIN
   → complete-registration (server hashes PIN with bcrypt)
 
 Return login:
