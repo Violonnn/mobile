@@ -1,10 +1,10 @@
 import { AuthError, isAuthRetryableFetchError } from '@supabase/supabase-js';
-import { supabase } from './supabase';
+import { RegistrationDetails } from '../types/registration';
 import {
   parseEdgeFunctionMeta,
   readEdgeFunctionErrorMessage,
 } from './edgeFunctionErrors';
-import { RegistrationDetails } from '../types/registration';
+import { supabase } from './supabase';
 
 export type CompleteRegistrationInput = {
   phone: string;

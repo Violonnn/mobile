@@ -31,7 +31,11 @@ Go to **Authentication → Rate Limits** (or **Auth → Settings** depending on 
 
 Go to **Authentication → Hooks → Send SMS**:
 
+<<<<<<< HEAD
 - Point the hook URL to your deployed `iprogsms-hook` function (delivers OTP SMS via IPROG SMS).
+=======
+- Point the hook URL to your deployed `unisms-hook` function (this function now delivers via IPROG SMS; the name is kept to avoid re-pointing the hook URL).
+>>>>>>> 3a7db20 (chore and docs: Changed sending of OTP to iprogmSMS and added docs for it (uniSMS not yet renamed in some parts for fast testing))
 - Copy the hook secret and set it as `SEND_SMS_HOOK_SECRET` via `supabase secrets set`.
 
 ### 3. Edge function secrets
@@ -62,7 +66,11 @@ supabase functions deploy verify-login
 
 ```
 Registration (first time):
+<<<<<<< HEAD
   Phone → OTP (SMS via iprogsms-hook → IPROG) → verify OTP → profile + PIN
+=======
+  Phone → OTP (SMS via unisms-hook → IPROG) → verify OTP → profile + PIN
+>>>>>>> 3a7db20 (chore and docs: Changed sending of OTP to iprogmSMS and added docs for it (uniSMS not yet renamed in some parts for fast testing))
   → complete-registration (server hashes PIN with bcrypt)
 
 Return login:
