@@ -6,7 +6,12 @@ import {
   OTP_COOLDOWN_SECONDS,
   OTP_MAX_SENDS_PER_WINDOW,
 } from "../_shared/registration-otp-limit.ts";
-import { isValidE164Phone, rejectExtraKeys, trimText } from "../_shared/validation.ts";
+import {
+  isSupportedCarrier,
+  isValidE164Phone,
+  rejectExtraKeys,
+  trimText,
+} from "../_shared/validation.ts";
 
 const PROFILE_EXISTS_ERROR = 'This phone number is already registered.';
 
@@ -48,6 +53,12 @@ Deno.serve(async (req) => {
 
   if (!phone || !isValidE164Phone(phone)) {
     return jsonResponse({ error: "Enter a valid Philippine mobile number." }, 400);
+  }
+
+  // API constraint: IPROG's shared sender only reaches Globe/TM and DITO for now.
+  // Mirrors the client-side carrier gate so it can't be bypassed via the API.
+  if (!isSupportedCarrier(phone)) {
+    return jsonResponse({ error: "Not supported yet. Try Globe, TM, or DITO" }, 400);
   }
 
   const adminClient = createClient(supabaseUrl, serviceRoleKey, {

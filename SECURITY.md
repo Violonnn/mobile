@@ -31,7 +31,7 @@ Go to **Authentication → Rate Limits** (or **Auth → Settings** depending on 
 
 Go to **Authentication → Hooks → Send SMS**:
 
-- Point the hook URL to your deployed `unisms-hook` function (this function now delivers via IPROG SMS; the name is kept to avoid re-pointing the hook URL).
+- Point the hook URL to your deployed `iprogsms-hook` function (delivers OTP SMS via IPROG SMS).
 - Copy the hook secret and set it as `SEND_SMS_HOOK_SECRET` via `supabase secrets set`.
 
 ### 3. Edge function secrets
@@ -51,7 +51,7 @@ supabase secrets set IPROG_SMS_API_TOKEN="your-api-token"
 ```bash
 cd mobile
 supabase db push
-supabase functions deploy unisms-hook
+supabase functions deploy iprogsms-hook
 supabase functions deploy complete-registration
 supabase functions deploy verify-login
 ```
@@ -62,7 +62,7 @@ supabase functions deploy verify-login
 
 ```
 Registration (first time):
-  Phone → OTP (SMS via unisms-hook → IPROG) → verify OTP → profile + PIN
+  Phone → OTP (SMS via iprogsms-hook → IPROG) → verify OTP → profile + PIN
   → complete-registration (server hashes PIN with bcrypt)
 
 Return login:

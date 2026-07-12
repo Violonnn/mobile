@@ -13,6 +13,8 @@ type Props = {
   placeholder?: string;
   onPress: () => void;
   error?: string;
+  /** Highlight the field border without showing its own error text. */
+  hasError?: boolean;
 };
 
 // Tappable field that opens a selection modal. Shared by the birth month and
@@ -24,12 +26,13 @@ export default function SelectField({
   placeholder = 'Select',
   onPress,
   error,
+  hasError = false,
 }: Props) {
   return (
     <View style={styles.flex1}>
       <Text style={styles.label}>{label}</Text>
       <TouchableOpacity
-        style={[styles.input, styles.dropdownInput, !!error && styles.inputError]}
+        style={[styles.input, styles.dropdownInput, (!!error || hasError) && styles.inputError]}
         onPress={onPress}
         activeOpacity={0.8}
       >

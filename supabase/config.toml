@@ -1,8 +1,8 @@
-[functions.unisms-hook]
+[functions.iprogsms-hook]
 enabled = true
 verify_jwt = false
-import_map = "./functions/unisms-hook/deno.json"
-entrypoint = "./functions/unisms-hook/index.ts"
+import_map = "./functions/iprogsms-hook/deno.json"
+entrypoint = "./functions/iprogsms-hook/index.ts"
 
 [functions.complete-registration]
 enabled = true

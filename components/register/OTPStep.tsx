@@ -38,7 +38,7 @@ export default function OTPStep({
       <View style={styles.loginFieldWrap}>
         <Text style={styles.loginFieldLabel}>6-digit code</Text>
         <OTPInput value={otp} onChange={onChangeOtp} hasError={!!otpError} />
-        <FieldError message={otpError} />
+        <FieldError message={otpError} centered />
       </View>
 
       <View style={styles.resendRow}>

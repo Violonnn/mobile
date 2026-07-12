@@ -54,7 +54,7 @@ function getAuthErrorMessage(error: unknown, fallback: string): string {
     }
     if (error.status === 502 || error.status === 504) {
       if (isAuthRetryableFetchError(error)) {
-        return 'SMS hook failed (server timeout or IPROG error). Check Supabase → Edge Functions → unisms-hook → Logs.';
+        return 'SMS hook failed (server timeout or IPROG error). Check Supabase → Edge Functions → iprogsms-hook → Logs.';
       }
       return 'SMS could not be sent. Check the IPROG API token and account credits.';
     }
