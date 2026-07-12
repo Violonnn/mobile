@@ -9,6 +9,7 @@ import SelectField from './SelectField';
 import SelectModal from './SelectModal';
 import LegalModal from './LegalModal';
 import FieldError from './FieldError';
+import { isValidName, MAX_NAME_LENGTH } from '../../lib/validation/name';
 
 const MINGLANILLA_BARANGAYS = [
   'Cadulawan', 'Calajo-an', 'Camp 7', 'Camp 8', 'Cuanos', 'Guindaruhan',
@@ -36,6 +37,7 @@ const ERROR_TERMS = 'You must agree to the Terms & Conditions.';
 type FieldErrors = {
   lastName?: string;
   firstName?: string;
+  middleName?: string;
   birthMonth?: string;
   birthYear?: string;
   barangay?: string;
@@ -89,6 +91,10 @@ export default function DetailsStep({ details, onUpdateDetails, onSubmit }: Deta
         delete next.firstName;
         changed = true;
       }
+      if (next.middleName) {
+        delete next.middleName;
+        changed = true;
+      }
       if (birthMonth && next.birthMonth && next.birthMonth !== ERROR_MIN_AGE) {
         delete next.birthMonth;
         changed = true;
@@ -112,13 +118,29 @@ export default function DetailsStep({ details, onUpdateDetails, onSubmit }: Deta
 
       return changed ? next : prev;
     });
-  }, [lastName, firstName, birthYear, birthMonth, barangay, agreedToTerms]);
+  }, [lastName, firstName, middleName, birthYear, birthMonth, barangay, agreedToTerms]);
 
   function validateAndSubmit() {
     const nextErrors: FieldErrors = {};
 
-    if (!lastName) nextErrors.lastName = 'Last name is required.';
-    if (!firstName) nextErrors.firstName = 'First name is required.';
+    // Required checks first, then character validation for the name fields.
+    if (!lastName.trim()) {
+      nextErrors.lastName = 'Last name is required.';
+    } else if (!isValidName(lastName)) {
+      nextErrors.lastName = 'Last name can only contain letters.';
+    }
+
+    if (!firstName.trim()) {
+      nextErrors.firstName = 'First name is required.';
+    } else if (!isValidName(firstName)) {
+      nextErrors.firstName = 'First name can only contain letters.';
+    }
+
+    // Middle name is optional, but if provided it must be a valid name.
+    if (middleName.trim() && !isValidName(middleName)) {
+      nextErrors.middleName = 'Middle name can only contain letters.';
+    }
+
     if (!birthMonth) nextErrors.birthMonth = 'Select your birth month.';
     if (!birthYear) nextErrors.birthYear = 'Select your birth year.';
     if (!barangay) nextErrors.barangay = 'Select your barangay.';
@@ -129,19 +151,19 @@ export default function DetailsStep({ details, onUpdateDetails, onSubmit }: Deta
       return;
     }
 
+    // Age error is shown once under Birth Year; Birth Month only gets a border
+    // highlight (via hasError) so the same message isn't repeated.
     const age = computeAge(birthYear, birthMonth);
     if (age === null || age < 18) {
-      setFieldErrors({
-        birthMonth: ERROR_MIN_AGE,
-        birthYear: ERROR_MIN_AGE,
-      });
-      setError(ERROR_MIN_AGE);
+      setFieldErrors({ birthYear: ERROR_MIN_AGE });
+      setError('');
       return;
     }
 
+    // Terms error shows once under the checkbox — no duplicate banner below.
     if (!agreedToTerms) {
       setFieldErrors({ terms: ERROR_TERMS });
-      setError(ERROR_TERMS);
+      setError('');
       return;
     }
 
@@ -163,6 +185,8 @@ export default function DetailsStep({ details, onUpdateDetails, onSubmit }: Deta
         onChangeText={(text) => onUpdateDetails({ lastName: text })}
         leadingIcon="person-outline"
         error={fieldErrors.lastName}
+        maxLength={MAX_NAME_LENGTH}
+        autoCapitalize="words"
       />
       <LabeledInput
         label="First Name"
@@ -171,6 +195,8 @@ export default function DetailsStep({ details, onUpdateDetails, onSubmit }: Deta
         onChangeText={(text) => onUpdateDetails({ firstName: text })}
         leadingIcon="person-outline"
         error={fieldErrors.firstName}
+        maxLength={MAX_NAME_LENGTH}
+        autoCapitalize="words"
       />
       <LabeledInput
         label="Middle Name"
@@ -178,6 +204,9 @@ export default function DetailsStep({ details, onUpdateDetails, onSubmit }: Deta
         value={middleName}
         onChangeText={(text) => onUpdateDetails({ middleName: text })}
         leadingIcon="person-outline"
+        error={fieldErrors.middleName}
+        maxLength={MAX_NAME_LENGTH}
+        autoCapitalize="words"
       />
 
       <View style={styles.row}>
@@ -187,6 +216,7 @@ export default function DetailsStep({ details, onUpdateDetails, onSubmit }: Deta
           value={birthMonth ? MONTHS.find((m) => m.value === birthMonth)?.label ?? null : null}
           onPress={() => setShowMonthDropdown(true)}
           error={fieldErrors.birthMonth}
+          hasError={fieldErrors.birthYear === ERROR_MIN_AGE}
         />
         <SelectField
           label="Birth Year"

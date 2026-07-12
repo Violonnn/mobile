@@ -6,6 +6,7 @@ import {
   isValidBirthMonth,
   isValidBirthYear,
   isValidE164Phone,
+  isValidName,
   isValidPin,
   MAX_BARANGAY_LENGTH,
   MAX_NAME_LENGTH,
@@ -121,6 +122,14 @@ Deno.serve(async (req) => {
     middleName.length > MAX_NAME_LENGTH ||
     barangay.length > MAX_BARANGAY_LENGTH
   ) {
+    return jsonResponse({ error: GENERIC_VALIDATION_ERROR }, 400);
+  }
+
+  // Names must be letters/spaces/-/'/. only (middle name is optional).
+  if (!isValidName(lastName) || !isValidName(firstName)) {
+    return jsonResponse({ error: GENERIC_VALIDATION_ERROR }, 400);
+  }
+  if (middleName && !isValidName(middleName)) {
     return jsonResponse({ error: GENERIC_VALIDATION_ERROR }, 400);
   }
 

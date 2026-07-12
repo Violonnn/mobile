@@ -20,9 +20,13 @@ import {
   EMPTY_DETAILS,
   OTP_COOLDOWN_SECONDS,
   OTP_MAX_SENDS_PER_SESSION,
+  OTP_MAX_VERIFY_ATTEMPTS,
   RegistrationDetails,
   RegistrationStep,
 } from '../types/registration';
+
+const OTP_RESEND_HINT =
+  'Too many incorrect codes. Tap "Resend OTP" to get a new one.';
 
 type OtpLimitMeta = {
   sendCount?: number;
@@ -53,6 +57,7 @@ export function useRegistrationFlow() {
   const [resendCooldown, setResendCooldown] = useState(0);
   const [otpSendCount, setOtpSendCount] = useState(0);
   const [otpSentPhone, setOtpSentPhone] = useState('');
+  const [otpAttempts, setOtpAttempts] = useState(0);
   const [sendingOTP, setSendingOTP] = useState(false);
   const [verifyingOTP, setVerifyingOTP] = useState(false);
   const [submittingRegistration, setSubmittingRegistration] = useState(false);
@@ -68,6 +73,14 @@ export function useRegistrationFlow() {
   const hasPendingOtp =
     otpSentPhone === cleanedPhone && otpSendCount > 0 && cleanedPhone.replace(/^0+/, '').length === 10;
   const canRequestOtp = resendCooldown === 0 && !otpLimitReached;
+
+  // The GET OTP button is disabled for invalid/unsupported numbers. Once the
+  // user has typed a full 10-digit number, surface the validation reason (e.g.
+  // "Not supported yet. Try Globe, TM, or DITO") so a disabled button is never
+  // silent. An explicit phoneError (server/submit) still takes priority.
+  const displayPhoneError =
+    phoneError ||
+    (cleanedPhone.length === 10 && !phoneValidation.valid ? phoneValidation.message : '');
 
   useEffect(() => {
     return () => {
@@ -127,6 +140,7 @@ export function useRegistrationFlow() {
     setOtpSendCount(0);
     setOtpSentPhone('');
     setOtp('');
+    setOtpAttempts(0);
     clearCooldownTimer();
     clearOtpSession();
     hydratedPhoneRef.current = '';
@@ -238,6 +252,7 @@ export function useRegistrationFlow() {
 
       setOtp('');
       setOtpSentPhone(cleanedPhone);
+      setOtpAttempts(0);
 
       const sendCount = result.sendCount ?? otpSendCount + 1;
       const cooldownSeconds = result.cooldownSeconds ?? OTP_COOLDOWN_SECONDS;
@@ -296,15 +311,22 @@ export function useRegistrationFlow() {
       const { error } = await verifyRegistrationOtp(e164Number, otp);
       if (error) throw new Error(error);
 
+      setOtpAttempts(0);
       setStep(2);
     } catch (err: unknown) {
       const message =
         err instanceof Error ? err.message : 'Invalid or expired OTP. Please try again.';
-      setOtpError(message);
+
+      // Supabase invalidates the code after several wrong tries, after which the
+      // correct code also fails. Once we hit that many attempts, stop showing
+      // the confusing "invalid/expired" text and point the user to resend.
+      const nextAttempts = otpAttempts + 1;
+      setOtpAttempts(nextAttempts);
+      setOtpError(nextAttempts >= OTP_MAX_VERIFY_ATTEMPTS ? OTP_RESEND_HINT : message);
     } finally {
       setVerifyingOTP(false);
     }
-  }, [otp, e164Number]);
+  }, [otp, e164Number, otpAttempts]);
 
   const handleResend = useCallback(async () => {
     if (resendCooldown > 0) return;
@@ -383,7 +405,7 @@ export function useRegistrationFlow() {
     step,
     isComplete,
     phoneDigits,
-    phoneError,
+    phoneError: displayPhoneError,
     phoneValidation,
     displayNumber,
     otp,

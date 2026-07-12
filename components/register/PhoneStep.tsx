@@ -85,7 +85,7 @@ export default function PhoneStep({
             }}
           />
         </View>
-        <FieldError message={phoneError} />
+        <FieldError message={phoneError} centered />
       </View>
 
       {!phoneError && resendCooldown > 0 && (
@@ -97,6 +97,7 @@ export default function PhoneStep({
       {!phoneError && otpLimitReached && (
         <FieldError
           message={`OTP limit reached (${OTP_MAX_SENDS_PER_SESSION} requests). Try again later.`}
+          centered
         />
       )}
 

@@ -449,6 +449,13 @@ export const registerStyles = StyleSheet.create({
     lineHeight: 18,
     textAlign: 'left',
   },
+  fieldErrorRowCentered: {
+    justifyContent: 'center',
+  },
+  fieldErrorTextCentered: {
+    flex: 0,
+    textAlign: 'center',
+  },
   inputWithIconRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -628,15 +635,17 @@ export const registerStyles = StyleSheet.create({
   pinHintRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
+    justifyContent: 'center',
     gap: 6,
     marginBottom: spacing.sm,
     paddingHorizontal: spacing.xs,
   },
   pinHintText: {
-    flex: 1,
+    flexShrink: 1,
     fontSize: fontSizes.sm,
     color: registerColors.gray,
     lineHeight: 18,
+    textAlign: 'center',
   },
   pinInputWrapper: {
     flex: 1,
