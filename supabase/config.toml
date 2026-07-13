@@ -21,3 +21,9 @@ enabled = true
 verify_jwt = false
 import_map = "./functions/request-registration-otp/deno.json"
 entrypoint = "./functions/request-registration-otp/index.ts"
+
+[functions.reset-pin]
+enabled = true
+verify_jwt = true
+import_map = "./functions/reset-pin/deno.json"
+entrypoint = "./functions/reset-pin/index.ts"
