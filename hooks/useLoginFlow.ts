@@ -105,9 +105,11 @@ export function useLoginFlow() {
 
       router.replace('/(main)/home');
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Login failed. Please try again.';
+      // Generic on purpose: never reveal whether the phone or the PIN was wrong.
+      const message =
+        err instanceof Error ? err.message : 'Invalid phone number or PIN. Please try again.';
       setPinError(message);
-      Alert.alert('Incorrect PIN', message);
+      Alert.alert('Login failed', message);
     } finally {
       setSubmitting(false);
     }

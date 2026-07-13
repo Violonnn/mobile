@@ -9,7 +9,11 @@ export type VerifyLoginInput = {
   pin: string;
 };
 
-const WRONG_CREDENTIALS_MESSAGE = 'Invalid phone number or PIN. Please try again.';
+/**
+ * Single generic message for wrong phone, wrong PIN, or unknown account.
+ * WHY: Never reveal which credential was wrong (prevents account enumeration).
+ */
+const GENERIC_LOGIN_ERROR = 'Invalid phone number or PIN. Please try again.';
 
 /**
  * Return login: phone + PIN checked on the server only.
@@ -25,11 +29,7 @@ export async function loginWithPin(
   });
 
   if (error) {
-    const message = await readEdgeFunctionErrorMessage(
-      error,
-      response,
-      'Login failed. Please try again.',
-    );
+    const message = await readEdgeFunctionErrorMessage(error, response, GENERIC_LOGIN_ERROR);
     return { error: normalizeLoginError(message) };
   }
 
@@ -39,7 +39,7 @@ export async function loginWithPin(
 
   const tokenHash = data?.token_hash;
   if (!tokenHash || typeof tokenHash !== 'string') {
-    return { error: 'Login failed. Please try again.' };
+    return { error: GENERIC_LOGIN_ERROR };
   }
 
   const { error: sessionError } = await supabase.auth.verifyOtp({
@@ -48,22 +48,19 @@ export async function loginWithPin(
   });
 
   if (sessionError) {
-    const message = sessionError.message?.trim() || 'Login failed. Please try again.';
-    return { error: message };
+    return { error: GENERIC_LOGIN_ERROR };
   }
 
   return { error: null };
 }
 
+/**
+ * Keep the lockout message (it's not credential-specific), but collapse every
+ * other failure into the generic message so we never say "wrong PIN".
+ */
 function normalizeLoginError(message: string): string {
-  if (/invalid phone number or pin/i.test(message)) {
-    return 'Incorrect PIN. Please try again.';
-  }
   if (/too many failed attempts/i.test(message)) {
     return message;
   }
-  if (message === WRONG_CREDENTIALS_MESSAGE) {
-    return 'Incorrect PIN. Please try again.';
-  }
-  return message;
+  return GENERIC_LOGIN_ERROR;
 }
