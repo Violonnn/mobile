@@ -1,5 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
-import { View, Text, Image, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
+import {
+  View,
+  Text,
+  Image,
+  TouchableOpacity,
+  StyleSheet,
+  Dimensions,
+  ActivityIndicator,
+} from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -17,10 +25,13 @@ import Animated, {
 import * as SplashScreen from 'expo-splash-screen';
 import { styles } from '../styles/screens/welcome.styles';
 import { colors } from '../styles/theme';
+import { getActiveSession } from '../lib/auth';
 
 export default function WelcomeScreen() {
   const router = useRouter();
   const [loadingDone, setLoadingDone] = useState(false);
+  // 'checking' until we know whether a saved session exists; then 'welcome'.
+  const [phase, setPhase] = useState<'checking' | 'welcome'>('checking');
   const splashHiddenRef = useRef(false);
 
   const logoOpacity = useSharedValue(0);
@@ -34,6 +45,25 @@ export default function WelcomeScreen() {
   function onLoadingDone() {
     setLoadingDone(true);
   }
+
+  // Auto-login: if a persisted session is still valid, skip the welcome screen
+  // and go straight to home. A user who never logged out stays logged in.
+  useEffect(() => {
+    let mounted = true;
+
+    getActiveSession().then((session) => {
+      if (!mounted) return;
+      if (session) {
+        router.replace('/(main)/home');
+        return;
+      }
+      setPhase('welcome');
+    });
+
+    return () => {
+      mounted = false;
+    };
+  }, [router]);
 
   useEffect(() => {
     logoOpacity.value = withTiming(1, { duration: 520, easing: Easing.out(Easing.cubic) });
@@ -80,8 +110,9 @@ export default function WelcomeScreen() {
 
   return (
     <View style={{ flex: 1 }}>
-      {/* Welcome screen underneath */}
-      <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+      {/* Welcome screen underneath (only once we know there is no session) */}
+      {phase === 'welcome' ? (
+        <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
         <View style={styles.content}>
           <View style={styles.header}>
             <Image source={require('../assets/images/AppLogo.png')} style={styles.logo} />
@@ -116,7 +147,12 @@ export default function WelcomeScreen() {
             </TouchableOpacity>
           </View>
         </View>
-      </SafeAreaView>
+        </SafeAreaView>
+      ) : (
+        <View style={loadingStyles.overlay}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
+      )}
 
       {/* Loading overlay on top — fades out when done */}
       {!loadingDone && (
