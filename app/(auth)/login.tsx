@@ -22,7 +22,6 @@ import { responsiveLoginImageHeight } from '../../lib/layout';
 import { registerStyles as styles, registerColors } from '../../styles/screens/register.styles';
 import NumericKeyboardAccessory, { NUMERIC_ACCESSORY_ID } from '../../components/ui/NumericKeyboardAccessory';
 import PinField from '../../components/ui/PinField';
-import { FacebookIcon, TikTokIcon } from '../../components/ui/SocialBrandIcons';
 import FieldError from '../../components/register/FieldError';
 
 export default function LoginScreen() {
@@ -244,8 +243,7 @@ export default function LoginScreen() {
                     </TouchableOpacity>
 
                     <View style={styles.socialFollowRow}>
-                      <FacebookIcon />
-                      <TikTokIcon />
+                      <Text style={styles.versionText}>DisasterLink Version 1.0.0</Text>
                     </View>
                   </View>
                 </View>

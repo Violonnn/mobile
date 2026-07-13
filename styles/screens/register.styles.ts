@@ -1,4 +1,4 @@
-import { StyleSheet } from 'react-native';
+import { Platform, StyleSheet } from 'react-native';
 import { colors as themeColors, fontSizes, fontWeights, radius, spacing } from '../theme';
 import { scaleByWidth } from '../../lib/layout';
 
@@ -775,6 +775,15 @@ export const registerStyles = StyleSheet.create({
     justifyContent: 'center',
     gap: spacing.lg,
     paddingVertical: spacing.xs,
+  },
+  // Small app-version label. Uses a monospace face (not the default sans-serif)
+  // to read like a build tag.
+  versionText: {
+    textAlign: 'center',
+    color: registerColors.gray,
+    fontSize: 11,
+    letterSpacing: 0.5,
+    fontFamily: Platform.select({ ios: 'Courier New', android: 'monospace' }),
   },
   legalModalSheet: {
     backgroundColor: registerColors.white,
