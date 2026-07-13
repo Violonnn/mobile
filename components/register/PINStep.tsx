@@ -13,6 +13,9 @@ type Props = {
   onChangeConfirmPin: (value: string) => void;
   onSubmit: (pin: string) => void;
   submitting?: boolean;
+  // Optional copy overrides so the same step works for registration and reset.
+  title?: string;
+  submitLabel?: string;
 };
 
 export default function PINStep({
@@ -23,6 +26,8 @@ export default function PINStep({
   onChangeConfirmPin,
   onSubmit,
   submitting = false,
+  title = 'Almost there...',
+  submitLabel = 'CREATE ACCOUNT',
 }: Props) {
   const pinRef = useRef<TextInput>(null);
   const confirmRef = useRef<TextInput>(null);
@@ -71,7 +76,7 @@ export default function PINStep({
 
   return (
     <View style={styles.stepContent}>
-      <Text style={styles.stepTitle}>Almost there...</Text>
+      <Text style={styles.stepTitle}>{title}</Text>
       <Text style={styles.stepSubtitle}>
         Enter your PIN for{' '}
         <Text style={styles.stepSubtitleBold}>{phoneNumber}</Text>
@@ -119,7 +124,7 @@ export default function PINStep({
           <ActivityIndicator color={registerColors.white} />
         ) : (
           <>
-            <Text style={styles.primaryButtonText}>CREATE ACCOUNT</Text>
+            <Text style={styles.primaryButtonText}>{submitLabel}</Text>
             <Ionicons name="checkmark-circle-outline" size={20} color="#fff" />
           </>
         )}

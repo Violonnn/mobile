@@ -12,6 +12,12 @@ export type CompleteRegistrationInput = {
   pin: string;
 };
 
+/**
+ * Why the OTP was requested. The same Edge Function, table, rate limits, and
+ * verification serve both flows — only the existence rules differ server-side.
+ */
+export type OtpPurpose = 'registration' | 'password_reset';
+
 export type OtpRequestResult = {
   error: string | null;
   sendCount?: number;
@@ -68,11 +74,14 @@ function getAuthErrorMessage(error: unknown, fallback: string): string {
   return fallback;
 }
 
-export async function fetchRegistrationOtpStatus(phone: string): Promise<OtpRequestResult> {
+export async function fetchRegistrationOtpStatus(
+  phone: string,
+  purpose: OtpPurpose = 'registration',
+): Promise<OtpRequestResult> {
   const { data, error, response } = await supabase.functions.invoke(
     'request-registration-otp',
     {
-      body: { phone, statusOnly: true },
+      body: { phone, statusOnly: true, purpose },
     },
   );
 
@@ -96,11 +105,14 @@ export async function fetchRegistrationOtpStatus(phone: string): Promise<OtpRequ
   };
 }
 
-export async function requestRegistrationOtp(phone: string): Promise<OtpRequestResult> {
+export async function requestRegistrationOtp(
+  phone: string,
+  purpose: OtpPurpose = 'registration',
+): Promise<OtpRequestResult> {
   const { data, error, response } = await supabase.functions.invoke(
     'request-registration-otp',
     {
-      body: { phone },
+      body: { phone, purpose },
     },
   );
 
@@ -150,7 +162,7 @@ export async function verifyRegistrationOtp(
   return { error: null };
 }
 
-async function getActiveSession() {
+export async function getActiveSession() {
   const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
   if (refreshError) {
     console.warn('refreshSession failed during registration:', refreshError.message);
