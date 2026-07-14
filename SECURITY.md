@@ -14,6 +14,8 @@ This document explains what we fixed, what you must configure in Supabase, and h
 | **Weak registration** | `complete-registration` trims input, validates max lengths, rejects extra JSON fields, returns generic errors. |
 | **OTP abuse** | Documented Supabase Dashboard rate limits (client cooldown is UX only). |
 | **PIN brute force** | `login_attempts` table locks a phone after 5 wrong PINs for 15 minutes. |
+| **Advisor: mutable search_path** | `handle_profiles_updated_at` recreated with `set search_path = ''` (`20250616000000_fix_advisor_warnings.sql`). |
+| **Advisor: public EXECUTE on `rls_auto_enable()`** | Same migration revokes EXECUTE from `public`, `anon`, `authenticated`. |
 
 ---
 
@@ -46,7 +48,26 @@ supabase secrets set IPROG_SMS_API_TOKEN="your-api-token"
 
 `complete-registration` and `verify-login` use built-in env vars (`SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`).
 
-### 4. Deploy migration + functions
+### 4. Leaked password protection (Free tier: not available)
+
+Supabase's leaked-password check (Have I Been Pwned) is a **Pro+** setting. This
+project is on the **Free** plan, so the Security Advisor warning
+"Leaked Password Protection Disabled" is **expected and cannot be cleared** from
+the dashboard.
+
+This is acceptable here because the app's only end-user credential is a
+**phone OTP + 6-digit PIN** handled by edge functions — there is no native
+Supabase email/password login path in this codebase. (The
+`{userId}@login.disasterlink.invalid` addresses are server-only, used so
+`generateLink` can mint a session after a PIN check; users never type them.)
+
+Caveat: any account you create **manually in the Supabase Dashboard** with an
+email/password would not benefit from HIBP on Free — use unique passwords via a
+password manager, or upgrade to Pro to enable the check. When enabled, it only
+blocks new signups/password changes (not retroactive) and returns a distinct
+error any future password UI should surface specifically.
+
+### 5. Deploy migration + functions
 
 ```bash
 cd mobile
@@ -73,7 +94,7 @@ Return login:
 
 Why the hidden email?
   Supabase generateLink only works with email, not phone.
-  At registration we store `{userId}@login.disasterlink.local` — users never see it.
+  At registration we store `{userId}@login.disasterlink.invalid` — users never see it.
   It exists only so the server can create a session after PIN verification.
 ```
 
@@ -125,11 +146,36 @@ const { error } = await supabase.from('profiles').insert({
 
 ---
 
+## Security Advisor status
+
+| Advisor item | Status |
+|--------------|--------|
+| Function Search Path Mutable (`handle_profiles_updated_at`) | Fixed in `20250616000000_fix_advisor_warnings.sql` |
+| Public / signed-in EXECUTE on `rls_auto_enable()` | Revoked in same migration |
+| Leaked Password Protection Disabled | Expected on Free plan (see Dashboard settings §4) |
+| RLS Enabled No Policy on `login_attempts` | Intentional — service-role only, clients fully blocked |
+| RLS Enabled No Policy on `registration_otp_sends` | Intentional — service-role only, clients fully blocked |
+
+---
+
+## Follow-ups (not yet implemented)
+
+- **Weak PIN blocklist.** `isValidPin` (`supabase/functions/_shared/validation.ts`)
+  only enforces `^\d{6}$`. It does not reject obviously weak PINs (`000000`,
+  `123456`, repeated digits, birth-year patterns). Adding a shared reject list
+  used by `complete-registration` and `reset-pin` (with matching client UX) is
+  the real analog to leaked-password protection for this PIN-based architecture.
+  It complements — does not replace — server bcrypt and the `login_attempts`
+  lockout.
+
+---
+
 ## File map
 
 | File | Purpose |
 |------|---------|
 | `supabase/migrations/20250614000000_security_profiles_rls.sql` | RLS lockdown, view, login_attempts |
+| `supabase/migrations/20250616000000_fix_advisor_warnings.sql` | Advisor fixes: search_path + revoke rls_auto_enable |
 | `supabase/functions/complete-registration/` | Registration profile + bcrypt PIN |
 | `supabase/functions/verify-login/` | PIN login + session token |
 | `lib/login.ts` | Client login API (no PIN comparison) |
