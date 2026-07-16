@@ -1,227 +1,170 @@
 import { StyleSheet } from 'react-native';
-import { colors, fontSizes, fontWeights, radius, spacing } from '../theme';
+import { colors, fonts, fontSizes, radius, spacing } from '../theme';
 import { scaleByWidth } from '../../lib/layout';
 
 export const homeColors = {
   navy: '#1C2B4B',
-  accent: '#000000',
+  // Brand blue nudged slightly toward sky blue for a softer header.
+  header: '#2E6DED',
+  // Recent Today card: a bit darker than the header for subtle contrast.
+  recentCard: '#2159D6',
+  headerMuted: 'rgba(255, 255, 255, 0.78)',
+  headerHairline: 'rgba(255, 255, 255, 0.18)',
+  pill: 'rgba(255, 255, 255, 0.18)',
+  dot: '#F97316',
 };
 
 export const homeStyles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
-  },
-  scrollContent: {
-    flexGrow: 1,
-    paddingHorizontal: spacing.lg,
-    // Leave room for the floating bottom navigation bar.
-    paddingBottom: 132,
+    backgroundColor: colors.white,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: colors.background,
   },
-  header: {
+
+  // ---- Sections ---------------------------------------------------------
+  scrollContent: {
+    flexGrow: 1,
+    // Leave room for the floating bottom navigation bar.
+    paddingBottom: 132,
+  },
+  headerSection: {
+    marginTop: spacing.lg,
+  },
+  bodySection: {
+    paddingHorizontal: spacing.lg,
+    marginTop: spacing.lg,
+  },
+  sectionHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.md,
+    marginBottom: spacing.md,
   },
-  headerBrand: {
+  sectionTitle: {
+    fontFamily: fonts.bold,
+    fontSize: scaleByWidth(18),
+    color: colors.white,
+  },
+  announcementTitleRow: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    flex: 1,
+    marginRight: spacing.sm,
   },
-  headerLogo: {
-    width: 40,
-    height: 40,
-    resizeMode: 'contain',
-  },
-  headerTitle: {
-    fontSize: fontSizes.lg,
-    fontWeight: fontWeights.bold,
-    color: homeColors.navy,
-  },
-  headerSubtitle: {
-    fontSize: fontSizes.sm,
-    color: colors.textMuted,
-    marginTop: 1,
-  },
-  headerLogout: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1.5,
-    borderColor: colors.primary,
-    backgroundColor: colors.white,
-  },
-  heroCard: {
-    backgroundColor: colors.card,
-    borderRadius: radius.xl,
-    padding: spacing.lg,
-    marginBottom: spacing.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    shadowColor: homeColors.navy,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    elevation: 2,
-  },
-  heroGreeting: {
-    fontSize: scaleByWidth(24),
-    fontWeight: fontWeights.extrabold,
-    color: homeColors.navy,
-    marginBottom: spacing.xs,
-  },
-  heroText: {
-    fontSize: fontSizes.md,
-    color: colors.textMuted,
-    lineHeight: 22,
-  },
-  placeholderGrid: {
-    gap: spacing.sm,
-    marginBottom: spacing.lg,
-  },
-  placeholderCard: {
-    backgroundColor: colors.card,
-    borderRadius: radius.lg,
-    padding: spacing.md,
+  headerLocationRow: {
+    flexShrink: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    opacity: 0.85,
+    gap: 3,
   },
-  placeholderIconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.md,
-    backgroundColor: colors.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
+  headerLocation: {
+    flexShrink: 1,
+    fontFamily: fonts.medium,
+    fontSize: fontSizes.sm,
+    color: homeColors.headerMuted,
   },
-  placeholderBody: {
-    flex: 1,
-  },
-  placeholderTitle: {
-    fontSize: fontSizes.md,
-    fontWeight: fontWeights.semibold,
+  sectionTitleDark: {
+    fontFamily: fonts.bold,
+    fontSize: scaleByWidth(18),
     color: homeColors.navy,
   },
-  placeholderSubtitle: {
-    fontSize: fontSizes.sm,
-    color: colors.textMuted,
-    marginTop: 2,
-  },
-  logoutButton: {
-    marginTop: 'auto',
-    paddingVertical: spacing.lg,
-    borderRadius: radius.full,
+  seeAllButton: {
+    flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: colors.primary,
-    backgroundColor: colors.white,
+    gap: 2,
+    paddingVertical: 4,
   },
-  logoutButtonText: {
+  seeAllText: {
+    fontFamily: fonts.medium,
+    fontSize: fontSizes.sm,
+    color: 'rgba(255, 255, 255, 0.92)',
+  },
+  seeAllTextDark: {
+    fontFamily: fonts.medium,
+    fontSize: fontSizes.sm,
     color: colors.primary,
-    fontSize: fontSizes.lg,
-    fontWeight: fontWeights.semibold,
   },
 
+  // Recent Today lives in the white body but keeps the announcement's blue.
+  recentCard: {
+    backgroundColor: homeColors.recentCard,
+    borderRadius: radius.xl,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.md,
+  },
+  happeningSection: {
+    marginTop: spacing.lg,
+  },
+
+  // ---- Empty states (transparent, single unbold line) -------------------
+  emptyCard: {
+    backgroundColor: 'transparent',
+    paddingVertical: spacing.md,
+    paddingLeft: spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    gap: spacing.sm,
+  },
+  emptyCardDark: {
+    backgroundColor: 'transparent',
+    paddingVertical: spacing.md,
+    paddingLeft: spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    gap: spacing.sm,
+  },
+  emptyTitle: {
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.md,
+    color: 'rgba(255, 255, 255, 0.9)',
+  },
+  emptyTitleDark: {
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.md,
+    color: colors.textMuted,
+  },
+
+  // ---- Map preview ------------------------------------------------------
+  mapCard: {
+    marginTop: spacing.md,
+    height: 220,
+    borderRadius: radius.lg,
+    overflow: 'hidden',
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  mapWebview: {
+    flex: 1,
+    backgroundColor: 'transparent',
+  },
+  mapFallback: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+  },
+  mapFallbackText: {
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.sm,
+    color: colors.textMuted,
+  },
+
+  // ---- Welcome modal overlay (consumed by WelcomeModal) -----------------
   welcomeOverlay: {
     flex: 1,
     backgroundColor: 'rgba(15, 32, 68, 0.55)',
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: spacing.lg,
-  },
-  welcomeCard: {
-    width: '100%',
-    maxWidth: 360,
-    backgroundColor: colors.white,
-    borderRadius: radius.xl,
-    padding: spacing.lg,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.2,
-    shadowRadius: 24,
-    elevation: 10,
-  },
-  welcomeIconRing: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: '#ECFDF5',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.md,
-  },
-  welcomeTitle: {
-    fontSize: scaleByWidth(22),
-    fontWeight: fontWeights.extrabold,
-    color: homeColors.navy,
-    textAlign: 'center',
-    marginBottom: spacing.xs,
-  },
-  welcomeName: {
-    fontSize: fontSizes.lg,
-    fontWeight: fontWeights.semibold,
-    color: colors.primary,
-    textAlign: 'center',
-    marginBottom: spacing.sm,
-  },
-  welcomeMessage: {
-    fontSize: fontSizes.md,
-    color: colors.textMuted,
-    textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: spacing.md,
-  },
-  welcomeList: {
-    width: '100%',
-    gap: spacing.sm,
-    marginBottom: spacing.lg,
-  },
-  welcomeListItem: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.sm,
-    backgroundColor: colors.primaryLight,
-    borderRadius: radius.md,
-    padding: spacing.sm,
-  },
-  welcomeListText: {
-    flex: 1,
-    fontSize: fontSizes.sm,
-    color: homeColors.navy,
-    lineHeight: 20,
-  },
-  welcomeDoneButton: {
-    width: '100%',
-    paddingVertical: spacing.lg,
-    borderRadius: radius.full,
-    alignItems: 'center',
-    backgroundColor: homeColors.accent,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  welcomeDoneButtonText: {
-    color: colors.white,
-    fontSize: fontSizes.lg,
-    fontWeight: fontWeights.bold,
-    letterSpacing: 0.5,
   },
 });

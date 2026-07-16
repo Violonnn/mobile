@@ -2,38 +2,27 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
-  Image,
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
-  Alert,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
-import { homeStyles as styles } from '../../styles/screens/home.styles';
+import { homeStyles as styles, homeColors } from '../../styles/screens/home.styles';
 import { colors } from '../../styles/theme';
+import AppHeader from '../../components/navigation/AppHeader';
 import WelcomeModal from '../../components/ui/WelcomeModal';
-import { getActiveSession, logout } from '../../lib/auth';
+import HomeMapPreview from '../../components/home/HomeMapPreview';
+import { getActiveSession } from '../../lib/auth';
 import { fetchMyProfile } from '../../lib/profile';
 
-const PLACEHOLDER_FEATURES = [
-  {
-    icon: 'warning-outline' as const,
-    title: 'Report an Emergency',
-    subtitle: 'Quickly alert your barangay when help is needed.',
-  },
-  {
-    icon: 'notifications-outline' as const,
-    title: 'Safety Alerts',
-    subtitle: 'Get updates on weather and local hazards.',
-  },
-  {
-    icon: 'people-outline' as const,
-    title: 'Community Hub',
-    subtitle: 'Connect with neighbors and responders.',
-  },
-];
+// UI-only placeholders. Real feeds arrive later; keep these empty so the
+// screen renders its soft empty states.
+const ANNOUNCEMENTS: unknown[] = [];
+const RECENT_TODAY: unknown[] = [];
+const HAPPENING_NEAR_YOU: unknown[] = [];
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -44,7 +33,6 @@ export default function HomeScreen() {
   const [firstName, setFirstName] = useState('');
   const [barangay, setBarangay] = useState('');
   const [showWelcome, setShowWelcome] = useState(false);
-  const [loggingOut, setLoggingOut] = useState(false);
 
   const loadSession = useCallback(async () => {
     setLoading(true);
@@ -84,20 +72,6 @@ export default function HomeScreen() {
     }
   }, [welcome, isAuthenticated, loading]);
 
-  async function handleLogout() {
-    setLoggingOut(true);
-    try {
-      const { error } = await logout();
-      if (error) throw new Error(error);
-      router.replace('/');
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Could not log out. Please try again.';
-      Alert.alert('Logout failed', message);
-    } finally {
-      setLoggingOut(false);
-    }
-  }
-
   if (loading || !isAuthenticated) {
     return (
       <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
@@ -108,59 +82,135 @@ export default function HomeScreen() {
     );
   }
 
-  const greetingName = firstName.trim() || 'there';
+  const avatarInitial = firstName.trim().charAt(0).toUpperCase() || 'U';
+  const locationValue = barangay ? `${barangay}, Minglanilla` : 'Minglanilla, Cebu';
+  const goToFeed = () => router.push('/(main)/feed');
+  const goToMap = () => router.push('/(main)/map');
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-      <View style={styles.header}>
-        <View style={styles.headerBrand}>
-          <Image source={require('../../assets/images/AppLogo.png')} style={styles.headerLogo} />
-          <View>
-            <Text style={styles.headerTitle}>DisasterLink</Text>
-            <Text style={styles.headerSubtitle}>Minglanilla, Cebu</Text>
-          </View>
-        </View>
-        <TouchableOpacity
-          style={styles.headerLogout}
-          onPress={handleLogout}
-          disabled={loggingOut}
-          activeOpacity={0.8}
-          accessibilityRole="button"
-          accessibilityLabel="Log out"
-        >
-          {loggingOut ? (
-            <ActivityIndicator size="small" color={colors.primary} />
-          ) : (
-            <Ionicons name="log-out-outline" size={22} color={colors.primary} />
-          )}
-        </TouchableOpacity>
-      </View>
-
+    <View style={styles.container}>
+      <StatusBar style="light" />
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.heroCard}>
-          <Text style={styles.heroGreeting}>Welcome, {greetingName}!</Text>
-          <Text style={styles.heroText}>
-            {barangay
-              ? `You're signed in and linked to ${barangay}`
-              : "You're signed in. Home features are being prepared for you."}
-          </Text>
-        </View>
-
-        <View style={styles.placeholderGrid}>
-          {PLACEHOLDER_FEATURES.map((feature) => (
-            <View key={feature.title} style={styles.placeholderCard} pointerEvents="none">
-              <View style={styles.placeholderIconWrap}>
-                <Ionicons name={feature.icon} size={22} color={colors.primary} />
+        <AppHeader
+          title="Home"
+          avatarInitial={avatarInitial}
+          searchPlaceholder="Search announcement, and report"
+        >
+          <View style={styles.headerSection}>
+            <View style={styles.sectionHeaderRow}>
+              <View style={styles.announcementTitleRow}>
+                <Text style={styles.sectionTitle}>Announcement</Text>
+                <View style={styles.headerLocationRow}>
+                  <Ionicons name="location-outline" size={13} color={homeColors.headerMuted} />
+                  <Text style={styles.headerLocation} numberOfLines={1}>
+                    {locationValue}
+                  </Text>
+                </View>
               </View>
-              <View style={styles.placeholderBody}>
-                <Text style={styles.placeholderTitle}>{feature.title}</Text>
-                <Text style={styles.placeholderSubtitle}>{feature.subtitle}</Text>
-              </View>
+              <TouchableOpacity
+                style={styles.seeAllButton}
+                activeOpacity={0.8}
+                onPress={goToFeed}
+                accessibilityRole="button"
+                accessibilityLabel="Show all announcements"
+              >
+                <Text style={styles.seeAllText}>Show All</Text>
+                <Ionicons name="chevron-forward" size={14} color="rgba(255,255,255,0.92)" />
+              </TouchableOpacity>
             </View>
-          ))}
+
+            {ANNOUNCEMENTS.length === 0 && (
+              <View style={styles.emptyCard}>
+                <Ionicons name="megaphone-outline" size={18} color={homeColors.headerMuted} />
+                <Text style={styles.emptyTitle}>No announcements yet</Text>
+              </View>
+            )}
+          </View>
+        </AppHeader>
+
+        <View style={styles.bodySection}>
+          <View style={styles.recentCard}>
+            <View style={styles.sectionHeaderRow}>
+              <Text style={styles.sectionTitle}>Recent Today</Text>
+            </View>
+
+            {RECENT_TODAY.length === 0 && (
+              <View style={styles.emptyCard}>
+                <Ionicons name="time-outline" size={18} color={homeColors.headerMuted} />
+                <Text style={styles.emptyTitle}>No reports yet today</Text>
+              </View>
+            )}
+          </View>
+
+          <View style={styles.happeningSection}>
+            <View style={styles.sectionHeaderRow}>
+              <Text style={styles.sectionTitleDark}>Happening near you</Text>
+              <TouchableOpacity
+                style={styles.seeAllButton}
+                activeOpacity={0.8}
+                onPress={goToFeed}
+                accessibilityRole="button"
+                accessibilityLabel="Show all nearby activity"
+              >
+                <Text style={styles.seeAllTextDark}>Show All</Text>
+                <Ionicons name="chevron-forward" size={14} color={colors.primary} />
+              </TouchableOpacity>
+            </View>
+
+            {HAPPENING_NEAR_YOU.length === 0 && (
+              <View style={styles.emptyCardDark}>
+                <Ionicons name="pulse-outline" size={18} color={colors.textMuted} />
+                <Text style={styles.emptyTitleDark}>Nothing nearby right now</Text>
+              </View>
+            )}
+
+            <HomeMapPreview />
+          </View>
+
+          <View style={styles.happeningSection}>
+            <View style={styles.sectionHeaderRow}>
+              <Text style={styles.sectionTitleDark}>Hotlines</Text>
+              <TouchableOpacity
+                style={styles.seeAllButton}
+                activeOpacity={0.8}
+                onPress={goToMap}
+                accessibilityRole="button"
+                accessibilityLabel="View hotlines in map"
+              >
+                <Text style={styles.seeAllTextDark}>View in map</Text>
+                <Ionicons name="chevron-forward" size={14} color={colors.primary} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.emptyCardDark}>
+              <Ionicons name="call-outline" size={18} color={colors.textMuted} />
+              <Text style={styles.emptyTitleDark}>No hotlines added yet</Text>
+            </View>
+          </View>
+
+          <View style={styles.happeningSection}>
+            <View style={styles.sectionHeaderRow}>
+              <Text style={styles.sectionTitleDark}>Facilities</Text>
+              <TouchableOpacity
+                style={styles.seeAllButton}
+                activeOpacity={0.8}
+                onPress={goToMap}
+                accessibilityRole="button"
+                accessibilityLabel="View facilities in map"
+              >
+                <Text style={styles.seeAllTextDark}>View in map</Text>
+                <Ionicons name="chevron-forward" size={14} color={colors.primary} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.emptyCardDark}>
+              <Ionicons name="business-outline" size={18} color={colors.textMuted} />
+              <Text style={styles.emptyTitleDark}>No facilities added yet</Text>
+            </View>
+          </View>
         </View>
       </ScrollView>
 
@@ -170,6 +220,6 @@ export default function HomeScreen() {
         barangay={barangay}
         onDone={() => setShowWelcome(false)}
       />
-    </SafeAreaView>
+    </View>
   );
 }
