@@ -15,7 +15,8 @@ export const homeStyles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.xl,
+    // Leave room for the floating bottom navigation bar.
+    paddingBottom: 132,
   },
   loadingContainer: {
     flex: 1,
@@ -50,6 +51,16 @@ export const homeStyles = StyleSheet.create({
     fontSize: fontSizes.sm,
     color: colors.textMuted,
     marginTop: 1,
+  },
+  headerLogout: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: colors.primary,
+    backgroundColor: colors.white,
   },
   heroCard: {
     backgroundColor: colors.card,

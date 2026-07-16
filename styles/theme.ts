@@ -34,6 +34,17 @@ export const fontWeights = {
   extrabold: "800" as const,
 };
 
+// Sora — a clean, modern, geometric sans-serif. Minimalist and distinctive
+// (not the usual system font), and versatile enough for use across the app.
+// Each weight is registered as its own family name (Expo Google Fonts).
+export const fonts = {
+  regular: "Sora_400Regular",
+  medium: "Sora_500Medium",
+  semibold: "Sora_600SemiBold",
+  bold: "Sora_700Bold",
+  extrabold: "Sora_800ExtraBold",
+};
+
 export const radius = {
   sm: 8,
   md: 12,

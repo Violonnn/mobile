@@ -120,6 +120,20 @@ export default function HomeScreen() {
             <Text style={styles.headerSubtitle}>Minglanilla, Cebu</Text>
           </View>
         </View>
+        <TouchableOpacity
+          style={styles.headerLogout}
+          onPress={handleLogout}
+          disabled={loggingOut}
+          activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel="Log out"
+        >
+          {loggingOut ? (
+            <ActivityIndicator size="small" color={colors.primary} />
+          ) : (
+            <Ionicons name="log-out-outline" size={22} color={colors.primary} />
+          )}
+        </TouchableOpacity>
       </View>
 
       <ScrollView
@@ -148,19 +162,6 @@ export default function HomeScreen() {
             </View>
           ))}
         </View>
-
-        <TouchableOpacity
-          style={styles.logoutButton}
-          onPress={handleLogout}
-          disabled={loggingOut}
-          activeOpacity={0.8}
-        >
-          {loggingOut ? (
-            <ActivityIndicator color={colors.primary} />
-          ) : (
-            <Text style={styles.logoutButtonText}>Log Out</Text>
-          )}
-        </TouchableOpacity>
       </ScrollView>
 
       <WelcomeModal
