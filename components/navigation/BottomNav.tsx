@@ -20,7 +20,6 @@ import {
   navColors,
   navMetrics,
 } from '../../styles/components/bottomNav.styles';
-import { layout } from '../../lib/layout';
 
 type IoniconName = keyof typeof Ionicons.glyphMap;
 
@@ -205,17 +204,23 @@ export default function BottomNav({ state, navigation }: BottomTabBarProps) {
     // Action button only — no tab / screen navigation.
   }, []);
 
-  const barWidth = layout.screenWidth - navMetrics.barMarginHorizontal * 2;
-
   return (
     <View
       style={[
         styles.wrapper,
-        { paddingBottom: Math.max(insets.bottom, 8) + navMetrics.barBottomGap },
+        {
+          bottom: -insets.bottom,
+          height: navMetrics.barHeight + insets.bottom + navMetrics.barBottomGap,
+        },
       ]}
       pointerEvents="box-none"
     >
-      <View style={[styles.bar, { width: barWidth }]}>
+      <View
+        style={[
+          styles.bar,
+          { height: navMetrics.barHeight + insets.bottom + navMetrics.barBottomGap },
+        ]}
+      >
         <View style={styles.row}>
           {LEFT_TABS.map((tab) => (
             <NavItem

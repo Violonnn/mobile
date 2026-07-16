@@ -1,5 +1,5 @@
 // styles/components/bottomNav.styles.ts
-// Design tokens + styles for the floating white bottom navigation bar.
+// Design tokens + styles for the fixed white bottom navigation bar.
 // Inactive tabs are vertically centered icon + label. The active tab is a blue
 // circle (white icon) seated at its default position inside the bar (no lift),
 // keeping its label below. The center Report control is a borderless soft-red
@@ -10,9 +10,9 @@ import { colors, fonts } from '../theme';
 
 export const navMetrics = {
   barHeight: 74,
-  barRadius: 30,
-  barMarginHorizontal: 16,
-  barBottomGap: 10,
+  barRadius: 24,
+  barMarginHorizontal: 0,
+  barBottomGap: 0,
   itemWidth: 62,
   // Tab icons a bit larger, but still smaller than the report button.
   iconSize: 24,
@@ -59,23 +59,27 @@ export const bottomNavStyles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    alignItems: 'center',
-    backgroundColor: 'transparent',
+    alignItems: 'stretch',
+    backgroundColor: navColors.bar,
     overflow: 'visible',
   },
   bar: {
     height: navMetrics.barHeight,
-    borderRadius: navMetrics.barRadius,
+    width: '100%',
+    borderTopLeftRadius: navMetrics.barRadius,
+    borderTopRightRadius: navMetrics.barRadius,
     backgroundColor: navColors.bar,
     overflow: 'visible',
     shadowColor: '#1C2B4B',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.14,
-    shadowRadius: 18,
-    elevation: 10,
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 0,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(28, 43, 75, 0.06)',
   },
   row: {
-    flex: 1,
+    height: navMetrics.barHeight,
     flexDirection: 'row',
     alignItems: 'stretch',
     justifyContent: 'space-around',
