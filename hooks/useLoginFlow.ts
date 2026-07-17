@@ -128,6 +128,10 @@ export function useLoginFlow() {
     router.push('/(auth)/register');
   }, [router]);
 
+  const goToOfficialLogin = useCallback(() => {
+    router.push('/(auth)/official-login');
+  }, [router]);
+
   return {
     phoneDigits,
     phoneError,
@@ -146,5 +150,6 @@ export function useLoginFlow() {
     goBack,
     goToForgotPassword,
     goToRegister,
+    goToOfficialLogin,
   };
 }

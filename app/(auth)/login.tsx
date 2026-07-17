@@ -8,6 +8,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  Image,
+  StyleSheet,
   Keyboard,
   TouchableWithoutFeedback,
   Pressable,
@@ -45,6 +47,7 @@ export default function LoginScreen() {
     goBack,
     goToForgotPassword,
     goToRegister,
+    goToOfficialLogin,
   } = useLoginFlow();
 
   const imageHeight = responsiveLoginImageHeight();
@@ -91,13 +94,14 @@ export default function LoginScreen() {
 
         <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
           <ScrollView
-            contentContainerStyle={styles.fixedScrollContent}
+            contentContainerStyle={loginStyles.fixedScrollContent}
+            scrollEnabled={false}
             keyboardShouldPersistTaps="always"
             showsVerticalScrollIndicator={false}
             bounces={false}
             automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
           >
-            <View style={styles.centeredBlock}>
+            <View style={loginStyles.centeredBlock}>
               <Text style={styles.screenTitle}>Login</Text>
 
               <View style={[styles.imageContainer, { height: imageHeight }]}>
@@ -242,6 +246,34 @@ export default function LoginScreen() {
                       )}
                     </TouchableOpacity>
 
+                    <TouchableOpacity
+                      style={styles.officialLoginSection}
+                      onPress={goToOfficialLogin}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.officialLoginDivider} />
+                      <View style={loginStyles.officialLoginContent}>
+                        <Image
+                          source={require('../../assets/images/minglanilla.png')}
+                          style={loginStyles.officialLoginLogo}
+                          resizeMode="cover"
+                        />
+                        <View style={loginStyles.officialLoginTextGroup}>
+                          <View style={loginStyles.officialLoginTitleRow}>
+                            <Text style={styles.officialLoginTitle}>Official Login</Text>
+                            <Ionicons
+                              name="arrow-forward"
+                              size={17}
+                              color={registerColors.text}
+                            />
+                          </View>
+                          <Text style={styles.officialLoginSubtitle}>
+                            Authorized government personnel only
+                          </Text>
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+
                     <View style={styles.socialFollowRow}>
                       <Text style={styles.versionText}>DisasterLink Version 1.0.0</Text>
                     </View>
@@ -257,3 +289,35 @@ export default function LoginScreen() {
     </SafeAreaView>
   );
 }
+
+const loginStyles = StyleSheet.create({
+  fixedScrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    paddingBottom: 0,
+  },
+  centeredBlock: {
+    flexShrink: 1,
+    width: '100%',
+  },
+  officialLoginContent: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  officialLoginLogo: {
+    width: 112,
+    height: 112,
+    borderRadius: 56,
+  },
+  officialLoginTextGroup: {
+    alignItems: 'center',
+    flexShrink: 1,
+  },
+  officialLoginTitleRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 4,
+    justifyContent: 'center',
+  },
+});
