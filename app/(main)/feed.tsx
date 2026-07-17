@@ -12,7 +12,7 @@ export default function FeedScreen() {
   return (
     <View style={styles.container}>
       <StatusBar style="light" />
-      <AppHeader title="Feed" searchPlaceholder="Search announcement, and report" />
+      <AppHeader title="Feed" searchPlaceholder="Search announcement and report" />
       <ScrollView
         contentContainerStyle={styles.feedContent}
         showsVerticalScrollIndicator={false}

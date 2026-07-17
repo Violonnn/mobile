@@ -97,7 +97,7 @@ export default function HomeScreen() {
         <AppHeader
           title="Home"
           avatarInitial={avatarInitial}
-          searchPlaceholder="Search announcement, and report"
+          searchPlaceholder="Search announcement and report"
         >
           <View style={styles.headerSection}>
             <View style={styles.sectionHeaderRow}>
