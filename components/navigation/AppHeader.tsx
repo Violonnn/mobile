@@ -1,32 +1,38 @@
 // components/navigation/AppHeader.tsx — reusable blue header bar.
-// Shows the "DisasterLink" brand, a centered screen title, a notification bell,
-// and the profile avatar. Optionally renders a search bar below the top row.
-// Shared across the home, feed, map, and profile tabs.
+// Three variants, chosen by props:
+//  - greetingName set   -> greeting header: "Hi, {name}" + "Your Location"
+//    block on the left and a plain notification bell on the right (home).
+//  - title set          -> legacy layout: "DisasterLink" brand, centered
+//    title, bell + avatar (still used by the profile tab — do not restyle).
+//  - neither            -> no top row; only the search bar renders (map).
 //
-// The avatar letter defaults to the signed-in user's first initial (self-loaded)
-// so the header can be dropped into any screen. Screens that already have this
-// value can pass `avatarInitial` to skip the fetch.
+// The bell opens a minimalist placeholder sheet until notifications exist.
 import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
+import { View, Text, TouchableOpacity, Modal, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { headerStyles as styles } from '../../styles/components/header.styles';
+import { headerStyles as styles, headerColors } from '../../styles/components/header.styles';
 import { colors, spacing } from '../../styles/theme';
 import { fetchMyProfile } from '../../lib/profile';
 
 type AppHeaderProps = {
-  /** Centered screen label (e.g. "Home", "Feed", "Map", "Profile"). */
+  /** Legacy centered screen label (kept for the profile tab). */
   title?: string;
-  /** Overrides the avatar letter. Falls back to the user's first initial. */
+  /** Renders the greeting variant: "Hi, {greetingName}". */
+  greetingName?: string;
+  /** Location value shown under the greeting ("Your Location"). */
+  locationLabel?: string;
+  /** Overrides the avatar letter (legacy variant only). */
   avatarInitial?: string;
-  /** Shows the orange unread dot on the bell. */
+  /** Shows the orange unread dot on the bell (legacy variant only). */
   showNotificationDot?: boolean;
-  /** Hide the profile avatar (e.g. when already on the profile screen). */
+  /** Hide the profile avatar (legacy variant only). */
   showProfile?: boolean;
   /** When set, renders a search bar with this placeholder below the top row. */
   searchPlaceholder?: string;
   onSearchPress?: () => void;
+  /** Overrides the default placeholder sheet when the bell is tapped. */
   onNotificationsPress?: () => void;
   /** Defaults to navigating to the profile tab. */
   onProfilePress?: () => void;
@@ -34,8 +40,51 @@ type AppHeaderProps = {
   children?: React.ReactNode;
 };
 
+/** Minimalist placeholder shown when notifications are tapped (no data yet). */
+function NotificationsPlaceholder({
+  visible,
+  onClose,
+}: {
+  visible: boolean;
+  onClose: () => void;
+}) {
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      statusBarTranslucent
+      onRequestClose={onClose}
+    >
+      <View style={styles.notifOverlay}>
+        <Pressable style={styles.notifBackdrop} onPress={onClose} />
+        <View style={styles.notifCard}>
+          <View style={styles.notifIconCircle}>
+            <Ionicons name="notifications-outline" size={26} color={colors.themeSoft} />
+          </View>
+          <Text style={styles.notifTitle}>Notifications</Text>
+          <Text style={styles.notifSubtitle}>
+            You're all caught up. Nothing here yet.
+          </Text>
+          <TouchableOpacity
+            style={styles.notifCloseButton}
+            onPress={onClose}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Close notifications"
+          >
+            <Text style={styles.notifCloseText}>Close</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 export default function AppHeader({
   title,
+  greetingName,
+  locationLabel,
   avatarInitial,
   showNotificationDot = true,
   showProfile = true,
@@ -48,11 +97,15 @@ export default function AppHeader({
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
-  const [resolvedInitial, setResolvedInitial] = useState(avatarInitial ?? 'U');
+  const isGreetingVariant = greetingName !== undefined;
+  const isLegacyVariant = !isGreetingVariant && title !== undefined;
 
-  // Only self-fetch the avatar initial when it's needed and not provided.
+  const [resolvedInitial, setResolvedInitial] = useState(avatarInitial ?? 'U');
+  const [notifOpen, setNotifOpen] = useState(false);
+
+  // Only self-fetch the avatar initial when the legacy variant needs it.
   useEffect(() => {
-    if (avatarInitial !== undefined || !showProfile) return;
+    if (!isLegacyVariant || avatarInitial !== undefined || !showProfile) return;
 
     let cancelled = false;
     (async () => {
@@ -64,49 +117,92 @@ export default function AppHeader({
     return () => {
       cancelled = true;
     };
-  }, [avatarInitial, showProfile]);
+  }, [isLegacyVariant, avatarInitial, showProfile]);
 
   const initial = avatarInitial ?? resolvedInitial;
 
   const handleProfilePress =
     onProfilePress ?? (() => router.push('/(main)/profile'));
 
+  const handleNotificationsPress =
+    onNotificationsPress ?? (() => setNotifOpen(true));
+
   return (
     <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
-      <View style={styles.topRow}>
-        <Text style={styles.brandTitle}>DisasterLink</Text>
-
-        {title ? (
-          <View style={styles.centerTitleWrap} pointerEvents="none">
-            <Text style={styles.centerTitle}>{title}</Text>
+      {isGreetingVariant ? (
+        <View style={styles.greetingRow}>
+          <View style={styles.greetingTextWrap}>
+            <Text style={styles.greetingTitle} numberOfLines={1}>
+              Hi, {greetingName || 'there'}
+            </Text>
+            {locationLabel ? (
+              <View style={styles.greetingLocationWrap}>
+                <Text style={styles.greetingLocationLabel}>Your Location</Text>
+                <Text style={styles.greetingLocationValue} numberOfLines={1}>
+                  {locationLabel}
+                </Text>
+              </View>
+            ) : null}
           </View>
-        ) : null}
 
-        <View style={styles.headerActions}>
-          <TouchableOpacity
-            style={styles.iconButton}
-            activeOpacity={0.8}
-            onPress={onNotificationsPress}
-            accessibilityRole="button"
-            accessibilityLabel="Notifications"
-          >
-            <Ionicons name="notifications-outline" size={20} color={colors.white} />
-            {showNotificationDot && <View style={styles.bellDot} />}
-          </TouchableOpacity>
-
-          {showProfile && (
+          <View style={styles.greetingActions}>
             <TouchableOpacity
-              style={styles.avatar}
+              style={styles.plainBellButton}
+              activeOpacity={0.7}
+              onPress={handleNotificationsPress}
+              accessibilityRole="button"
+              accessibilityLabel="Notifications"
+            >
+              <Ionicons name="notifications-outline" size={24} color={colors.white} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.greetingAvatar}
               activeOpacity={0.85}
               onPress={handleProfilePress}
               accessibilityRole="button"
               accessibilityLabel="Profile"
             >
-              <Text style={styles.avatarText}>{initial}</Text>
+              {/* No profile pictures yet — same initial-avatar format as the app. */}
+              <Text style={styles.greetingAvatarText}>
+                {(greetingName ?? '').trim().charAt(0).toUpperCase() || 'U'}
+              </Text>
             </TouchableOpacity>
-          )}
+          </View>
         </View>
-      </View>
+      ) : isLegacyVariant ? (
+        <View style={styles.topRow}>
+          <Text style={styles.brandTitle}>DisasterLink</Text>
+
+          <View style={styles.centerTitleWrap} pointerEvents="none">
+            <Text style={styles.centerTitle}>{title}</Text>
+          </View>
+
+          <View style={styles.headerActions}>
+            <TouchableOpacity
+              style={styles.iconButton}
+              activeOpacity={0.8}
+              onPress={handleNotificationsPress}
+              accessibilityRole="button"
+              accessibilityLabel="Notifications"
+            >
+              <Ionicons name="notifications-outline" size={20} color={headerColors.ink} />
+              {showNotificationDot && <View style={styles.bellDot} />}
+            </TouchableOpacity>
+
+            {showProfile && (
+              <TouchableOpacity
+                style={styles.avatar}
+                activeOpacity={0.85}
+                onPress={handleProfilePress}
+                accessibilityRole="button"
+                accessibilityLabel="Profile"
+              >
+                <Text style={styles.avatarText}>{initial}</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+      ) : null}
 
       {searchPlaceholder ? (
         <TouchableOpacity
@@ -122,6 +218,8 @@ export default function AppHeader({
       ) : null}
 
       {children}
+
+      <NotificationsPlaceholder visible={notifOpen} onClose={() => setNotifOpen(false)} />
     </View>
   );
 }

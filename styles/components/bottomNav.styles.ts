@@ -34,8 +34,9 @@ export const navColors = {
   iconInactive: '#9CA3AF',
   iconActive: '#FFFFFF',
   labelInactive: '#9CA3AF',
-  labelActive: colors.primary,
-  circleFill: colors.primary,
+  // Active-tab highlight + label match the in-app theme color.
+  labelActive: colors.themeSoft,
+  circleFill: colors.themeSoft,
   // Soft, minimal red — no gradient, no border.
   report: '#F26E6E',
   reportIcon: '#FFFFFF',
@@ -126,11 +127,6 @@ export const bottomNavStyles = StyleSheet.create({
     backgroundColor: navColors.circleFill,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 5 },
-    shadowOpacity: 0.35,
-    shadowRadius: 9,
-    elevation: 8,
   },
 
   // ---- Carved center report action button ----

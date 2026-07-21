@@ -4,13 +4,11 @@ import { scaleByWidth } from '../../lib/layout';
 
 export const homeColors = {
   navy: '#1C2B4B',
-  // Brand blue nudged slightly toward sky blue for a softer header.
-  header: '#2E6DED',
-  // Recent Today card: a bit darker than the header for subtle contrast.
-  recentCard: '#2159D6',
-  headerMuted: 'rgba(255, 255, 255, 0.78)',
-  headerHairline: 'rgba(255, 255, 255, 0.18)',
-  pill: 'rgba(255, 255, 255, 0.18)',
+  // In-app theme: soft desaturated blue with white text (per design).
+  header: colors.themeSoft,
+  headerMuted: 'rgba(255, 255, 255, 0.85)',
+  headerHairline: 'rgba(255, 255, 255, 0.25)',
+  pill: 'rgba(255, 255, 255, 0.35)',
   dot: '#F97316',
 };
 
@@ -57,18 +55,6 @@ export const homeStyles = StyleSheet.create({
     gap: spacing.sm,
     marginRight: spacing.sm,
   },
-  headerLocationRow: {
-    flexShrink: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-  },
-  headerLocation: {
-    flexShrink: 1,
-    fontFamily: fonts.medium,
-    fontSize: fontSizes.sm,
-    color: homeColors.headerMuted,
-  },
   sectionTitleDark: {
     fontFamily: fonts.bold,
     fontSize: scaleByWidth(18),
@@ -83,22 +69,15 @@ export const homeStyles = StyleSheet.create({
   seeAllText: {
     fontFamily: fonts.medium,
     fontSize: fontSizes.sm,
-    color: 'rgba(255, 255, 255, 0.92)',
+    color: colors.white,
   },
+  // Body-section links are black (only the header links stay white).
   seeAllTextDark: {
     fontFamily: fonts.medium,
     fontSize: fontSizes.sm,
-    color: colors.primary,
+    color: colors.text,
   },
 
-  // Recent Today lives in the white body but keeps the announcement's blue.
-  recentCard: {
-    backgroundColor: homeColors.recentCard,
-    borderRadius: radius.xl,
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.md,
-  },
   happeningSection: {
     marginTop: spacing.lg,
   },
@@ -125,7 +104,7 @@ export const homeStyles = StyleSheet.create({
   emptyTitle: {
     fontFamily: fonts.regular,
     fontSize: fontSizes.md,
-    color: 'rgba(255, 255, 255, 0.9)',
+    color: 'rgba(255, 255, 255, 0.92)',
   },
   emptyTitleDark: {
     fontFamily: fonts.regular,

@@ -9,7 +9,7 @@
 //    tab route) seated in a carved notch so it never touches the bar.
 // No animations — static highlight for best performance on low-end devices.
 
-import React, { useCallback, useRef, memo } from 'react';
+import React, { useCallback, useRef, useState, memo } from 'react';
 import { Animated, View, Text, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,6 +20,7 @@ import {
   navColors,
   navMetrics,
 } from '../../styles/components/bottomNav.styles';
+import ReportModal from '../ui/ReportModal';
 
 type IoniconName = keyof typeof Ionicons.glyphMap;
 
@@ -179,6 +180,7 @@ const ReportButton = memo(function ReportButton({ onPress }: { onPress: () => vo
 export default function BottomNav({ state, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const currentRouteName = state.routes[state.index]?.name;
+  const [reportOpen, setReportOpen] = useState(false);
 
   const navigateTo = useCallback(
     (routeName: string) => {
@@ -201,50 +203,72 @@ export default function BottomNav({ state, navigation }: BottomTabBarProps) {
 
   const handleReportPress = useCallback(() => {
     triggerHaptic();
-    // Action button only — no tab / screen navigation.
+    if (reportOpen) return;
+    setReportOpen(true);
+  }, [reportOpen]);
+
+  const handleReportClose = useCallback(() => {
+    setReportOpen(false);
   }, []);
 
+  const handleReportSubmitted = useCallback(() => {
+    // Always jump to Map so the new pin is visible (even if already on Map).
+    triggerHaptic();
+    const target = state.routes.find((r) => r.name === 'map');
+    if (target) {
+      navigation.navigate(target.name);
+    }
+  }, [navigation, state.routes]);
+
   return (
-    <View
-      style={[
-        styles.wrapper,
-        {
-          bottom: -insets.bottom,
-          height: navMetrics.barHeight + insets.bottom + navMetrics.barBottomGap,
-        },
-      ]}
-      pointerEvents="box-none"
-    >
+    <>
       <View
         style={[
-          styles.bar,
-          { height: navMetrics.barHeight + insets.bottom + navMetrics.barBottomGap },
+          styles.wrapper,
+          {
+            bottom: -insets.bottom,
+            height: navMetrics.barHeight + insets.bottom + navMetrics.barBottomGap,
+          },
         ]}
+        pointerEvents="box-none"
       >
-        <View style={styles.row}>
-          {LEFT_TABS.map((tab) => (
-            <NavItem
-              key={tab.name}
-              config={tab}
-              focused={currentRouteName === tab.name}
-              onPress={() => navigateTo(tab.name)}
-            />
-          ))}
+        <View
+          style={[
+            styles.bar,
+            { height: navMetrics.barHeight + insets.bottom + navMetrics.barBottomGap },
+          ]}
+        >
+          <View style={styles.row}>
+            {LEFT_TABS.map((tab) => (
+              <NavItem
+                key={tab.name}
+                config={tab}
+                focused={currentRouteName === tab.name}
+                onPress={() => navigateTo(tab.name)}
+              />
+            ))}
 
-          <View style={styles.centerSlot} />
+            <View style={styles.centerSlot} />
 
-          {RIGHT_TABS.map((tab) => (
-            <NavItem
-              key={tab.name}
-              config={tab}
-              focused={currentRouteName === tab.name}
-              onPress={() => navigateTo(tab.name)}
-            />
-          ))}
+            {RIGHT_TABS.map((tab) => (
+              <NavItem
+                key={tab.name}
+                config={tab}
+                focused={currentRouteName === tab.name}
+                onPress={() => navigateTo(tab.name)}
+              />
+            ))}
+          </View>
+
+          <ReportButton onPress={handleReportPress} />
         </View>
-
-        <ReportButton onPress={handleReportPress} />
       </View>
-    </View>
+
+      <ReportModal
+        visible={reportOpen}
+        onClose={handleReportClose}
+        onSubmitted={handleReportSubmitted}
+      />
+    </>
   );
 }

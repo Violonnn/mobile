@@ -3,6 +3,7 @@
 
 export const colors = {
   primary: "#1A56DB",        // main blue — buttons, accents
+  themeSoft: "#AAC0DC",      // soft desaturated blue — in-app header + nav highlight
   primaryLight: "#EEF2FF",   // light blue — backgrounds, badges
   secondary: "#60A5FA",      // lighter blue — highlights
   danger: "#F97316",         // orange — warning badges

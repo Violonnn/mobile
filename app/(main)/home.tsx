@@ -21,7 +21,6 @@ import { fetchMyProfile } from '../../lib/profile';
 // UI-only placeholders. Real feeds arrive later; keep these empty so the
 // screen renders its soft empty states.
 const ANNOUNCEMENTS: unknown[] = [];
-const RECENT_TODAY: unknown[] = [];
 const HAPPENING_NEAR_YOU: unknown[] = [];
 
 export default function HomeScreen() {
@@ -76,39 +75,33 @@ export default function HomeScreen() {
     return (
       <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
+          <ActivityIndicator size="large" color={colors.themeSoft} />
         </View>
       </SafeAreaView>
     );
   }
 
-  const avatarInitial = firstName.trim().charAt(0).toUpperCase() || 'U';
   const locationValue = barangay ? `${barangay}, Minglanilla` : 'Minglanilla, Cebu';
   const goToFeed = () => router.push('/(main)/feed');
   const goToMap = () => router.push('/(main)/map');
 
   return (
     <View style={styles.container}>
+      {/* Light status bar icons — matches the white text on the themed header. */}
       <StatusBar style="light" />
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
         <AppHeader
-          title="Home"
-          avatarInitial={avatarInitial}
+          greetingName={firstName}
+          locationLabel={locationValue}
           searchPlaceholder="Search announcement and report"
         >
           <View style={styles.headerSection}>
             <View style={styles.sectionHeaderRow}>
               <View style={styles.announcementTitleRow}>
                 <Text style={styles.sectionTitle}>Announcement</Text>
-                <View style={styles.headerLocationRow}>
-                  <Ionicons name="location-outline" size={13} color={homeColors.headerMuted} />
-                  <Text style={styles.headerLocation} numberOfLines={1}>
-                    {locationValue}
-                  </Text>
-                </View>
               </View>
               <TouchableOpacity
                 style={styles.seeAllButton}
@@ -118,7 +111,7 @@ export default function HomeScreen() {
                 accessibilityLabel="Show all announcements"
               >
                 <Text style={styles.seeAllText}>Show All</Text>
-                <Ionicons name="chevron-forward" size={14} color="rgba(255,255,255,0.92)" />
+                <Ionicons name="chevron-forward" size={14} color={colors.white} />
               </TouchableOpacity>
             </View>
 
@@ -132,19 +125,6 @@ export default function HomeScreen() {
         </AppHeader>
 
         <View style={styles.bodySection}>
-          <View style={styles.recentCard}>
-            <View style={styles.sectionHeaderRow}>
-              <Text style={styles.sectionTitle}>Recent Today</Text>
-            </View>
-
-            {RECENT_TODAY.length === 0 && (
-              <View style={styles.emptyCard}>
-                <Ionicons name="time-outline" size={18} color={homeColors.headerMuted} />
-                <Text style={styles.emptyTitle}>No reports yet today</Text>
-              </View>
-            )}
-          </View>
-
           <View style={styles.happeningSection}>
             <View style={styles.sectionHeaderRow}>
               <Text style={styles.sectionTitleDark}>Happening near you</Text>
@@ -156,7 +136,7 @@ export default function HomeScreen() {
                 accessibilityLabel="Show all nearby activity"
               >
                 <Text style={styles.seeAllTextDark}>Show All</Text>
-                <Ionicons name="chevron-forward" size={14} color={colors.primary} />
+                <Ionicons name="chevron-forward" size={14} color={colors.text} />
               </TouchableOpacity>
             </View>
 
@@ -181,7 +161,7 @@ export default function HomeScreen() {
                 accessibilityLabel="View hotlines in map"
               >
                 <Text style={styles.seeAllTextDark}>View in map</Text>
-                <Ionicons name="chevron-forward" size={14} color={colors.primary} />
+                <Ionicons name="chevron-forward" size={14} color={colors.text} />
               </TouchableOpacity>
             </View>
 
@@ -202,7 +182,7 @@ export default function HomeScreen() {
                 accessibilityLabel="View facilities in map"
               >
                 <Text style={styles.seeAllTextDark}>View in map</Text>
-                <Ionicons name="chevron-forward" size={14} color={colors.primary} />
+                <Ionicons name="chevron-forward" size={14} color={colors.text} />
               </TouchableOpacity>
             </View>
 
