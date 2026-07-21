@@ -27,3 +27,9 @@ enabled = true
 verify_jwt = true
 import_map = "./functions/reset-pin/deno.json"
 entrypoint = "./functions/reset-pin/index.ts"
+
+[functions.create-report]
+enabled = true
+verify_jwt = true
+import_map = "./functions/create-report/deno.json"
+entrypoint = "./functions/create-report/index.ts"

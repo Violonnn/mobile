@@ -1,9 +1,11 @@
 # DisasterLink Schema — Dev vs. Production Checklist
 
-Covers the migrations `20250617000000` … `20250617000700` (barangays/app_profiles,
+Covers the migrations `20250617000000` … `20250617000900` plus the later
+`202607*` report/map/engagement projections (barangays/app_profiles,
 officials/invites, reports/media/history, map data, announcements/engagement,
-notifications/outbox, analytics/export, storage). Read alongside
-[SECURITY.md](../SECURITY.md), which covers the resident phone/OTP/PIN flow.
+notifications/outbox, analytics/export, storage, create-report/map helpers,
+`reports_map` engagement counts, `report_comments` + comments Realtime).
+Read alongside [SECURITY.md](../SECURITY.md), which covers the resident phone/OTP/PIN flow.
 
 ## Apply order
 
@@ -79,9 +81,13 @@ first.
 - Bucket is **private**. Path convention: `{reporter_user_id}/{report_id}/{media_id}.{ext}`.
 - Display + PDF export use **signed URLs**, not public URLs.
 - Supabase Storage edge-caches objects — no separate CDN needed.
-- Live-capture only (1–3 photos + ≥1 video, combined ≤30s) is enforced at the
-  data layer by deferred constraint triggers; the client must still restrict to
-  camera capture (no gallery) since the DB can't tell capture from picked media.
+- Media rules (1–3 photos + ≥1 video, combined ≤30s) are enforced at the data
+  layer by deferred constraint triggers. The step-based report flow uses
+  live camera capture only (no gallery): photos one at a time up to 3, and one
+  or more recorded clips whose combined duration is validated client-side from
+  each asset's real duration to stay ≤30s. The DB can't tell captured from picked
+  media, so the count/duration rules above are the source of truth. Title is
+  optional; description is required.
 
 ## Expo push notifications (SDK 54)
 
@@ -126,7 +132,9 @@ first.
 - `EXPLAIN` an officer queue query hits `idx_reports_barangay_status_created`.
 - Insert/delete an upvote and a comment → `reports.upvote_count` /
   `comment_count` move correctly.
-- Realtime: `reports` is in the `supabase_realtime` publication; a BDRRMO
-  subscription filtered to their `barangay_id` receives only their barangay's
-  changes.
+- Realtime: `reports` and `comments` are in the `supabase_realtime`
+  publication. Map clients subscribe to `reports` (and patch counter-only
+  updates in place). Comment sheets subscribe to `comments` filtered by
+  `report_id` only while open. A BDRRMO subscription filtered to their
+  `barangay_id` receives only their barangay's report changes.
 - Invite redemption is single-use (second attempt on the same token fails).
