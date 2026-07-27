@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, Keyboard } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, type Href } from 'expo-router';
 import { loginWithPin } from '../lib/login';
 import { getSavedPhone, setSavedPhone } from '../lib/savedPhone';
 import {
@@ -129,7 +129,7 @@ export function useLoginFlow() {
   }, [router]);
 
   const goToOfficialLogin = useCallback(() => {
-    router.push('/(auth)/official-login');
+    router.push('/(auth)/official-login' as Href);
   }, [router]);
 
   return {

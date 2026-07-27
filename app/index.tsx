@@ -25,7 +25,7 @@ import Animated, {
 import * as SplashScreen from 'expo-splash-screen';
 import { styles } from '../styles/screens/welcome.styles';
 import { colors } from '../styles/theme';
-import { getActiveSession } from '../lib/auth';
+import { resolveSessionDestination } from '../lib/portalAccess';
 
 export default function WelcomeScreen() {
   const router = useRouter();
@@ -46,15 +46,14 @@ export default function WelcomeScreen() {
     setLoadingDone(true);
   }
 
-  // Auto-login: if a persisted session is still valid, skip the welcome screen
-  // and go straight to home. A user who never logged out stays logged in.
+  // Auto-login: restore to the correct portal by role (resident / admin / official).
   useEffect(() => {
     let mounted = true;
 
-    getActiveSession().then((session) => {
+    resolveSessionDestination().then((destination) => {
       if (!mounted) return;
-      if (session) {
-        router.replace('/(main)/home');
+      if (destination) {
+        router.replace(destination);
         return;
       }
       setPhase('welcome');

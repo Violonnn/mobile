@@ -254,13 +254,13 @@ export default function LoginScreen() {
                       <View style={styles.officialLoginDivider} />
                       <View style={loginStyles.officialLoginContent}>
                         <Image
-                          source={require('../../assets/images/minglanilla.png')}
+                          source={require('../../assets/images/mingla.png')}
                           style={loginStyles.officialLoginLogo}
                           resizeMode="cover"
                         />
                         <View style={loginStyles.officialLoginTextGroup}>
                           <View style={loginStyles.officialLoginTitleRow}>
-                            <Text style={styles.officialLoginTitle}>Official Login</Text>
+                            <Text style={styles.officialLoginTitle}>Official Access</Text>
                             <Ionicons
                               name="arrow-forward"
                               size={17}
@@ -306,9 +306,9 @@ const loginStyles = StyleSheet.create({
     gap: 8,
   },
   officialLoginLogo: {
-    width: 112,
-    height: 112,
-    borderRadius: 56,
+    width: 88,
+    height: 88,
+    borderRadius: 44,
   },
   officialLoginTextGroup: {
     alignItems: 'center',
