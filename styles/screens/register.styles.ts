@@ -1,5 +1,5 @@
 import { Platform, StyleSheet } from 'react-native';
-import { colors as themeColors, fontSizes, fontWeights, radius, spacing } from '../theme';
+import { colors as themeColors, fonts, fontSizes, fontWeights, radius, spacing } from '../theme';
 import { scaleByWidth } from '../../lib/layout';
 
 export const registerColors = {
@@ -94,7 +94,7 @@ export const registerStyles = StyleSheet.create({
     position: 'relative',
   },
   stepMarkerSlot: {
-    width: 40,
+    width: 58,
     height: 40,
     alignItems: 'center',
     justifyContent: 'center',
@@ -147,7 +147,7 @@ export const registerStyles = StyleSheet.create({
   stepLabel: {
     fontSize: 9,
     textAlign: 'center',
-    width: 40, // match stepMarkerSlot width exactly
+    width: 58, // match stepMarkerSlot — keep labels on one line (e.g. Password)
   },
   stepLabelSpacer: {
     flex: 1,
@@ -476,6 +476,7 @@ export const registerStyles = StyleSheet.create({
     backgroundColor: registerColors.white,
   },
   fieldLeadingIconBox: {
+    minWidth: 44,
     paddingRight: spacing.sm,
     borderRightWidth: 1,
     borderRightColor: registerColors.grayLight,
@@ -483,12 +484,21 @@ export const registerStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  // Matches inputWithIconField so icon rows and "+63" rows stay consistent.
+  fieldLeadingPrefixText: {
+    fontSize: fontSizes.lg,
+    fontFamily: fonts.semibold,
+    color: registerColors.text,
+    lineHeight: fontSizes.lg + 2,
+  },
   inputWithIconField: {
     flex: 1,
     minWidth: 0,
     fontSize: fontSizes.lg,
+    fontFamily: fonts.regular,
     color: registerColors.text,
     paddingVertical: 0,
+    lineHeight: fontSizes.lg + 2,
   },
   checkboxError: {
     borderWidth: 1.5,

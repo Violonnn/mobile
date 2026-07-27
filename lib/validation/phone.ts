@@ -37,6 +37,59 @@ const SUPPORTED_CARRIER_PREFIXES = [
   895, 896, 897, 898, 991, 992, 993, 994,
 ];
 
+/**
+ * Philippine mobile contact check for official registration.
+ * Accepts all major PH carriers (no IPROG SMS delivery gate).
+ * Expects 10 local digits (without leading 0) or 11 digits starting with 09.
+ */
+export function validatePHContactNumber(raw: string): { valid: boolean; message: string } {
+  const digits = raw.replace(/\D/g, '');
+  const local =
+    digits.length === 11 && digits.startsWith('0')
+      ? digits.slice(1)
+      : digits;
+
+  if (!local) return { valid: false, message: 'Enter a Philippine mobile number.' };
+  if (local.length < 10) {
+    return { valid: false, message: 'Enter a 10-digit mobile number.' };
+  }
+  if (local.length > 10) {
+    return { valid: false, message: 'Too many digits.' };
+  }
+
+  const prefix = parseInt(local.substring(0, 3), 10);
+  const validPrefixes = [
+    // Globe / TM
+    817, 904, 905, 906, 915, 916, 917, 926, 927, 935, 936, 937,
+    945, 954, 955, 956, 965, 966, 967, 975, 976, 977, 978, 979,
+    995, 997,
+    // Smart
+    908, 911, 913, 914, 919, 920, 921, 928, 929, 939, 946, 947,
+    949, 951, 961, 963, 968, 969, 970, 981, 998, 999,
+    // TNT
+    907, 909, 910, 912, 930, 938,
+    // Sun
+    931, 932, 933, 934, 940, 973, 974, 991,
+    // DITO
+    895, 896, 897, 898, 992, 993, 994,
+  ];
+
+  if (!validPrefixes.includes(prefix)) {
+    return { valid: false, message: 'Enter a valid Philippine mobile number.' };
+  }
+
+  return { valid: true, message: '' };
+}
+
+/** Normalize contact input to 09XXXXXXXXX for storage. */
+export function normalizePHContactNumber(raw: string): string {
+  const digits = raw.replace(/\D/g, '');
+  if (digits.length === 10) return `0${digits}`;
+  if (digits.length === 11 && digits.startsWith('0')) return digits;
+  if (digits.length === 12 && digits.startsWith('63')) return `0${digits.slice(2)}`;
+  return digits;
+}
+
 export function validatePHNumber(digits: string): { valid: boolean; message: string } {
   const cleaned = digits.replace(/\s/g, ''); // ← strip spaces first
 

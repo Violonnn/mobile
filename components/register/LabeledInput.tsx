@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { forwardRef, useState } from 'react';
 import { View, Text, TextInput, TextInputProps } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { registerStyles as styles, registerColors } from '../../styles/screens/register.styles';
@@ -10,22 +10,23 @@ type Props = TextInputProps & {
   label: string;
   error?: string;
   required?: boolean;
+  /** Ionicons glyph shown in the leading slot (e.g. mail-outline). */
   leadingIcon?: IconName;
+  /** Text shown instead of an icon (e.g. "+63" for PH mobile). */
+  leadingPrefix?: string;
 };
 
-export default function LabeledInput({
-  label,
-  error,
-  required,
-  leadingIcon,
-  style,
-  ...rest
-}: Props) {
+const LabeledInput = forwardRef<TextInput, Props>(function LabeledInput(
+  { label, error, required, leadingIcon, leadingPrefix, style, ...rest },
+  ref,
+) {
   const [focused, setFocused] = useState(false);
+  const hasLeading = !!leadingIcon || !!leadingPrefix;
 
   const inputBody = (
     <TextInput
-      style={[leadingIcon ? styles.inputWithIconField : styles.input, style]}
+      ref={ref}
+      style={[hasLeading ? styles.inputWithIconField : styles.input, style]}
       onFocus={(e) => {
         setFocused(true);
         rest.onFocus?.(e);
@@ -44,7 +45,7 @@ export default function LabeledInput({
       <Text style={styles.label}>
         {label} {required && <Text style={styles.required}>*</Text>}
       </Text>
-      {leadingIcon ? (
+      {hasLeading ? (
         <View
           style={[
             styles.inputWithIconRow,
@@ -53,12 +54,21 @@ export default function LabeledInput({
           ]}
         >
           <View style={styles.fieldLeadingIconBox}>
-            <Ionicons name={leadingIcon} size={18} color={registerColors.textLight} />
+            {leadingPrefix ? (
+              <Text style={styles.fieldLeadingPrefixText}>{leadingPrefix}</Text>
+            ) : (
+              <Ionicons
+                name={leadingIcon!}
+                size={18}
+                color={registerColors.textLight}
+              />
+            )}
           </View>
           {inputBody}
         </View>
       ) : (
         <TextInput
+          ref={ref}
           style={[
             styles.input,
             focused && styles.inputFocused,
@@ -80,4 +90,6 @@ export default function LabeledInput({
       <FieldError message={error ?? ''} />
     </View>
   );
-}
+});
+
+export default LabeledInput;

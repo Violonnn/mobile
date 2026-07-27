@@ -11,7 +11,7 @@ import Animated, {
 import { registerStyles as styles, registerColors } from '../../styles/screens/register.styles';
 import { RegistrationStep } from '../../types/registration';
 
-const STEP_LABELS = ['Phone', 'Verify', 'Details', 'PIN'];
+const DEFAULT_STEP_LABELS = ['Phone', 'Verify', 'Details', 'PIN'];
 const ACTIVE_MARKER_SIZE = 36;
 
 type AnimatedConnectorProps = {
@@ -44,7 +44,17 @@ function AnimatedConnector({ filled }: AnimatedConnectorProps) {
   );
 }
 
-export default function Stepper({ current }: { current: RegistrationStep }) {
+type StepperProps = {
+  current: RegistrationStep;
+  /** Optional labels — defaults to resident registration (Phone / Verify / Details / PIN). */
+  labels?: [string, string, string, string];
+};
+
+export default function Stepper({
+  current,
+  labels = DEFAULT_STEP_LABELS as [string, string, string, string],
+}: StepperProps) {
+  const stepLabels = labels;
   const [markerCenters, setMarkerCenters] = useState<number[]>([]);
   const translateX = useSharedValue(0);
   const scale = useSharedValue(1);
@@ -116,9 +126,9 @@ export default function Stepper({ current }: { current: RegistrationStep }) {
   return (
     <View style={styles.stepperWrapper}>
       <View style={styles.stepperRow}>
-        {STEP_LABELS.map((label, i) => {
+        {stepLabels.map((label, i) => {
           const isDone = i < current;
-          const isLast = i === STEP_LABELS.length - 1;
+          const isLast = i === stepLabels.length - 1;
 
           return (
             <React.Fragment key={label}>
@@ -162,11 +172,14 @@ export default function Stepper({ current }: { current: RegistrationStep }) {
       </View>
 
       <View style={styles.stepLabelsRow}>
-        {STEP_LABELS.map((label, i) => {
-          const isLast = i === STEP_LABELS.length - 1;
+        {stepLabels.map((label, i) => {
+          const isLast = i === stepLabels.length - 1;
           return (
             <React.Fragment key={label}>
               <Text
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.8}
                 style={[
                   styles.stepLabel,
                   i < current
