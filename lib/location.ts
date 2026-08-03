@@ -2,17 +2,31 @@ import * as Location from 'expo-location';
 import { supabase } from './supabase';
 import { promptOpenSettings } from './permissions';
 
+/** Max horizontal accuracy (meters) before the resident must confirm the pin. */
+export const REPORT_LOCATION_MAX_ACCURACY_METERS = 100;
+
 export type GpsPosition = {
   latitude: number;
   longitude: number;
+  /** Horizontal accuracy from the device GPS, or null when unknown. */
+  accuracyMeters: number | null;
 };
 
 /** Human-readable place for the report pin: "Barangay, Municipality". */
 export type ReadableAddress = {
+  barangayId: string;
   barangay: string;
   municipality: string;
   label: string;
 };
+
+/** True when accuracy is missing or worse than the report threshold. */
+export function isLowConfidenceLocation(position: GpsPosition): boolean {
+  return (
+    position.accuracyMeters === null ||
+    position.accuracyMeters > REPORT_LOCATION_MAX_ACCURACY_METERS
+  );
+}
 
 /**
  * Ask for location access every time it is missing. Granted access persists,
@@ -29,7 +43,7 @@ async function ensureLocationPermission(): Promise<string | null> {
     if (!requested.canAskAgain) {
       promptOpenSettings(
         'Location access needed',
-        'DisasterLink needs your location to pin the report on the map. Enable location access in your device settings.',
+        'DisasterLink needs your location to place an accurate map pin. Enable location access in your device settings.',
       );
     }
     return 'Location permission is required to submit a report.';
@@ -37,12 +51,12 @@ async function ensureLocationPermission(): Promise<string | null> {
 
   promptOpenSettings(
     'Location access needed',
-    'DisasterLink needs your location to pin the report on the map. Enable location access in your device settings.',
+    'DisasterLink needs your location to place an accurate map pin. Enable location access in your device settings.',
   );
   return 'Location permission is required to submit a report.';
 }
 
-/** Request foreground permission and read the device GPS once. */
+/** Request foreground permission and read a high-accuracy GPS fix once. */
 export async function getCurrentGps(): Promise<{
   position: GpsPosition | null;
   error: string | null;
@@ -54,17 +68,25 @@ export async function getCurrentGps(): Promise<{
 
   try {
     const current = await Location.getCurrentPositionAsync({
-      accuracy: Location.Accuracy.Balanced,
+      accuracy: Location.Accuracy.Highest,
     });
 
     const latitude = current.coords.latitude;
     const longitude = current.coords.longitude;
+    const rawAccuracy = current.coords.accuracy;
+    const accuracyMeters =
+      typeof rawAccuracy === 'number' && Number.isFinite(rawAccuracy)
+        ? rawAccuracy
+        : null;
 
     if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
       return { position: null, error: 'Could not read a valid GPS position.' };
     }
 
-    return { position: { latitude, longitude }, error: null };
+    return {
+      position: { latitude, longitude, accuracyMeters },
+      error: null,
+    };
   } catch {
     return {
       position: null,
@@ -73,9 +95,12 @@ export async function getCurrentGps(): Promise<{
   }
 }
 
-/** Map lat/lng to nearest barangay label from the seeded centroids. */
+/**
+ * Suggest a barangay from nearest centroids. The resident must still confirm
+ * the barangay before submit — this is only a preselect/display helper.
+ */
 export async function resolveReadableAddress(
-  position: GpsPosition,
+  position: Pick<GpsPosition, 'latitude' | 'longitude'>,
 ): Promise<{ address: ReadableAddress | null; error: string | null }> {
   const { data, error } = await supabase.rpc('resolve_barangay_label', {
     p_latitude: position.latitude,
@@ -94,12 +119,15 @@ export async function resolveReadableAddress(
     };
   }
 
+  const barangayId = String(
+    (row as { barangay_id?: unknown }).barangay_id ?? '',
+  ).trim();
   const name = String((row as { name?: unknown }).name ?? '').trim();
   const municipality = String(
     (row as { municipality?: unknown }).municipality ?? 'Minglanilla',
   ).trim();
 
-  if (!name) {
+  if (!barangayId || !name) {
     return {
       address: null,
       error: 'Could not match your location to a barangay.',
@@ -108,6 +136,7 @@ export async function resolveReadableAddress(
 
   return {
     address: {
+      barangayId,
       barangay: name,
       municipality,
       label: `${name}, ${municipality}`,
@@ -137,8 +166,8 @@ function withTimeout<T>(
   });
 }
 
-/** GPS + readable barangay/municipality for the report modal. */
-export async function getCurrentGpsWithAddress(timeoutMs = 15000): Promise<{
+/** GPS + suggested barangay/municipality for the report modal. */
+export async function getCurrentGpsWithAddress(timeoutMs = 20000): Promise<{
   position: GpsPosition | null;
   address: ReadableAddress | null;
   error: string | null;

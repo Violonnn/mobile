@@ -337,7 +337,7 @@ export default function ReportMapDetailSheet({ reports, visible, onClose }: Prop
                 </TouchableOpacity>
               ) : (
                 <Text style={styles.listFooterNote}>
-                  That's all for the report within this area
+                  That&apos;s all for the report within this area
                 </Text>
               )}
             </View>

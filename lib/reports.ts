@@ -36,6 +36,8 @@ export type MapReportMarker = {
   created_at: string;
   reporter: MapReportReporter;
   media: ReportMediaAttachment[];
+  /** Populated when private attachment rows or signed URLs cannot be read. */
+  mediaError?: string | null;
   // Denormalized engagement totals from public.reports (trigger-maintained).
   upvoteCount: number;
   commentCount: number;
@@ -51,6 +53,8 @@ export type SubmitReportInput = {
   addressText?: string;
   /** Optional user-provided location detail (landmark, floor, etc.). */
   locationNote?: string;
+  /** Resident-confirmed barangay used for BDRRMO routing. */
+  barangayId: string;
   media: CapturedMedia[];
 };
 
@@ -78,17 +82,26 @@ export function formatReportLocation(report: MapReportMarker): string {
 }
 
 /** Fetch pins for the interactive map (includes reporter, location, media). */
-export async function fetchMapReports(): Promise<{
+export async function fetchMapReports(options?: {
+  barangayId?: string | null;
+  includePending?: boolean;
+}): Promise<{
   reports: MapReportMarker[];
   error: string | null;
 }> {
-  const { data, error } = await supabase
+  let query = supabase
     .from('reports_map')
     .select(
       'id, title, description, status, latitude, longitude, barangay_id, created_at, address_text, upvote_count, comment_count, reporter_id, reporter_first_name, reporter_last_name, reporter_middle_name',
     )
     .order('created_at', { ascending: false })
     .limit(200);
+
+  if (options?.barangayId) {
+    query = query.eq('barangay_id', options.barangayId);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     return { reports: [], error: error.message };
@@ -102,22 +115,31 @@ export async function fetchMapReports(): Promise<{
 
   const reportIds = baseRows.map((row) => String(row.id));
   const mediaByReport = new Map<string, ReportMediaAttachment[]>();
+  let mediaLoadError: string | null = null;
 
   // Media is optional for pins — never wipe the whole map if signing fails.
   if (reportIds.length > 0) {
-    const { data: mediaRows } = await supabase
+    const { data: mediaRows, error: mediaQueryError } = await supabase
       .from('report_media')
       .select('id, report_id, type, storage_path, duration_seconds, position')
       .in('report_id', reportIds)
       .order('position', { ascending: true });
 
+    if (mediaQueryError) {
+      mediaLoadError = `Could not load report attachments: ${mediaQueryError.message}`;
+    }
+
     const paths = (mediaRows ?? []).map((row) => String(row.storage_path));
     const signedUrlByPath = new Map<string, string>();
 
     if (paths.length > 0) {
-      const { data: signedRows } = await supabase.storage
+      const { data: signedRows, error: signedUrlError } = await supabase.storage
         .from(REPORT_MEDIA_BUCKET)
         .createSignedUrls(paths, 3600);
+
+      if (signedUrlError) {
+        mediaLoadError = `Could not open report attachments: ${signedUrlError.message}`;
+      }
 
       (signedRows ?? []).forEach((row, index) => {
         if (row.signedUrl) {
@@ -161,42 +183,51 @@ export async function fetchMapReports(): Promise<{
       middleName: row.reporter_middle_name ? String(row.reporter_middle_name) : null,
     },
     media: mediaByReport.get(String(row.id)) ?? [],
+    mediaError: mediaLoadError,
     upvoteCount: Number(row.upvote_count ?? 0),
     commentCount: Number(row.comment_count ?? 0),
   }));
 
-  // Include still-uploading local reports so new pins appear before sync finishes.
-  const pending = await getPendingReports();
-  const serverIds = new Set(serverReports.map((r) => r.id));
-  const { profile } = await fetchMyProfile();
-  const pendingMarkers: MapReportMarker[] = pending
-    .filter((queued) => !serverIds.has(queued.id))
-    .map((queued) => ({
-      id: queued.id,
-      title: queued.title,
-      description: queued.description,
-      status: 'unverified',
-      latitude: queued.position.latitude,
-      longitude: queued.position.longitude,
-      addressText: queued.addressText ?? null,
-      barangay_id: null,
-      created_at: queued.createdAt,
-      reporter: {
-        id: profile?.id ?? '',
-        firstName: profile?.first_name?.trim() || 'Resident',
-        lastName: profile?.last_name?.trim() || '',
-        middleName: profile?.middle_name?.trim() || null,
-      },
-      media: queued.media.map((item) => ({
-        id: item.id,
-        type: item.type,
-        url: item.localUri,
-        durationSeconds: item.durationSeconds,
-      })),
-      upvoteCount: 0,
-      commentCount: 0,
-      isPending: true,
-    }));
+  let pendingMarkers: MapReportMarker[] = [];
+  if (options?.includePending !== false) {
+    // Only resident-facing maps use the device-local upload queue. Official
+    // maps show database-authorized records exclusively.
+    const pending = await getPendingReports();
+    const serverIds = new Set(serverReports.map((r) => r.id));
+    const { profile } = await fetchMyProfile();
+    pendingMarkers = pending
+      .filter((queued) => !serverIds.has(queued.id))
+      .filter(
+        (queued) =>
+          !options?.barangayId || queued.barangayId === options.barangayId,
+      )
+      .map((queued) => ({
+        id: queued.id,
+        title: queued.title,
+        description: queued.description,
+        status: 'unverified',
+        latitude: queued.position.latitude,
+        longitude: queued.position.longitude,
+        addressText: queued.addressText ?? null,
+        barangay_id: queued.barangayId ?? null,
+        created_at: queued.createdAt,
+        reporter: {
+          id: profile?.id ?? '',
+          firstName: profile?.first_name?.trim() || 'Resident',
+          lastName: profile?.last_name?.trim() || '',
+          middleName: profile?.middle_name?.trim() || null,
+        },
+        media: queued.media.map((item) => ({
+          id: item.id,
+          type: item.type,
+          url: item.localUri,
+          durationSeconds: item.durationSeconds,
+        })),
+        upvoteCount: 0,
+        commentCount: 0,
+        isPending: true,
+      }));
+  }
 
   const reports = [...pendingMarkers, ...serverReports].sort(
     (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
@@ -231,17 +262,24 @@ export async function fetchMapReportById(
   }
 
   const media: ReportMediaAttachment[] = [];
-  const { data: mediaRows } = await supabase
+  const { data: mediaRows, error: mediaQueryError } = await supabase
     .from('report_media')
     .select('id, type, storage_path, duration_seconds, position')
     .eq('report_id', reportId)
     .order('position', { ascending: true });
 
+  let mediaError: string | null = mediaQueryError
+    ? `Could not load report attachments: ${mediaQueryError.message}`
+    : null;
   const paths = (mediaRows ?? []).map((mediaRow) => String(mediaRow.storage_path));
   if (paths.length > 0) {
-    const { data: signedRows } = await supabase.storage
+    const { data: signedRows, error: signedUrlError } = await supabase.storage
       .from(REPORT_MEDIA_BUCKET)
       .createSignedUrls(paths, 3600);
+
+    if (signedUrlError) {
+      mediaError = `Could not open report attachments: ${signedUrlError.message}`;
+    }
 
     (mediaRows ?? []).forEach((mediaRow, index) => {
       const url = signedRows?.[index]?.signedUrl;
@@ -278,6 +316,7 @@ export async function fetchMapReportById(
           : null,
       },
       media,
+      mediaError,
       upvoteCount: Number(row.upvote_count ?? 0),
       commentCount: Number(row.comment_count ?? 0),
     },
@@ -302,6 +341,11 @@ export async function enqueueResidentReport(
   }
   if (!description) {
     return { reportId: null, error: 'Description of the report is required.' };
+  }
+
+  const barangayId = input.barangayId.trim();
+  if (!barangayId) {
+    return { reportId: null, error: 'Select a barangay before submitting.' };
   }
 
   const mediaError = validateCapturedMedia(input.media);
@@ -335,6 +379,7 @@ export async function enqueueResidentReport(
       description,
       position: input.position,
       addressText,
+      barangayId,
       media,
       status: 'pending',
       createdAt: new Date().toISOString(),

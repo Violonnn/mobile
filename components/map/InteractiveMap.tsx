@@ -1,7 +1,8 @@
 // Interactive Leaflet map in a WebView (OSM tiles, Minglanilla).
-// Soft red report pins with clustering; taps post back to React Native.
+// Soft red report pins with clustering; blue facility + green evac markers.
+// Layer filters live in React Native so report clustering stays unchanged.
 import React, { useCallback, useEffect, useMemo, useRef } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, fonts, fontSizes, spacing } from '../../styles/theme';
@@ -10,9 +11,45 @@ import type { MapReportMarker } from '../../lib/reports';
 const CENTER = { lat: 10.2447, lng: 123.7967 };
 const ZOOM = 14;
 
+export type MapResourceMarker = {
+  id: string;
+  kind: 'facility' | 'evacuation';
+  name: string;
+  latitude: number;
+  longitude: number;
+  subtitle?: string | null;
+  isPriority?: boolean;
+};
+
+export type MapLayerVisibility = {
+  reports: boolean;
+  facilities: boolean;
+  evacuationCenters: boolean;
+};
+
+/** Imperative camera target supplied by a parent route after markers are scoped. */
+export type MapFocusTarget = {
+  reportId: string;
+  latitude: number;
+  longitude: number;
+};
+
 type Props = {
   markers?: MapReportMarker[];
+  facilities?: MapResourceMarker[];
+  evacuationCenters?: MapResourceMarker[];
+  layerVisibility?: MapLayerVisibility;
+  showLayerFilters?: boolean;
+  onLayerVisibilityChange?: (next: MapLayerVisibility) => void;
   onReportSelection?: (reportIds: string[]) => void;
+  onResourceSelection?: (resource: MapResourceMarker) => void;
+  focusTarget?: MapFocusTarget | null;
+};
+
+const DEFAULT_LAYERS: MapLayerVisibility = {
+  reports: true,
+  facilities: true,
+  evacuationCenters: true,
 };
 
 function buildMapHtml(): string {
@@ -28,7 +65,7 @@ function buildMapHtml(): string {
       html, body, #map { height: 100%; margin: 0; padding: 0; background: #F0F4FF; }
       .leaflet-control-attribution { display: none; }
 
-      .report-pin-wrap {
+      .report-pin-wrap, .resource-pin-wrap {
         background: transparent;
         border: none;
       }
@@ -70,6 +107,27 @@ function buildMapHtml(): string {
         border-right: 5px solid transparent;
         border-top: 7px solid #F04444;
         filter: drop-shadow(0 2px 3px rgba(255, 92, 92, 0.25));
+      }
+
+      .resource-pin {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        border: 2.5px solid #FFFFFF;
+        box-shadow: 0 3px 10px rgba(28, 43, 75, 0.28);
+        transform: translate(-50%, -50%);
+      }
+
+      .resource-pin.facility {
+        background: linear-gradient(145deg, #60A5FA 0%, #1A56DB 100%);
+      }
+
+      .resource-pin.evacuation {
+        background: linear-gradient(145deg, #4ADE80 0%, #16A34A 100%);
+      }
+
+      .resource-pin.evacuation.priority {
+        box-shadow: 0 0 0 3px rgba(234, 179, 8, 0.55), 0 3px 10px rgba(28, 43, 75, 0.28);
       }
 
       .marker-cluster-report {
@@ -121,6 +179,16 @@ function buildMapHtml(): string {
         popupAnchor: [0, -34]
       });
 
+      function resourceIcon(kind, isPriority) {
+        var extra = kind === 'evacuation' && isPriority ? ' priority' : '';
+        return L.divIcon({
+          className: 'resource-pin-wrap',
+          html: '<div class="resource-pin ' + kind + extra + '"></div>',
+          iconSize: [28, 28],
+          iconAnchor: [14, 14]
+        });
+      }
+
       // Animations stay off: leaflet.markercluster throws internally when
       // layers are cleared/re-added while a zoom animation is running, which
       // silently aborts marker loading on iOS WKWebView (only 1 pin shows).
@@ -141,11 +209,21 @@ function buildMapHtml(): string {
         }
       }).addTo(map);
 
+      var resourceGroup = L.layerGroup().addTo(map);
+
       function postSelection(reportIds) {
         if (!window.ReactNativeWebView || !reportIds || !reportIds.length) return;
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'reportSelection',
           reportIds: reportIds
+        }));
+      }
+
+      function postResource(resource) {
+        if (!window.ReactNativeWebView || !resource) return;
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'resourceSelection',
+          resource: resource
         }));
       }
 
@@ -203,12 +281,43 @@ function buildMapHtml(): string {
         }
       };
 
+      window.setResourceMarkers = function(resources) {
+        resourceGroup.clearLayers();
+        if (!resources || !resources.length) return;
+
+        resources.forEach(function(r) {
+          if (typeof r.latitude !== 'number' || typeof r.longitude !== 'number') return;
+          var marker = L.marker([r.latitude, r.longitude], {
+            icon: resourceIcon(r.kind, !!r.isPriority),
+            resourceMeta: r
+          });
+          marker.on('click', function(e) {
+            L.DomEvent.stopPropagation(e);
+            postResource(r);
+          });
+          resourceGroup.addLayer(marker);
+        });
+      };
+
+      window.focusReport = function(target) {
+        if (!target || typeof target.latitude !== 'number' || typeof target.longitude !== 'number') return;
+        map.setView([target.latitude, target.longitude], 16, { animate: true });
+      };
+
       // On iOS, React Native can inject markers before this script has run
       // (onLoadEnd fires for the intermediate blank page). Apply anything
       // that was buffered while we were still loading.
       if (window.__pendingReportMarkers) {
         window.setReportMarkers(window.__pendingReportMarkers);
         window.__pendingReportMarkers = null;
+      }
+      if (window.__pendingResourceMarkers) {
+        window.setResourceMarkers(window.__pendingResourceMarkers);
+        window.__pendingResourceMarkers = null;
+      }
+      if (window.__pendingFocusTarget) {
+        window.focusReport(window.__pendingFocusTarget);
+        window.__pendingFocusTarget = null;
       }
     </script>
   </body>
@@ -223,8 +332,6 @@ function markersToInjectScript(markers: MapReportMarker[]): string {
     created_at: m.created_at,
   }));
   const json = JSON.stringify(payload).replace(/</g, '\\u003c');
-  // If the page script hasn't finished loading yet (an iOS timing quirk),
-  // buffer the payload instead of dropping it — the page applies it on load.
   return `(function() {
     var data = ${json};
     if (window.setReportMarkers) {
@@ -235,36 +342,113 @@ function markersToInjectScript(markers: MapReportMarker[]): string {
   })(); true;`;
 }
 
+function resourcesToInjectScript(resources: MapResourceMarker[]): string {
+  const payload = resources.map((r) => ({
+    id: r.id,
+    kind: r.kind,
+    name: r.name,
+    latitude: r.latitude,
+    longitude: r.longitude,
+    subtitle: r.subtitle ?? null,
+    isPriority: Boolean(r.isPriority),
+  }));
+  const json = JSON.stringify(payload).replace(/</g, '\\u003c');
+  return `(function() {
+    var data = ${json};
+    if (window.setResourceMarkers) {
+      window.setResourceMarkers(data);
+    } else {
+      window.__pendingResourceMarkers = data;
+    }
+  })(); true;`;
+}
+
+function focusToInjectScript(target: MapFocusTarget): string {
+  const json = JSON.stringify(target).replace(/</g, '\\u003c');
+  return `(function() {
+    var target = ${json};
+    if (window.focusReport) {
+      window.focusReport(target);
+    } else {
+      window.__pendingFocusTarget = target;
+    }
+  })(); true;`;
+}
+
 export default function InteractiveMap({
   markers = [],
+  facilities = [],
+  evacuationCenters = [],
+  layerVisibility = DEFAULT_LAYERS,
+  showLayerFilters = false,
+  onLayerVisibilityChange,
   onReportSelection,
+  onResourceSelection,
+  focusTarget,
 }: Props) {
   const webRef = useRef<WebView>(null);
   const html = useMemo(() => buildMapHtml(), []);
   const readyRef = useRef(false);
 
+  const visibleReports = useMemo(
+    () => (layerVisibility.reports ? markers : []),
+    [layerVisibility.reports, markers],
+  );
+  const visibleResources = useMemo(() => {
+    const next: MapResourceMarker[] = [];
+    if (layerVisibility.facilities) {
+      for (const facility of facilities) {
+        next.push(facility);
+      }
+    }
+    if (layerVisibility.evacuationCenters) {
+      for (const center of evacuationCenters) {
+        next.push(center);
+      }
+    }
+    return next;
+  }, [facilities, evacuationCenters, layerVisibility]);
+
   useEffect(() => {
     if (!readyRef.current || !webRef.current) return;
-    webRef.current.injectJavaScript(markersToInjectScript(markers));
-  }, [markers]);
+    webRef.current.injectJavaScript(markersToInjectScript(visibleReports));
+    webRef.current.injectJavaScript(resourcesToInjectScript(visibleResources));
+  }, [visibleReports, visibleResources]);
+
+  useEffect(() => {
+    if (!focusTarget || !readyRef.current || !webRef.current) return;
+    webRef.current.injectJavaScript(focusToInjectScript(focusTarget));
+  }, [focusTarget]);
 
   const handleMessage = useCallback(
     (event: WebViewMessageEvent) => {
-      if (!onReportSelection) return;
       try {
         const data = JSON.parse(event.nativeEvent.data) as {
           type?: string;
           reportIds?: string[];
+          resource?: MapResourceMarker;
         };
         if (data.type === 'reportSelection' && Array.isArray(data.reportIds)) {
-          onReportSelection(data.reportIds.filter(Boolean));
+          onReportSelection?.(data.reportIds.filter(Boolean));
+          return;
+        }
+        if (data.type === 'resourceSelection' && data.resource?.id) {
+          onResourceSelection?.(data.resource);
         }
       } catch {
         // Ignore malformed WebView messages.
       }
     },
-    [onReportSelection],
+    [onReportSelection, onResourceSelection],
   );
+
+  function toggleLayer(key: keyof MapLayerVisibility) {
+    if (!onLayerVisibilityChange) return;
+    onLayerVisibilityChange({
+      ...layerVisibility,
+      [key]: !layerVisibility[key],
+    });
+  }
 
   return (
     <View style={mapStyles.container}>
@@ -277,7 +461,11 @@ export default function InteractiveMap({
         onMessage={handleMessage}
         onLoadEnd={() => {
           readyRef.current = true;
-          webRef.current?.injectJavaScript(markersToInjectScript(markers));
+          webRef.current?.injectJavaScript(markersToInjectScript(visibleReports));
+          webRef.current?.injectJavaScript(resourcesToInjectScript(visibleResources));
+          if (focusTarget) {
+            webRef.current?.injectJavaScript(focusToInjectScript(focusTarget));
+          }
         }}
         renderError={() => (
           <View style={mapStyles.fallback}>
@@ -287,6 +475,47 @@ export default function InteractiveMap({
         )}
         startInLoadingState={false}
       />
+
+      {showLayerFilters ? (
+        <View style={mapStyles.legend} pointerEvents="box-none">
+          <Pressable
+            style={[
+              mapStyles.legendChip,
+              layerVisibility.reports && mapStyles.legendChipActive,
+            ]}
+            onPress={() => toggleLayer('reports')}
+            accessibilityRole="button"
+            accessibilityLabel="Toggle reports layer"
+          >
+            <View style={[mapStyles.legendDot, { backgroundColor: '#F04444' }]} />
+            <Text style={mapStyles.legendText}>Reports</Text>
+          </Pressable>
+          <Pressable
+            style={[
+              mapStyles.legendChip,
+              layerVisibility.facilities && mapStyles.legendChipActive,
+            ]}
+            onPress={() => toggleLayer('facilities')}
+            accessibilityRole="button"
+            accessibilityLabel="Toggle facilities layer"
+          >
+            <View style={[mapStyles.legendDot, { backgroundColor: '#1A56DB' }]} />
+            <Text style={mapStyles.legendText}>Facilities</Text>
+          </Pressable>
+          <Pressable
+            style={[
+              mapStyles.legendChip,
+              layerVisibility.evacuationCenters && mapStyles.legendChipActive,
+            ]}
+            onPress={() => toggleLayer('evacuationCenters')}
+            accessibilityRole="button"
+            accessibilityLabel="Toggle evacuation centers layer"
+          >
+            <View style={[mapStyles.legendDot, { backgroundColor: '#16A34A' }]} />
+            <Text style={mapStyles.legendText}>Evac</Text>
+          </Pressable>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -310,5 +539,39 @@ const mapStyles = StyleSheet.create({
     fontFamily: fonts.regular,
     fontSize: fontSizes.sm,
     color: colors.textMuted,
+  },
+  legend: {
+    position: 'absolute',
+    left: spacing.md,
+    right: spacing.md,
+    bottom: spacing.md,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  legendChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(28, 43, 75, 0.08)',
+    opacity: 0.55,
+  },
+  legendChipActive: {
+    opacity: 1,
+  },
+  legendDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  legendText: {
+    fontFamily: fonts.medium,
+    fontSize: 12,
+    color: colors.text,
   },
 });

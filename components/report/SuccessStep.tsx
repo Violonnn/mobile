@@ -14,6 +14,8 @@ type Props = {
   address: ReadableAddress | null;
   position: GpsPosition | null;
   syncStatus: SyncStatus;
+  syncError: string | null;
+  onRetry: () => void;
   onDone: () => void;
 };
 
@@ -21,6 +23,8 @@ export default function SuccessStep({
   address,
   position,
   syncStatus,
+  syncError,
+  onRetry,
   onDone,
 }: Props) {
   const scale = useSharedValue(0);
@@ -41,6 +45,7 @@ export default function SuccessStep({
       : 'Location captured';
 
   const synced = syncStatus === 'synced';
+  const failed = syncStatus === 'failed';
 
   return (
     <View style={styles.stepContent}>
@@ -54,7 +59,7 @@ export default function SuccessStep({
 
         <View style={[styles.syncChip, synced && styles.syncChipSynced]}>
           <Ionicons
-            name={synced ? 'cloud-done-outline' : 'sync-outline'}
+            name={synced ? 'cloud-done-outline' : failed ? 'cloud-offline-outline' : 'sync-outline'}
             size={14}
             color={synced ? reportColors.success : reportColors.primary}
           />
@@ -62,6 +67,17 @@ export default function SuccessStep({
             {synced ? 'Sent to responders' : 'Saved on device · uploading…'}
           </Text>
         </View>
+        {failed && syncError ? <Text style={styles.errorText}>{syncError}</Text> : null}
+        {failed ? (
+          <TouchableOpacity
+            style={styles.primaryButton}
+            onPress={onRetry}
+            accessibilityRole="button"
+            accessibilityLabel="Retry report upload"
+          >
+            <Text style={styles.primaryButtonText}>Retry upload</Text>
+          </TouchableOpacity>
+        ) : null}
       </View>
 
       <TouchableOpacity

@@ -1,23 +1,127 @@
-Rough summary sa changes
-changes sa pag report:
-1. g step process nako ang report, psychologically one step at a time provide low cognitive load, visually appealing ug maka urge sa users to continue. Which is crucial since g cater man natong as resilience atoang system ug as much as possible less friction when reporting ug less overwhelming sa situations nga chaotic
-2. Steps:
-1st step - getting location 
-2nd step - attachments (vid/photos) 
-3rd step - report details 
-3. G una Nakong attached sa file (required live) since mao naman jud nang way sa karong panahona nga mag record/photo daan before i post so ma mimic ra kaysa sa mag details daan. Gamit kung ga baha then maka record or capture ra dayon kaysa sa mga suwat mag details. 
+You are the planning agent for this repository. Your role
+  is to create an implementation-ready handoff for a       
+  separate execution agent.                                
+                                                           
+  This contains the requested       
+  feature, product intent, and any constraints.            
+                                                           
+  Then inspect the repository without modifying source     
+  files:                                                   
+  - Read all applicable `AGENTS.md` instructions.          
+  - Identify existing components, hooks, utilities,        
+  database patterns, routes, types, and styles that should 
+  be reused.                                               
+  - Find the closest existing implementation to use as a   
+  reference.                                               
+  - Inspect relevant Supabase schema, migrations, RLS      
+  policies, and environment configuration when backend     
+  changes are involved.                                    
+  - Check package scripts and existing test/lint           
+  conventions.                                             
+                                                           
+  Create or replace `execution.md` with a decision-complete
+  implementation plan. Do not write application code.      
+                                                           
+  The execution plan must include:                         
+                                                           
+  1. Goal and acceptance criteria                          
+     - Describe the user-visible outcome.                  
+     - Define what must work for the feature to be         
+     considered complete.                                  
+                                                           
+  2. Current-state findings                                
+     - Name the existing files, components, hooks, routes, 
+     tables, or utilities that the implementation should   
+     reuse or extend.                                      
+     - State important existing behavior that must not     
+     regress.                                              
+                                                           
+  3. Implementation specification                          
+     - Give ordered, concrete steps that an execution agent
+     can follow without making product or architectural    
+     decisions.                                            
+     - For each meaningful change, identify the target file
+     or folder and the intended responsibility.            
+     - Specify navigation changes, UI behavior, loading    
+     states, validation, errors, empty states, and success 
+     feedback.                                             
+     - Define any TypeScript types, function interfaces,   
+     database columns, queries, migrations, storage        
+     changes, or API contracts.                            
+     - For Supabase changes, specify RLS requirements and  
+     policies needed before client use.                    
+     - Preserve existing architecture and reuse current    
+     patterns; do not introduce abstractions unless real   
+     duplication exists.                                   
+                                                           
+  4. Edge cases and security                               
+     - Cover authorization, invalid input, missing data,   
+     offline/network failures, duplicate submissions, and  
+     permission failures where relevant.
+     - Never expose secrets or use the Supabase service-   
+     role key in the mobile client.                        
+                                                           
+  5. Verification plan                                     
+     - List focused manual scenarios and automated checks. 
+     - Include exact commands to run when discoverable from
+     `package.json`.                                       
+     - Include regression checks for affected existing     
+     flows.                                                
+                                                           
+  6. Assumptions and unresolved decisions                  
+     - Record only assumptions that were necessary.        
+     - If a decision cannot be derived from `context.md` or
+     repository evidence and would materially affect       
+     implementation, stop and ask concise clarification    
+     questions instead of guessing.                        
+                                                           
+  Write `execution.md` as an execution specification, not a
+  discussion. Be specific enough that the execution agent  
+  can implement directly, but keep it scoped to the        
+  requested feature.                                       
+                                                           
+  A useful context.md structure is:                        
+                                                           
+  # Feature request                                        
+  I want to develop the BDRMMO/MAYOR/MDRMMO flow so that I will develop my MVP towards residents and the officials. 
 
-ako ra i push sa sub branch tom ang changes
+  In regards the feature see the scope of the project document # Scope , the rough planning # roughsummary and decide what is best feature to implement it. Include proper navigation and for now focused in the core feature. 
 
-ug expect lang mahuman tanan features within 3-7 days, ga hinay2 ko feature by feature kay mapareha pag last daghag guba ug na overlook. majority in handling sa data or system design since atong app dapat pas2 ug assume na ang codebase is deployment ready sa katong g ingon ni sir. 
+ # Scope
+ Scope of the Project. The proposed project focuses on the following;
+User Access and Security
+o Secure Login and Registration for Residents.
+o Role-Based Access Control for MDRRMO, BDRRMO and Mayor.
+o Invite Link Generator and Revocation for Mayor and BDRRMO accounts.
+o Email Verification and Forgot Password.
+Map and Location Integration
+o Base Map Setup.
+o Live Capture of GPS and Reverse Geocoding.
+o Map Search and Overlay Legend.
+Disaster Reporting and Management
+o GPS and Photo Upload requirements for residents.
 
-// above kay 7/18/2026 //
+o Two-tier Verification: Confirmation call from BDRRMO and MDRRMO re-
+verification.
 
-// below mao na ako g focusan last sabado ug diri ko ga base sa tanan flow sa app //
-// i check ug validate ang flow/feature if naay additions or modifications ug i compare sa current docs // 
+o Upvoting, commenting, and misinformation flagging of user reports.
+o Contribution Reports Management
+Community Communication Feed
+o Integrated Feed UI for announcements and user reports.
+o Pinned Posts for high-priority LGU/Mayor announcements.
+o Notification of resources, disaster early warnings, and report contribution
+statuses.
+o Evacuation Center status toggles (Available/Full).
 
-Sa pag himo nakog database diri ko ga base.
-Flow/feature:
+xix
+
+Analytics and Administrative Tools
+o System Admin Panel: Municipality and User Management.
+o Mayor’s Dashboard: Visual analytics for resolved/unresolved incidents and
+overall status logs of the municipality.
+o Incident Documentation: One-click PDF Export for official reports.
+
+# roughsummary
 1. Notification built in: local and push notification (outside the app)
 2. When user use report button, the system will ask for permission to use their location and camera, system use that location (convert to readable), then they can fill up following required details about short caption title, their description or their situation of their report, photos (3 max, at least 1 required) and videos (captures all user's sent video's duration, max is 30 seconds overall and at least 1 video). Photo and Video is only allowed live capture not in the gallery. 
 3. The report is posted as unverified first, BDRMMO can verify it via a call or just straight mark it as verified, it should display the one who verified it and BDRMMO can escalate it to MDRMMO re verifies if it barangay cant handle it
@@ -82,45 +186,38 @@ PDF should include:
 - Timeline (when reported, when verified, when escalated)
 
 
-Changes in regards sa authentication login
-
-Note: mao ni imong gpangita nga changes 
-The app prevents account numerations pasabot ani kay dili i specific igka validate if naa bana nga acc for security purposes e.g. ang user mo enter sa phone number in forgot password ang buhaton sa system is to generalized (“OTP has been sent”) regardless if ang number existed or not  rather than say (“Phone number not found!”). Exception sa registration kay needed na but with rate limiting
-Rate Limiting - basically para maka prevent ug spam sa system. Especially sa outside services para di ta ma bankrupt. E.g. currently ang rate limiting sato system kay wrong pin login (5 times with 15 min lockout), sending of OTP SMS sa registration ug forgotpassword (3 total sends, +60 seconds cooldown. If nagamit ang 3 tanan then 1 hr para mabalik) 
-Persisted Session para nako since nag cater mantag disaster response/reporting, if ang user ma logout taga close sa app then dira maka cause ug friction/delay. So ang buhaton ra ana kay ang user to keep it login.
-Forgot Password
-Miigration from uniSMS to iprogSMS since ang unisms caters higher services cost ceiling which is 3k sa nahinomdoman nako tungod sa policy changes compared sa iprogSMS where it is capstone friendly ug tag 200 ra pinaka lowest but limited to services (GLOBE/TM, DITO) which is mao ang usa sa limitation nato.
-
-
-Scope of the Project. The proposed project focuses on the following;
-User Access and Security
-o Secure Login and Registration for Residents.
-o Role-Based Access Control for MDRRMO, BDRRMO and Mayor.
-o Invite Link Generator and Revocation for Mayor and BDRRMO accounts.
-o Email Verification and Forgot Password.
-Map and Location Integration
-o Base Map Setup.
-o Live Capture of GPS and Reverse Geocoding.
-o Map Search and Overlay Legend.
-Disaster Reporting and Management
-o GPS and Photo Upload requirements for residents.
-
-o Two-tier Verification: Confirmation call from BDRRMO and MDRRMO re-
-verification.
-
-o Upvoting, commenting, and misinformation flagging of user reports.
-o Contribution Reports Management
-Community Communication Feed
-o Integrated Feed UI for announcements and user reports.
-o Pinned Posts for high-priority LGU/Mayor announcements.
-o Notification of resources, disaster early warnings, and report contribution
-statuses.
-o Evacuation Center status toggles (Available/Full).
-
-xix
-
-Analytics and Administrative Tools
-o System Admin Panel: Municipality and User Management.
-o Mayor’s Dashboard: Visual analytics for resolved/unresolved incidents and
-overall status logs of the municipality.
-o Incident Documentation: One-click PDF Export for official reports.
+  # Why it matters                                         
+  - put your description here so i can review it             
+                                                           
+  # User flow                                              
+  - put your description here so i can review it                                               
+                                                           
+  # Required behavior                                      
+  - put your description here so i can review it                                                  
+                                                           
+  # UI/content requirements                                
+  - Screens affected:                                      
+  - Text/copy:                                             
+  - Design references:                                     
+  - Accessibility requirements:           
+  - put your description here so i can review it                 
+                                                           
+  # Data and permissions                                   
+  - Who can view/create/edit/delete:                       
+  - Data to collect or display:                            
+  - Existing tables/services involved, if known:       
+  - put your description here so i can review it    
+                                                           
+  # Constraints                                            
+  - Must preserve:                                         
+  - Out of scope:                                          
+  - Deadline/platform limitations: 
+  - put your description here so i can review it                      
+                                                           
+  # Acceptance examples                                    
+  - Given ..., when ..., then ...   
+  - put your description here so i can review it                     
+                                                           
+  The key is to make execution.md a contract: the execution
+  agent should only need to inspect details necessary to   
+  implement—not decide what the feature is supposed to do. 

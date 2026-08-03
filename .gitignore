@@ -27,6 +27,9 @@ npm-debug.*
 yarn-debug.*
 yarn-error.*
 
+# Local recovery snapshots created before portal stabilization work.
+/backups/
+
 # macOS
 .DS_Store
 *.pem

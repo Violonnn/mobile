@@ -17,6 +17,7 @@ import LocationStep from '../report/LocationStep';
 import DetailsStep from '../report/DetailsStep';
 import AttachmentsStep from '../report/AttachmentsStep';
 import SuccessStep from '../report/SuccessStep';
+import ReportLocationPicker from '../report/ReportLocationPicker';
 
 type Props = {
   visible: boolean;
@@ -106,7 +107,10 @@ export default function ReportModal({ visible, onClose, onSubmitted }: Props) {
                 <LocationStep
                   loading={flow.locationLoading}
                   error={flow.locationError}
+                  needsConfirmation={flow.locationNeedsConfirmation}
+                  accuracyMeters={flow.position?.accuracyMeters}
                   onRetry={flow.retryLocation}
+                  onConfirmOnMap={flow.openLocationPicker}
                 />
               )}
 
@@ -135,6 +139,13 @@ export default function ReportModal({ visible, onClose, onSubmitted }: Props) {
                   locationNote={flow.locationNote}
                   onChangeLocationNote={flow.setLocationNote}
                   address={flow.address}
+                  barangays={flow.barangays}
+                  barangaysLoading={flow.barangaysLoading}
+                  barangaysError={flow.barangaysError}
+                  selectedBarangayId={flow.selectedBarangayId}
+                  onSelectBarangay={flow.setSelectedBarangayId}
+                  onRetryBarangays={flow.retryBarangays}
+                  locationConfirmed={flow.locationConfirmed}
                   error={flow.error}
                   submitting={flow.submitting}
                   onBack={flow.goBack}
@@ -147,6 +158,8 @@ export default function ReportModal({ visible, onClose, onSubmitted }: Props) {
                   address={flow.address}
                   position={flow.position}
                   syncStatus={flow.syncStatus}
+                  syncError={flow.syncError}
+                  onRetry={flow.retrySync}
                   onDone={handleDone}
                 />
               )}
@@ -154,6 +167,15 @@ export default function ReportModal({ visible, onClose, onSubmitted }: Props) {
           </ScrollView>
         </Pressable>
       </Pressable>
+
+      {flow.position ? (
+        <ReportLocationPicker
+          visible={flow.locationPickerVisible}
+          initialPosition={flow.position}
+          onConfirm={flow.confirmManualPosition}
+          onClose={flow.closeLocationPicker}
+        />
+      ) : null}
     </Modal>
   );
 }

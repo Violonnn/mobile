@@ -14,7 +14,11 @@ import { reportStyles as styles, reportColors } from '../../styles/screens/repor
 type Props = {
   loading: boolean;
   error: string | null;
+  /** Low-confidence GPS awaiting map confirmation (accuracy worse than 100 m). */
+  needsConfirmation?: boolean;
+  accuracyMeters?: number | null;
   onRetry: () => void;
+  onConfirmOnMap?: () => void;
 };
 
 /** Radar-style pulse ring behind a pin while GPS resolves. */
@@ -50,8 +54,24 @@ function PulsePin({ active }: { active: boolean }) {
   );
 }
 
-export default function LocationStep({ loading, error, onRetry }: Props) {
-  const showError = !loading && !!error;
+function formatAccuracyLabel(accuracyMeters: number | null | undefined): string {
+  if (typeof accuracyMeters === 'number' && Number.isFinite(accuracyMeters)) {
+    return `Location accuracy is about ±${Math.round(accuracyMeters)} m.`;
+  }
+  return 'Location accuracy could not be measured.';
+}
+
+export default function LocationStep({
+  loading,
+  error,
+  needsConfirmation = false,
+  accuracyMeters = null,
+  onRetry,
+  onConfirmOnMap,
+}: Props) {
+  const showError = !loading && !!error && !needsConfirmation;
+  // Prefer map confirmation when accuracy is poor, even if label resolution failed.
+  const showLowConfidence = !loading && needsConfirmation;
 
   return (
     <View style={styles.stepContent}>
@@ -69,6 +89,35 @@ export default function LocationStep({ loading, error, onRetry }: Props) {
             >
               <Text style={styles.secondaryButtonText}>Try again</Text>
             </TouchableOpacity>
+          </>
+        ) : showLowConfidence ? (
+          <>
+            <Text style={styles.locationLabel}>Confirm your location</Text>
+            <Text style={styles.locationHint}>
+              {formatAccuracyLabel(accuracyMeters)}
+            </Text>
+            <Text style={styles.locationHint}>
+              This may point to a nearby barangay. Try again outdoors, or confirm
+              the pin on the map before continuing.
+            </Text>
+            <View style={styles.locationActions}>
+              <TouchableOpacity
+                style={styles.secondaryButton}
+                onPress={onRetry}
+                accessibilityRole="button"
+                accessibilityLabel="Retry getting location"
+              >
+                <Text style={styles.secondaryButtonText}>Try again</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.primaryButton}
+                onPress={onConfirmOnMap}
+                accessibilityRole="button"
+                accessibilityLabel="Confirm location on map"
+              >
+                <Text style={styles.primaryButtonText}>Confirm on map</Text>
+              </TouchableOpacity>
+            </View>
           </>
         ) : (
           <>

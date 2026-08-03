@@ -22,7 +22,11 @@ export type ReplyPageState = {
   error: string | null;
 };
 
-export function useComments(reportId: string | null) {
+export function useComments(
+  reportId: string | null,
+  options?: { includeHidden?: boolean },
+) {
+  const includeHidden = options?.includeHidden ?? false;
   const [comments, setComments] = useState<ReportComment[]>([]);
   const [totalComments, setTotalComments] = useState(0);
   const [commentLimit, setCommentLimit] = useState(INITIAL_COMMENT_COUNT);
@@ -51,7 +55,7 @@ export function useComments(reportId: string | null) {
       comments: fetched,
       total,
       error: fetchError,
-    } = await fetchTopLevelComments(reportId, commentLimit);
+    } = await fetchTopLevelComments(reportId, commentLimit, includeHidden);
     setLoading(false);
     setLoadingMore(false);
     if (fetchError) {
@@ -61,7 +65,7 @@ export function useComments(reportId: string | null) {
     setError(null);
     setComments(fetched);
     setTotalComments(total);
-  }, [reportId, commentLimit]);
+  }, [reportId, commentLimit, includeHidden]);
 
   const loadReplies = useCallback(
     async (parentCommentId: string, limit: number) => {
@@ -83,6 +87,7 @@ export function useComments(reportId: string | null) {
         reportId,
         parentCommentId,
         limit,
+        includeHidden,
       );
       setReplyPages((current) => {
         const next = new Map(current);
@@ -96,7 +101,7 @@ export function useComments(reportId: string | null) {
         return next;
       });
     },
-    [reportId],
+    [reportId, includeHidden],
   );
 
   const reloadVisible = useCallback(async () => {

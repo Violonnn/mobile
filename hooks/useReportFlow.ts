@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   getCurrentGpsWithAddress,
+  isLowConfidenceLocation,
+  resolveReadableAddress,
   type GpsPosition,
   type ReadableAddress,
 } from '../lib/location';
@@ -14,11 +16,12 @@ import {
 } from '../lib/reportMedia';
 import { enqueueResidentReport } from '../lib/reports';
 import { getQueuedReport } from '../lib/reportQueue';
-import { onReportQueueChange } from '../lib/reportQueueFlush';
+import { flushReportQueue, onReportQueueChange } from '../lib/reportQueueFlush';
+import { fetchBarangays, type BarangayOption } from '../lib/barangays';
 
 // Step order: location -> attachments ("What are you seeing?") -> details.
 export type ReportStep = 'location' | 'attachments' | 'details' | 'success';
-export type SyncStatus = 'syncing' | 'synced';
+export type SyncStatus = 'syncing' | 'synced' | 'failed';
 
 // Progress checkpoints (deliberate jumps, not linear).
 const PROGRESS = {
@@ -29,12 +32,26 @@ const PROGRESS = {
   submitted: 100,
 } as const;
 
+const MUNICIPALITY_LABEL = 'Minglanilla';
+
 function attachmentsProgress(media: CapturedMedia[]): number {
   const hasPhoto = media.some((m) => m.type === 'photo');
   const hasVideo = media.some((m) => m.type === 'video');
   if (hasPhoto && hasVideo) return PROGRESS.bothAttachments;
   if (hasPhoto || hasVideo) return PROGRESS.firstAttachment;
   return PROGRESS.locationDone;
+}
+
+function buildAddressFromBarangay(
+  barangay: BarangayOption,
+  municipality = MUNICIPALITY_LABEL,
+): ReadableAddress {
+  return {
+    barangayId: barangay.id,
+    barangay: barangay.name,
+    municipality,
+    label: `${barangay.name}, ${municipality}`,
+  };
 }
 
 export function useReportFlow(active: boolean) {
@@ -45,6 +62,17 @@ export function useReportFlow(active: boolean) {
   const [address, setAddress] = useState<ReadableAddress | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
   const [locationLoading, setLocationLoading] = useState(false);
+  const [locationNeedsConfirmation, setLocationNeedsConfirmation] =
+    useState(false);
+  const [locationConfirmed, setLocationConfirmed] = useState(false);
+  const [locationPickerVisible, setLocationPickerVisible] = useState(false);
+
+  const [barangays, setBarangays] = useState<BarangayOption[]>([]);
+  const [barangaysLoading, setBarangaysLoading] = useState(false);
+  const [barangaysError, setBarangaysError] = useState<string | null>(null);
+  const [selectedBarangayId, setSelectedBarangayIdState] = useState<
+    string | null
+  >(null);
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -55,9 +83,13 @@ export function useReportFlow(active: boolean) {
   const [submitting, setSubmitting] = useState(false);
   const [queuedReportId, setQueuedReportId] = useState<string | null>(null);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('syncing');
+  const [syncError, setSyncError] = useState<string | null>(null);
 
   const advanceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const submitLock = useRef(false);
+  // Keep a resident's manual barangay pick across GPS retries / pin moves.
+  const barangayManuallySelected = useRef(false);
+  const barangaysRef = useRef<BarangayOption[]>([]);
 
   const usedPhotoSlots = media.filter((m) => m.type === 'photo').length;
   const usedVideoSeconds = totalVideoSeconds(media);
@@ -67,34 +99,81 @@ export function useReportFlow(active: boolean) {
     usedPhotoSlots <= MAX_PHOTOS &&
     usedVideoSeconds <= MAX_VIDEO_SECONDS;
 
-  const fetchLocation = useCallback(async (autoAdvance: boolean) => {
-    setLocationLoading(true);
-    setLocationError(null);
-    setProgress(0);
+  const loadBarangays = useCallback(async () => {
+    setBarangaysLoading(true);
+    setBarangaysError(null);
+    const { barangays: options, error: loadError } = await fetchBarangays();
+    setBarangaysLoading(false);
 
-    const { position: gps, address: place, error: gpsError } =
-      await getCurrentGpsWithAddress();
-
-    setLocationLoading(false);
-
-    if (!gps) {
-      setLocationError(gpsError ?? 'Could not get your location.');
+    if (loadError) {
+      setBarangays([]);
+      barangaysRef.current = [];
+      setBarangaysError(loadError);
       return;
     }
 
-    setPosition(gps);
-    setAddress(place);
-    setLocationError(place ? null : gpsError);
-    setProgress(PROGRESS.locationDone);
-
-    if (autoAdvance) {
-      // Auto-advance to the attachments step; the bar holds at 20% until the
-      // first attachment is added.
-      advanceTimer.current = setTimeout(() => {
-        setStep('attachments');
-      }, 450);
-    }
+    setBarangays(options);
+    barangaysRef.current = options;
+    setBarangaysError(null);
   }, []);
+
+  const applySuggestedBarangay = useCallback(
+    (place: ReadableAddress | null) => {
+      if (!place) return;
+
+      // Never overwrite a barangay the resident already chose by hand.
+      if (barangayManuallySelected.current) return;
+
+      setSelectedBarangayIdState(place.barangayId);
+      setAddress(place);
+    },
+    [],
+  );
+
+  const fetchLocation = useCallback(
+    async (autoAdvance: boolean) => {
+      setLocationLoading(true);
+      setLocationError(null);
+      setLocationNeedsConfirmation(false);
+      setLocationConfirmed(false);
+      setLocationPickerVisible(false);
+      setProgress(0);
+
+      const { position: gps, address: place, error: gpsError } =
+        await getCurrentGpsWithAddress();
+
+      setLocationLoading(false);
+
+      if (!gps) {
+        setPosition(null);
+        setLocationError(gpsError ?? 'Could not get your location.');
+        return;
+      }
+
+      setPosition(gps);
+      applySuggestedBarangay(place);
+
+      const needsConfirm = isLowConfidenceLocation(gps);
+      setLocationNeedsConfirmation(needsConfirm);
+      // Address resolution is only a suggestion; low-confidence UX owns the step.
+      setLocationError(
+        needsConfirm
+          ? null
+          : place || barangayManuallySelected.current
+            ? null
+            : gpsError,
+      );
+      setProgress(PROGRESS.locationDone);
+
+      // High-confidence fixes may advance; low-confidence stays on location.
+      if (autoAdvance && !needsConfirm) {
+        advanceTimer.current = setTimeout(() => {
+          setStep('attachments');
+        }, 450);
+      }
+    },
+    [applySuggestedBarangay],
+  );
 
   const reset = useCallback(() => {
     if (advanceTimer.current) clearTimeout(advanceTimer.current);
@@ -104,6 +183,11 @@ export function useReportFlow(active: boolean) {
     setAddress(null);
     setLocationError(null);
     setLocationLoading(false);
+    setLocationNeedsConfirmation(false);
+    setLocationConfirmed(false);
+    setLocationPickerVisible(false);
+    setSelectedBarangayIdState(null);
+    barangayManuallySelected.current = false;
     setTitle('');
     setDescription('');
     setLocationNote('');
@@ -112,12 +196,14 @@ export function useReportFlow(active: boolean) {
     setSubmitting(false);
     setQueuedReportId(null);
     setSyncStatus('syncing');
+    setSyncError(null);
     submitLock.current = false;
   }, []);
 
   useEffect(() => {
     if (!active) return;
     reset();
+    void loadBarangays();
     void fetchLocation(true);
     return () => {
       if (advanceTimer.current) clearTimeout(advanceTimer.current);
@@ -128,6 +214,60 @@ export function useReportFlow(active: boolean) {
   const retryLocation = useCallback(() => {
     void fetchLocation(step === 'location');
   }, [fetchLocation, step]);
+
+  const openLocationPicker = useCallback(() => {
+    if (!position) return;
+    setLocationPickerVisible(true);
+  }, [position]);
+
+  const closeLocationPicker = useCallback(() => {
+    setLocationPickerVisible(false);
+  }, []);
+
+  const confirmManualPosition = useCallback(
+    async (nextPosition: GpsPosition) => {
+      // Keep original GPS accuracy so the pin stays marked low-confidence;
+      // explicit map confirmation is what unlocks the rest of the flow.
+      const confirmed: GpsPosition = {
+        latitude: nextPosition.latitude,
+        longitude: nextPosition.longitude,
+        accuracyMeters: position?.accuracyMeters ?? null,
+      };
+
+      setPosition(confirmed);
+      setLocationConfirmed(true);
+      setLocationNeedsConfirmation(false);
+      setLocationPickerVisible(false);
+      setLocationError(null);
+      setProgress(PROGRESS.locationDone);
+
+      if (!barangayManuallySelected.current) {
+        const { address: place } = await resolveReadableAddress(confirmed);
+        applySuggestedBarangay(place);
+      }
+
+      if (advanceTimer.current) clearTimeout(advanceTimer.current);
+      advanceTimer.current = setTimeout(() => {
+        setStep('attachments');
+      }, 450);
+    },
+    [position?.accuracyMeters, applySuggestedBarangay],
+  );
+
+  const setSelectedBarangayId = useCallback((id: string) => {
+    const match = barangaysRef.current.find((item) => item.id === id);
+    if (!match) return;
+
+    barangayManuallySelected.current = true;
+    setSelectedBarangayIdState(id);
+    setAddress((prev) =>
+      buildAddressFromBarangay(match, prev?.municipality ?? MUNICIPALITY_LABEL),
+    );
+  }, []);
+
+  const retryBarangays = useCallback(() => {
+    void loadBarangays();
+  }, [loadBarangays]);
 
   const addPhoto = useCallback(async () => {
     setError(null);
@@ -203,6 +343,27 @@ export function useReportFlow(active: boolean) {
 
   const submit = useCallback(async () => {
     if (submitLock.current || !position) return;
+
+    if (!selectedBarangayId) {
+      setError(
+        barangaysError
+          ? 'Barangay list could not load. Retry before submitting.'
+          : 'Select a barangay before submitting.',
+      );
+      return;
+    }
+
+    if (barangaysError || barangays.length === 0) {
+      setError('Barangay list could not load. Retry before submitting.');
+      return;
+    }
+
+    const barangayExists = barangays.some((item) => item.id === selectedBarangayId);
+    if (!barangayExists) {
+      setError('The selected barangay is no longer available. Please select again.');
+      return;
+    }
+
     if (!title.trim()) {
       setError('Title is required.');
       return;
@@ -222,6 +383,7 @@ export function useReportFlow(active: boolean) {
       addressText: address?.label,
       locationNote,
       media,
+      barangayId: selectedBarangayId,
     });
 
     setSubmitting(false);
@@ -234,9 +396,20 @@ export function useReportFlow(active: boolean) {
 
     setQueuedReportId(reportId);
     setSyncStatus('syncing');
+    setSyncError(null);
     setProgress(PROGRESS.submitted);
     setStep('success');
-  }, [title, description, position, address, locationNote, media]);
+  }, [
+    title,
+    description,
+    position,
+    address,
+    locationNote,
+    media,
+    selectedBarangayId,
+    barangays,
+    barangaysError,
+  ]);
 
   useEffect(() => {
     if (step !== 'success' || !queuedReportId) return;
@@ -245,7 +418,20 @@ export function useReportFlow(active: boolean) {
     const check = async () => {
       const queued = await getQueuedReport(queuedReportId);
       if (cancelled) return;
-      setSyncStatus(!queued || queued.status === 'synced' ? 'synced' : 'syncing');
+      if (!queued || queued.status === 'synced') {
+        setSyncStatus('synced');
+        setSyncError(null);
+        return;
+      }
+
+      if (queued.lastError) {
+        setSyncStatus('failed');
+        setSyncError(queued.lastError);
+        return;
+      }
+
+      setSyncStatus('syncing');
+      setSyncError(null);
     };
     void check();
     const unsub = onReportQueueChange(check);
@@ -255,6 +441,13 @@ export function useReportFlow(active: boolean) {
     };
   }, [step, queuedReportId]);
 
+  const retrySync = useCallback(() => {
+    if (!queuedReportId) return;
+    setSyncStatus('syncing');
+    setSyncError(null);
+    void flushReportQueue();
+  }, [queuedReportId]);
+
   return {
     step,
     progress,
@@ -263,7 +456,20 @@ export function useReportFlow(active: boolean) {
     address,
     locationError,
     locationLoading,
+    locationNeedsConfirmation,
+    locationConfirmed,
+    locationPickerVisible,
     retryLocation,
+    openLocationPicker,
+    closeLocationPicker,
+    confirmManualPosition,
+    // barangay
+    barangays,
+    barangaysLoading,
+    barangaysError,
+    selectedBarangayId,
+    setSelectedBarangayId,
+    retryBarangays,
     // attachments
     media,
     usedPhotoSlots,
@@ -288,6 +494,8 @@ export function useReportFlow(active: boolean) {
     reset,
     // success
     syncStatus,
+    syncError,
+    retrySync,
     queuedReportId,
     maxPhotos: MAX_PHOTOS,
     maxVideoSeconds: MAX_VIDEO_SECONDS,

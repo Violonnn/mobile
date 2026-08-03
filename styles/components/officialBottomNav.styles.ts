@@ -1,0 +1,152 @@
+// styles/components/officialBottomNav.styles.ts
+// Fixed white bottom bar for the official portal — five equal destinations,
+// soft-blue active circle matching AdminBottomNav (no Report action).
+
+import { StyleSheet } from 'react-native';
+import { colors, fonts } from '../theme';
+
+export const officialNavMetrics = {
+  barHeight: 74,
+  barRadius: 24,
+  iconSize: 22,
+  activeIconSize: 24,
+  labelGap: 3,
+  labelLineHeight: 12,
+  hlWidth: 36,
+  hlHeight: 36,
+  itemMinWidth: 56,
+  incidentSize: 54,
+  incidentIconSize: 26,
+  incidentLift: 20,
+  incidentCarveGap: 6,
+};
+
+export const officialNavColors = {
+  bar: '#FFFFFF',
+  iconInactive: '#9CA3AF',
+  iconActive: '#FFFFFF',
+  labelInactive: '#9CA3AF',
+  labelActive: colors.themeSoft,
+  circleFill: colors.themeSoft,
+  incident: '#F26E6E',
+  incidentIcon: '#FFFFFF',
+  carve: colors.white,
+};
+
+export const officialBottomNavStyles = StyleSheet.create({
+  wrapper: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: 'stretch',
+    backgroundColor: officialNavColors.bar,
+    overflow: 'visible',
+  },
+  bar: {
+    width: '100%',
+    borderTopLeftRadius: officialNavMetrics.barRadius,
+    borderTopRightRadius: officialNavMetrics.barRadius,
+    backgroundColor: officialNavColors.bar,
+    shadowColor: '#1C2B4B',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 0,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(28, 43, 75, 0.06)',
+  },
+  row: {
+    height: officialNavMetrics.barHeight,
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    justifyContent: 'space-around',
+  },
+  centerSlot: {
+    width: officialNavMetrics.incidentSize + 18,
+    height: '100%',
+  },
+  item: {
+    minWidth: officialNavMetrics.itemMinWidth,
+    flex: 1,
+    height: '100%',
+  },
+  itemContent: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconHolder: {
+    width: officialNavMetrics.hlWidth,
+    height: officialNavMetrics.hlHeight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  activeCircle: {
+    width: officialNavMetrics.hlWidth,
+    height: officialNavMetrics.hlHeight,
+    borderRadius: officialNavMetrics.hlWidth / 2,
+    backgroundColor: officialNavColors.circleFill,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  label: {
+    marginTop: officialNavMetrics.labelGap,
+    fontSize: 10,
+    lineHeight: officialNavMetrics.labelLineHeight,
+    fontFamily: fonts.medium,
+    letterSpacing: 0.2,
+    color: officialNavColors.labelInactive,
+  },
+  labelActive: {
+    fontFamily: fonts.semibold,
+    color: officialNavColors.labelActive,
+  },
+  incidentButtonWrap: {
+    position: 'absolute',
+    top: -officialNavMetrics.incidentLift,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  incidentButtonStage: {
+    width: officialNavMetrics.incidentSize,
+    height: officialNavMetrics.incidentSize,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  incidentCarve: {
+    position: 'absolute',
+    top: -officialNavMetrics.incidentCarveGap,
+    left: -officialNavMetrics.incidentCarveGap,
+    width: officialNavMetrics.incidentSize + officialNavMetrics.incidentCarveGap * 2,
+    height: officialNavMetrics.incidentSize + officialNavMetrics.incidentCarveGap * 2,
+    borderRadius: (officialNavMetrics.incidentSize + officialNavMetrics.incidentCarveGap * 2) / 2,
+    backgroundColor: officialNavColors.carve,
+  },
+  incidentButton: {
+    width: officialNavMetrics.incidentSize,
+    height: officialNavMetrics.incidentSize,
+    borderRadius: officialNavMetrics.incidentSize / 2,
+    backgroundColor: officialNavColors.incident,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#F26E6E',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  incidentLabel: {
+    position: 'absolute',
+    top: officialNavMetrics.incidentLift + 51,
+    left: 0,
+    right: 0,
+    textAlign: 'center',
+    fontSize: 10,
+    lineHeight: officialNavMetrics.labelLineHeight,
+    fontFamily: fonts.medium,
+    letterSpacing: 0.2,
+    color: officialNavColors.labelInactive,
+  },
+});

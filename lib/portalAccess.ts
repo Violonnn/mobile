@@ -8,7 +8,7 @@ export type PortalDestination = Href;
 
 /**
  * Resolve where an authenticated user belongs.
- * Active officials land on the Official Access success panel (/official).
+ * Active officials land on the official incident-operations workspace (/official).
  * Admins land on /admin. Residents land on the resident home shell.
  */
 export async function resolveSessionDestination(): Promise<PortalDestination | null> {

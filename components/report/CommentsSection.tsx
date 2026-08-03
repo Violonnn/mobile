@@ -13,37 +13,62 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   StyleSheet,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, fonts, fontSizes, radius, spacing } from '../../styles/theme';
-import { formatReporterName } from '../../lib/reports';
+import { formatReporterName, type MapReportReporter } from '../../lib/reports';
 import { formatPublishedAt } from '../../lib/formatTime';
-import { type ReportComment } from '../../lib/comments';
 import { useComments } from '../../hooks/useComments';
+import { useAnnouncementComments } from '../../hooks/useAnnouncementComments';
 import { ReporterAvatar } from './ReporterAvatar';
+import { hideComment, unhideComment } from '../../lib/announcements';
+import {
+  hideAnnouncementComment,
+  unhideAnnouncementComment,
+} from '../../lib/announcementComments';
+
+/** Shared comment shape for report + announcement thread rows. */
+type ThreadComment = {
+  id: string;
+  body: string;
+  createdAt: string;
+  replyCount: number;
+  isHidden: boolean;
+  author: MapReportReporter;
+};
 
 type Props = {
-  reportId: string;
+  /** Report thread target. Provide either reportId or announcementId. */
+  reportId?: string;
+  /** Announcement thread target. Provide either reportId or announcementId. */
+  announcementId?: string;
   /** Pop the keyboard once the section is ready (comment-button flow). */
   autoFocus?: boolean;
   /** Briefly tint the section to draw the eye when opened via the comment button. */
   highlighted?: boolean;
-  /** Called after a comment posts so the parent can bump the report's count. */
-  onCommentAdded?: (reportId: string) => void;
+  /** Called after a comment posts so the parent can bump the post's count. */
+  onCommentAdded?: (targetId: string) => void;
   /** Called when the composer gains focus so the parent can scroll it into view. */
   onComposerFocus?: () => void;
-  /** Incremented when the opened report is pull-refreshed. */
+  /** Incremented when the opened post is pull-refreshed. */
   refreshSignal?: number;
+  /** Passed only by an authorized official detail screen; never inferred here. */
+  moderationMode?: 'none' | 'scoped';
 };
 
 function CommentRow({
   comment,
   onReply,
   isReply = false,
+  moderationMode = 'none',
+  onModerate,
 }: {
-  comment: ReportComment;
+  comment: ThreadComment;
   onReply?: () => void;
   isReply?: boolean;
+  moderationMode?: 'none' | 'scoped';
+  onModerate?: (comment: ThreadComment) => void;
 }) {
   return (
     <View style={[styles.commentRow, isReply && styles.commentReplyRow]}>
@@ -57,8 +82,14 @@ function CommentRow({
             <Text style={styles.commentTime}>
               {formatPublishedAt(comment.createdAt)}
             </Text>
+            {moderationMode === 'scoped' ? (
+              <TouchableOpacity onPress={() => onModerate?.(comment)} hitSlop={8} accessibilityRole="button" accessibilityLabel={comment.isHidden ? 'Restore comment options' : 'Hide comment options'}>
+                <Ionicons name="ellipsis-horizontal" size={18} color={colors.textMuted} />
+              </TouchableOpacity>
+            ) : null}
           </View>
           <Text style={styles.commentText}>{comment.body}</Text>
+          {comment.isHidden ? <Text style={styles.hiddenLabel}>Hidden from residents</Text> : null}
         </View>
         {onReply ? (
           <TouchableOpacity
@@ -77,12 +108,25 @@ function CommentRow({
 
 export default function CommentsSection({
   reportId,
+  announcementId,
   autoFocus = false,
   highlighted = false,
   onCommentAdded,
   onComposerFocus,
   refreshSignal = 0,
+  moderationMode = 'none',
 }: Props) {
+  const targetId = announcementId ?? reportId ?? null;
+  const isAnnouncement = Boolean(announcementId);
+  const includeHidden = moderationMode === 'scoped';
+
+  const reportThread = useComments(isAnnouncement ? null : reportId ?? null, {
+    includeHidden,
+  });
+  const announcementThread = useAnnouncementComments(
+    isAnnouncement ? announcementId ?? null : null,
+    { includeHidden },
+  );
   const {
     comments,
     totalComments,
@@ -97,13 +141,44 @@ export default function CommentsSection({
     hideReplies,
     loadMoreReplies,
     reload,
-  } = useComments(reportId);
+  } = isAnnouncement ? announcementThread : reportThread;
+
   const [draft, setDraft] = useState('');
-  const [replyTo, setReplyTo] = useState<ReportComment | null>(null);
+  const [replyTo, setReplyTo] = useState<ThreadComment | null>(null);
   const [sendError, setSendError] = useState<string | null>(null);
   const [highlightActive, setHighlightActive] = useState(false);
   const inputRef = useRef<TextInput>(null);
   const previousRefreshSignal = useRef(refreshSignal);
+
+  const handleModeration = (comment: ThreadComment) => {
+    const action = comment.isHidden ? 'Restore comment' : 'Hide comment';
+    const message = comment.isHidden
+      ? 'Restore this comment so residents can see it again?'
+      : 'Hide this comment from residents? The original text will not be changed.';
+    Alert.alert(action, message, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: action,
+        style: comment.isHidden ? 'default' : 'destructive',
+        onPress: () => {
+          void (async () => {
+            const result = comment.isHidden
+              ? isAnnouncement
+                ? await unhideAnnouncementComment(comment.id)
+                : await unhideComment(comment.id)
+              : isAnnouncement
+                ? await hideAnnouncementComment(comment.id)
+                : await hideComment(comment.id);
+            if (result.error) {
+              Alert.alert('Moderation failed', result.error);
+              return;
+            }
+            await reload();
+          })();
+        },
+      },
+    ]);
+  };
 
   // Comment-button flow: focus the composer after the parent modal's open /
   // scroll-to-bottom animation has settled, so the keyboard doesn't fight it.
@@ -142,7 +217,7 @@ export default function CommentsSection({
     setDraft('');
     setReplyTo(null);
     setSendError(null);
-    onCommentAdded?.(reportId);
+    if (targetId) onCommentAdded?.(targetId);
   };
 
   return (
@@ -181,6 +256,8 @@ export default function CommentsSection({
                   setReplyTo(comment);
                   inputRef.current?.focus();
                 }}
+                moderationMode={moderationMode}
+                onModerate={handleModeration}
               />
 
               {!replyPage && replyCount > 0 ? (
@@ -208,7 +285,7 @@ export default function CommentsSection({
               ) : null}
 
               {replyPage?.replies.map((reply) => (
-                <CommentRow key={reply.id} comment={reply} isReply />
+                <CommentRow key={reply.id} comment={reply} isReply moderationMode={moderationMode} onModerate={handleModeration} />
               ))}
 
               {replyPage?.error ? (
@@ -439,6 +516,11 @@ const styles = StyleSheet.create({
     fontSize: fontSizes.md,
     color: colors.text,
     lineHeight: 20,
+  },
+  hiddenLabel: {
+    fontFamily: fonts.semibold,
+    fontSize: fontSizes.xs,
+    color: colors.danger,
   },
   replyButton: {
     alignSelf: 'flex-start',

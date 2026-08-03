@@ -12,9 +12,17 @@ import { supabase } from '../lib/supabase';
 type UseReportsOptions = {
   /** Subscribe to live database changes. Defaults to true (used by the map). */
   realtime?: boolean;
+  /** Restrict map loading and Realtime to one barangay when an official is scoped. */
+  barangayId?: string | null;
+  /** Resident maps may show their local upload queue; official maps must not. */
+  includePending?: boolean;
 };
 
-export function useReports({ realtime = true }: UseReportsOptions = {}) {
+export function useReports({
+  realtime = true,
+  barangayId = null,
+  includePending = true,
+}: UseReportsOptions = {}) {
   const [reports, setReports] = useState<MapReportMarker[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -34,7 +42,10 @@ export function useReports({ realtime = true }: UseReportsOptions = {}) {
   }, [reports]);
 
   const load = useCallback(async () => {
-    const { reports: fetched, error: fetchError } = await fetchMapReports();
+    const { reports: fetched, error: fetchError } = await fetchMapReports({
+      barangayId,
+      includePending,
+    });
     setLoading(false);
     if (fetchError) {
       setError(fetchError);
@@ -42,7 +53,7 @@ export function useReports({ realtime = true }: UseReportsOptions = {}) {
     }
     setError(null);
     setReports(fetched);
-  }, []);
+  }, [barangayId, includePending]);
 
   // Decide how to react to a live `reports` change. Inserts, deletes, and edits
   // to pin-relevant fields (title/description/status) trigger a full reload
@@ -118,7 +129,12 @@ export function useReports({ realtime = true }: UseReportsOptions = {}) {
       .channel(channelName)
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'reports' },
+        {
+          event: '*',
+          schema: 'public',
+          table: 'reports',
+          ...(barangayId ? { filter: `barangay_id=eq.${barangayId}` } : {}),
+        },
         handleRealtimeChange,
       )
       .subscribe();
@@ -126,7 +142,7 @@ export function useReports({ realtime = true }: UseReportsOptions = {}) {
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [realtime, channelName, handleRealtimeChange]);
+  }, [realtime, channelName, handleRealtimeChange, barangayId]);
 
   return { reports, error, loading, reload: load };
 }

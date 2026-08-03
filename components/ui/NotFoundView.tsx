@@ -38,7 +38,7 @@ export default function NotFoundView({ onGoHome }: NotFoundViewProps) {
       <Text style={styles.title}>Whoops!</Text>
 
       <Text style={styles.subtitle}>
-        We couldn't find the page{"\n"}you were looking for.
+        We couldn&apos;t find the page{"\n"}you were looking for.
       </Text>
 
       <TouchableOpacity style={styles.button} onPress={handlePress} activeOpacity={0.85}>

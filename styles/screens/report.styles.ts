@@ -169,8 +169,60 @@ export const reportStyles = StyleSheet.create({
     color: reportColors.accent,
     textAlign: 'center',
   },
+  locationActions: {
+    width: '100%',
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+  },
 
   // --- Inputs (details) ---
+  pinConfirmedText: {
+    fontFamily: fonts.medium,
+    fontSize: fontSizes.xs,
+    color: reportColors.success,
+    marginBottom: spacing.sm,
+  },
+  barangaySelectBox: {
+    borderWidth: 1,
+    borderColor: reportColors.border,
+    borderRadius: radius.md,
+    overflow: 'hidden',
+    marginBottom: spacing.xs,
+  },
+  barangayOption: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: reportColors.border,
+    backgroundColor: colors.white,
+  },
+  barangayOptionSelected: {
+    backgroundColor: reportColors.primaryLight,
+  },
+  barangayOptionText: {
+    fontFamily: fonts.medium,
+    fontSize: fontSizes.sm,
+    color: reportColors.text,
+  },
+  barangayOptionTextSelected: {
+    fontFamily: fonts.semibold,
+    color: reportColors.text,
+  },
+  barangayLoadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  barangayHelperText: {
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.sm,
+    color: reportColors.textLight,
+  },
+  barangayErrorBlock: {
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
   label: {
     marginTop: spacing.sm,
     marginBottom: spacing.xs,
@@ -329,6 +381,13 @@ export const reportStyles = StyleSheet.create({
   },
 
   // --- Buttons / footer ---
+  privacyNotice: {
+    marginTop: spacing.md,
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.xs,
+    color: reportColors.textLight,
+    lineHeight: 16,
+  },
   errorText: {
     fontFamily: fonts.medium,
     fontSize: fontSizes.sm,

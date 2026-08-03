@@ -7,6 +7,7 @@ export const colors = {
   primaryLight: "#EEF2FF",   // light blue — backgrounds, badges
   secondary: "#60A5FA",      // lighter blue — highlights
   danger: "#F97316",         // orange — warning badges
+  unverified: "#DC2626",     // red — report verification is still needed
   success: "#22C55E",        // green — verified badges
   purple: "#7C3AED",         // purple — weather alert icon
   white: "#FFFFFF",
@@ -44,6 +45,8 @@ export const fonts = {
   semibold: "Sora_600SemiBold",
   bold: "Sora_700Bold",
   extrabold: "Sora_800ExtraBold",
+  // Condensed display face for escalation card titles — elongated, modern.
+  display: "BarlowCondensed_600SemiBold",
 };
 
 export const radius = {

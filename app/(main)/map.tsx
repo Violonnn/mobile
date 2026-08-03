@@ -1,20 +1,82 @@
-// Map tab: loads report pins from reports_map and keeps them live via Realtime.
+// Map tab: report pins + active facilities/evac centers (read-only layers).
 import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import AppHeader from '../../components/navigation/AppHeader';
-import InteractiveMap from '../../components/map/InteractiveMap';
+import InteractiveMap, {
+  type MapLayerVisibility,
+  type MapResourceMarker,
+} from '../../components/map/InteractiveMap';
 import ReportMapDetailSheet from '../../components/map/ReportMapDetailSheet';
+import ResourceMapDetailSheet from '../../components/map/ResourceMapDetailSheet';
 import { ReportEngagementProvider } from '../../components/report/ReportEngagementProvider';
 import { tabStyles as styles } from '../../styles/screens/tab.styles';
 import { type MapReportMarker } from '../../lib/reports';
 import { useReports } from '../../hooks/useReports';
+import { useResources } from '../../hooks/useResources';
+import { useEvacuationCenters } from '../../hooks/useEvacuationCenters';
+import {
+  evacuationStatusLabel,
+  facilityTypeLabel,
+} from '../../lib/resources';
 import { colors, fonts, fontSizes, spacing } from '../../styles/theme';
 
 export default function MapScreen() {
-  // Realtime keeps the map markers live as reports are created/updated.
   const { reports: markers, error } = useReports({ realtime: true });
+  const { facilities } = useResources({ mode: 'resident' });
+  const { centers } = useEvacuationCenters();
+
   const [selectedReportIds, setSelectedReportIds] = useState<string[]>([]);
+  const [selectedResource, setSelectedResource] =
+    useState<MapResourceMarker | null>(null);
+  const [layers, setLayers] = useState<MapLayerVisibility>({
+    reports: true,
+    facilities: true,
+    evacuationCenters: true,
+  });
+
+  const facilityMarkers = useMemo<MapResourceMarker[]>(
+    () =>
+      facilities
+        .filter(
+          (f) =>
+            Number.isFinite(f.latitude) &&
+            Number.isFinite(f.longitude) &&
+            !(f.latitude === 0 && f.longitude === 0),
+        )
+        .map((f) => ({
+          id: f.id,
+          kind: 'facility' as const,
+          name: f.name,
+          latitude: f.latitude,
+          longitude: f.longitude,
+          subtitle: facilityTypeLabel(f.type),
+        })),
+    [facilities],
+  );
+
+  const centerMarkers = useMemo<MapResourceMarker[]>(
+    () =>
+      centers
+        .filter(
+          (c) =>
+            Number.isFinite(c.latitude) &&
+            Number.isFinite(c.longitude) &&
+            !(c.latitude === 0 && c.longitude === 0),
+        )
+        .map((c) => ({
+          id: c.id,
+          kind: 'evacuation' as const,
+          name: c.name,
+          latitude: c.latitude,
+          longitude: c.longitude,
+          subtitle: `${evacuationStatusLabel(c.status)}${
+            c.isPriority ? ' · Priority' : ''
+          }`,
+          isPriority: c.isPriority,
+        })),
+    [centers],
+  );
 
   const selectedReports = useMemo(() => {
     if (selectedReportIds.length === 0) return [];
@@ -27,14 +89,24 @@ export default function MapScreen() {
   return (
     <ReportEngagementProvider reports={markers}>
       <View style={styles.container}>
-        {/* Light status bar icons — matches the white text on the themed header. */}
         <StatusBar style="light" />
-        {/* Map header is search-only (no greeting/title row). */}
         <AppHeader searchPlaceholder="Search facilities and reports" />
         <View style={styles.mapFill}>
           <InteractiveMap
             markers={markers}
-            onReportSelection={setSelectedReportIds}
+            facilities={facilityMarkers}
+            evacuationCenters={centerMarkers}
+            layerVisibility={layers}
+            showLayerFilters
+            onLayerVisibilityChange={setLayers}
+            onReportSelection={(ids) => {
+              setSelectedResource(null);
+              setSelectedReportIds(ids);
+            }}
+            onResourceSelection={(resource) => {
+              setSelectedReportIds([]);
+              setSelectedResource(resource);
+            }}
           />
           {error ? (
             <View style={localStyles.banner} pointerEvents="none">
@@ -47,6 +119,11 @@ export default function MapScreen() {
           visible={selectedReports.length > 0}
           reports={selectedReports}
           onClose={() => setSelectedReportIds([])}
+        />
+        <ResourceMapDetailSheet
+          visible={selectedResource != null}
+          resource={selectedResource}
+          onClose={() => setSelectedResource(null)}
         />
       </View>
     </ReportEngagementProvider>

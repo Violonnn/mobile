@@ -1,17 +1,27 @@
+// styles/screens/official.styles.ts
+// Styles for the official incident-operations workspace.
+
 import { StyleSheet } from 'react-native';
 import { colors, fonts, fontSizes, radius, spacing } from '../theme';
+import { officialNavMetrics } from '../components/officialBottomNav.styles';
+
+const softFill = 'rgba(170, 192, 220, 0.25)';
+
+/** Extra bottom padding so scroll content clears the fixed official bottom bar. */
+const BOTTOM_BAR_CLEARANCE = officialNavMetrics.barHeight + spacing.lg;
 
 export const officialStyles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.white,
   },
+  // Non-scroll shell layout (loading/error states). Prefer scrollContent for ScrollViews.
   content: {
     flex: 1,
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.xl,
-    paddingBottom: spacing.lg,
-    justifyContent: 'center',
+    paddingBottom: BOTTOM_BAR_CLEARANCE + spacing.xl,
+    justifyContent: 'flex-start',
     gap: spacing.lg,
   },
   card: {
@@ -27,7 +37,7 @@ export const officialStyles = StyleSheet.create({
   },
   badge: {
     alignSelf: 'flex-start',
-    backgroundColor: 'rgba(170, 192, 220, 0.25)',
+    backgroundColor: softFill,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
     borderRadius: radius.full,
@@ -49,29 +59,10 @@ export const officialStyles = StyleSheet.create({
     color: colors.textMuted,
     lineHeight: 22,
   },
-  scopeBox: {
-    backgroundColor: 'rgba(170, 192, 220, 0.25)',
-    borderRadius: radius.lg,
-    padding: spacing.md,
-    gap: spacing.xs,
-  },
-  scopeLabel: {
-    fontFamily: fonts.semibold,
-    fontSize: fontSizes.xs,
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
-    marginTop: spacing.xs,
-  },
   scopeValue: {
     fontFamily: fonts.bold,
     fontSize: fontSizes.lg,
     color: colors.themeSoft,
-  },
-  scopeMeta: {
-    fontFamily: fonts.medium,
-    fontSize: fontSizes.md,
-    color: colors.text,
   },
   logoutButton: {
     marginTop: spacing.sm,
@@ -90,5 +81,1124 @@ export const officialStyles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+
+  // ---- Workspace shell ----
+  scrollContent: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    // Clear the fixed OfficialBottomNav + home-indicator overlap.
+    paddingBottom: BOTTOM_BAR_CLEARANCE + spacing.xl,
+    gap: spacing.lg,
+  },
+  filterRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  // Hotlines / Facilities / Centers — centered black/white chips.
+  resourceTabRow: {
+    flexDirection: 'row',
+    flexWrap: 'nowrap',
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'center',
+    width: '100%',
+    gap: spacing.sm,
+  },
+  resourceTabChip: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.full,
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  resourceTabChipActive: {
+    backgroundColor: colors.text,
+    borderColor: colors.text,
+  },
+  resourceTabChipText: {
+    fontFamily: fonts.medium,
+    fontSize: fontSizes.sm,
+    color: colors.textMuted,
+  },
+  resourceTabChipTextActive: {
+    fontFamily: fonts.semibold,
+    color: colors.white,
+  },
+  // MDRRMO Community ↔ Resources icon switch — centered under the header.
+  communitySectionSwitch: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'center',
+    width: '100%',
+    gap: spacing.xl,
+    paddingBottom: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  communitySectionIconButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing.xs,
+  },
+  // MDRRMO expanded status row — one line; chips share width dynamically.
+  filterRowSingleLine: {
+    flexDirection: 'row',
+    flexWrap: 'nowrap',
+    alignItems: 'stretch',
+    gap: spacing.sm,
+  },
+  filterChip: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.full,
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  // Equal flex share so labels stay readable and scale with screen width.
+  filterChipFlexible: {
+    flex: 1,
+    minWidth: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.sm,
+  },
+  filterChipActive: {
+    backgroundColor: softFill,
+    borderColor: colors.themeSoft,
+  },
+  filterChipText: {
+    fontFamily: fonts.medium,
+    fontSize: fontSizes.sm,
+    color: colors.textMuted,
+  },
+  filterChipTextFlexible: {
+    width: '100%',
+    textAlign: 'center',
+  },
+  filterChipTextActive: {
+    fontFamily: fonts.semibold,
+    color: colors.themeSoft,
+  },
+  // MDRRMO Report time-sort control — black active state (not themeSoft).
+  filterChipBlackActive: {
+    backgroundColor: colors.white,
+    borderColor: colors.text,
+  },
+  filterChipTextBlackActive: {
+    fontFamily: fonts.semibold,
+    color: colors.text,
+  },
+  // MDRRMO Report status filter — Command status colors on the active chip.
+  filterChipStatusUnverified: {
+    backgroundColor: '#FEE2E2',
+    borderColor: colors.unverified,
+  },
+  filterChipStatusVerified: {
+    backgroundColor: '#DCFCE7',
+    borderColor: '#16A34A',
+  },
+  filterChipStatusEscalated: {
+    backgroundColor: '#FFEDD5',
+    borderColor: colors.danger,
+  },
+  filterChipStatusResolved: {
+    backgroundColor: '#E5E7EB',
+    borderColor: '#4B5563',
+  },
+  filterChipStatusAll: {
+    backgroundColor: colors.white,
+    borderColor: colors.text,
+  },
+  priorityCard: {
+    backgroundColor: colors.white,
+    borderRadius: radius.xl,
+    padding: spacing.md,
+    gap: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  priorityCardTitle: {
+    fontFamily: fonts.bold,
+    fontSize: fontSizes.md,
+    color: colors.text,
+  },
+  priorityCardBody: {
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.sm,
+    color: colors.textMuted,
+    lineHeight: 18,
+  },
+  quickActionsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  quickAction: {
+    flexGrow: 1,
+    flexBasis: '45%',
+    backgroundColor: colors.themeSoft,
+    borderRadius: radius.lg,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+  },
+  quickActionSecondary: {
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  quickActionText: {
+    fontFamily: fonts.semibold,
+    fontSize: fontSizes.sm,
+    color: colors.white,
+    textAlign: 'center',
+  },
+  quickActionTextSecondary: {
+    color: colors.text,
+  },
+  formCard: {
+    backgroundColor: colors.white,
+    borderRadius: radius.xl,
+    padding: spacing.md,
+    gap: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  formLabel: {
+    fontFamily: fonts.semibold,
+    fontSize: fontSizes.xs,
+    color: colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+  },
+  formInput: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    minHeight: 44,
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.md,
+    color: colors.text,
+    backgroundColor: colors.white,
+  },
+  formTextArea: {
+    minHeight: 96,
+    textAlignVertical: 'top',
+  },
+  searchInput: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    minHeight: 44,
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.md,
+    color: colors.text,
+    backgroundColor: colors.white,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+  },
+  headerIdentity: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  brandMark: {
+    width: 48,
+    height: 48,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  brandMarkImage: {
+    width: 48,
+    height: 48,
+  },
+  headerTextGroup: {
+    flex: 1,
+    gap: 2,
+  },
+  brandLabel: {
+    fontFamily: fonts.semibold,
+    fontSize: fontSizes.sm,
+    color: colors.themeSoft,
+  },
+  screenTitle: {
+    fontFamily: fonts.extrabold,
+    fontSize: fontSizes.xl,
+    color: colors.text,
+    letterSpacing: -0.4,
+  },
+  screenSubtitle: {
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.sm,
+    color: colors.textMuted,
+  },
+  headerLogoutButton: {
+    minHeight: 44,
+    minWidth: 44,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.full,
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerNotificationButton: {
+    minHeight: 44,
+    minWidth: 44,
+    borderRadius: radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerLogoutText: {
+    fontFamily: fonts.semibold,
+    fontSize: fontSizes.sm,
+    color: colors.text,
+  },
+  settingsIdentityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  settingsSection: {
+    gap: spacing.sm,
+  },
+  settingsAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    minHeight: 58,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  settingsActionCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  settingsActionTitle: {
+    fontFamily: fonts.semibold,
+    fontSize: fontSizes.sm,
+    color: colors.text,
+  },
+  settingsActionMeta: {
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.xs,
+    color: colors.textMuted,
+  },
+  initialAvatar: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.white,
+    borderWidth: 2,
+    borderColor: colors.primaryLight,
+  },
+  initialAvatarText: {
+    fontFamily: fonts.bold,
+    fontSize: fontSizes.lg,
+    color: colors.primary,
+  },
+  mdrmmoBadge: {
+    minWidth: 52,
+    height: 52,
+    borderRadius: radius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.xs,
+    backgroundColor: softFill,
+  },
+  mdrmmoBadgeText: {
+    fontFamily: fonts.bold,
+    fontSize: fontSizes.xs,
+    color: colors.themeSoft,
+  },
+  backButton: {
+    minHeight: 44,
+    minWidth: 44,
+    borderRadius: radius.full,
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  // ---- Status counts ----
+  countsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  commandHeaderControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  commandAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.white,
+    borderWidth: 2,
+    borderColor: colors.primaryLight,
+  },
+  commandAvatarText: {
+    fontFamily: fonts.bold,
+    fontSize: fontSizes.md,
+    color: colors.primary,
+  },
+  commandRoleBadge: {
+    minWidth: 52,
+    height: 44,
+    borderRadius: radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.xs,
+    backgroundColor: softFill,
+    borderWidth: 1,
+    borderColor: colors.themeSoft,
+  },
+  commandRoleBadgeText: {
+    fontFamily: fonts.bold,
+    fontSize: 9,
+    color: colors.themeSoft,
+  },
+  inlineErrorRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#FFF7ED',
+    borderRadius: radius.lg,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  escalationList: {
+    gap: spacing.md,
+    paddingRight: spacing.lg,
+    // Clear bottom/right card shadows so they do not sit on the status cards.
+    paddingBottom: spacing.xl,
+    paddingLeft: 2,
+    // Stretch every card to the tallest in the row so CTAs line up at the bottom.
+    alignItems: 'stretch',
+  },
+  escalationCard: {
+    width: '100%',
+    flex: 1,
+    // Height is driven by a shared minHeight (per device width); content cannot overlap the CTA.
+    overflow: 'hidden',
+    borderRadius: radius.xl,
+    flexDirection: 'column',
+    backgroundColor: colors.white,
+  },
+  escalationCardShadow: {
+    // Width + minHeight are set at render time from window size so cards fit every device.
+    borderRadius: radius.xl,
+    backgroundColor: colors.white,
+    // Bottom + right soft shadow.
+    shadowColor: '#0F2044',
+    shadowOpacity: 0.18,
+    shadowRadius: 10,
+    shadowOffset: { width: 6, height: 8 },
+    elevation: 6,
+  },
+  escalationMedia: {
+    // Aspect-ratio keeps media proportional when card width changes per device.
+    width: '100%',
+    aspectRatio: 16 / 10,
+    backgroundColor: '#E9EEF5',
+    overflow: 'hidden',
+  },
+  escalationImage: {
+    width: '100%',
+    height: '100%',
+  },
+  incidentImagePlaceholder: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#E9EEF5',
+  },
+  // Fade the bottom of the media into the white card body.
+  escalationMediaFade: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: 64,
+  },
+  // Escalated pill — orange status color, hugs title + time text.
+  escalationOverlay: {
+    position: 'absolute',
+    left: spacing.sm,
+    top: spacing.sm,
+    maxWidth: '92%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+    borderRadius: radius.full,
+    backgroundColor: '#FFEDD5',
+  },
+  escalationOverlayText: {
+    flexShrink: 1,
+    fontFamily: fonts.semibold,
+    fontSize: fontSizes.xs,
+    color: colors.danger,
+  },
+  // Extra attachment count — large, bottom-right of the media.
+  escalationAttachmentBadge: {
+    position: 'absolute',
+    right: spacing.md,
+    bottom: spacing.md,
+    zIndex: 2,
+    minWidth: 52,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.lg,
+    backgroundColor: 'rgba(17, 24, 39, 0.72)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  escalationAttachmentBadgeText: {
+    fontFamily: fonts.extrabold,
+    fontSize: fontSizes.xl,
+    color: colors.white,
+    letterSpacing: -0.4,
+  },
+  // Details band fills leftover card height; CTA is pushed to the bottom edge.
+  escalationDetails: {
+    flex: 1,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.md,
+    paddingHorizontal: spacing.md,
+    backgroundColor: colors.white,
+    justifyContent: 'space-between',
+    gap: spacing.md,
+  },
+  escalationDetailsCopy: {
+    flexShrink: 1,
+    gap: spacing.sm,
+  },
+  escalationCardTitle: {
+    fontFamily: fonts.display,
+    fontSize: fontSizes.xxl,
+    color: colors.text,
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+  },
+  escalationDescription: {
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.md,
+    color: colors.textMuted,
+    lineHeight: 20,
+  },
+  escalationDetailsButton: {
+    alignSelf: 'stretch',
+    // Stay at the bottom; never shrink under large Android font scales.
+    flexShrink: 0,
+    marginTop: 'auto',
+    // Keep the button inset so it does not touch the card edges.
+    marginHorizontal: spacing.xs,
+    borderRadius: radius.full,
+    backgroundColor: colors.text,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  escalationDetailsButtonText: {
+    flexShrink: 1,
+    fontFamily: fonts.semibold,
+    fontSize: fontSizes.md,
+    color: colors.white,
+  },
+  statusOverviewCard: {
+    minHeight: 58,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: spacing.sm + 4,
+    paddingVertical: spacing.xs + 2,
+    backgroundColor: colors.white,
+  },
+  statusAvatarGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingLeft: 8,
+  },
+  statusAvatar: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: colors.white,
+    backgroundColor: colors.themeSoft,
+  },
+  statusAvatarText: {
+    fontFamily: fonts.bold,
+    fontSize: fontSizes.xs,
+    color: colors.white,
+  },
+  countChip: {
+    flexGrow: 1,
+    flexBasis: '45%',
+    backgroundColor: colors.white,
+    borderRadius: radius.lg,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    gap: 2,
+  },
+  countValue: {
+    fontFamily: fonts.extrabold,
+    fontSize: fontSizes.lg,
+    color: colors.text,
+  },
+  countLabel: {
+    fontFamily: fonts.medium,
+    fontSize: fontSizes.xs,
+    color: colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+  },
+  // Status label/count text colors for Command overview cards.
+  statusTextUnverified: {
+      color: colors.unverified,
+  },
+  statusTextVerified: {
+    color: '#16A34A',
+  },
+  statusTextEscalated: {
+    color: colors.danger,
+  },
+  statusTextResolved: {
+    color: '#4B5563',
+  },
+
+  // ---- Queue ----
+  section: {
+    gap: spacing.md,
+  },
+  sectionTitle: {
+    fontFamily: fonts.bold,
+    fontSize: fontSizes.lg,
+    color: colors.text,
+  },
+  resourceSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+  },
+  resourceSectionTitleRow: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  resourceCount: {
+    minWidth: 24,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: radius.full,
+    backgroundColor: softFill,
+    fontFamily: fonts.semibold,
+    fontSize: fontSizes.xs,
+    color: colors.themeSoft,
+    textAlign: 'center',
+  },
+  addResourceButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.text,
+  },
+  resourceCard: {
+    backgroundColor: colors.white,
+    borderRadius: radius.xl,
+    padding: spacing.md,
+    gap: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    shadowColor: '#0F2044',
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+  },
+  resourceStatusChip: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: radius.full,
+  },
+  resourceStatusChipText: {
+    fontFamily: fonts.semibold,
+    fontSize: fontSizes.xs,
+    color: colors.text,
+  },
+  resourceStatusActive: {
+    backgroundColor: '#DCFCE7',
+  },
+  resourceStatusInactive: {
+    backgroundColor: '#E5E7EB',
+  },
+  resourceStatusOpen: {
+    backgroundColor: '#DCFCE7',
+  },
+  resourceStatusFull: {
+    backgroundColor: '#FFEDD5',
+  },
+  resourceCardActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  resourceStatusActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    paddingTop: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  resourceCardAction: {
+    minHeight: 38,
+    paddingHorizontal: spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.white,
+  },
+  resourceCardActionPrimary: {
+    backgroundColor: colors.text,
+    borderColor: colors.text,
+  },
+  resourceCardActionText: {
+    fontFamily: fonts.semibold,
+    fontSize: fontSizes.xs,
+    color: colors.text,
+  },
+  resourceCardActionTextPrimary: {
+    color: colors.white,
+  },
+  evacuationManageLink: {
+    paddingVertical: spacing.sm,
+    paddingLeft: spacing.sm,
+  },
+  evacuationManageLinkText: {
+    fontFamily: fonts.semibold,
+    fontSize: fontSizes.xs,
+    color: colors.themeSoft,
+  },
+  evacuationMetrics: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  evacuationMetric: {
+    flexGrow: 1,
+    flexBasis: '45%',
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.white,
+    gap: 2,
+  },
+  evacuationMetricValue: {
+    fontFamily: fonts.extrabold,
+    fontSize: fontSizes.lg,
+    color: colors.text,
+  },
+  evacuationMetricLabel: {
+    fontFamily: fonts.medium,
+    fontSize: fontSizes.xs,
+    color: colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+  },
+  evacuationCapacityCard: {
+    borderRadius: radius.xl,
+    padding: spacing.md,
+    gap: spacing.xs,
+    backgroundColor: 'rgba(170, 192, 220, 0.25)',
+  },
+  evacuationCapacityValue: {
+    fontFamily: fonts.extrabold,
+    fontSize: fontSizes.xl,
+    color: colors.text,
+  },
+  evacuationCapacityLabel: {
+    fontFamily: fonts.semibold,
+    fontSize: fontSizes.sm,
+    color: colors.text,
+  },
+  evacuationCapacityMeta: {
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.xs,
+    color: colors.textMuted,
+  },
+  evacuationAttentionList: {
+    gap: spacing.sm,
+  },
+  evacuationAttentionTitle: {
+    fontFamily: fonts.bold,
+    fontSize: fontSizes.md,
+    color: colors.text,
+  },
+  evacuationAttentionCard: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    gap: spacing.xs,
+    backgroundColor: colors.white,
+  },
+  evacuationAttentionStatus: {
+    fontFamily: fonts.semibold,
+    fontSize: fontSizes.xs,
+    color: colors.textMuted,
+  },
+  queueCard: {
+    backgroundColor: colors.white,
+    borderRadius: radius.xl,
+    padding: spacing.md,
+    gap: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  queueCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  queueTitle: {
+    flex: 1,
+    fontFamily: fonts.bold,
+    fontSize: fontSizes.md,
+    color: colors.text,
+  },
+  queueMeta: {
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.sm,
+    color: colors.textMuted,
+    lineHeight: 18,
+  },
+  statusPill: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: radius.full,
+  },
+  statusPillText: {
+    fontFamily: fonts.semibold,
+    fontSize: fontSizes.xs,
+    color: colors.text,
+  },
+  statusUnverified: {
+    backgroundColor: '#FEE2E2',
+  },
+  statusVerified: {
+    backgroundColor: '#DCFCE7',
+  },
+  statusEscalated: {
+    backgroundColor: '#FFEDD5',
+  },
+  statusResolved: {
+    backgroundColor: '#E5E7EB',
+  },
+
+  // ---- Empty / error ----
+  stateBox: {
+    backgroundColor: colors.white,
+    borderRadius: radius.xl,
+    padding: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    gap: spacing.sm,
+    alignItems: 'center',
+  },
+  // Empty escalations message — same layout as stateBox, no gray outline.
+  stateBoxBorderless: {
+    backgroundColor: colors.white,
+    borderRadius: radius.xl,
+    padding: spacing.lg,
+    gap: spacing.sm,
+    alignItems: 'center',
+  },
+  stateTitle: {
+    fontFamily: fonts.bold,
+    fontSize: fontSizes.md,
+    color: colors.text,
+    textAlign: 'center',
+  },
+  stateBody: {
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.sm,
+    color: colors.textMuted,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  retryButton: {
+    marginTop: spacing.sm,
+    backgroundColor: colors.themeSoft,
+    borderRadius: radius.lg,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+  },
+  retryButtonText: {
+    fontFamily: fonts.semibold,
+    fontSize: fontSizes.sm,
+    color: colors.white,
+  },
+
+  // ---- Detail ----
+  detailCard: {
+    backgroundColor: colors.white,
+    borderRadius: radius.xl,
+    padding: spacing.lg,
+    gap: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  // Status actions: same spacing as detail cards, no gray outline.
+  statusActionsCard: {
+    gap: spacing.md,
+  },
+  // Verification + Timeline sit side by side; each panel expands on tap.
+  collapsibleRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+  },
+  collapsiblePanel: {
+    flex: 1,
+    minWidth: 0,
+    backgroundColor: colors.white,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: colors.border,
+    overflow: 'hidden',
+  },
+  collapsibleHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.xs,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+  },
+  collapsibleHeaderText: {
+    flex: 1,
+    fontFamily: fonts.bold,
+    fontSize: fontSizes.md,
+    color: colors.text,
+  },
+  collapsibleBody: {
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.md,
+    gap: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    paddingTop: spacing.md,
+  },
+  detailTitle: {
+    fontFamily: fonts.extrabold,
+    fontSize: fontSizes.xl,
+    color: colors.text,
+    letterSpacing: -0.3,
+  },
+  detailBody: {
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.md,
+    color: colors.text,
+    lineHeight: 22,
+  },
+  metaRow: {
+    gap: spacing.xs,
+  },
+  metaLabel: {
+    fontFamily: fonts.semibold,
+    fontSize: fontSizes.xs,
+    color: colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+  },
+  metaValue: {
+    fontFamily: fonts.medium,
+    fontSize: fontSizes.md,
+    color: colors.text,
+  },
+  mediaRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  mediaThumb: {
+    width: 96,
+    height: 96,
+    borderRadius: radius.md,
+    backgroundColor: softFill,
+    overflow: 'hidden',
+  },
+  mediaThumbImage: {
+    width: '100%',
+    height: '100%',
+  },
+  mediaVideoThumb: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  timelineItem: {
+    borderLeftWidth: 3,
+    borderLeftColor: colors.themeSoft,
+    paddingLeft: spacing.md,
+    gap: 2,
+  },
+  timelineTitle: {
+    fontFamily: fonts.semibold,
+    fontSize: fontSizes.sm,
+    color: colors.text,
+  },
+  timelineMeta: {
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.xs,
+    color: colors.textMuted,
+  },
+  timelineNote: {
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.sm,
+    color: colors.text,
+    marginTop: 2,
+  },
+
+  noteInput: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    minHeight: 88,
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.md,
+    color: colors.text,
+    backgroundColor: colors.white,
+    textAlignVertical: 'top',
+  },
+  noteHint: {
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.xs,
+    color: colors.textMuted,
+  },
+
+  actionColumn: {
+    gap: spacing.sm,
+  },
+  // Call reporter / Mark verified (and other primary status CTAs): black on white text.
+  primaryAction: {
+    backgroundColor: colors.text,
+    borderRadius: radius.lg,
+    paddingVertical: spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // Icon + masked number side by side inside the Call reporter button.
+  callReporterAction: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+  },
+  primaryActionText: {
+    fontFamily: fonts.semibold,
+    fontSize: fontSizes.md,
+    color: colors.white,
+  },
+  secondaryAction: {
+    backgroundColor: colors.white,
+    borderRadius: radius.lg,
+    paddingVertical: spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  secondaryActionText: {
+    fontFamily: fonts.semibold,
+    fontSize: fontSizes.md,
+    color: colors.text,
+  },
+  dangerAction: {
+    backgroundColor: colors.white,
+    borderRadius: radius.lg,
+    paddingVertical: spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#FDBA74',
+  },
+  dangerActionText: {
+    fontFamily: fonts.semibold,
+    fontSize: fontSizes.md,
+    color: colors.danger,
+  },
+  actionDisabled: {
+    opacity: 0.55,
+  },
+
+  readOnlyBanner: {
+    backgroundColor: softFill,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+  },
+  readOnlyText: {
+    fontFamily: fonts.medium,
+    fontSize: fontSizes.sm,
+    color: colors.textMuted,
+    textAlign: 'center',
   },
 });

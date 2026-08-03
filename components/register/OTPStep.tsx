@@ -42,7 +42,7 @@ export default function OTPStep({
       </View>
 
       <View style={styles.resendRow}>
-        <Text style={styles.resendLabel}>Didn't receive the OTP? </Text>
+        <Text style={styles.resendLabel}>Didn&apos;t receive the OTP? </Text>
         {resendCooldown > 0 ? (
           <Text style={styles.resendTimer}>Resend in {resendCooldown}s</Text>
         ) : (

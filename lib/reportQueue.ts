@@ -21,6 +21,11 @@ export type QueuedReport = {
   description: string;
   position: GpsPosition;
   addressText?: string;
+  /**
+   * Selected barangay for BDRRMO routing. Optional so older AsyncStorage
+   * queue records (pre-feature) still deserialize and sync via centroid fallback.
+   */
+  barangayId?: string;
   media: QueuedMedia[];
   status: QueuedReportStatus;
   createdAt: string;

@@ -31,6 +31,8 @@ type CreateReportPayload = {
   latitude?: number;
   longitude?: number;
   addressText?: string;
+  /** Resident-selected barangay; optional for legacy offline queue rows. */
+  barangayId?: string;
   media?: MediaItem[];
 };
 
@@ -91,6 +93,14 @@ function validateMedia(media: MediaItem[]): string | null {
   return null;
 }
 
+function isMissingBarangayAwareReportRpc(message: string): boolean {
+  const lower = message.toLowerCase();
+  return (
+    lower.includes("create_report_with_media") &&
+    (lower.includes("p_barangay_id") || lower.includes("does not exist"))
+  );
+}
+
 Deno.serve(async (req) => {
   if (req.method !== "POST") {
     return jsonResponse({ error: "Method not allowed" }, 405);
@@ -136,6 +146,7 @@ Deno.serve(async (req) => {
     "latitude",
     "longitude",
     "addressText",
+    "barangayId",
     "media",
   ]);
   if (extraFieldsError) {
@@ -145,6 +156,7 @@ Deno.serve(async (req) => {
   const title = trimText(rawPayload.title);
   const description = trimText(rawPayload.description);
   const addressText = trimText(rawPayload.addressText);
+  const barangayIdRaw = trimText(rawPayload.barangayId);
   const latitude = Number(rawPayload.latitude);
   const longitude = Number(rawPayload.longitude);
   const reportId = trimText(rawPayload.reportId);
@@ -161,6 +173,10 @@ Deno.serve(async (req) => {
   }
   if (reportId && !isUuid(reportId)) {
     return jsonResponse({ error: "Invalid report id." }, 400);
+  }
+  // Never trust a barangay name/label from the client for routing — only a UUID.
+  if (barangayIdRaw && !isUuid(barangayIdRaw)) {
+    return jsonResponse({ error: "Invalid barangay id." }, 400);
   }
   if (
     !Number.isFinite(latitude) ||
@@ -193,9 +209,33 @@ Deno.serve(async (req) => {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
+  // Validate selected barangay against the live table before creating a report.
+  let validatedBarangayId: string | null = null;
+  if (barangayIdRaw) {
+    const { data: barangayRow, error: barangayError } = await adminClient
+      .from("barangays")
+      .select("id")
+      .eq("id", barangayIdRaw)
+      .maybeSingle();
+
+    if (barangayError) {
+      console.error("create-report barangay lookup:", barangayError.message);
+      return jsonResponse({ error: GENERIC_SERVER_ERROR }, 500);
+    }
+
+    if (!barangayRow) {
+      return jsonResponse({
+        error:
+          "The selected barangay is no longer available. Please refresh and select it again.",
+      }, 400);
+    }
+
+    validatedBarangayId = barangayIdRaw;
+  }
+
   const { data: profile, error: profileError } = await adminClient
     .from("app_profiles")
-    .select("id, role")
+    .select("id, role, status")
     .eq("id", reporterId)
     .maybeSingle();
 
@@ -203,8 +243,10 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: "Profile not found. Complete registration first." }, 403);
   }
 
-  if (profile.role !== "resident") {
-    return jsonResponse({ error: "Only residents can submit from this flow." }, 403);
+  if (profile.role !== "resident" || profile.status !== "active") {
+    return jsonResponse({
+      error: "Only active resident accounts can submit from this flow.",
+    }, 403);
   }
 
   const limit = await checkReportCreateAllowed(adminClient, reporterId);
@@ -223,7 +265,7 @@ Deno.serve(async (req) => {
     durationSeconds: item.type === "video" ? Number(item.durationSeconds) : null,
   }));
 
-  const { data: createdId, error: rpcError } = await adminClient.rpc(
+  let { data: createdId, error: rpcError } = await adminClient.rpc(
     "create_report_with_media",
     {
       p_reporter_id: reporterId,
@@ -234,14 +276,35 @@ Deno.serve(async (req) => {
       p_longitude: longitude,
       p_address_text: addressText || null,
       p_media: mediaJson,
+      // Nine-arg overload: explicit id when present, null for legacy centroid fallback.
+      p_barangay_id: validatedBarangayId,
     },
   );
+
+  // Older deployed databases may not yet have the nine-argument RPC.
+  // Fall back to the established eight-argument version, which resolves the
+  // barangay from the report location until the migration is applied.
+  if (rpcError && isMissingBarangayAwareReportRpc(rpcError.message)) {
+    const fallback = await adminClient.rpc("create_report_with_media", {
+      p_reporter_id: reporterId,
+      p_report_id: reportId || null,
+      p_title: title,
+      p_description: description,
+      p_latitude: latitude,
+      p_longitude: longitude,
+      p_address_text: addressText || null,
+      p_media: mediaJson,
+    });
+    createdId = fallback.data;
+    rpcError = fallback.error;
+  }
 
   if (rpcError) {
     console.error("create-report rpc:", rpcError.message);
     const hint = rpcError.message.includes("photos") ||
         rpcError.message.includes("video") ||
-        rpcError.message.includes("duration")
+        rpcError.message.includes("duration") ||
+        rpcError.message.includes("barangay")
       ? rpcError.message
       : "Could not save your report. Check media and try again.";
     return jsonResponse({ error: hint }, 400);

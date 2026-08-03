@@ -96,6 +96,8 @@ async function syncReport(
           latitude: report.position.latitude,
           longitude: report.position.longitude,
           addressText: report.addressText || undefined,
+          // Omit for legacy queue rows so the server uses centroid fallback.
+          barangayId: report.barangayId || undefined,
           media: uploaded,
         },
       },

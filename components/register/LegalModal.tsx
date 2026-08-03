@@ -1,16 +1,16 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Modal,
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  NativeSyntheticEvent,
   NativeScrollEvent,
+  NativeSyntheticEvent,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import { registerStyles as styles, registerColors } from '../../styles/screens/register.styles';
+import { registerStyles as styles } from '../../styles/screens/register.styles';
 
-const TERMS_CONTENT = `Terms and Conditions
+export const LEGAL_INFORMATION_CONTENT = `Terms and Conditions
 
 Last updated: January 1, 2025
 
@@ -40,7 +40,7 @@ These Terms shall be governed by the laws of the Republic of the Philippines.
 
 Privacy Policy
 
-Last updated: January 1, 2025
+Last updated: July 28, 2026
 
 1. Information We Collect
 We collect the following personal data upon registration: full name, mobile phone number, barangay of residence, birth month and year, and a security PIN.
@@ -54,6 +54,9 @@ Your information is used to verify your identity, link you to your barangay's di
 4. Data Sharing
 Your personal information may be shared with authorized LGU officials of Minglanilla, Cebu solely for disaster response purposes. We do not share your data with commercial third parties.
 
+4a. Incident Contact Access
+When you submit an incident report, your registered contact number may be accessed only by authorized BDRRMO or MDRRMO personnel who are handling that specific incident, and solely for verification and coordination. Your phone number is not public, is not included in feeds, maps, or exports, and is not available in the Mayor's read-only incident view. Retention of contact-access records follows LGU/DPO-approved policy.
+
 5. Data Retention
 Your data will be retained for as long as your account is active. You may request deletion of your account and associated data by contacting your barangay administrator.
 
@@ -66,13 +69,41 @@ We implement reasonable technical and organizational measures to protect your pe
 8. Contact
 For privacy-related concerns, contact your barangay administrator or the DisasterLink system administrator.`;
 
+const PRIVACY_START = LEGAL_INFORMATION_CONTENT.indexOf('\nPrivacy Policy');
+
+export const TERMS_INFORMATION_CONTENT = LEGAL_INFORMATION_CONTENT.slice(
+  0,
+  PRIVACY_START,
+);
+
+export const PRIVACY_NOTICE_CONTENT = LEGAL_INFORMATION_CONTENT.slice(
+  PRIVACY_START + 1,
+);
+
 type LegalModalProps = {
   visible: boolean;
   onAccept: () => void;
+  title?: string;
+  content?: string;
+  actionLabel?: string;
+  requireRead?: boolean;
+  onClose?: () => void;
 };
 
-export default function LegalModal({ visible, onAccept }: LegalModalProps) {
+export default function LegalModal({
+  visible,
+  onAccept,
+  title = 'Terms & Conditions and Privacy Policy',
+  content = LEGAL_INFORMATION_CONTENT,
+  actionLabel = 'I have read and agree',
+  requireRead = true,
+  onClose,
+}: LegalModalProps) {
   const [hasScrolledToBottom, setHasScrolledToBottom] = useState(false);
+
+  useEffect(() => {
+    if (visible) setHasScrolledToBottom(!requireRead);
+  }, [requireRead, visible]);
 
   function handleScroll(e: NativeSyntheticEvent<NativeScrollEvent>) {
     const { layoutMeasurement, contentOffset, contentSize } = e.nativeEvent;
@@ -85,7 +116,12 @@ export default function LegalModal({ visible, onAccept }: LegalModalProps) {
       <View style={styles.modalOverlay}>
         <View style={styles.legalModalSheet}>
           <View style={styles.legalModalHeader}>
-            <Text style={styles.legalModalTitle}>Terms & Conditions and Privacy Policy</Text>
+            <Text style={styles.legalModalTitle}>{title}</Text>
+            {onClose ? (
+              <TouchableOpacity style={styles.legalModalClose} onPress={onClose}>
+                <Text style={styles.legalModalTitle}>×</Text>
+              </TouchableOpacity>
+            ) : null}
           </View>
 
           <ScrollView
@@ -95,11 +131,11 @@ export default function LegalModal({ visible, onAccept }: LegalModalProps) {
             scrollEventThrottle={16}
             showsVerticalScrollIndicator
           >
-            <Text style={styles.legalModalBody}>{TERMS_CONTENT}</Text>
+            <Text style={styles.legalModalBody}>{content}</Text>
             <View style={styles.legalModalScrollAnchor} />
           </ScrollView>
 
-          {!hasScrolledToBottom && (
+          {requireRead && !hasScrolledToBottom && (
             <View style={styles.legalScrollHint}>
               <Text style={styles.legalScrollHintText}>Scroll to the bottom to continue</Text>
             </View>
@@ -108,18 +144,18 @@ export default function LegalModal({ visible, onAccept }: LegalModalProps) {
           <TouchableOpacity
             style={[
               styles.legalAcceptButton,
-              !hasScrolledToBottom && styles.legalAcceptButtonDisabled,
+              requireRead && !hasScrolledToBottom && styles.legalAcceptButtonDisabled,
             ]}
             onPress={onAccept}
-            disabled={!hasScrolledToBottom}
+            disabled={requireRead && !hasScrolledToBottom}
           >
             <Text
               style={[
                 styles.legalAcceptButtonText,
-                !hasScrolledToBottom && styles.legalAcceptButtonTextDisabled,
+                requireRead && !hasScrolledToBottom && styles.legalAcceptButtonTextDisabled,
               ]}
             >
-              I have read and agree
+              {actionLabel}
             </Text>
           </TouchableOpacity>
         </View>

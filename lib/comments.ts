@@ -12,6 +12,7 @@ export type ReportComment = {
   parentCommentId: string | null;
   createdAt: string;
   replyCount: number;
+  isHidden: boolean;
   author: MapReportReporter;
 };
 
@@ -31,6 +32,7 @@ function mapCommentRow(row: Record<string, unknown>): ReportComment {
       : null,
     createdAt: String(row.created_at ?? ''),
     replyCount: Number(row.reply_count ?? 0),
+    isHidden: Boolean(row.is_hidden),
     author: {
       id: String(row.user_id ?? ''),
       firstName: String(row.author_first_name ?? ''),
@@ -52,15 +54,17 @@ const COMMENT_SELECT =
 export async function fetchTopLevelComments(
   reportId: string,
   limit: number,
+  includeHidden = false,
 ): Promise<CommentPage> {
-  const { data, error, count } = await supabase
+  let query = supabase
     .from('report_comments')
     .select(COMMENT_SELECT, { count: 'exact' })
     .eq('report_id', reportId)
-    .eq('is_hidden', false)
     .is('parent_comment_id', null)
     .order('created_at', { ascending: false })
     .range(0, Math.max(0, limit - 1));
+  if (!includeHidden) query = query.eq('is_hidden', false);
+  const { data, error, count } = await query;
 
   if (error) return { comments: [], total: 0, error: error.message };
   return {
@@ -80,15 +84,17 @@ export async function fetchCommentReplies(
   reportId: string,
   parentCommentId: string,
   limit: number,
+  includeHidden = false,
 ): Promise<CommentPage> {
-  const { data, error, count } = await supabase
+  let query = supabase
     .from('report_comments')
     .select(COMMENT_SELECT, { count: 'exact' })
     .eq('report_id', reportId)
     .eq('parent_comment_id', parentCommentId)
-    .eq('is_hidden', false)
     .order('created_at', { ascending: true })
     .range(0, Math.max(0, limit - 1));
+  if (!includeHidden) query = query.eq('is_hidden', false);
+  const { data, error, count } = await query;
 
   if (error) return { comments: [], total: 0, error: error.message };
   return {

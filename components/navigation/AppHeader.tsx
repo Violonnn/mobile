@@ -41,7 +41,7 @@ type AppHeaderProps = {
 };
 
 /** Minimalist placeholder shown when notifications are tapped (no data yet). */
-function NotificationsPlaceholder({
+export function NotificationsPlaceholder({
   visible,
   onClose,
 }: {
@@ -64,7 +64,7 @@ function NotificationsPlaceholder({
           </View>
           <Text style={styles.notifTitle}>Notifications</Text>
           <Text style={styles.notifSubtitle}>
-            You're all caught up. Nothing here yet.
+            You&apos;re all caught up. Nothing here yet.
           </Text>
           <TouchableOpacity
             style={styles.notifCloseButton}

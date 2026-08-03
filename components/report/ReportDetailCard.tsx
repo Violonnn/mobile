@@ -139,7 +139,7 @@ export function CollageCellContent({ item }: { item: ReportMediaAttachment }) {
  *  - 5+: 2x2 grid with a "+N" overlay on the last cell (same as the map
  *    marker cluster count) — tapping it opens the full gallery.
  */
-function MediaCollage({
+export function MediaCollage({
   media,
   onOpenPreview,
   onOpenGallery,
@@ -232,25 +232,29 @@ function MediaCollage({
 }
 
 /**
- * Upvote + comment actions with live counts. Upvotes toggle optimistically via
- * the nearest ReportEngagementProvider (falls back to read-only counts without
- * one). The comment button calls onCommentPress so the parent can open the
- * report's details and jump straight to the inline comments section.
+ * Shared share / upvote / comment row used by report and announcement posts.
+ * Parents supply counts + handlers so report and announcement engagement can
+ * reuse the same presentation without sharing a data provider.
  */
-export function EngagementActions({
-  report,
+export function EngagementActionsRow({
+  upvoteCount,
+  commentCount,
+  hasUpvoted,
+  disabled = false,
   compact = false,
   hideShare = false,
+  onToggleUpvote,
   onCommentPress,
 }: {
-  report: MapReportMarker;
+  upvoteCount: number;
+  commentCount: number;
+  hasUpvoted: boolean;
+  disabled?: boolean;
   compact?: boolean;
   hideShare?: boolean;
+  onToggleUpvote?: () => void;
   onCommentPress?: () => void;
 }) {
-  const { getState, toggleUpvote } = useReportEngagement();
-  const { upvoteCount, commentCount, hasUpvoted } = getState(report);
-
   return (
     <View style={[reportDetailStyles.engagementRow, compact && reportDetailStyles.engagementRowCompact]}>
       {!hideShare ? (
@@ -274,13 +278,13 @@ export function EngagementActions({
         onPress={(event) => {
           // Keep parent Pressable/TouchableOpacity (feed card / map list) from firing.
           event.stopPropagation?.();
-          if (report.isPending) return;
-          toggleUpvote(report);
+          if (disabled) return;
+          onToggleUpvote?.();
         }}
-        disabled={report.isPending}
+        disabled={disabled}
         accessibilityRole="button"
         accessibilityLabel={hasUpvoted ? 'Remove upvote' : 'Upvote'}
-        accessibilityState={{ selected: hasUpvoted, disabled: Boolean(report.isPending) }}
+        accessibilityState={{ selected: hasUpvoted, disabled }}
       >
         <Ionicons
           name={hasUpvoted ? 'arrow-up-circle' : 'arrow-up-outline'}
@@ -303,13 +307,13 @@ export function EngagementActions({
         activeOpacity={0.7}
         onPress={(event) => {
           event.stopPropagation?.();
-          if (report.isPending) return;
+          if (disabled) return;
           onCommentPress?.();
         }}
-        disabled={report.isPending}
+        disabled={disabled}
         accessibilityRole="button"
         accessibilityLabel="Comment"
-        accessibilityState={{ disabled: Boolean(report.isPending) }}
+        accessibilityState={{ disabled }}
       >
         <Ionicons
           name="chatbubble-outline"
@@ -324,7 +328,41 @@ export function EngagementActions({
   );
 }
 
-function VerticalAttachmentList({
+/**
+ * Upvote + comment actions with live counts. Upvotes toggle optimistically via
+ * the nearest ReportEngagementProvider (falls back to read-only counts without
+ * one). The comment button calls onCommentPress so the parent can open the
+ * report's details and jump straight to the inline comments section.
+ */
+export function EngagementActions({
+  report,
+  compact = false,
+  hideShare = false,
+  onCommentPress,
+}: {
+  report: MapReportMarker;
+  compact?: boolean;
+  hideShare?: boolean;
+  onCommentPress?: () => void;
+}) {
+  const { getState, toggleUpvote } = useReportEngagement();
+  const { upvoteCount, commentCount, hasUpvoted } = getState(report);
+
+  return (
+    <EngagementActionsRow
+      upvoteCount={upvoteCount}
+      commentCount={commentCount}
+      hasUpvoted={hasUpvoted}
+      disabled={Boolean(report.isPending)}
+      compact={compact}
+      hideShare={hideShare}
+      onToggleUpvote={() => toggleUpvote(report)}
+      onCommentPress={onCommentPress}
+    />
+  );
+}
+
+export function VerticalAttachmentList({
   media,
   onOpenPreview,
 }: {
@@ -394,8 +432,15 @@ function PostOverflowMenu() {
 /**
  * Post header: avatar + reporter name (published time right next to it) with
  * the full location under them, and a three-dot overflow menu on the right.
+ * Official community cards can also show the report status beside the date.
  */
-function ReportMetaHeader({ report }: { report: MapReportMarker }) {
+function ReportMetaHeader({
+  report,
+  showStatus = false,
+}: {
+  report: MapReportMarker;
+  showStatus?: boolean;
+}) {
   return (
     <View style={reportDetailStyles.metaBlock}>
       <View style={reportDetailStyles.reporterRow}>
@@ -408,6 +453,18 @@ function ReportMetaHeader({ report }: { report: MapReportMarker }) {
             <Text style={reportDetailStyles.publishedDate}>
               {formatPublishedAt(report.created_at)}
             </Text>
+            {showStatus ? (
+              <View
+                style={[
+                  reportDetailStyles.statusPillSmall,
+                  statusStyle(report.status),
+                ]}
+              >
+                <Text style={reportDetailStyles.statusTextSmall}>
+                  {statusLabel(report.status)}
+                </Text>
+              </View>
+            ) : null}
           </View>
           {/* Full location — wraps to more lines instead of truncating. */}
           <Text style={reportDetailStyles.reporterLocation}>
@@ -420,7 +477,8 @@ function ReportMetaHeader({ report }: { report: MapReportMarker }) {
   );
 }
 
-function ReportMediaPreviewModal({
+/** Full-screen photo/video viewer shared by feed cards and official report ops. */
+export function ReportMediaPreviewModal({
   preview,
   onClose,
 }: {
@@ -484,6 +542,8 @@ type ReportDetailContentProps = {
    * details (if not already open) and scroll down to the comments section.
    */
   onRequestComments?: () => void;
+  /** Show the report status pill beside the published date (official community). */
+  showStatus?: boolean;
 };
 
 /**
@@ -499,6 +559,7 @@ export function ReportDetailContent({
   onShowingAllMediaChange,
   onRequestExpand,
   onRequestComments,
+  showStatus = false,
 }: ReportDetailContentProps) {
   const [internalShowingAllMedia, setInternalShowingAllMedia] = useState(false);
   const showingAllMedia = controlledShowingAllMedia ?? internalShowingAllMedia;
@@ -509,7 +570,7 @@ export function ReportDetailContent({
 
   return (
     <View style={reportDetailStyles.detailBody}>
-      <ReportMetaHeader report={report} />
+      <ReportMetaHeader report={report} showStatus={showStatus} />
 
       {report.media.length > 0 ? (
         showingAllMedia ? (
@@ -521,6 +582,12 @@ export function ReportDetailContent({
             onOpenGallery={handleOpenGallery}
           />
         )
+      ) : null}
+
+      {report.mediaError ? (
+        <Text style={reportDetailStyles.detailRefreshError}>
+          {report.mediaError}
+        </Text>
       ) : null}
 
       <EngagementActions report={report} onCommentPress={onRequestComments} />
@@ -883,7 +950,8 @@ export const reportDetailStyles = StyleSheet.create({
   },
   nameDateRow: {
     flexDirection: 'row',
-    alignItems: 'baseline',
+    alignItems: 'center',
+    flexWrap: 'wrap',
     gap: spacing.sm,
     minWidth: 0,
   },

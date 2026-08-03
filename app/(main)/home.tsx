@@ -17,11 +17,14 @@ import WelcomeModal from '../../components/ui/WelcomeModal';
 import HomeMapPreview from '../../components/home/HomeMapPreview';
 import { getActiveSession } from '../../lib/auth';
 import { fetchMyProfile } from '../../lib/profile';
-
-// UI-only placeholders. Real feeds arrive later; keep these empty so the
-// screen renders its soft empty states.
-const ANNOUNCEMENTS: unknown[] = [];
-const HAPPENING_NEAR_YOU: unknown[] = [];
+import { useAnnouncements } from '../../hooks/useAnnouncements';
+import { useResources } from '../../hooks/useResources';
+import {
+  facilityTypeLabel,
+  hotlineCategoryLabel,
+  openHotlineDialer,
+} from '../../lib/resources';
+import { formatPublishedAt } from '../../lib/formatTime';
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -32,6 +35,19 @@ export default function HomeScreen() {
   const [firstName, setFirstName] = useState('');
   const [barangay, setBarangay] = useState('');
   const [showWelcome, setShowWelcome] = useState(false);
+
+  const {
+    announcements,
+    loading: announcementsLoading,
+    error: announcementsError,
+  } = useAnnouncements({ limit: 5 });
+
+  const {
+    hotlines,
+    facilities,
+    loading: resourcesLoading,
+    error: resourcesError,
+  } = useResources({ mode: 'resident' });
 
   const loadSession = useCallback(async () => {
     setLoading(true);
@@ -85,6 +101,10 @@ export default function HomeScreen() {
   const goToFeed = () => router.push('/(main)/feed');
   const goToMap = () => router.push('/(main)/map');
 
+  const visibleHotlines = hotlines.slice(0, 5);
+  const visibleFacilities = facilities.slice(0, 5);
+  const visibleAnnouncements = announcements.slice(0, 3);
+
   return (
     <View style={styles.container}>
       {/* Light status bar icons — matches the white text on the themed header. */}
@@ -115,12 +135,60 @@ export default function HomeScreen() {
               </TouchableOpacity>
             </View>
 
-            {ANNOUNCEMENTS.length === 0 && (
+            {announcementsLoading ? (
+              <View style={styles.emptyCard}>
+                <ActivityIndicator color={homeColors.headerMuted} />
+              </View>
+            ) : null}
+
+            {!announcementsLoading && announcementsError ? (
+              <View style={styles.emptyCard}>
+                <Ionicons name="warning-outline" size={18} color={homeColors.headerMuted} />
+                <Text style={styles.emptyTitle}>Could not load announcements</Text>
+              </View>
+            ) : null}
+
+            {!announcementsLoading &&
+              !announcementsError &&
+              visibleAnnouncements.length === 0 ? (
               <View style={styles.emptyCard}>
                 <Ionicons name="megaphone-outline" size={18} color={homeColors.headerMuted} />
                 <Text style={styles.emptyTitle}>No announcements yet</Text>
               </View>
-            )}
+            ) : null}
+
+            {!announcementsLoading &&
+              !announcementsError &&
+              visibleAnnouncements.map((item) => (
+                <TouchableOpacity
+                  key={item.id}
+                  style={styles.emptyCard}
+                  activeOpacity={0.85}
+                  onPress={goToFeed}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Open announcement ${item.title}`}
+                >
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <Text style={styles.emptyTitle} numberOfLines={1}>
+                      {item.isPinned ? '[Pinned] ' : ''}
+                      {item.title}
+                    </Text>
+                    <Text
+                      style={{ color: homeColors.headerMuted, fontSize: 12 }}
+                      numberOfLines={2}
+                    >
+                      {item.body}
+                    </Text>
+                    {item.createdAt ? (
+                      <Text
+                        style={{ color: homeColors.headerMuted, fontSize: 11 }}
+                      >
+                        {formatPublishedAt(item.createdAt)}
+                      </Text>
+                    ) : null}
+                  </View>
+                </TouchableOpacity>
+              ))}
           </View>
         </AppHeader>
 
@@ -140,12 +208,10 @@ export default function HomeScreen() {
               </TouchableOpacity>
             </View>
 
-            {HAPPENING_NEAR_YOU.length === 0 && (
-              <View style={styles.emptyCardDark}>
-                <Ionicons name="pulse-outline" size={18} color={colors.textMuted} />
-                <Text style={styles.emptyTitleDark}>Nothing nearby right now</Text>
-              </View>
-            )}
+            <View style={styles.emptyCardDark}>
+              <Ionicons name="pulse-outline" size={18} color={colors.textMuted} />
+              <Text style={styles.emptyTitleDark}>Check the map for nearby reports</Text>
+            </View>
 
             <HomeMapPreview />
           </View>
@@ -165,10 +231,55 @@ export default function HomeScreen() {
               </TouchableOpacity>
             </View>
 
-            <View style={styles.emptyCardDark}>
-              <Ionicons name="call-outline" size={18} color={colors.textMuted} />
-              <Text style={styles.emptyTitleDark}>No hotlines added yet</Text>
-            </View>
+            {resourcesLoading ? (
+              <View style={styles.emptyCardDark}>
+                <ActivityIndicator color={colors.textMuted} />
+              </View>
+            ) : null}
+
+            {!resourcesLoading && resourcesError ? (
+              <View style={styles.emptyCardDark}>
+                <Ionicons name="warning-outline" size={18} color={colors.textMuted} />
+                <Text style={styles.emptyTitleDark}>Could not load hotlines</Text>
+              </View>
+            ) : null}
+
+            {!resourcesLoading &&
+              !resourcesError &&
+              visibleHotlines.length === 0 ? (
+              <View style={styles.emptyCardDark}>
+                <Ionicons name="call-outline" size={18} color={colors.textMuted} />
+                <Text style={styles.emptyTitleDark}>No hotlines added yet</Text>
+              </View>
+            ) : null}
+
+            {!resourcesLoading &&
+              !resourcesError &&
+              visibleHotlines.map((hotline) => (
+                <TouchableOpacity
+                  key={hotline.id}
+                  style={styles.emptyCardDark}
+                  activeOpacity={0.85}
+                  onPress={() => {
+                    // Hotlines without a linked facility open the dialer, not a fake map pin.
+                    if (!hotline.facilityId) {
+                      void openHotlineDialer(hotline.number);
+                      return;
+                    }
+                    goToMap();
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Call ${hotline.name}`}
+                >
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <Text style={styles.emptyTitleDark}>{hotline.name}</Text>
+                    <Text style={{ color: colors.textMuted, fontSize: 12 }}>
+                      {hotline.number} · {hotlineCategoryLabel(hotline.category)}
+                    </Text>
+                  </View>
+                  <Ionicons name="call" size={18} color={colors.themeSoft} />
+                </TouchableOpacity>
+              ))}
           </View>
 
           <View style={styles.happeningSection}>
@@ -186,10 +297,42 @@ export default function HomeScreen() {
               </TouchableOpacity>
             </View>
 
-            <View style={styles.emptyCardDark}>
-              <Ionicons name="business-outline" size={18} color={colors.textMuted} />
-              <Text style={styles.emptyTitleDark}>No facilities added yet</Text>
-            </View>
+            {resourcesLoading ? (
+              <View style={styles.emptyCardDark}>
+                <ActivityIndicator color={colors.textMuted} />
+              </View>
+            ) : null}
+
+            {!resourcesLoading &&
+              !resourcesError &&
+              visibleFacilities.length === 0 ? (
+              <View style={styles.emptyCardDark}>
+                <Ionicons name="business-outline" size={18} color={colors.textMuted} />
+                <Text style={styles.emptyTitleDark}>No facilities added yet</Text>
+              </View>
+            ) : null}
+
+            {!resourcesLoading &&
+              !resourcesError &&
+              visibleFacilities.map((facility) => (
+                <TouchableOpacity
+                  key={facility.id}
+                  style={styles.emptyCardDark}
+                  activeOpacity={0.85}
+                  onPress={goToMap}
+                  accessibilityRole="button"
+                  accessibilityLabel={`View ${facility.name} on map`}
+                >
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <Text style={styles.emptyTitleDark}>{facility.name}</Text>
+                    <Text style={{ color: colors.textMuted, fontSize: 12 }}>
+                      {facilityTypeLabel(facility.type)}
+                      {facility.address ? ` · ${facility.address}` : ''}
+                    </Text>
+                  </View>
+                  <Ionicons name="map-outline" size={18} color={colors.themeSoft} />
+                </TouchableOpacity>
+              ))}
           </View>
         </View>
       </ScrollView>

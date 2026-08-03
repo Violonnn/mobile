@@ -11,6 +11,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
+  Image,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
 } from 'react-native';
@@ -20,7 +21,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { ReportDetailCard } from '../../components/report/ReportDetailCard';
 import { ReportEngagementProvider } from '../../components/report/ReportEngagementProvider';
 import { useReports } from '../../hooks/useReports';
+import { useAnnouncements } from '../../hooks/useAnnouncements';
 import { type MapReportMarker } from '../../lib/reports';
+import { formatPublishedAt } from '../../lib/formatTime';
 import { tabStyles as styles } from '../../styles/screens/tab.styles';
 import { colors, spacing } from '../../styles/theme';
 
@@ -60,6 +63,12 @@ export default function FeedScreen() {
   const insets = useSafeAreaInsets();
   // No live subscription here — the feed refreshes via pull-to-refresh.
   const { reports, error, loading, reload } = useReports({ realtime: false });
+  const {
+    announcements,
+    error: announcementsError,
+    loading: announcementsLoading,
+    refresh: refreshAnnouncements,
+  } = useAnnouncements({ limit: 10 });
   const [sortMode, setSortMode] = useState<SortMode>('latest');
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [refreshing, setRefreshing] = useState(false);
@@ -97,7 +106,7 @@ export default function FeedScreen() {
   // triggers a full feed refresh; pagination restarts from the first page.
   const handleRefresh = async () => {
     setRefreshing(true);
-    await reload();
+    await Promise.all([reload(), refreshAnnouncements()]);
     setVisibleCount(PAGE_SIZE);
     setRefreshing(false);
   };
@@ -136,10 +145,58 @@ export default function FeedScreen() {
       >
         <View style={styles.section}>
           <Text style={styles.sectionHeading}>Announcement</Text>
-          <View style={styles.emptyBlockPlain}>
-            <Ionicons name="megaphone-outline" size={18} color={colors.text} />
-            <Text style={styles.emptyLinePlain}>No announcements yet</Text>
-          </View>
+          {announcementsLoading && announcements.length === 0 ? (
+            <View style={styles.emptyBlockPlain}>
+              <ActivityIndicator color={colors.themeSoft} />
+            </View>
+          ) : null}
+          {!announcementsLoading && announcementsError ? (
+            <View style={styles.emptyBlockPlain}>
+              <Ionicons name="warning-outline" size={18} color={colors.text} />
+              <Text style={styles.emptyLinePlain}>Could not load announcements</Text>
+            </View>
+          ) : null}
+          {!announcementsLoading &&
+            !announcementsError &&
+            announcements.length === 0 ? (
+            <View style={styles.emptyBlockPlain}>
+              <Ionicons name="megaphone-outline" size={18} color={colors.text} />
+              <Text style={styles.emptyLinePlain}>No announcements yet</Text>
+            </View>
+          ) : null}
+          {!announcementsError &&
+            announcements.map((item) => (
+              <View key={item.id} style={styles.emptyBlockPlain}>
+                <View style={{ flex: 1, gap: 4 }}>
+                  <Text style={styles.emptyLinePlain} numberOfLines={2}>
+                    {item.isPinned ? '[Pinned] ' : ''}
+                    {item.title}
+                  </Text>
+                  <Text
+                    style={[styles.emptyLinePlain, { opacity: 0.75 }]}
+                    numberOfLines={3}
+                  >
+                    {item.body}
+                  </Text>
+                  {item.createdAt ? (
+                    <Text style={[styles.emptyLinePlain, { opacity: 0.6 }]}>
+                      {formatPublishedAt(item.createdAt)}
+                    </Text>
+                  ) : null}
+                  {item.media.length > 0 ? (
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, marginTop: 8 }}>
+                      {item.media.map((media) => media.type === 'photo' ? (
+                        <Image key={media.id} source={{ uri: media.url }} style={{ width: 120, height: 84, borderRadius: 12 }} />
+                      ) : (
+                        <View key={media.id} style={{ width: 120, height: 84, borderRadius: 12, backgroundColor: colors.text, alignItems: 'center', justifyContent: 'center' }}>
+                          <Ionicons name="play" size={22} color={colors.white} />
+                        </View>
+                      ))}
+                    </ScrollView>
+                  ) : null}
+                </View>
+              </View>
+            ))}
         </View>
 
         <View style={styles.section}>
@@ -209,7 +266,7 @@ export default function FeedScreen() {
                   <Text style={styles.loadMoreHint}>Scroll for more</Text>
                 </View>
               ) : (
-                <Text style={styles.feedEndNote}>You're all caught up</Text>
+                <Text style={styles.feedEndNote}>You&apos;re all caught up</Text>
               )}
             </>
           )}

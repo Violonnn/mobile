@@ -110,7 +110,7 @@ export default function PINStep({
       <View style={styles.pinHintRow}>
         <Ionicons name="information-circle-outline" size={14} color="#9CA3AF" />
         <Text style={styles.pinHintText}>
-          Choose a PIN you'll remember. You'll use this every time you log in.
+          Choose a PIN you&apos;ll remember. You&apos;ll use this every time you log in.
         </Text>
       </View>
 

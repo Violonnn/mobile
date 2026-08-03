@@ -43,7 +43,7 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "DisasterLink uses your location to pin emergency reports on the map."
+          "locationWhenInUsePermission": "DisasterLink uses your location to place emergency reports and official resource pins on the map."
         }
       ],
       [
