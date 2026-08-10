@@ -7,14 +7,18 @@ import {
   Pressable,
   RefreshControl,
   ScrollView,
+  StyleSheet,
   Text,
   TouchableOpacity,
   useWindowDimensions,
   View,
+  type StyleProp,
+  type ViewStyle,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
+  CollageCellContent,
   EngagementActionsRow,
   MediaCollage,
   ReportMediaPreviewModal,
@@ -32,7 +36,7 @@ import {
 import { formatPublishedAt } from '../../lib/formatTime';
 import type { ReportMediaAttachment } from '../../lib/reports';
 import { useKeyboardHeight } from '../../hooks/useKeyboardHeight';
-import { colors, spacing } from '../../styles/theme';
+import { colors, fonts, fontSizes, radius, spacing } from '../../styles/theme';
 import { officialNavMetrics } from '../../styles/components/officialBottomNav.styles';
 
 const BOTTOM_NAV_CLEARANCE = officialNavMetrics.barHeight + spacing.sm;
@@ -153,12 +157,116 @@ function AnnouncementDetailContent({
   );
 }
 
+/**
+ * Smaller resident-home card. The expanded sheet remains the shared official
+ * announcement detail view, while this layout keeps Home compact and media-led.
+ */
+function ResidentAnnouncementCompactContent({
+  announcement,
+  onRequestExpand,
+  onRequestComments,
+}: {
+  announcement: AnnouncementRecord;
+  onRequestExpand: () => void;
+  onRequestComments: () => void;
+}) {
+  const { getState, toggleUpvote } = useAnnouncementEngagement();
+  const { upvoteCount, commentCount, hasUpvoted } = getState(announcement);
+  const media = announcement.media.map(toReportMedia);
+  const firstMedia = media[0] ?? null;
+  const displayName = formatAnnouncementAuthorName(announcement.author);
+  const message = [announcement.title.trim(), announcement.body.trim()]
+    .filter(Boolean)
+    .join('\n');
+
+  return (
+    <View style={residentStyles.content}>
+      <View style={residentStyles.mediaFrame}>
+        <View style={residentStyles.mediaClip}>
+          {firstMedia ? (
+            <CollageCellContent item={firstMedia} />
+          ) : (
+            <View style={residentStyles.mediaPlaceholder}>
+              <Ionicons name="megaphone-outline" size={26} color={colors.textMuted} />
+            </View>
+          )}
+        </View>
+
+        {media.length > 0 ? (
+          <View style={residentStyles.mediaCount}>
+            <Ionicons name="images-outline" size={13} color={colors.white} />
+            <Text style={residentStyles.mediaCountText}>{media.length}</Text>
+          </View>
+        ) : null}
+
+        <View style={residentStyles.avatarOverlay} pointerEvents="none">
+          <ReporterAvatar
+            reporter={{
+              id: announcement.author.id,
+              firstName: announcement.author.firstName,
+              lastName: announcement.author.lastName,
+              middleName: announcement.author.middleName,
+            }}
+            size={44}
+          />
+        </View>
+      </View>
+
+      <View style={residentStyles.detailsSection}>
+        <View style={residentStyles.authorActionRow}>
+          <View style={residentStyles.authorBlock}>
+            <Text style={residentStyles.authorName} numberOfLines={1}>
+              {displayName}
+            </Text>
+            <Text style={residentStyles.authorRole} numberOfLines={1}>
+              {announcement.author.roleLabel}
+              {announcement.createdAt ? ` · ${formatPublishedAt(announcement.createdAt)}` : ''}
+            </Text>
+          </View>
+
+          <EngagementActionsRow
+            upvoteCount={upvoteCount}
+            commentCount={commentCount}
+            hasUpvoted={hasUpvoted}
+            compact
+            onToggleUpvote={() => toggleUpvote(announcement)}
+            onCommentPress={onRequestComments}
+          />
+        </View>
+
+        <View style={residentStyles.messageBlock}>
+          <Text style={residentStyles.message} numberOfLines={3} ellipsizeMode="tail">
+            {message || 'No description provided.'}
+          </Text>
+        </View>
+
+        <TouchableOpacity
+          style={residentStyles.moreAction}
+          onPress={(event) => {
+            event.stopPropagation?.();
+            onRequestExpand();
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="Read the full announcement"
+        >
+          <Text style={residentStyles.moreText}>Read more</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
 export default function OfficialAnnouncementPostCard({
   announcement,
   moderationMode = 'none',
+  cardStyle,
+  variant = 'default',
 }: {
   announcement: AnnouncementRecord;
   moderationMode?: 'none' | 'scoped';
+  /** Lets horizontally scrolling resident cards keep the shared post layout. */
+  cardStyle?: StyleProp<ViewStyle>;
+  variant?: 'default' | 'residentCompact';
 }) {
   const [expanded, setExpanded] = useState(false);
   const [focusComments, setFocusComments] = useState(false);
@@ -210,14 +318,22 @@ export default function OfficialAnnouncementPostCard({
   return (
     <>
       <Pressable
-        style={reportDetailStyles.feedCard}
+        style={[reportDetailStyles.feedCard, cardStyle]}
         onPress={() => openExpanded(false)}
       >
-        <AnnouncementDetailContent
-          announcement={announcement}
-          onRequestExpand={() => openExpanded(false)}
-          onRequestComments={() => openExpanded(true)}
-        />
+        {variant === 'residentCompact' ? (
+          <ResidentAnnouncementCompactContent
+            announcement={announcement}
+            onRequestExpand={() => openExpanded(false)}
+            onRequestComments={() => openExpanded(true)}
+          />
+        ) : (
+          <AnnouncementDetailContent
+            announcement={announcement}
+            onRequestExpand={() => openExpanded(false)}
+            onRequestComments={() => openExpanded(true)}
+          />
+        )}
       </Pressable>
 
       <Modal
@@ -310,3 +426,95 @@ export default function OfficialAnnouncementPostCard({
     </>
   );
 }
+
+const residentStyles = StyleSheet.create({
+  content: {
+    flex: 1,
+  },
+  mediaFrame: {
+    flex: 3,
+    minHeight: 0,
+    position: 'relative',
+  },
+  mediaClip: {
+    flex: 1,
+    overflow: 'hidden',
+    backgroundColor: colors.background,
+  },
+  mediaPlaceholder: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mediaCount: {
+    position: 'absolute',
+    top: spacing.xs,
+    right: spacing.xs,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: spacing.xs,
+    paddingVertical: 3,
+    borderRadius: radius.full,
+    backgroundColor: 'rgba(17, 24, 39, 0.72)',
+  },
+  mediaCountText: {
+    fontFamily: fonts.semibold,
+    fontSize: fontSizes.xs,
+    color: colors.white,
+  },
+  avatarOverlay: {
+    position: 'absolute',
+    left: spacing.md,
+    bottom: spacing.sm,
+  },
+  detailsSection: {
+    flex: 2.25,
+    justifyContent: 'space-between',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.xs,
+  },
+  authorActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  authorBlock: {
+    flex: 1,
+    minWidth: 0,
+    gap: 1,
+  },
+  authorName: {
+    fontFamily: fonts.bold,
+    fontSize: fontSizes.md,
+    color: colors.text,
+  },
+  authorRole: {
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.xs,
+    color: colors.textMuted,
+  },
+  messageBlock: {
+    gap: 1,
+  },
+  message: {
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.sm,
+    lineHeight: 18,
+    color: colors.text,
+  },
+  moreText: {
+    fontFamily: fonts.semibold,
+    fontSize: fontSizes.md,
+    color: colors.text,
+  },
+  moreAction: {
+    alignSelf: 'flex-end',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingVertical: 2,
+  },
+});

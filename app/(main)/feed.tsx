@@ -11,7 +11,6 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
-  Image,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
 } from 'react-native';
@@ -20,10 +19,11 @@ import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { ReportDetailCard } from '../../components/report/ReportDetailCard';
 import { ReportEngagementProvider } from '../../components/report/ReportEngagementProvider';
+import { AnnouncementEngagementProvider } from '../../components/official/AnnouncementEngagementProvider';
+import OfficialAnnouncementPostCard from '../../components/official/OfficialAnnouncementPostCard';
 import { useReports } from '../../hooks/useReports';
 import { useAnnouncements } from '../../hooks/useAnnouncements';
 import { type MapReportMarker } from '../../lib/reports';
-import { formatPublishedAt } from '../../lib/formatTime';
 import { tabStyles as styles } from '../../styles/screens/tab.styles';
 import { colors, spacing } from '../../styles/theme';
 
@@ -164,39 +164,16 @@ export default function FeedScreen() {
               <Text style={styles.emptyLinePlain}>No announcements yet</Text>
             </View>
           ) : null}
-          {!announcementsError &&
-            announcements.map((item) => (
-              <View key={item.id} style={styles.emptyBlockPlain}>
-                <View style={{ flex: 1, gap: 4 }}>
-                  <Text style={styles.emptyLinePlain} numberOfLines={2}>
-                    {item.isPinned ? '[Pinned] ' : ''}
-                    {item.title}
-                  </Text>
-                  <Text
-                    style={[styles.emptyLinePlain, { opacity: 0.75 }]}
-                    numberOfLines={3}
-                  >
-                    {item.body}
-                  </Text>
-                  {item.createdAt ? (
-                    <Text style={[styles.emptyLinePlain, { opacity: 0.6 }]}>
-                      {formatPublishedAt(item.createdAt)}
-                    </Text>
-                  ) : null}
-                  {item.media.length > 0 ? (
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, marginTop: 8 }}>
-                      {item.media.map((media) => media.type === 'photo' ? (
-                        <Image key={media.id} source={{ uri: media.url }} style={{ width: 120, height: 84, borderRadius: 12 }} />
-                      ) : (
-                        <View key={media.id} style={{ width: 120, height: 84, borderRadius: 12, backgroundColor: colors.text, alignItems: 'center', justifyContent: 'center' }}>
-                          <Ionicons name="play" size={22} color={colors.white} />
-                        </View>
-                      ))}
-                    </ScrollView>
-                  ) : null}
-                </View>
-              </View>
-            ))}
+          {!announcementsError && announcements.length > 0 ? (
+            <AnnouncementEngagementProvider announcements={announcements}>
+              {announcements.map((item) => (
+                <OfficialAnnouncementPostCard
+                  key={item.id}
+                  announcement={item}
+                />
+              ))}
+            </AnnouncementEngagementProvider>
+          ) : null}
         </View>
 
         <View style={styles.section}>
