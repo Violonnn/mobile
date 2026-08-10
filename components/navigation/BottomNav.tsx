@@ -159,7 +159,7 @@ const ReportButton = memo(function ReportButton({ onPress }: { onPress: () => vo
             accessibilityLabel="Report an emergency"
           >
             <Ionicons
-              name="megaphone"
+              name="location"
               size={navMetrics.reportIconSize}
               color={navColors.reportIcon}
             />
