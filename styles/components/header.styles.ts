@@ -21,6 +21,12 @@ export const headerStyles = StyleSheet.create({
     borderBottomLeftRadius: 28,
     borderBottomRightRadius: 28,
   },
+  headerLight: {
+    backgroundColor: colors.white,
+    paddingBottom: spacing.lg,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
+  },
   topRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -47,6 +53,9 @@ export const headerStyles = StyleSheet.create({
     color: colors.white,
     marginBottom: spacing.sm,
   },
+  greetingTitleLight: {
+    color: colors.text,
+  },
   greetingLocationWrap: {
     gap: 1,
   },
@@ -56,10 +65,16 @@ export const headerStyles = StyleSheet.create({
     color: headerColors.muted,
     letterSpacing: 0.4,
   },
+  greetingLocationLabelLight: {
+    color: colors.textMuted,
+  },
   greetingLocationValue: {
     fontFamily: fonts.semibold,
     fontSize: fontSizes.md,
     color: colors.white,
+  },
+  greetingLocationValueLight: {
+    color: colors.text,
   },
   greetingActions: {
     flexDirection: 'row',
@@ -78,6 +93,10 @@ export const headerStyles = StyleSheet.create({
     backgroundColor: colors.white,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  greetingAvatarLight: {
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   greetingAvatarText: {
     fontFamily: fonts.bold,
@@ -214,6 +233,12 @@ export const headerStyles = StyleSheet.create({
     shadowOpacity: 0.12,
     shadowRadius: 14,
     elevation: 3,
+  },
+  searchBarLight: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    shadowOpacity: 0.05,
+    elevation: 1,
   },
   searchPlaceholder: {
     flex: 1,

@@ -4,12 +4,7 @@ import { scaleByWidth } from '../../lib/layout';
 
 export const homeColors = {
   navy: '#1C2B4B',
-  // In-app theme: soft desaturated blue with white text (per design).
-  header: colors.themeSoft,
-  headerMuted: 'rgba(255, 255, 255, 0.85)',
-  headerHairline: 'rgba(255, 255, 255, 0.25)',
-  pill: 'rgba(255, 255, 255, 0.35)',
-  dot: '#F97316',
+  headerMuted: colors.textMuted,
 };
 
 export const homeStyles = StyleSheet.create({
@@ -46,7 +41,7 @@ export const homeStyles = StyleSheet.create({
   sectionTitle: {
     fontFamily: fonts.bold,
     fontSize: scaleByWidth(18),
-    color: colors.white,
+    color: colors.text,
   },
   announcementTitleRow: {
     flex: 1,
@@ -69,19 +64,124 @@ export const homeStyles = StyleSheet.create({
   seeAllText: {
     fontFamily: fonts.medium,
     fontSize: fontSizes.sm,
-    color: colors.white,
+    color: colors.primary,
+    textDecorationLine: 'underline',
   },
   // Body-section links are black (only the header links stay white).
   seeAllTextDark: {
     fontFamily: fonts.medium,
     fontSize: fontSizes.sm,
-    color: colors.text,
+    color: colors.primary,
+    textDecorationLine: 'underline',
   },
 
   happeningSection: {
     marginTop: spacing.lg,
   },
+  nearbySection: {
+    marginTop: spacing.sm,
+  },
+  nearbySectionHeader: {
+    marginBottom: spacing.sm,
+  },
+  nearbyCarousel: {
+    gap: spacing.md,
+    paddingRight: spacing.lg,
+    paddingBottom: spacing.xs,
+  },
+  nearbyIntroCard: {
+    width: scaleByWidth(385),
+    minHeight: scaleByWidth(260),
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(170, 192, 220, 0.18)',
+    justifyContent: 'center',
+  },
+  nearbyIntroGlow: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: '72%',
+    height: '78%',
+  },
+  nearbyReportBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.full,
+    backgroundColor: colors.themeSoft,
+  },
+  nearbyReportBadgeText: {
+    fontFamily: fonts.semibold,
+    fontSize: fontSizes.sm,
+    color: colors.white,
+  },
+  nearbyIntroContent: {
+    alignItems: 'flex-start',
+    gap: spacing.md,
+  },
+  nearbyIntroTitle: {
+    fontFamily: fonts.display,
+    fontSize: scaleByWidth(32),
+    color: colors.text,
+    textAlign: 'left',
+  },
+  nearbyIntroDescription: {
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.lg,
+    lineHeight: 24,
+    color: colors.textMuted,
+    textAlign: 'left',
+  },
+  nearbyReportCard: {
+    width: scaleByWidth(385),
+    minHeight: scaleByWidth(260),
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    shadowColor: '#111827',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.07,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  nearbyStateCard: {
+    width: scaleByWidth(385),
+    minHeight: scaleByWidth(260),
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    borderRadius: radius.lg,
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
 
+  // Horizontally scrolling cards preserve the shared post layout on Home.
+  announcementList: {
+    gap: spacing.md,
+    paddingRight: spacing.lg,
+    paddingBottom: spacing.xs,
+  },
+  announcementPostCard: {
+    width: scaleByWidth(385),
+    height: scaleByWidth(320),
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: 'rgba(229, 231, 235, 0.9)',
+    borderBottomWidth: 1,
+    borderRadius: radius.lg,
+    paddingVertical: 0,
+    overflow: 'hidden',
+    shadowColor: '#111827',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 2,
+  },
   // ---- Empty states (transparent, single unbold line) -------------------
   emptyCard: {
     backgroundColor: 'transparent',
@@ -104,7 +204,7 @@ export const homeStyles = StyleSheet.create({
   emptyTitle: {
     fontFamily: fonts.regular,
     fontSize: fontSizes.md,
-    color: 'rgba(255, 255, 255, 0.92)',
+    color: colors.text,
   },
   emptyTitleDark: {
     fontFamily: fonts.regular,
@@ -121,21 +221,6 @@ export const homeStyles = StyleSheet.create({
     backgroundColor: colors.background,
     borderWidth: 1,
     borderColor: colors.border,
-  },
-  mapWebview: {
-    flex: 1,
-    backgroundColor: 'transparent',
-  },
-  mapFallback: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-  },
-  mapFallbackText: {
-    fontFamily: fonts.regular,
-    fontSize: fontSizes.sm,
-    color: colors.textMuted,
   },
 
   // ---- Welcome modal overlay (consumed by WelcomeModal) -----------------

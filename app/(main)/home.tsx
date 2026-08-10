@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -9,22 +9,28 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { homeStyles as styles, homeColors } from '../../styles/screens/home.styles';
 import { colors } from '../../styles/theme';
 import AppHeader from '../../components/navigation/AppHeader';
 import WelcomeModal from '../../components/ui/WelcomeModal';
 import HomeMapPreview from '../../components/home/HomeMapPreview';
+import { ReportDetailContent } from '../../components/report/ReportDetailCard';
+import { ReportEngagementProvider } from '../../components/report/ReportEngagementProvider';
+import OfficialAnnouncementPostCard from '../../components/official/OfficialAnnouncementPostCard';
+import { AnnouncementEngagementProvider } from '../../components/official/AnnouncementEngagementProvider';
 import { getActiveSession } from '../../lib/auth';
 import { fetchMyProfile } from '../../lib/profile';
 import { useAnnouncements } from '../../hooks/useAnnouncements';
+import { useReports } from '../../hooks/useReports';
 import { useResources } from '../../hooks/useResources';
 import {
   facilityTypeLabel,
   hotlineCategoryLabel,
   openHotlineDialer,
 } from '../../lib/resources';
-import { formatPublishedAt } from '../../lib/formatTime';
+import type { MapReportMarker } from '../../lib/reports';
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -43,11 +49,24 @@ export default function HomeScreen() {
   } = useAnnouncements({ limit: 5 });
 
   const {
+    reports,
+    loading: reportsLoading,
+    error: reportsError,
+  } = useReports({ realtime: false });
+
+  const {
     hotlines,
     facilities,
     loading: resourcesLoading,
     error: resourcesError,
   } = useResources({ mode: 'resident' });
+
+  const scrollViewRef = useRef<ScrollView>(null);
+  const [bodySectionTop, setBodySectionTop] = useState(0);
+  const [mapSectionTop, setMapSectionTop] = useState(0);
+  const [mapFocusReport, setMapFocusReport] = useState<MapReportMarker | null>(
+    null,
+  );
 
   const loadSession = useCallback(async () => {
     setLoading(true);
@@ -103,13 +122,38 @@ export default function HomeScreen() {
 
   const visibleHotlines = hotlines.slice(0, 5);
   const visibleFacilities = facilities.slice(0, 5);
-  const visibleAnnouncements = announcements.slice(0, 3);
+  const visibleAnnouncements = announcements.slice(0, 5);
+  const normalizedBarangay = barangay.trim().toLocaleLowerCase();
+  // Profiles store a barangay label, so use it to prioritize local reports.
+  const nearbyReport =
+    reports.find((report) => {
+      if (!normalizedBarangay) return false;
+      return (report.addressText ?? '')
+        .toLocaleLowerCase()
+        .includes(normalizedBarangay);
+    }) ?? reports[0] ?? null;
+
+  const focusNearbyReportOnMap = () => {
+    if (!nearbyReport) return;
+    setMapFocusReport(nearbyReport);
+    requestAnimationFrame(() => {
+      scrollViewRef.current?.scrollTo({
+        y: Math.max(0, bodySectionTop + mapSectionTop - 16),
+        animated: true,
+      });
+    });
+  };
+
+  const openReportInMap = (reportId: string) => {
+    router.push({ pathname: '/(main)/map', params: { reportId } });
+  };
 
   return (
     <View style={styles.container}>
       {/* Light status bar icons — matches the white text on the themed header. */}
-      <StatusBar style="light" />
+      <StatusBar style="dark" />
       <ScrollView
+        ref={scrollViewRef}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
@@ -117,6 +161,7 @@ export default function HomeScreen() {
           greetingName={firstName}
           locationLabel={locationValue}
           searchPlaceholder="Search announcement and report"
+          tone="light"
         >
           <View style={styles.headerSection}>
             <View style={styles.sectionHeaderRow}>
@@ -131,7 +176,6 @@ export default function HomeScreen() {
                 accessibilityLabel="Show all announcements"
               >
                 <Text style={styles.seeAllText}>Show All</Text>
-                <Ionicons name="chevron-forward" size={14} color={colors.white} />
               </TouchableOpacity>
             </View>
 
@@ -159,42 +203,34 @@ export default function HomeScreen() {
 
             {!announcementsLoading &&
               !announcementsError &&
-              visibleAnnouncements.map((item) => (
-                <TouchableOpacity
-                  key={item.id}
-                  style={styles.emptyCard}
-                  activeOpacity={0.85}
-                  onPress={goToFeed}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Open announcement ${item.title}`}
+              visibleAnnouncements.length > 0 ? (
+              <AnnouncementEngagementProvider announcements={visibleAnnouncements}>
+                <ScrollView
+                  horizontal
+                  nestedScrollEnabled
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.announcementList}
                 >
-                  <View style={{ flex: 1, gap: 2 }}>
-                    <Text style={styles.emptyTitle} numberOfLines={1}>
-                      {item.isPinned ? '[Pinned] ' : ''}
-                      {item.title}
-                    </Text>
-                    <Text
-                      style={{ color: homeColors.headerMuted, fontSize: 12 }}
-                      numberOfLines={2}
-                    >
-                      {item.body}
-                    </Text>
-                    {item.createdAt ? (
-                      <Text
-                        style={{ color: homeColors.headerMuted, fontSize: 11 }}
-                      >
-                        {formatPublishedAt(item.createdAt)}
-                      </Text>
-                    ) : null}
-                  </View>
-                </TouchableOpacity>
-              ))}
+                  {visibleAnnouncements.map((item) => (
+                    <OfficialAnnouncementPostCard
+                      key={item.id}
+                    announcement={item}
+                    cardStyle={styles.announcementPostCard}
+                    variant="residentCompact"
+                    />
+                  ))}
+                </ScrollView>
+              </AnnouncementEngagementProvider>
+            ) : null}
           </View>
         </AppHeader>
 
-        <View style={styles.bodySection}>
-          <View style={styles.happeningSection}>
-            <View style={styles.sectionHeaderRow}>
+        <View
+          style={styles.bodySection}
+          onLayout={(event) => setBodySectionTop(event.nativeEvent.layout.y)}
+        >
+          <View style={styles.nearbySection}>
+            <View style={[styles.sectionHeaderRow, styles.nearbySectionHeader]}>
               <Text style={styles.sectionTitleDark}>Happening near you</Text>
               <TouchableOpacity
                 style={styles.seeAllButton}
@@ -204,16 +240,85 @@ export default function HomeScreen() {
                 accessibilityLabel="Show all nearby activity"
               >
                 <Text style={styles.seeAllTextDark}>Show All</Text>
-                <Ionicons name="chevron-forward" size={14} color={colors.text} />
               </TouchableOpacity>
             </View>
 
-            <View style={styles.emptyCardDark}>
-              <Ionicons name="pulse-outline" size={18} color={colors.textMuted} />
-              <Text style={styles.emptyTitleDark}>Check the map for nearby reports</Text>
-            </View>
+            <ScrollView
+              horizontal
+              nestedScrollEnabled
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.nearbyCarousel}
+            >
+              <View style={styles.nearbyIntroCard}>
+                <LinearGradient
+                  colors={['rgba(255, 255, 255, 0.52)', 'rgba(255, 255, 255, 0)']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.nearbyIntroGlow}
+                  pointerEvents="none"
+                />
+                <View style={styles.nearbyIntroContent}>
+                  <View style={styles.nearbyReportBadge}>
+                    <Text style={styles.nearbyReportBadgeText}>Report</Text>
+                  </View>
+                  <Text style={styles.nearbyIntroTitle}>What&apos;s happening near you?</Text>
+                  <Text style={styles.nearbyIntroDescription}>
+                    Reports that are happening near your barangay. New ones will
+                    pop up for every nearby report. Slide right to see →
+                  </Text>
+                </View>
+              </View>
 
-            <HomeMapPreview />
+              {reportsLoading ? (
+                <View style={styles.nearbyStateCard}>
+                  <ActivityIndicator color={colors.themeSoft} />
+                </View>
+              ) : null}
+
+              {!reportsLoading && reportsError ? (
+                <View style={styles.nearbyStateCard}>
+                  <Ionicons name="warning-outline" size={20} color={colors.textMuted} />
+                  <Text style={styles.emptyTitleDark}>Could not load nearby reports</Text>
+                </View>
+              ) : null}
+
+              {!reportsLoading && !reportsError && !nearbyReport ? (
+                <View style={styles.nearbyStateCard}>
+                  <Ionicons name="pulse-outline" size={20} color={colors.textMuted} />
+                  <Text style={styles.emptyTitleDark}>No nearby reports yet</Text>
+                </View>
+              ) : null}
+
+              {!reportsLoading && !reportsError && nearbyReport ? (
+                <ReportEngagementProvider reports={[nearbyReport]}>
+                  <TouchableOpacity
+                    style={styles.nearbyReportCard}
+                    activeOpacity={0.88}
+                    onPress={focusNearbyReportOnMap}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Show ${nearbyReport.title || 'nearby report'} on the map`}
+                  >
+                    <ReportDetailContent report={nearbyReport} />
+                  </TouchableOpacity>
+                </ReportEngagementProvider>
+              ) : null}
+            </ScrollView>
+
+            <View onLayout={(event) => setMapSectionTop(event.nativeEvent.layout.y)}>
+              <HomeMapPreview
+                report={nearbyReport}
+                focusTarget={
+                  mapFocusReport
+                    ? {
+                        reportId: mapFocusReport.id,
+                        latitude: mapFocusReport.latitude,
+                        longitude: mapFocusReport.longitude,
+                      }
+                    : null
+                }
+                onOpenReport={openReportInMap}
+              />
+            </View>
           </View>
 
           <View style={styles.happeningSection}>
@@ -227,7 +332,6 @@ export default function HomeScreen() {
                 accessibilityLabel="View hotlines in map"
               >
                 <Text style={styles.seeAllTextDark}>View in map</Text>
-                <Ionicons name="chevron-forward" size={14} color={colors.text} />
               </TouchableOpacity>
             </View>
 
@@ -293,7 +397,6 @@ export default function HomeScreen() {
                 accessibilityLabel="View facilities in map"
               >
                 <Text style={styles.seeAllTextDark}>View in map</Text>
-                <Ionicons name="chevron-forward" size={14} color={colors.text} />
               </TouchableOpacity>
             </View>
 

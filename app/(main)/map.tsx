@@ -1,7 +1,8 @@
 // Map tab: report pins + active facilities/evac centers (read-only layers).
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import AppHeader from '../../components/navigation/AppHeader';
 import InteractiveMap, {
   type MapLayerVisibility,
@@ -22,6 +23,8 @@ import {
 import { colors, fonts, fontSizes, spacing } from '../../styles/theme';
 
 export default function MapScreen() {
+  const router = useRouter();
+  const { reportId } = useLocalSearchParams<{ reportId?: string | string[] }>();
   const { reports: markers, error } = useReports({ realtime: true });
   const { facilities } = useResources({ mode: 'resident' });
   const { centers } = useEvacuationCenters();
@@ -29,11 +32,45 @@ export default function MapScreen() {
   const [selectedReportIds, setSelectedReportIds] = useState<string[]>([]);
   const [selectedResource, setSelectedResource] =
     useState<MapResourceMarker | null>(null);
+  const [focusTarget, setFocusTarget] = useState<{
+    reportId: string;
+    latitude: number;
+    longitude: number;
+  } | null>(null);
   const [layers, setLayers] = useState<MapLayerVisibility>({
     reports: true,
     facilities: true,
     evacuationCenters: true,
   });
+  const handledRouteReportIdRef = useRef<string | null>(null);
+  const requestedReportId = Array.isArray(reportId) ? reportId[0] : reportId;
+
+  useEffect(() => {
+    if (!requestedReportId) {
+      handledRouteReportIdRef.current = null;
+      return;
+    }
+
+    if (handledRouteReportIdRef.current === requestedReportId) {
+      return;
+    }
+
+    const requestedReport = markers.find(
+      (marker) => marker.id === requestedReportId,
+    );
+    if (!requestedReport) return;
+
+    handledRouteReportIdRef.current = requestedReportId;
+    setSelectedResource(null);
+    setSelectedReportIds([requestedReport.id]);
+    setFocusTarget({
+      reportId: requestedReport.id,
+      latitude: requestedReport.latitude,
+      longitude: requestedReport.longitude,
+    });
+    // Clear the route value so opening the same home card later works again.
+    router.setParams({ reportId: undefined });
+  }, [markers, requestedReportId, router]);
 
   const facilityMarkers = useMemo<MapResourceMarker[]>(
     () =>
@@ -99,6 +136,7 @@ export default function MapScreen() {
             layerVisibility={layers}
             showLayerFilters
             onLayerVisibilityChange={setLayers}
+            focusTarget={focusTarget}
             onReportSelection={(ids) => {
               setSelectedResource(null);
               setSelectedReportIds(ids);

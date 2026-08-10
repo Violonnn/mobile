@@ -31,12 +31,14 @@ type AppHeaderProps = {
   showProfile?: boolean;
   /** When set, renders a search bar with this placeholder below the top row. */
   searchPlaceholder?: string;
+  /** Home can opt out of the themed blue header without affecting other screens. */
+  tone?: 'themed' | 'light';
   onSearchPress?: () => void;
   /** Overrides the default placeholder sheet when the bell is tapped. */
   onNotificationsPress?: () => void;
   /** Defaults to navigating to the profile tab. */
   onProfilePress?: () => void;
-  /** Extra content rendered inside the blue block, below the search bar. */
+  /** Extra content rendered below the search bar. */
   children?: React.ReactNode;
 };
 
@@ -89,6 +91,7 @@ export default function AppHeader({
   showNotificationDot = true,
   showProfile = true,
   searchPlaceholder,
+  tone = 'themed',
   onSearchPress,
   onNotificationsPress,
   onProfilePress,
@@ -99,6 +102,7 @@ export default function AppHeader({
 
   const isGreetingVariant = greetingName !== undefined;
   const isLegacyVariant = !isGreetingVariant && title !== undefined;
+  const usesLightTone = tone === 'light';
 
   const [resolvedInitial, setResolvedInitial] = useState(avatarInitial ?? 'U');
   const [notifOpen, setNotifOpen] = useState(false);
@@ -128,17 +132,39 @@ export default function AppHeader({
     onNotificationsPress ?? (() => setNotifOpen(true));
 
   return (
-    <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
+    <View
+      style={[
+        styles.header,
+        usesLightTone && styles.headerLight,
+        { paddingTop: insets.top + spacing.sm },
+      ]}
+    >
       {isGreetingVariant ? (
         <View style={styles.greetingRow}>
           <View style={styles.greetingTextWrap}>
-            <Text style={styles.greetingTitle} numberOfLines={1}>
+            <Text
+              style={[styles.greetingTitle, usesLightTone && styles.greetingTitleLight]}
+              numberOfLines={1}
+            >
               Hi, {greetingName || 'there'}
             </Text>
             {locationLabel ? (
               <View style={styles.greetingLocationWrap}>
-                <Text style={styles.greetingLocationLabel}>Your Location</Text>
-                <Text style={styles.greetingLocationValue} numberOfLines={1}>
+                <Text
+                  style={[
+                    styles.greetingLocationLabel,
+                    usesLightTone && styles.greetingLocationLabelLight,
+                  ]}
+                >
+                  Your Location
+                </Text>
+                <Text
+                  style={[
+                    styles.greetingLocationValue,
+                    usesLightTone && styles.greetingLocationValueLight,
+                  ]}
+                  numberOfLines={1}
+                >
                   {locationLabel}
                 </Text>
               </View>
@@ -153,10 +179,17 @@ export default function AppHeader({
               accessibilityRole="button"
               accessibilityLabel="Notifications"
             >
-              <Ionicons name="notifications-outline" size={24} color={colors.white} />
+              <Ionicons
+                name="notifications-outline"
+                size={24}
+                color={usesLightTone ? colors.text : colors.white}
+              />
             </TouchableOpacity>
             <TouchableOpacity
-              style={styles.greetingAvatar}
+              style={[
+                styles.greetingAvatar,
+                usesLightTone && styles.greetingAvatarLight,
+              ]}
               activeOpacity={0.85}
               onPress={handleProfilePress}
               accessibilityRole="button"
@@ -206,7 +239,7 @@ export default function AppHeader({
 
       {searchPlaceholder ? (
         <TouchableOpacity
-          style={styles.searchBar}
+          style={[styles.searchBar, usesLightTone && styles.searchBarLight]}
           activeOpacity={0.9}
           onPress={onSearchPress}
           accessibilityRole="search"

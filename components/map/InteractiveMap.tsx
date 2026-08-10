@@ -42,8 +42,12 @@ type Props = {
   showLayerFilters?: boolean;
   onLayerVisibilityChange?: (next: MapLayerVisibility) => void;
   onReportSelection?: (reportIds: string[]) => void;
+  /** Used by the home preview: opens a marker popup with a details action. */
+  showReportDetailsPopup?: boolean;
+  onReportDetailsRequest?: (reportId: string) => void;
   onResourceSelection?: (resource: MapResourceMarker) => void;
   focusTarget?: MapFocusTarget | null;
+  showZoomControls?: boolean;
 };
 
 const DEFAULT_LAYERS: MapLayerVisibility = {
@@ -52,7 +56,7 @@ const DEFAULT_LAYERS: MapLayerVisibility = {
   evacuationCenters: true,
 };
 
-function buildMapHtml(): string {
+function buildMapHtml(showZoomControls: boolean): string {
   return `<!DOCTYPE html>
 <html>
   <head>
@@ -148,6 +152,33 @@ function buildMapHtml(): string {
         border-radius: 50%;
         text-align: center;
       }
+
+      .report-details-popup-button {
+        border: 0;
+        border-radius: 999px;
+        background: #111827;
+        color: #FFFFFF;
+        font-family: ui-rounded, "Arial Rounded MT Bold", system-ui, sans-serif;
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 0.1px;
+        padding: 10px 16px;
+        white-space: nowrap;
+        box-shadow: 0 4px 10px rgba(17, 24, 39, 0.2);
+      }
+
+      .leaflet-popup-content-wrapper {
+        border-radius: 18px;
+        box-shadow: 0 8px 20px rgba(17, 24, 39, 0.16);
+      }
+
+      .leaflet-popup-tip {
+        box-shadow: 3px 3px 8px rgba(17, 24, 39, 0.08);
+      }
+
+      .leaflet-popup-content {
+        margin: 10px;
+      }
     </style>
   </head>
   <body>
@@ -158,7 +189,7 @@ function buildMapHtml(): string {
       var map = L.map('map', {
         center: [${CENTER.lat}, ${CENTER.lng}],
         zoom: ${ZOOM},
-        zoomControl: true,
+        zoomControl: ${showZoomControls ? 'true' : 'false'},
         attributionControl: false
       });
 
@@ -210,6 +241,7 @@ function buildMapHtml(): string {
       }).addTo(map);
 
       var resourceGroup = L.layerGroup().addTo(map);
+      var reportMarkersById = {};
 
       function postSelection(reportIds) {
         if (!window.ReactNativeWebView || !reportIds || !reportIds.length) return;
@@ -217,6 +249,26 @@ function buildMapHtml(): string {
           type: 'reportSelection',
           reportIds: reportIds
         }));
+      }
+
+      function postReportDetails(reportId) {
+        if (!window.ReactNativeWebView || !reportId) return;
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'reportDetails',
+          reportId: reportId
+        }));
+      }
+
+      function createReportDetailsPopup(reportId) {
+        var button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'report-details-popup-button';
+        button.textContent = 'See details';
+        button.addEventListener('click', function(event) {
+          L.DomEvent.stop(event);
+          postReportDetails(reportId);
+        });
+        return button;
       }
 
       function postResource(resource) {
@@ -250,6 +302,7 @@ function buildMapHtml(): string {
 
       window.setReportMarkers = function(markers) {
         clusterGroup.clearLayers();
+        reportMarkersById = {};
         if (!markers || !markers.length) return;
 
         var bounds = [];
@@ -262,12 +315,24 @@ function buildMapHtml(): string {
             reportMeta: { id: m.id, createdAt: m.created_at || '' }
           });
 
+          if (m.showDetailsPopup) {
+            marker.bindPopup(createReportDetailsPopup(m.id), {
+              closeButton: false,
+              autoPanPadding: [18, 18]
+            });
+          }
+
           marker.on('click', function(e) {
             L.DomEvent.stopPropagation(e);
+            if (m.showDetailsPopup) {
+              marker.openPopup();
+              return;
+            }
             postSelection([m.id]);
           });
 
           clusterGroup.addLayer(marker);
+          reportMarkersById[m.id] = marker;
           bounds.push([m.latitude, m.longitude]);
         });
 
@@ -302,6 +367,10 @@ function buildMapHtml(): string {
       window.focusReport = function(target) {
         if (!target || typeof target.latitude !== 'number' || typeof target.longitude !== 'number') return;
         map.setView([target.latitude, target.longitude], 16, { animate: true });
+        var marker = reportMarkersById[target.reportId];
+        if (marker && marker.getPopup()) {
+          window.setTimeout(function() { marker.openPopup(); }, 150);
+        }
       };
 
       // On iOS, React Native can inject markers before this script has run
@@ -324,12 +393,16 @@ function buildMapHtml(): string {
 </html>`;
 }
 
-function markersToInjectScript(markers: MapReportMarker[]): string {
+function markersToInjectScript(
+  markers: MapReportMarker[],
+  showReportDetailsPopup: boolean,
+): string {
   const payload = markers.map((m) => ({
     id: m.id,
     latitude: m.latitude,
     longitude: m.longitude,
     created_at: m.created_at,
+    showDetailsPopup: showReportDetailsPopup,
   }));
   const json = JSON.stringify(payload).replace(/</g, '\\u003c');
   return `(function() {
@@ -383,11 +456,14 @@ export default function InteractiveMap({
   showLayerFilters = false,
   onLayerVisibilityChange,
   onReportSelection,
+  showReportDetailsPopup = false,
+  onReportDetailsRequest,
   onResourceSelection,
   focusTarget,
+  showZoomControls = true,
 }: Props) {
   const webRef = useRef<WebView>(null);
-  const html = useMemo(() => buildMapHtml(), []);
+  const html = useMemo(() => buildMapHtml(showZoomControls), [showZoomControls]);
   const readyRef = useRef(false);
 
   const visibleReports = useMemo(
@@ -411,9 +487,11 @@ export default function InteractiveMap({
 
   useEffect(() => {
     if (!readyRef.current || !webRef.current) return;
-    webRef.current.injectJavaScript(markersToInjectScript(visibleReports));
+    webRef.current.injectJavaScript(
+      markersToInjectScript(visibleReports, showReportDetailsPopup),
+    );
     webRef.current.injectJavaScript(resourcesToInjectScript(visibleResources));
-  }, [visibleReports, visibleResources]);
+  }, [visibleReports, visibleResources, showReportDetailsPopup]);
 
   useEffect(() => {
     if (!focusTarget || !readyRef.current || !webRef.current) return;
@@ -426,10 +504,15 @@ export default function InteractiveMap({
         const data = JSON.parse(event.nativeEvent.data) as {
           type?: string;
           reportIds?: string[];
+          reportId?: string;
           resource?: MapResourceMarker;
         };
         if (data.type === 'reportSelection' && Array.isArray(data.reportIds)) {
           onReportSelection?.(data.reportIds.filter(Boolean));
+          return;
+        }
+        if (data.type === 'reportDetails' && data.reportId) {
+          onReportDetailsRequest?.(data.reportId);
           return;
         }
         if (data.type === 'resourceSelection' && data.resource?.id) {
@@ -439,7 +522,7 @@ export default function InteractiveMap({
         // Ignore malformed WebView messages.
       }
     },
-    [onReportSelection, onResourceSelection],
+    [onReportSelection, onReportDetailsRequest, onResourceSelection],
   );
 
   function toggleLayer(key: keyof MapLayerVisibility) {
@@ -461,7 +544,9 @@ export default function InteractiveMap({
         onMessage={handleMessage}
         onLoadEnd={() => {
           readyRef.current = true;
-          webRef.current?.injectJavaScript(markersToInjectScript(visibleReports));
+          webRef.current?.injectJavaScript(
+            markersToInjectScript(visibleReports, showReportDetailsPopup),
+          );
           webRef.current?.injectJavaScript(resourcesToInjectScript(visibleResources));
           if (focusTarget) {
             webRef.current?.injectJavaScript(focusToInjectScript(focusTarget));
