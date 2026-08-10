@@ -19,6 +19,7 @@ import {
   isSupportedCarrier,
   isValidE164Phone,
   isValidName,
+  normalizeName,
   normalizePhilippinePhone,
   rejectExtraKeys,
   trimText,
@@ -405,9 +406,9 @@ async function handleRegister(
     password: string;
   },
 ): Promise<Response> {
-  const firstName = payload.firstName.trim();
-  const lastName = payload.lastName.trim();
-  const middleName = payload.middleName.trim();
+  const firstName = normalizeName(payload.firstName);
+  const lastName = normalizeName(payload.lastName);
+  const middleName = normalizeName(payload.middleName);
   const password = payload.password;
 
   if (!isValidName(firstName) || !isValidName(lastName)) {

@@ -3,7 +3,7 @@ import {
   parseEdgeFunctionMeta,
   readEdgeFunctionErrorMessage,
 } from './edgeFunctionErrors';
-import { isValidName } from './validation/name';
+import { isValidName, normalizeName } from './validation/name';
 import { formatInviteKind, type InviteRole, type ValidatedInvite } from './invites';
 
 export const OFFICIAL_PASSWORD_MIN_LENGTH = 12;
@@ -216,9 +216,9 @@ export async function registerOfficialAccount(input: {
       body: {
         action: 'register',
         token,
-        firstName: input.firstName.trim(),
-        lastName: input.lastName.trim(),
-        middleName: input.middleName.trim(),
+        firstName: normalizeName(input.firstName),
+        lastName: normalizeName(input.lastName),
+        middleName: normalizeName(input.middleName),
         password: input.password,
       },
     },

@@ -45,6 +45,21 @@ export function isValidName(value: string): boolean {
   return NAME_PATTERN.test(trimmed);
 }
 
+/**
+ * Store each part of a person's name with an initial capital letter.
+ * This mirrors normalizeName in lib/validation/name.ts for client feedback.
+ */
+export function normalizeName(value: string): string {
+  return value
+    .trim()
+    .split(/([ .'-]+)/)
+    .map((part) => {
+      if (!part || /^[ .'-]+$/.test(part)) return part;
+      return `${part.charAt(0).toLocaleUpperCase()}${part.slice(1).toLocaleLowerCase()}`;
+    })
+    .join("");
+}
+
 /** Basic E.164 PH mobile check (+639xxxxxxxxx). */
 export function isValidE164Phone(phone: string): boolean {
   return /^\+639\d{9}$/.test(phone);

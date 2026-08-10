@@ -10,6 +10,7 @@ import {
   isValidPin,
   MAX_BARANGAY_LENGTH,
   MAX_NAME_LENGTH,
+  normalizeName,
   normalizePhilippinePhone,
   rejectExtraKeys,
   trimText,
@@ -98,9 +99,9 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: GENERIC_VALIDATION_ERROR }, 400);
   }
 
-  const lastName = trimText(details.lastName);
-  const firstName = trimText(details.firstName);
-  const middleName = trimText(details.middleName);
+  const lastName = normalizeName(trimText(details.lastName));
+  const firstName = normalizeName(trimText(details.firstName));
+  const middleName = normalizeName(trimText(details.middleName));
   const birthYear = trimText(details.birthYear);
   const birthMonth =
     typeof details.birthMonth === "number" ? details.birthMonth : null;

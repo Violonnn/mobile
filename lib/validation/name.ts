@@ -13,3 +13,19 @@ export function isValidName(value: string): boolean {
   if (trimmed.length === 0 || trimmed.length > MAX_NAME_LENGTH) return false;
   return NAME_PATTERN.test(trimmed);
 }
+
+/**
+ * Store each part of a person's name with an initial capital letter.
+ * Separators are preserved so names such as "O'Brien" and "Anne-Marie"
+ * remain readable and correctly formatted.
+ */
+export function normalizeName(value: string): string {
+  return value
+    .trim()
+    .split(/([ .'-]+)/)
+    .map((part) => {
+      if (!part || /^[ .'-]+$/.test(part)) return part;
+      return `${part.charAt(0).toLocaleUpperCase()}${part.slice(1).toLocaleLowerCase()}`;
+    })
+    .join('');
+}

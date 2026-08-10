@@ -4,6 +4,7 @@ import {
   parseEdgeFunctionMeta,
   readEdgeFunctionErrorMessage,
 } from './edgeFunctionErrors';
+import { normalizeName } from './validation/name';
 import { RegistrationDetails } from '../types/registration';
 
 export type CompleteRegistrationInput = {
@@ -196,7 +197,12 @@ export async function completeRegistrationProfile(
     },
     body: {
       phone: input.phone,
-      details: input.details,
+      details: {
+        ...input.details,
+        lastName: normalizeName(input.details.lastName),
+        firstName: normalizeName(input.details.firstName),
+        middleName: normalizeName(input.details.middleName),
+      },
       pin: input.pin,
     },
   });
