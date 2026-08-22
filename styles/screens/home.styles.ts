@@ -1,234 +1,618 @@
 import { StyleSheet } from 'react-native';
+
 import { colors, fonts, fontSizes, radius, spacing } from '../theme';
-import { scaleByWidth } from '../../lib/layout';
 
 export const homeColors = {
-  navy: '#1C2B4B',
-  headerMuted: colors.textMuted,
+  background: '#FFFEFC',
+  ink: '#20252C',
+  border: '#E7E3DE',
+  clear: '#56865B',
+  warning: '#D97706',
+  peach: '#F8C29F',
+  gold: '#F4D99B',
+  green: '#6F9B75',
 };
 
 export const homeStyles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.white,
+    backgroundColor: homeColors.background,
   },
   loadingContainer: {
     flex: 1,
-    justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: colors.background,
+    justifyContent: 'center',
+    backgroundColor: homeColors.background,
   },
-
-  // ---- Sections ---------------------------------------------------------
   scrollContent: {
     flexGrow: 1,
-    // Leave room for the floating bottom navigation bar.
     paddingBottom: 132,
   },
-  headerSection: {
-    marginTop: spacing.lg,
-  },
-  bodySection: {
+
+  // Header and resident identity
+  heroSection: {
+    width: '100%',
+    maxWidth: 760,
+    alignSelf: 'center',
     paddingHorizontal: spacing.lg,
+  },
+  greetingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+  },
+  greetingCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  greetingTitle: {
+    fontFamily: fonts.bold,
+    fontSize: 29,
+    lineHeight: 36,
+    letterSpacing: -0.8,
+    color: homeColors.ink,
+  },
+  locationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginTop: 4,
+  },
+  locationText: {
+    flex: 1,
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.md,
+    color: homeColors.ink,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  notificationButton: {
+    width: 36,
+    height: 42,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  notificationDot: {
+    position: 'absolute',
+    top: 5,
+    right: 2,
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+    backgroundColor: colors.secondary,
+    borderWidth: 1.5,
+    borderColor: homeColors.background,
+  },
+  avatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FBF1E5',
+  },
+  avatarText: {
+    fontFamily: fonts.medium,
+    fontSize: 21,
+    color: homeColors.ink,
+  },
+  areaStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginTop: spacing.xl,
+  },
+  areaStatusDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: homeColors.clear,
+  },
+  areaStatusDotWarning: {
+    backgroundColor: homeColors.warning,
+  },
+  areaStatusDotMuted: {
+    backgroundColor: colors.textMuted,
+  },
+  areaStatusText: {
+    flex: 1,
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.md,
+    color: homeColors.clear,
+  },
+  areaStatusTextWarning: {
+    color: homeColors.warning,
+  },
+  areaStatusTextMuted: {
+    color: colors.textMuted,
+  },
+  searchBar: {
+    minHeight: 54,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
     marginTop: spacing.lg,
+    paddingHorizontal: spacing.md,
+    borderWidth: 1,
+    borderColor: homeColors.border,
+    borderRadius: radius.lg,
+    backgroundColor: colors.white,
+  },
+  searchInput: {
+    flex: 1,
+    minWidth: 0,
+    paddingVertical: spacing.md,
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.md,
+    color: homeColors.ink,
+  },
+  searchResultsCard: {
+    marginTop: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderWidth: 1,
+    borderColor: homeColors.border,
+    borderRadius: radius.lg,
+    backgroundColor: colors.white,
+    shadowColor: homeColors.ink,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.07,
+    shadowRadius: 10,
+    elevation: 2,
+  },
+  searchResultRow: {
+    minHeight: 58,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  searchResultDivider: {
+    borderBottomWidth: 1,
+    borderBottomColor: homeColors.border,
+  },
+  searchResultCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  searchResultTitle: {
+    fontFamily: fonts.semibold,
+    fontSize: fontSizes.sm,
+    color: homeColors.ink,
+  },
+  searchResultType: {
+    marginTop: 2,
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.xs,
+    color: colors.textMuted,
+  },
+
+  // Shared section structure
+  contentSection: {
+    width: '100%',
+    maxWidth: 760,
+    alignSelf: 'center',
+    paddingHorizontal: spacing.lg,
+  },
+  sectionBlock: {
+    marginTop: spacing.xl,
   },
   sectionHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: spacing.md,
     marginBottom: spacing.md,
   },
+  municipalHeaderRow: {
+    marginBottom: spacing.lg,
+  },
   sectionTitle: {
+    flexShrink: 1,
     fontFamily: fonts.bold,
-    fontSize: scaleByWidth(18),
-    color: colors.text,
+    fontSize: 20,
+    lineHeight: 26,
+    letterSpacing: -0.4,
+    color: homeColors.ink,
   },
-  announcementTitleRow: {
-    flex: 1,
+  sectionLink: {
+    fontFamily: fonts.medium,
+    fontSize: fontSizes.md,
+    color: '#378FE7',
+  },
+  quickAccessTitle: {
+    marginBottom: spacing.md,
+  },
+  stateCard: {
+    minHeight: 80,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: spacing.sm,
-    marginRight: spacing.sm,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: homeColors.border,
+    borderRadius: radius.lg,
+    backgroundColor: colors.white,
   },
-  sectionTitleDark: {
-    fontFamily: fonts.bold,
-    fontSize: scaleByWidth(18),
-    color: homeColors.navy,
-  },
-  seeAllButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-    paddingVertical: 4,
-  },
-  seeAllText: {
-    fontFamily: fonts.medium,
+  stateText: {
+    flexShrink: 1,
+    fontFamily: fonts.regular,
     fontSize: fontSizes.sm,
-    color: colors.primary,
-    textDecorationLine: 'underline',
-  },
-  // Body-section links are black (only the header links stay white).
-  seeAllTextDark: {
-    fontFamily: fonts.medium,
-    fontSize: fontSizes.sm,
-    color: colors.primary,
-    textDecorationLine: 'underline',
+    color: colors.textMuted,
+    textAlign: 'center',
   },
 
-  happeningSection: {
-    marginTop: spacing.lg,
-  },
-  nearbySection: {
-    marginTop: spacing.sm,
-  },
-  nearbySectionHeader: {
-    marginBottom: spacing.sm,
-  },
-  nearbyCarousel: {
+  // Municipal and barangay update card
+  updateCard: {
+    minHeight: 116,
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: spacing.md,
-    paddingRight: spacing.lg,
-    paddingBottom: spacing.xs,
-  },
-  nearbyIntroCard: {
-    width: scaleByWidth(385),
-    minHeight: scaleByWidth(260),
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: homeColors.border,
     borderRadius: radius.lg,
-    padding: spacing.lg,
+    backgroundColor: colors.white,
+  },
+  updateSeal: {
+    width: 70,
+    height: 70,
+  },
+  updateContent: {
+    flex: 1,
+    minWidth: 0,
+  },
+  updateLabel: {
+    fontFamily: fonts.medium,
+    fontSize: fontSizes.xs,
+    color: '#378FE7',
+  },
+  updateTitle: {
+    marginTop: 2,
+    fontFamily: fonts.bold,
+    fontSize: fontSizes.lg,
+    lineHeight: 22,
+    color: homeColors.ink,
+  },
+  updateMeta: {
+    marginTop: 2,
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.sm,
+    color: colors.textMuted,
+  },
+  updateBody: {
+    marginTop: spacing.xs,
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.sm,
+    lineHeight: 18,
+    color: homeColors.ink,
+  },
+  updateChevron: {
+    color: homeColors.ink,
+  },
+  featuredUpdateCard: {
     overflow: 'hidden',
-    backgroundColor: 'rgba(170, 192, 220, 0.18)',
+    borderWidth: 1,
+    borderColor: homeColors.border,
+    borderRadius: radius.lg,
+    backgroundColor: colors.white,
+  },
+  featuredUpdateMedia: {
+    width: '100%',
+    height: 140,
+    overflow: 'hidden',
+    backgroundColor: '#EEF2F4',
+  },
+  featuredUpdateMediaFallback: {
+    flex: 1,
+    alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: '#F4F7FA',
   },
-  nearbyIntroGlow: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    width: '72%',
-    height: '78%',
+  featuredUpdateContent: {
+    paddingTop: 12,
+    paddingHorizontal: 14,
   },
-  nearbyReportBadge: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: radius.full,
-    backgroundColor: colors.themeSoft,
+  featuredUpdateAuthorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
   },
-  nearbyReportBadgeText: {
+  featuredUpdateAuthor: {
     fontFamily: fonts.semibold,
     fontSize: fontSizes.sm,
-    color: colors.white,
+    color: homeColors.ink,
   },
-  nearbyIntroContent: {
-    alignItems: 'flex-start',
-    gap: spacing.md,
-  },
-  nearbyIntroTitle: {
-    fontFamily: fonts.display,
-    fontSize: scaleByWidth(32),
-    color: colors.text,
-    textAlign: 'left',
-  },
-  nearbyIntroDescription: {
+  featuredUpdateAuthorDivider: {
     fontFamily: fonts.regular,
-    fontSize: fontSizes.lg,
-    lineHeight: 24,
+    fontSize: fontSizes.sm,
     color: colors.textMuted,
-    textAlign: 'left',
   },
-  nearbyReportCard: {
-    width: scaleByWidth(385),
-    minHeight: scaleByWidth(260),
-    backgroundColor: colors.card,
+  featuredUpdateVerified: {
+    fontFamily: fonts.medium,
+    fontSize: fontSizes.sm,
+    color: colors.primary,
+  },
+  featuredUpdateDate: {
+    marginTop: spacing.xs,
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.sm,
+    color: colors.textMuted,
+  },
+  featuredUpdateTitle: {
+    marginTop: spacing.sm,
+    fontFamily: fonts.bold,
+    fontSize: 18,
+    lineHeight: 24,
+    letterSpacing: -0.3,
+    color: homeColors.ink,
+  },
+  featuredUpdateBody: {
+    marginTop: 6,
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.sm,
+    lineHeight: 19,
+    color: colors.textMuted,
+  },
+  featuredReadMoreButton: {
+    alignSelf: 'flex-start',
+    paddingVertical: 10,
+  },
+  featuredReadMoreText: {
+    fontFamily: fonts.medium,
+    fontSize: fontSizes.sm,
+    color: colors.primary,
+  },
+  featuredActionsRow: {
+    minHeight: 50,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: homeColors.border,
+  },
+  featuredActionButton: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.xs,
+    paddingVertical: 10,
+  },
+  featuredActionDivider: {
+    width: 1,
+    height: 28,
+    backgroundColor: homeColors.border,
+  },
+  featuredActionIcon: {
+    color: homeColors.ink,
+  },
+  featuredActionIconActive: {
+    color: colors.primary,
+  },
+  featuredActionText: {
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.sm,
+    color: homeColors.ink,
+  },
+  featuredActionTextActive: {
+    fontFamily: fonts.medium,
+    color: colors.primary,
+  },
+
+  // Quick-access cards
+  quickAccessRow: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    gap: 6,
+  },
+  quickAccessCard: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 76,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.xs,
+    paddingVertical: 6,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: homeColors.border,
     borderRadius: radius.lg,
-    padding: spacing.md,
-    shadowColor: '#111827',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.07,
-    shadowRadius: 8,
-    elevation: 2,
+    backgroundColor: colors.white,
   },
-  nearbyStateCard: {
-    width: scaleByWidth(385),
-    minHeight: scaleByWidth(260),
+  quickAccessIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  hotlineIconBackground: {
+    backgroundColor: homeColors.peach,
+  },
+  facilityIconBackground: {
+    backgroundColor: homeColors.gold,
+  },
+  evacuationIconBackground: {
+    backgroundColor: homeColors.green,
+  },
+  quickAccessText: {
+    marginTop: 4,
+    fontFamily: fonts.regular,
+    fontSize: 9,
+    lineHeight: 12,
+    color: homeColors.ink,
+    textAlign: 'center',
+  },
+
+  // Nearby report list + live map
+  nearbyPanel: {
+    minHeight: 246,
+    flexDirection: 'row',
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: homeColors.border,
+    borderRadius: radius.lg,
+    backgroundColor: colors.white,
+  },
+  nearbyPanelCompact: {
+    minHeight: 430,
+    flexDirection: 'column',
+  },
+  nearbyReportList: {
+    flex: 1.08,
+    minWidth: 0,
+    paddingHorizontal: spacing.sm,
+  },
+  nearbyReportListCompact: {
+    flex: 0,
+    minHeight: 242,
+  },
+  nearbyReportRow: {
+    flex: 1,
+    minHeight: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: 4,
+    paddingVertical: 8,
+    marginHorizontal: -4,
+    borderRadius: radius.md,
+  },
+  nearbyReportRowFocused: {
+    backgroundColor: '#F2F7FD',
+  },
+  nearbyReportDivider: {
+    borderBottomWidth: 1,
+    borderBottomColor: homeColors.border,
+  },
+  reportThumbnail: {
+    width: 72,
+    height: 90,
+    flexShrink: 0,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.md,
+    backgroundColor: '#F1F3F5',
+  },
+  reportThumbnailImage: {
+    width: '100%',
+    height: '100%',
+  },
+  reportSummary: {
+    flex: 1,
+    minWidth: 0,
+  },
+  reportTitle: {
+    fontFamily: fonts.bold,
+    fontSize: fontSizes.md,
+    lineHeight: 18,
+    color: homeColors.ink,
+  },
+  reportLocationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    marginTop: 5,
+  },
+  reportDistance: {
+    marginTop: 3,
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.sm,
+    color: homeColors.ink,
+  },
+  reportAddress: {
+    flex: 1,
+    minWidth: 0,
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.sm,
+    color: homeColors.ink,
+  },
+  reportTime: {
+    marginTop: 4,
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.xs,
+    color: colors.textMuted,
+  },
+  nearbyState: {
+    flex: 1,
+    minHeight: 220,
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.sm,
-    borderRadius: radius.lg,
+    padding: spacing.md,
+  },
+  nearbyMapWrap: {
+    flex: 0.92,
+    minWidth: 0,
+    borderLeftWidth: 1,
+    borderLeftColor: homeColors.border,
+  },
+  nearbyMapWrapCompact: {
+    flex: 1,
+    minHeight: 188,
+    borderLeftWidth: 0,
+    borderTopWidth: 1,
+    borderTopColor: homeColors.border,
+  },
+  nearbyMap: {
+    flex: 1,
+    minHeight: 188,
     backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border,
   },
-
-  // Horizontally scrolling cards preserve the shared post layout on Home.
-  announcementList: {
-    gap: spacing.md,
-    paddingRight: spacing.lg,
-    paddingBottom: spacing.xs,
-  },
-  announcementPostCard: {
-    width: scaleByWidth(385),
-    height: scaleByWidth(320),
-    backgroundColor: colors.card,
+  nearbyMapDetailsButton: {
+    position: 'absolute',
+    right: 8,
+    bottom: 8,
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingLeft: 7,
+    paddingRight: 6,
+    borderRadius: radius.full,
     borderWidth: 1,
-    borderColor: 'rgba(229, 231, 235, 0.9)',
-    borderBottomWidth: 1,
-    borderRadius: radius.lg,
-    paddingVertical: 0,
-    overflow: 'hidden',
+    borderColor: 'rgba(255, 255, 255, 0.92)',
+    backgroundColor: 'rgba(255, 255, 255, 0.96)',
     shadowColor: '#111827',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    elevation: 7,
   },
-  // ---- Empty states (transparent, single unbold line) -------------------
-  emptyCard: {
-    backgroundColor: 'transparent',
-    paddingVertical: spacing.md,
-    paddingLeft: spacing.sm,
-    flexDirection: 'row',
+  nearbyMapDetailsIcon: {
+    width: 30,
+    height: 30,
     alignItems: 'center',
-    justifyContent: 'flex-start',
-    gap: spacing.sm,
+    justifyContent: 'center',
+    borderRadius: 15,
+    backgroundColor: colors.primary,
   },
-  emptyCardDark: {
-    backgroundColor: 'transparent',
-    paddingVertical: spacing.md,
-    paddingLeft: spacing.sm,
-    flexDirection: 'row',
+  nearbyMapDetailsText: {
+    fontFamily: fonts.semibold,
+    fontSize: 11,
+    color: homeColors.ink,
+  },
+  nearbyMapDetailsArrow: {
+    width: 24,
+    height: 24,
     alignItems: 'center',
-    justifyContent: 'flex-start',
-    gap: spacing.sm,
-  },
-  emptyTitle: {
-    fontFamily: fonts.regular,
-    fontSize: fontSizes.md,
-    color: colors.text,
-  },
-  emptyTitleDark: {
-    fontFamily: fonts.regular,
-    fontSize: fontSizes.md,
-    color: colors.textMuted,
+    justifyContent: 'center',
+    borderRadius: 12,
+    backgroundColor: colors.primaryLight,
   },
 
-  // ---- Map preview ------------------------------------------------------
-  mapCard: {
-    marginTop: spacing.md,
-    height: 220,
-    borderRadius: radius.lg,
-    overflow: 'hidden',
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-
-  // ---- Welcome modal overlay (consumed by WelcomeModal) -----------------
+  // Shared by the existing post-registration welcome modal.
   welcomeOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(15, 32, 68, 0.55)',
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
     paddingHorizontal: spacing.lg,
+    backgroundColor: 'rgba(15, 32, 68, 0.55)',
   },
 });

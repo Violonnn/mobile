@@ -1,40 +1,63 @@
-// Home-map preview for the selected nearby report. It uses the same Leaflet
-// component as the Map tab so marker behavior stays consistent across screens.
+// Home-map preview for nearby reports. It uses the same Leaflet component as
+// the Map tab so the visible markers always come from the shared report query.
 import React from 'react';
-import { View } from 'react-native';
+import { Text, TouchableOpacity, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { homeStyles as styles } from '../../styles/screens/home.styles';
-import InteractiveMap, { type MapFocusTarget } from '../map/InteractiveMap';
+import { colors } from '../../styles/theme';
+import InteractiveMap from '../map/InteractiveMap';
 import type { MapReportMarker } from '../../lib/reports';
 
 export default function HomeMapPreview({
-  report,
-  focusTarget,
+  reports,
+  focusedReport,
+  onFocusReport,
   onOpenReport,
 }: {
-  report: MapReportMarker | null;
-  focusTarget: MapFocusTarget | null;
+  reports: MapReportMarker[];
+  focusedReport: MapReportMarker | null;
+  onFocusReport: (reportId: string) => void;
   onOpenReport: (reportId: string) => void;
 }) {
-  // Keep the nearby report's details action visible, even before its card is tapped.
-  const activeFocusTarget =
-    focusTarget ??
-    (report
-      ? {
-          reportId: report.id,
-          latitude: report.latitude,
-          longitude: report.longitude,
-        }
-      : null);
+  const focusTarget = focusedReport
+    ? {
+        reportId: focusedReport.id,
+        latitude: focusedReport.latitude,
+        longitude: focusedReport.longitude,
+      }
+    : null;
 
   return (
-    <View style={styles.mapCard}>
+    <View style={styles.nearbyMap}>
       <InteractiveMap
-        markers={report ? [report] : []}
-        focusTarget={activeFocusTarget}
-        showReportDetailsPopup={report != null}
-        onReportDetailsRequest={onOpenReport}
+        markers={reports}
+        focusTarget={focusTarget}
+        showReportDetailsPopup={false}
+        onReportSelection={(reportIds) => {
+          const reportId = reportIds[0];
+          if (reportId) onFocusReport(reportId);
+        }}
         showZoomControls={false}
       />
+      {focusedReport ? (
+        <TouchableOpacity
+          style={styles.nearbyMapDetailsButton}
+          activeOpacity={0.84}
+          onPress={() => onOpenReport(focusedReport.id)}
+          accessibilityRole="button"
+          accessibilityLabel={`See details for ${focusedReport.title || 'selected report'}`}
+        >
+          <View style={styles.nearbyMapDetailsIcon}>
+            <Ionicons name="location" size={15} color={colors.white} />
+          </View>
+          <Text style={styles.nearbyMapDetailsText} numberOfLines={1}>
+            See details
+          </Text>
+          <View style={styles.nearbyMapDetailsArrow}>
+            <Ionicons name="arrow-forward" size={14} color={colors.primary} />
+          </View>
+        </TouchableOpacity>
+      ) : null}
     </View>
   );
 }

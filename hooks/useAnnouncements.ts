@@ -8,8 +8,9 @@ import {
 } from '../lib/announcements';
 import { supabase } from '../lib/supabase';
 
-export function useAnnouncements(options?: { limit?: number }) {
+export function useAnnouncements(options?: { limit?: number; realtime?: boolean }) {
   const limit = options?.limit ?? 50;
+  const realtime = options?.realtime ?? true;
   const [announcements, setAnnouncements] = useState<AnnouncementRecord[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -41,6 +42,8 @@ export function useAnnouncements(options?: { limit?: number }) {
   );
 
   useEffect(() => {
+    if (!realtime) return;
+
     const channel = supabase
       .channel(channelName)
       .on(
@@ -55,7 +58,7 @@ export function useAnnouncements(options?: { limit?: number }) {
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [channelName, load]);
+  }, [channelName, load, realtime]);
 
   return {
     announcements,

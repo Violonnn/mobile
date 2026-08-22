@@ -2,11 +2,9 @@
 // Floating white bottom navigation bar with labels.
 //
 // Interaction design:
-//  - Inactive tabs are vertically centered icon + label. The active tab is a
-//    blue circle (white icon) seated at its default position inside the bar
-//    (no lift) and keeps its label below.
-//  - The center Report control is a borderless soft-red action button (not a
-//    tab route) seated in a carved notch so it never touches the bar.
+//  - Tabs use the reference's simple icon + label treatment. Active items turn
+//    blue without adding a second shape behind the icon.
+//  - The center Report control is a large blue location action above the bar.
 // No animations — static highlight for best performance on low-end devices.
 
 import React, { useCallback, useRef, useState, memo } from 'react';
@@ -45,8 +43,7 @@ function triggerHaptic() {
   Haptics.selectionAsync().catch(() => {});
 }
 
-/** A side tab: icon + label, vertically centered. When focused the icon lives
- *  in a static blue highlight circle; the label stays put. */
+/** A resident tab with a vertically centered icon and label. */
 const NavItem = memo(function NavItem({
   config,
   focused,
@@ -67,21 +64,11 @@ const NavItem = memo(function NavItem({
     >
       <View style={styles.itemContent}>
         <View style={styles.iconHolder}>
-          {focused ? (
-            <View style={styles.activeCircle}>
-              <Ionicons
-                name={config.activeIcon}
-                size={navMetrics.activeIconSize}
-                color={navColors.iconActive}
-              />
-            </View>
-          ) : (
-            <Ionicons
-              name={config.inactiveIcon}
-              size={navMetrics.iconSize}
-              color={navColors.iconInactive}
-            />
-          )}
+          <Ionicons
+            name={focused ? config.activeIcon : config.inactiveIcon}
+            size={focused ? navMetrics.activeIconSize : navMetrics.iconSize}
+            color={focused ? navColors.iconActive : navColors.iconInactive}
+          />
         </View>
         <Text style={[styles.label, focused && styles.labelActive]} numberOfLines={1}>
           {config.label}
@@ -226,8 +213,8 @@ export default function BottomNav({ state, navigation }: BottomTabBarProps) {
         style={[
           styles.wrapper,
           {
-            bottom: -insets.bottom,
-            height: navMetrics.barHeight + insets.bottom + navMetrics.barBottomGap,
+            bottom: 0,
+            height: navMetrics.barHeight + insets.bottom,
           },
         ]}
         pointerEvents="box-none"
@@ -235,7 +222,7 @@ export default function BottomNav({ state, navigation }: BottomTabBarProps) {
         <View
           style={[
             styles.bar,
-            { height: navMetrics.barHeight + insets.bottom + navMetrics.barBottomGap },
+            { height: navMetrics.barHeight + insets.bottom },
           ]}
         >
           <View style={styles.row}>

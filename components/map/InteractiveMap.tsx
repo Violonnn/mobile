@@ -29,7 +29,8 @@ export type MapLayerVisibility = {
 
 /** Imperative camera target supplied by a parent route after markers are scoped. */
 export type MapFocusTarget = {
-  reportId: string;
+  reportId?: string;
+  resourceId?: string;
   latitude: number;
   longitude: number;
 };
@@ -40,6 +41,8 @@ type Props = {
   evacuationCenters?: MapResourceMarker[];
   layerVisibility?: MapLayerVisibility;
   showLayerFilters?: boolean;
+  /** Keeps resident layer controls clear of the device status bar. */
+  layerFiltersTopInset?: number;
   onLayerVisibilityChange?: (next: MapLayerVisibility) => void;
   onReportSelection?: (reportIds: string[]) => void;
   /** Used by the home preview: opens a marker popup with a details action. */
@@ -263,7 +266,7 @@ function buildMapHtml(showZoomControls: boolean): string {
         var button = document.createElement('button');
         button.type = 'button';
         button.className = 'report-details-popup-button';
-        button.textContent = 'See details';
+        button.textContent = 'See Details';
         button.addEventListener('click', function(event) {
           L.DomEvent.stop(event);
           postReportDetails(reportId);
@@ -454,6 +457,7 @@ export default function InteractiveMap({
   evacuationCenters = [],
   layerVisibility = DEFAULT_LAYERS,
   showLayerFilters = false,
+  layerFiltersTopInset = spacing.md,
   onLayerVisibilityChange,
   onReportSelection,
   showReportDetailsPopup = false,
@@ -562,43 +566,66 @@ export default function InteractiveMap({
       />
 
       {showLayerFilters ? (
-        <View style={mapStyles.legend} pointerEvents="box-none">
+        <View
+          style={[mapStyles.legend, { top: layerFiltersTopInset }]}
+          pointerEvents="box-none"
+        >
           <Pressable
             style={[
-              mapStyles.legendChip,
-              layerVisibility.reports && mapStyles.legendChipActive,
+              mapStyles.legendRow,
+              !layerVisibility.reports && mapStyles.legendRowInactive,
             ]}
             onPress={() => toggleLayer('reports')}
             accessibilityRole="button"
             accessibilityLabel="Toggle reports layer"
           >
-            <View style={[mapStyles.legendDot, { backgroundColor: '#F04444' }]} />
+            <View
+              style={[
+                mapStyles.legendDot,
+                { backgroundColor: layerVisibility.reports ? '#F04444' : '#9CA3AF' },
+              ]}
+            />
             <Text style={mapStyles.legendText}>Reports</Text>
           </Pressable>
           <Pressable
             style={[
-              mapStyles.legendChip,
-              layerVisibility.facilities && mapStyles.legendChipActive,
+              mapStyles.legendRow,
+              !layerVisibility.facilities && mapStyles.legendRowInactive,
             ]}
             onPress={() => toggleLayer('facilities')}
             accessibilityRole="button"
             accessibilityLabel="Toggle facilities layer"
           >
-            <View style={[mapStyles.legendDot, { backgroundColor: '#1A56DB' }]} />
+            <View
+              style={[
+                mapStyles.legendDot,
+                { backgroundColor: layerVisibility.facilities ? '#1A56DB' : '#9CA3AF' },
+              ]}
+            />
             <Text style={mapStyles.legendText}>Facilities</Text>
           </Pressable>
           <Pressable
             style={[
-              mapStyles.legendChip,
-              layerVisibility.evacuationCenters && mapStyles.legendChipActive,
+              mapStyles.legendRow,
+              !layerVisibility.evacuationCenters && mapStyles.legendRowInactive,
             ]}
             onPress={() => toggleLayer('evacuationCenters')}
             accessibilityRole="button"
             accessibilityLabel="Toggle evacuation centers layer"
           >
-            <View style={[mapStyles.legendDot, { backgroundColor: '#16A34A' }]} />
-            <Text style={mapStyles.legendText}>Evac</Text>
+            <View
+              style={[
+                mapStyles.legendDot,
+                {
+                  backgroundColor: layerVisibility.evacuationCenters
+                    ? '#16A34A'
+                    : '#9CA3AF',
+                },
+              ]}
+            />
+            <Text style={mapStyles.legendText}>Evacuation centers</Text>
           </Pressable>
+          <Text style={mapStyles.legendHint}>Tap a layer to show or hide</Text>
         </View>
       ) : null}
     </View>
@@ -628,26 +655,19 @@ const mapStyles = StyleSheet.create({
   legend: {
     position: 'absolute',
     left: spacing.md,
-    right: spacing.md,
-    bottom: spacing.md,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    alignItems: 'flex-start',
     gap: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
   },
-  legendChip: {
+  legendRow: {
+    minHeight: 25,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(255,255,255,0.92)',
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(28, 43, 75, 0.08)',
-    opacity: 0.55,
+    gap: 10,
   },
-  legendChipActive: {
-    opacity: 1,
+  legendRowInactive: {
+    opacity: 0.65,
   },
   legendDot: {
     width: 10,
@@ -656,7 +676,13 @@ const mapStyles = StyleSheet.create({
   },
   legendText: {
     fontFamily: fonts.medium,
-    fontSize: 12,
+    fontSize: 14,
     color: colors.text,
+  },
+  legendHint: {
+    marginTop: 2,
+    fontFamily: fonts.regular,
+    fontSize: 11,
+    color: colors.primary,
   },
 });

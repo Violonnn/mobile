@@ -13,6 +13,7 @@ import {
   Image,
   ScrollView,
   RefreshControl,
+  Share,
   StyleSheet,
   ActivityIndicator,
   Platform,
@@ -49,6 +50,13 @@ export function statusLabel(status: string): string {
   if (status === 'escalated') return 'Escalated';
   if (status === 'resolved') return 'Resolved';
   return 'Unverified';
+}
+
+function residentStatusLabel(status: string): string {
+  if (status === 'verified') return 'RECEIVED';
+  if (status === 'escalated') return 'ESCALATED';
+  if (status === 'resolved') return 'RESOLVED';
+  return 'UNDER REVIEW';
 }
 
 export function statusStyle(status: string) {
@@ -606,6 +614,136 @@ export function ReportDetailContent({
   );
 }
 
+function ResidentFeedReportContent({
+  report,
+  distanceLabel,
+  onRequestExpand,
+  onRequestComments,
+}: {
+  report: MapReportMarker;
+  distanceLabel?: string;
+  onRequestExpand: () => void;
+  onRequestComments: () => void;
+}) {
+  const { getState, toggleUpvote } = useReportEngagement();
+  const { upvoteCount, commentCount, hasUpvoted } = getState(report);
+  const firstMedia = report.media[0] ?? null;
+  const statusColor =
+    report.status === 'resolved'
+      ? colors.success
+      : report.status === 'verified'
+        ? colors.themeSoft
+        : report.status === 'escalated'
+          ? colors.danger
+          : '#F05B4F';
+
+  const shareReport = async () => {
+    try {
+      await Share.share({
+        message: `${report.title}\n${report.description}\n${formatReportLocation(report)}`,
+        title: report.title,
+      });
+    } catch {
+      // Closing or unavailable native share sheets should not interrupt the feed.
+    }
+  };
+
+  return (
+    <View style={residentFeedStyles.reportContent}>
+      <View style={residentFeedStyles.reporterRow}>
+        <ReporterAvatar reporter={report.reporter} size={46} />
+        <View style={residentFeedStyles.reporterDetails}>
+          <Text style={residentFeedStyles.reporterName} numberOfLines={1}>
+            {formatReporterName(report.reporter)}
+          </Text>
+          <Text style={residentFeedStyles.metaText}>
+            {formatPublishedAt(report.created_at)}
+          </Text>
+          <Text style={residentFeedStyles.metaText} numberOfLines={2}>
+            {formatReportLocation(report)}
+            {distanceLabel ? `  ·  ${distanceLabel}` : ''}
+          </Text>
+        </View>
+        <TouchableOpacity
+          style={residentFeedStyles.moreButton}
+          onPress={onRequestExpand}
+          accessibilityRole="button"
+          accessibilityLabel="Open report details"
+        >
+          <Ionicons name="ellipsis-horizontal" size={21} color={colors.textMuted} />
+        </TouchableOpacity>
+      </View>
+
+      <View style={residentFeedStyles.statusRow}>
+        <View style={[residentFeedStyles.statusDot, { backgroundColor: statusColor }]} />
+        <Text style={[residentFeedStyles.statusText, { color: statusColor }]}>
+          {residentStatusLabel(report.status)}
+        </Text>
+        <View style={residentFeedStyles.statusDivider} />
+        <Text style={residentFeedStyles.typeText}>COMMUNITY REPORT</Text>
+      </View>
+
+      {firstMedia ? (
+        <View style={residentFeedStyles.heroMedia}>
+          <CollageCellContent item={firstMedia} />
+          {report.media.length > 1 ? (
+            <View style={residentFeedStyles.mediaCountBadge}>
+              <Text style={residentFeedStyles.mediaCountText}>
+                {report.media.length} items
+              </Text>
+              <Ionicons name="play" size={13} color={colors.white} />
+            </View>
+          ) : null}
+        </View>
+      ) : (
+        <View style={residentFeedStyles.mediaPlaceholder}>
+          <Ionicons name="image-outline" size={30} color={colors.textMuted} />
+          <Text style={residentFeedStyles.mediaPlaceholderText}>No media attached</Text>
+        </View>
+      )}
+
+      <View style={residentFeedStyles.copyBlock}>
+        <Text style={residentFeedStyles.reportTitle}>{report.title || 'Untitled report'}</Text>
+        <Text style={residentFeedStyles.reportDescription}>
+          {report.description || 'No description provided.'}
+        </Text>
+        <TouchableOpacity
+          style={residentFeedStyles.viewReportButton}
+          onPress={onRequestExpand}
+          accessibilityRole="button"
+          accessibilityLabel="View report details"
+        >
+          <Text style={residentFeedStyles.viewReportText}>View report</Text>
+          <Ionicons name="arrow-forward" size={18} color={colors.primary} />
+        </TouchableOpacity>
+      </View>
+
+      <View style={residentFeedStyles.actionRow}>
+        <TouchableOpacity style={residentFeedStyles.actionButton} onPress={shareReport}>
+          <Ionicons name="paper-plane-outline" size={23} color={colors.text} />
+          <Text style={residentFeedStyles.actionText}>Share</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={residentFeedStyles.actionButton}
+          onPress={() => toggleUpvote(report)}
+          disabled={Boolean(report.isPending)}
+        >
+          <Ionicons
+            name={hasUpvoted ? 'arrow-up-circle' : 'arrow-up-outline'}
+            size={24}
+            color={hasUpvoted ? colors.primary : colors.text}
+          />
+          <Text style={residentFeedStyles.actionText}>{upvoteCount} Upvote</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={residentFeedStyles.actionButton} onPress={onRequestComments}>
+          <Ionicons name="chatbubble-outline" size={22} color={colors.text} />
+          <Text style={residentFeedStyles.actionText}>{commentCount} Comments</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
 /**
  * A single report shown as a self-contained, uniform box (used in the feed).
  * Tapping the post (or the "+N" media cell) opens a centered pop-up modal
@@ -616,9 +754,13 @@ export function ReportDetailContent({
 export function ReportDetailCard({
   report,
   isLast = false,
+  variant = 'default',
+  distanceLabel,
 }: {
   report: MapReportMarker;
   isLast?: boolean;
+  variant?: 'default' | 'residentFeed';
+  distanceLabel?: string;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [focusComments, setFocusComments] = useState(false);
@@ -684,11 +826,20 @@ export function ReportDetailCard({
         style={[reportDetailStyles.feedCard, isLast && reportDetailStyles.feedCardLast]}
         onPress={() => openExpanded(false)}
       >
-        <ReportDetailContent
-          report={report}
-          onRequestExpand={() => openExpanded(false)}
-          onRequestComments={() => openExpanded(true)}
-        />
+        {variant === 'residentFeed' ? (
+          <ResidentFeedReportContent
+            report={report}
+            distanceLabel={distanceLabel}
+            onRequestExpand={() => openExpanded(false)}
+            onRequestComments={() => openExpanded(true)}
+          />
+        ) : (
+          <ReportDetailContent
+            report={report}
+            onRequestExpand={() => openExpanded(false)}
+            onRequestComments={() => openExpanded(true)}
+          />
+        )}
       </Pressable>
 
       {/* Full-post sheet: matches the map screen's report-details sheet format. */}
@@ -804,6 +955,150 @@ export function ReportDetailCard({
     </>
   );
 }
+
+const residentFeedStyles = StyleSheet.create({
+  reportContent: {
+    gap: spacing.md,
+  },
+  reporterRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+  },
+  reporterDetails: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
+  },
+  moreButton: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  reporterName: {
+    fontFamily: fonts.bold,
+    fontSize: 17,
+    color: colors.text,
+  },
+  metaText: {
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.md,
+    lineHeight: 20,
+    color: colors.textMuted,
+  },
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  statusDot: {
+    width: 10,
+    height: 10,
+    borderRadius: radius.full,
+  },
+  statusText: {
+    fontFamily: fonts.medium,
+    fontSize: fontSizes.md,
+  },
+  statusDivider: {
+    width: 1,
+    height: 20,
+    backgroundColor: colors.border,
+  },
+  typeText: {
+    flex: 1,
+    fontFamily: fonts.medium,
+    fontSize: fontSizes.sm,
+    color: colors.textMuted,
+  },
+  heroMedia: {
+    position: 'relative',
+    width: '100%',
+    aspectRatio: 1.75,
+    borderRadius: radius.lg,
+    overflow: 'hidden',
+    backgroundColor: colors.background,
+  },
+  mediaCountBadge: {
+    position: 'absolute',
+    top: spacing.md,
+    right: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.full,
+    backgroundColor: 'rgba(17, 24, 39, 0.75)',
+  },
+  mediaCountText: {
+    fontFamily: fonts.medium,
+    fontSize: fontSizes.md,
+    color: colors.white,
+  },
+  mediaPlaceholder: {
+    width: '100%',
+    aspectRatio: 2.1,
+    borderRadius: radius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.background,
+  },
+  mediaPlaceholderText: {
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.sm,
+    color: colors.textMuted,
+  },
+  copyBlock: {
+    gap: spacing.sm,
+  },
+  reportTitle: {
+    fontFamily: fonts.bold,
+    fontSize: fontSizes.xl,
+    lineHeight: 27,
+    color: colors.text,
+  },
+  reportDescription: {
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.md,
+    lineHeight: 22,
+    color: colors.textMuted,
+  },
+  viewReportButton: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.sm,
+  },
+  viewReportText: {
+    fontFamily: fonts.semibold,
+    fontSize: fontSizes.lg,
+    color: colors.primary,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    // The parent already provides spacing; pull this row slightly closer to
+    // the View report action while keeping the two controls visually separate.
+    marginTop: -spacing.sm,
+  },
+  actionButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    minHeight: 40,
+  },
+  actionText: {
+    fontFamily: fonts.regular,
+    fontSize: 11,
+    color: colors.text,
+  },
+});
 
 export const reportDetailStyles = StyleSheet.create({
   feedCard: {
