@@ -24,8 +24,8 @@ import MdrrmoHeader from '../../components/official/MdrrmoHeader';
 import { statusLabel } from '../../components/report/ReportDetailCard';
 import { formatPublishedAt } from '../../lib/formatTime';
 import type { ReportStatus } from '../../lib/officialReports';
-import OfficialReportModal from '../../components/official/OfficialReportModal';
 import MayorSituations from '../../components/official/MayorSituations';
+import MdrrmoReportsWorkspace from '../../components/official/MdrrmoReportsWorkspace';
 
 type StatusFilter = ReportStatus | 'all';
 type OfficialReportSort = 'recent' | 'relevance' | 'oldest';
@@ -98,7 +98,6 @@ export default function OfficialIncidentsScreen() {
   const [sort, setSort] = useState<OfficialReportSort>('recent');
   const [statusOpen, setStatusOpen] = useState(false);
   const [sortOpen, setSortOpen] = useState(false);
-  const [officialReportModalVisible, setOfficialReportModalVisible] = useState(false);
 
   useEffect(() => {
     // A validated link temporarily overrides the role's normal queue default.
@@ -107,7 +106,7 @@ export default function OfficialIncidentsScreen() {
   }, [status]);
 
   const activeFilter = statusFilter ?? defaultFilter(officialKind);
-  const { reports, error, loading, refreshing, refresh, reload } =
+  const { reports, counts, error, loading, refreshing, refresh, reload } =
     useOfficialReportQueue(officialKind === 'Mayor' ? null : scope);
 
   const filtered = useMemo(() => {
@@ -173,6 +172,21 @@ export default function OfficialIncidentsScreen() {
     return <MayorSituations />;
   }
 
+  if (officialKind === 'MDRRMO') {
+    return (
+      <MdrrmoReportsWorkspace
+        reports={reports}
+        counts={counts}
+        error={error}
+        loading={loading}
+        refreshing={refreshing}
+        initialStatus={routeStatus(status)}
+        onRefresh={refresh}
+        onReload={reload}
+      />
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <StatusBar style="dark" />
@@ -191,13 +205,7 @@ export default function OfficialIncidentsScreen() {
               canLogIncident ? (
                 <TouchableOpacity
                   style={styles.headerLogoutButton}
-                  onPress={() => {
-                    if (officialKind === 'MDRRMO') {
-                      setOfficialReportModalVisible(true);
-                      return;
-                    }
-                    router.push('/official/log-incident' as Href);
-                  }}
+                  onPress={() => router.push('/official/log-incident' as Href)}
                   accessibilityRole="button"
                   accessibilityLabel="Log verified incident"
                 >
@@ -418,16 +426,6 @@ export default function OfficialIncidentsScreen() {
             </TouchableOpacity>
           ))}
       </ScrollView>
-      {officialKind === 'MDRRMO' ? (
-        <OfficialReportModal
-          visible={officialReportModalVisible}
-          onClose={() => setOfficialReportModalVisible(false)}
-          onSubmitted={() => {
-            setOfficialReportModalVisible(false);
-            void reload();
-          }}
-        />
-      ) : null}
     </SafeAreaView>
   );
 }
