@@ -33,6 +33,7 @@ import type { AnnouncementDraftMedia } from '../../lib/announcementMedia';
 import { fetchMyOfficialPublicProfile, type OfficialPublicProfile } from '../../lib/profile';
 import OfficialAnnouncementPostCard from '../../components/official/OfficialAnnouncementPostCard';
 import OfficialReportPostCard from '../../components/official/OfficialReportPostCard';
+import MdrrmoCommunityFeed from '../../components/official/MdrrmoCommunityFeed';
 import { AnnouncementEngagementProvider } from '../../components/official/AnnouncementEngagementProvider';
 import { ReportEngagementProvider } from '../../components/report/ReportEngagementProvider';
 
@@ -40,48 +41,17 @@ const PAGE_SIZE = 5;
 // How close to the bottom (px) before we reveal the next batch of reports.
 const LOAD_MORE_THRESHOLD = 80;
 
-type CommunitySection = 'community' | 'resources';
-
-/** Centered Community / Resources icon switch for operational official roles. */
-function CommunitySectionSwitch({
-  activeSection,
-  onSelect,
-}: {
-  activeSection: CommunitySection;
-  onSelect: (section: CommunitySection) => void;
+function BdrrmoCommunitySectionSwitch({ showingResources, onSelect }: {
+  showingResources: boolean;
+  onSelect: (resources: boolean) => void;
 }) {
-  const communityActive = activeSection === 'community';
-  const resourcesActive = activeSection === 'resources';
-
   return (
     <View style={styles.communitySectionSwitch}>
-      <TouchableOpacity
-        style={styles.communitySectionIconButton}
-        onPress={() => onSelect('community')}
-        activeOpacity={0.85}
-        accessibilityRole="button"
-        accessibilityState={{ selected: communityActive }}
-        accessibilityLabel="Community"
-      >
-        <Ionicons
-          name={communityActive ? 'people' : 'people-outline'}
-          size={24}
-          color={communityActive ? colors.themeSoft : colors.textMuted}
-        />
+      <TouchableOpacity style={styles.communitySectionIconButton} onPress={() => onSelect(false)} accessibilityRole="button" accessibilityState={{ selected: !showingResources }} accessibilityLabel="Community">
+        <Ionicons name={showingResources ? 'people-outline' : 'people'} size={24} color={showingResources ? colors.textMuted : colors.themeSoft} />
       </TouchableOpacity>
-      <TouchableOpacity
-        style={styles.communitySectionIconButton}
-        onPress={() => onSelect('resources')}
-        activeOpacity={0.85}
-        accessibilityRole="button"
-        accessibilityState={{ selected: resourcesActive }}
-        accessibilityLabel="Resources"
-      >
-        <Ionicons
-          name={resourcesActive ? 'business' : 'business-outline'}
-          size={24}
-          color={resourcesActive ? colors.themeSoft : colors.textMuted}
-        />
+      <TouchableOpacity style={styles.communitySectionIconButton} onPress={() => onSelect(true)} accessibilityRole="button" accessibilityState={{ selected: showingResources }} accessibilityLabel="Resources">
+        <Ionicons name={showingResources ? 'business' : 'business-outline'} size={24} color={showingResources ? colors.themeSoft : colors.textMuted} />
       </TouchableOpacity>
     </View>
   );
@@ -132,12 +102,9 @@ export default function OfficialCommunityScreen() {
   );
   const communityReports = sortedReports.slice(0, visibleReportCount);
   const hasMoreReports = visibleReportCount < sortedReports.length;
-  const requestedSection = Array.isArray(section) ? section[0] : section;
   const requestedCompose = Array.isArray(compose) ? compose[0] : compose;
-  const usesCommunityResources =
-    officialKind === 'BDRRMO' || officialKind === 'MDRRMO';
-  const showingResources =
-    usesCommunityResources && requestedSection === 'resources';
+  const requestedSection = Array.isArray(section) ? section[0] : section;
+  const showingBdrrmoResources = officialKind === 'BDRRMO' && requestedSection === 'resources';
 
   useEffect(() => {
     if (!canPublish) return;
@@ -162,20 +129,16 @@ export default function OfficialCommunityScreen() {
     loadLockRef.current = false;
   }, [visibleReportCount]);
 
-  function openCommunitySection(nextSection: CommunitySection) {
-    if (nextSection === 'resources') {
-      router.replace('/official/community?section=resources' as Href);
-      return;
-    }
-    router.replace('/official/community' as Href);
-  }
-
   function loadMoreReports() {
     if (loadLockRef.current || !hasMoreReports) return;
     loadLockRef.current = true;
     setVisibleReportCount((current) =>
       Math.min(current + PAGE_SIZE, sortedReports.length),
     );
+  }
+
+  function selectBdrrmoSection(resources: boolean) {
+    router.replace((resources ? '/official/community?section=resources' : '/official/community') as Href);
   }
 
   function handleScroll(event: NativeSyntheticEvent<NativeScrollEvent>) {
@@ -240,28 +203,15 @@ export default function OfficialCommunityScreen() {
     );
   }
 
-  if (showingResources) {
+  if (showingBdrrmoResources) {
     return (
       <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
         <StatusBar style="dark" />
         <ResourceManagementContent
           header={
             <>
-              {usesCommunityResources ? (
-                <MdrrmoHeader title="Community" />
-              ) : (
-                <View style={styles.headerTextGroup}>
-                  <Text style={styles.brandLabel}>DisasterLink</Text>
-                  <Text style={styles.screenTitle}>Community</Text>
-                  <Text style={styles.screenSubtitle}>
-                    Community and resource management
-                  </Text>
-                </View>
-              )}
-              <CommunitySectionSwitch
-                activeSection="resources"
-                onSelect={openCommunitySection}
-              />
+              <MdrrmoHeader title="Community" />
+              <BdrrmoCommunitySectionSwitch showingResources onSelect={selectBdrrmoSection} />
             </>
           }
         />
@@ -286,16 +236,30 @@ export default function OfficialCommunityScreen() {
           onScroll={handleScroll}
           scrollEventThrottle={16}
         >
-          <MdrrmoHeader
-            title="Community"
-            showDefaultControls={officialKind === 'Mayor'}
-          />
-
-          {usesCommunityResources ? (
-            <CommunitySectionSwitch
-              activeSection="community"
-              onSelect={openCommunitySection}
+          {officialKind === 'MDRRMO' ? (
+            <MdrrmoCommunityFeed
+              announcements={announcements}
+              announcementError={error}
+              announcementsLoading={loading}
+              reports={reports}
+              reportsError={reportsError}
+              reportsLoading={reportsLoading}
+              officialProfile={officialProfile}
+              visibleReportCount={visibleReportCount}
+              onCompose={() => setComposerVisible(true)}
+              onLoadMoreReports={loadMoreReports}
+              onRetryAnnouncements={() => void reload()}
+              onRetryReports={() => void reloadReports()}
             />
+          ) : (
+            <>
+              <MdrrmoHeader
+                title="Community"
+                showDefaultControls={officialKind === 'Mayor'}
+              />
+
+          {officialKind === 'BDRRMO' ? (
+            <BdrrmoCommunitySectionSwitch showingResources={false} onSelect={selectBdrrmoSection} />
           ) : null}
 
           <View style={styles.section}>
@@ -439,6 +403,8 @@ export default function OfficialCommunityScreen() {
               </>
             ) : null}
           </View>
+            </>
+          )}
         </ScrollView>
       </KeyboardAvoidingView>
       {canPublish ? (

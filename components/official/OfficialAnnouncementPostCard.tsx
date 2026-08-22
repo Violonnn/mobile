@@ -379,6 +379,121 @@ function ResidentFeedAnnouncementContent({
   );
 }
 
+/**
+ * Full-width official feed post. This keeps the resident engagement language,
+ * while giving officials clearer authorship, scope, and publishing context.
+ */
+function OfficialCommunityAnnouncementContent({
+  announcement,
+  onRequestExpand,
+  onRequestComments,
+}: {
+  announcement: AnnouncementRecord;
+  onRequestExpand: () => void;
+  onRequestComments: () => void;
+}) {
+  const { getState, toggleUpvote } = useAnnouncementEngagement();
+  const { upvoteCount, commentCount, hasUpvoted } = getState(announcement);
+  const firstMedia = announcement.media[0] ? toReportMedia(announcement.media[0]) : null;
+  const displayName = formatAnnouncementAuthorName(announcement.author);
+  const scopeLabel = announcement.scope === 'municipal' ? 'MUNICIPAL ADVISORY' : 'BARANGAY ADVISORY';
+  const title = announcement.title.trim() || announcement.body.trim() || 'Official update';
+
+  const shareAnnouncement = async () => {
+    try {
+      await Share.share({ message: `${title}\n${announcement.body}`, title });
+    } catch {
+      // Closing or unavailable native share sheets should not interrupt the feed.
+    }
+  };
+
+  return (
+    <View style={officialCommunityStyles.content}>
+      <View style={officialCommunityStyles.authorRow}>
+        <ReporterAvatar
+          reporter={{
+            id: announcement.author.id,
+            firstName: announcement.author.firstName,
+            lastName: announcement.author.lastName,
+            middleName: announcement.author.middleName,
+          }}
+          size={44}
+        />
+        <View style={officialCommunityStyles.authorCopy}>
+          <Text style={officialCommunityStyles.authorName} numberOfLines={1}>
+            {displayName}
+            <Text style={officialCommunityStyles.authorRole}> · {announcement.author.roleLabel}</Text>
+          </Text>
+          <Text style={officialCommunityStyles.date}>{formatPublishedAt(announcement.createdAt)}</Text>
+        </View>
+        {announcement.isPinned ? (
+          <Ionicons name="pin-outline" size={20} color={colors.textMuted} />
+        ) : null}
+      </View>
+
+      {firstMedia ? (
+        <View style={officialCommunityStyles.mediaFrame}>
+          <CollageCellContent item={firstMedia} />
+          <View style={officialCommunityStyles.scopeBadge}>
+            <Text style={officialCommunityStyles.scopeBadgeText}>{scopeLabel}</Text>
+          </View>
+          {announcement.media.length > 1 ? (
+            <View style={officialCommunityStyles.mediaCountBadge}>
+              <Ionicons name="images-outline" size={13} color={colors.white} />
+              <Text style={officialCommunityStyles.mediaCountText}>{announcement.media.length}</Text>
+            </View>
+          ) : null}
+        </View>
+      ) : (
+        <View style={officialCommunityStyles.noMediaScopeRow}>
+          <View style={officialCommunityStyles.scopeAccent} />
+          <Text style={officialCommunityStyles.noMediaScopeText}>{scopeLabel}</Text>
+        </View>
+      )}
+
+      <View style={officialCommunityStyles.postCopy}>
+        <Text style={officialCommunityStyles.title}>{title}</Text>
+        {announcement.body.trim() && announcement.body.trim() !== title ? (
+          <Text style={officialCommunityStyles.body} numberOfLines={4}>
+            {announcement.body.trim()}
+          </Text>
+        ) : null}
+        <TouchableOpacity
+          style={officialCommunityStyles.readAction}
+          onPress={onRequestExpand}
+          accessibilityRole="button"
+          accessibilityLabel="Read announcement"
+        >
+          <Text style={officialCommunityStyles.readActionText}>Read announcement</Text>
+          <Ionicons name="arrow-forward" size={18} color={colors.primary} />
+        </TouchableOpacity>
+      </View>
+
+      <View style={officialCommunityStyles.engagementRow}>
+        <TouchableOpacity style={officialCommunityStyles.engagementAction} onPress={shareAnnouncement}>
+          <Ionicons name="paper-plane-outline" size={22} color={colors.text} />
+          <Text style={officialCommunityStyles.engagementText}>Share</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={officialCommunityStyles.engagementAction}
+          onPress={() => toggleUpvote(announcement)}
+        >
+          <Ionicons
+            name={hasUpvoted ? 'arrow-up-circle' : 'arrow-up-outline'}
+            size={23}
+            color={hasUpvoted ? colors.primary : colors.text}
+          />
+          <Text style={officialCommunityStyles.engagementText}>{upvoteCount} Upvote</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={officialCommunityStyles.engagementAction} onPress={onRequestComments}>
+          <Ionicons name="chatbubble-outline" size={21} color={colors.text} />
+          <Text style={officialCommunityStyles.engagementText}>{commentCount} Comments</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
 export default function OfficialAnnouncementPostCard({
   announcement,
   moderationMode = 'none',
@@ -391,7 +506,7 @@ export default function OfficialAnnouncementPostCard({
   moderationMode?: 'none' | 'scoped';
   /** Lets horizontally scrolling resident cards keep the shared post layout. */
   cardStyle?: StyleProp<ViewStyle>;
-  variant?: 'default' | 'residentCompact' | 'residentFeedFeatured' | 'residentFeedCompact';
+  variant?: 'default' | 'residentCompact' | 'residentFeedFeatured' | 'residentFeedCompact' | 'officialCommunity';
   isUnread?: boolean;
   onOpened?: (announcementId: string) => void;
 }) {
@@ -460,6 +575,12 @@ export default function OfficialAnnouncementPostCard({
             announcement={announcement}
             compact={variant === 'residentFeedCompact'}
             isUnread={isUnread}
+            onRequestExpand={() => openExpanded(false)}
+            onRequestComments={() => openExpanded(true)}
+          />
+        ) : variant === 'officialCommunity' ? (
+          <OfficialCommunityAnnouncementContent
+            announcement={announcement}
             onRequestExpand={() => openExpanded(false)}
             onRequestComments={() => openExpanded(true)}
           />
@@ -796,5 +917,138 @@ const residentFeedAnnouncementStyles = StyleSheet.create({
     height: 9,
     borderRadius: radius.full,
     backgroundColor: colors.primary,
+  },
+});
+
+const officialCommunityStyles = StyleSheet.create({
+  content: {
+    gap: spacing.md,
+  },
+  authorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  authorCopy: {
+    flex: 1,
+    minWidth: 0,
+    gap: 3,
+  },
+  authorName: {
+    fontFamily: fonts.semibold,
+    fontSize: fontSizes.md,
+    color: colors.text,
+  },
+  authorRole: {
+    fontFamily: fonts.regular,
+    color: colors.textMuted,
+  },
+  date: {
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.sm,
+    color: colors.textMuted,
+  },
+  mediaFrame: {
+    width: '100%',
+    aspectRatio: 1.6,
+    position: 'relative',
+    overflow: 'hidden',
+    borderRadius: radius.lg,
+    backgroundColor: colors.background,
+  },
+  scopeBadge: {
+    position: 'absolute',
+    top: spacing.md,
+    left: spacing.md,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+    borderRadius: radius.sm,
+    backgroundColor: 'rgba(26, 86, 219, 0.88)',
+  },
+  scopeBadgeText: {
+    fontFamily: fonts.semibold,
+    fontSize: fontSizes.sm,
+    letterSpacing: 0.5,
+    color: colors.white,
+  },
+  mediaCountBadge: {
+    position: 'absolute',
+    top: spacing.md,
+    right: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+    borderRadius: radius.full,
+    backgroundColor: 'rgba(17, 24, 39, 0.72)',
+  },
+  mediaCountText: {
+    fontFamily: fonts.semibold,
+    fontSize: fontSizes.sm,
+    color: colors.white,
+  },
+  noMediaScopeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  scopeAccent: {
+    width: 3,
+    height: 22,
+    borderRadius: radius.full,
+    backgroundColor: colors.primary,
+  },
+  noMediaScopeText: {
+    fontFamily: fonts.semibold,
+    fontSize: fontSizes.sm,
+    letterSpacing: 0.4,
+    color: colors.primary,
+  },
+  postCopy: {
+    gap: spacing.sm,
+  },
+  title: {
+    fontFamily: fonts.bold,
+    fontSize: fontSizes.xl,
+    lineHeight: 28,
+    color: colors.text,
+  },
+  body: {
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.md,
+    lineHeight: 22,
+    color: colors.textMuted,
+  },
+  readAction: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    minHeight: 40,
+  },
+  readActionText: {
+    fontFamily: fonts.semibold,
+    fontSize: fontSizes.md,
+    color: colors.primary,
+  },
+  engagementRow: {
+    flexDirection: 'row',
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    paddingTop: spacing.sm,
+  },
+  engagementAction: {
+    flex: 1,
+    minHeight: 42,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  engagementText: {
+    fontFamily: fonts.regular,
+    fontSize: 11,
+    color: colors.text,
   },
 });
