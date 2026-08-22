@@ -8,15 +8,18 @@ export type EvacuationSummary = {
   totalCount: number;
   declaredCapacity: number;
   missingCapacityCount: number;
+  attentionCount: number;
   attentionCenters: EvacuationCenterRecord[];
 };
 
 function attentionRank(center: EvacuationCenterRecord): number {
-  if (center.isPriority && center.status === 'full') return 0;
-  if (center.status === 'full') return 1;
-  if (center.isPriority) return 2;
-  if (!center.lastUpdatedAt) return 3;
-  return 4;
+  if (center.capacity === null && center.isPriority) return 0;
+  if (center.capacity === null) return 1;
+  if (center.isPriority && center.status === 'full') return 2;
+  if (center.status === 'full') return 3;
+  if (center.isPriority) return 4;
+  if (!center.lastUpdatedAt) return 5;
+  return 6;
 }
 
 function updateTime(center: EvacuationCenterRecord): number {
@@ -40,16 +43,15 @@ export function summarizeEvacuationCenters(
     (center) => center.capacity === null,
   ).length;
 
-  const attentionCenters = centers
-    .filter((center) => attentionRank(center) < 4)
+  const allAttentionCenters = centers
+    .filter((center) => attentionRank(center) < 6)
     .sort((left, right) => {
       const rankDifference = attentionRank(left) - attentionRank(right);
       if (rankDifference !== 0) return rankDifference;
       const updateDifference = updateTime(left) - updateTime(right);
       if (updateDifference !== 0) return updateDifference;
       return left.name.localeCompare(right.name);
-    })
-    .slice(0, 3);
+    });
 
   return {
     openCount,
@@ -58,6 +60,7 @@ export function summarizeEvacuationCenters(
     totalCount: centers.length,
     declaredCapacity,
     missingCapacityCount,
-    attentionCenters,
+    attentionCount: allAttentionCenters.length,
+    attentionCenters: allAttentionCenters.slice(0, 3),
   };
 }

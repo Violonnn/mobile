@@ -1,12 +1,14 @@
-// Compact Command evacuation summary based only on declared center data.
 import React, { useEffect, useMemo, useState } from 'react';
 import { Text, TouchableOpacity, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter, type Href } from 'expo-router';
-import { officialStyles as styles } from '../../styles/screens/official.styles';
-import { summarizeEvacuationCenters } from '../../lib/evacuationSummary';
-import { evacuationStatusLabel, type EvacuationCenterRecord } from '../../lib/resources';
-import type { OfficialKind } from '../../lib/officialReports';
+import InteractiveMap, { type MapResourceMarker } from '../map/InteractiveMap';
 import { fetchBarangays } from '../../lib/barangays';
+import { summarizeEvacuationCenters } from '../../lib/evacuationSummary';
+import type { EvacuationCenterRecord } from '../../lib/resources';
+import type { OfficialKind } from '../../lib/officialReports';
+import { mdrrmoCommandStyles as styles } from '../../styles/screens/mdrrmoCommand.styles';
+import { officialStyles } from '../../styles/screens/official.styles';
 
 type EvacuationSummarySectionProps = {
   centers: EvacuationCenterRecord[];
@@ -14,75 +16,148 @@ type EvacuationSummarySectionProps = {
   officialKind: OfficialKind | null;
 };
 
-function formatLastUpdate(value: string | null): string {
-  if (!value) return 'Not updated yet';
+function formatUpdate(value: string | null): string {
+  if (!value) return 'Not updated';
   const date = new Date(value);
-  return Number.isFinite(date.getTime()) ? date.toLocaleString() : 'Not updated yet';
+  if (Number.isNaN(date.getTime())) return 'Not updated';
+  return date.toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit' });
 }
 
-export default function EvacuationSummarySection({
-  centers,
-  error,
-  officialKind,
-}: EvacuationSummarySectionProps) {
+export default function EvacuationSummarySection({ centers, error, officialKind }: EvacuationSummarySectionProps) {
   const router = useRouter();
   const summary = useMemo(() => summarizeEvacuationCenters(centers), [centers]);
-  const [barangayNameById, setBarangayNameById] = useState<Map<string, string>>(
-    new Map(),
-  );
+  const [barangayNameById, setBarangayNameById] = useState<Map<string, string>>(new Map());
 
   useEffect(() => {
     void fetchBarangays().then((result) => {
-      if (result.error) return;
-      setBarangayNameById(
-        new Map(result.barangays.map((barangay) => [barangay.id, barangay.name])),
-      );
+      if (!result.error) setBarangayNameById(new Map(result.barangays.map((barangay) => [barangay.id, barangay.name])));
     });
   }, []);
 
   function manageCenters() {
-    if (officialKind === 'MDRRMO') {
-      router.push('/official/community?section=resources&tab=centers' as Href);
-      return;
-    }
     router.push('/official/resources?tab=centers' as Href);
+  }
+
+  if (officialKind !== 'MDRRMO') {
+    return (
+      <View style={officialStyles.section}>
+        <View style={officialStyles.resourceSectionHeader}>
+          <Text style={officialStyles.sectionTitle}>Evacuation centers</Text>
+          <TouchableOpacity style={officialStyles.evacuationManageLink} onPress={manageCenters}>
+            <Text style={officialStyles.evacuationManageLinkText}>Manage centers</Text>
+          </TouchableOpacity>
+        </View>
+        {error ? <Text style={officialStyles.stateBody}>{error}</Text> : (
+          <View style={officialStyles.evacuationMetrics}>
+            <View style={officialStyles.evacuationMetric}><Text style={officialStyles.evacuationMetricValue}>{summary.openCount}</Text><Text style={officialStyles.evacuationMetricLabel}>Open</Text></View>
+            <View style={officialStyles.evacuationMetric}><Text style={officialStyles.evacuationMetricValue}>{summary.fullCount}</Text><Text style={officialStyles.evacuationMetricLabel}>Full</Text></View>
+            <View style={officialStyles.evacuationMetric}><Text style={officialStyles.evacuationMetricValue}>{summary.totalCount}</Text><Text style={officialStyles.evacuationMetricLabel}>Total</Text></View>
+          </View>
+        )}
+      </View>
+    );
   }
 
   return (
     <View style={styles.section}>
-      <View style={styles.resourceSectionHeader}>
-        <Text style={styles.sectionTitle}>Evacuation centers</Text>
-        <TouchableOpacity style={styles.evacuationManageLink} onPress={manageCenters}>
-          <Text style={styles.evacuationManageLinkText}>Manage centers</Text>
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionLabel}>EVACUATION NETWORK</Text>
+        <TouchableOpacity style={styles.link} onPress={manageCenters}>
+          <Text style={styles.linkText}>Manage centers</Text>
+          <Ionicons name="arrow-forward" size={19} color="#1A56DB" />
         </TouchableOpacity>
       </View>
 
-      {error ? <View style={styles.stateBox}><Text style={styles.stateTitle}>Center summary unavailable</Text><Text style={styles.stateBody}>{error}</Text></View> : (
+      {error ? (
+        <View style={officialStyles.stateBox}>
+          <Text style={officialStyles.stateTitle}>Center summary unavailable</Text>
+          <Text style={officialStyles.stateBody}>{error}</Text>
+        </View>
+      ) : (
         <>
-          <View style={styles.evacuationMetrics}>
-            <View style={styles.evacuationMetric}><Text style={styles.evacuationMetricValue}>{summary.openCount}</Text><Text style={styles.evacuationMetricLabel}>Open</Text></View>
-            <View style={styles.evacuationMetric}><Text style={styles.evacuationMetricValue}>{summary.fullCount}</Text><Text style={styles.evacuationMetricLabel}>Full</Text></View>
-            <View style={styles.evacuationMetric}><Text style={styles.evacuationMetricValue}>{summary.priorityCount}</Text><Text style={styles.evacuationMetricLabel}>Priority</Text></View>
-            <View style={styles.evacuationMetric}><Text style={styles.evacuationMetricValue}>{summary.totalCount}</Text><Text style={styles.evacuationMetricLabel}>Total</Text></View>
-          </View>
-          <View style={styles.evacuationCapacityCard}>
-            <Text style={styles.evacuationCapacityValue}>{summary.declaredCapacity.toLocaleString()}</Text>
-            <Text style={styles.evacuationCapacityLabel}>Total declared capacity</Text>
-            <Text style={styles.evacuationCapacityMeta}>{summary.missingCapacityCount} center{summary.missingCapacityCount === 1 ? '' : 's'} without declared capacity</Text>
+          <View style={styles.readinessCard}>
+            <View style={styles.readinessTop}>
+              <Text style={styles.readinessLabel}>NETWORK READINESS</Text>
+              <View style={styles.reviewBadge}>
+                <View style={[styles.alertDot, { backgroundColor: summary.attentionCount ? '#FF3B30' : '#16A34A' }]} />
+                <Text style={styles.reviewBadgeText}>
+                  {summary.attentionCount ? `${summary.attentionCount} need${summary.attentionCount === 1 ? 's' : ''} review` : 'Ready'}
+                </Text>
+              </View>
+            </View>
+            <View>
+              <Text style={styles.capacityValue}>{summary.declaredCapacity.toLocaleString()}</Text>
+              <Text style={styles.capacityLabel}>declared capacity</Text>
+            </View>
+            <View style={styles.readinessBar} />
+            <View style={styles.readinessMetrics}>
+              {[
+                { value: summary.openCount, label: 'Open', color: '#169B55' },
+                { value: summary.fullCount, label: 'Full', color: '#64748B' },
+                { value: summary.priorityCount, label: 'Priority', color: '#FF3B30' },
+              ].map((metric, index) => (
+                <View key={metric.label} style={[styles.readinessMetric, index === 2 && styles.readinessMetricLast]}>
+                  <View style={[styles.pipelineDot, { backgroundColor: metric.color }]} />
+                  <Text style={styles.readinessMetricValue}>{metric.value}</Text>
+                  <Text style={styles.readinessMetricLabel}>{metric.label}</Text>
+                </View>
+              ))}
+            </View>
+            <Text style={styles.capacityMeta}>
+              {summary.missingCapacityCount} center{summary.missingCapacityCount === 1 ? '' : 's'} still need capacity details
+            </Text>
           </View>
 
-          {summary.attentionCenters.length > 0 ? <View style={styles.evacuationAttentionList}>
-            <Text style={styles.evacuationAttentionTitle}>Needs attention</Text>
-            {summary.attentionCenters.map((center) => <View key={center.id} style={styles.evacuationAttentionCard}>
-              <View style={styles.queueCardHeader}>
-                <Text style={styles.queueTitle}>{center.name}</Text>
-                <Text style={styles.evacuationAttentionStatus}>{evacuationStatusLabel(center.status)}</Text>
+          {summary.attentionCenters.length > 0 ? (
+            <>
+              <View style={styles.reviewHeader}>
+                <Text style={styles.sectionLabel}>REQUIRES REVIEW</Text>
+                <Text style={styles.reviewCount}>{summary.attentionCount} center{summary.attentionCount === 1 ? '' : 's'}</Text>
               </View>
-              <Text style={styles.queueMeta}>{center.capacity == null ? 'Capacity not declared' : `Declared capacity ${center.capacity}`}{center.isPriority ? ' · Priority' : ''}</Text>
-              {center.barangayId && barangayNameById.get(center.barangayId) ? <Text style={styles.queueMeta}>Barangay: {barangayNameById.get(center.barangayId)}</Text> : null}
-              <Text style={styles.queueMeta}>{formatLastUpdate(center.lastUpdatedAt)}</Text>
-            </View>)}
-          </View> : null}
+              {summary.attentionCenters.slice(0, 1).map((center) => {
+                const marker: MapResourceMarker = {
+                  id: center.id,
+                  kind: 'evacuation',
+                  name: center.name,
+                  latitude: center.latitude,
+                  longitude: center.longitude,
+                  isPriority: center.isPriority,
+                };
+                return (
+                  <View key={center.id} style={styles.reviewCard}>
+                    <View style={styles.reviewAccent} />
+                    <View style={styles.reviewMap} pointerEvents="none">
+                      <InteractiveMap markers={[]} facilities={[]} evacuationCenters={[marker]} showZoomControls={false} tone="dark" />
+                    </View>
+                    <View style={styles.reviewCopy}>
+                      <View style={styles.reviewNameRow}>
+                        <Text style={styles.reviewName} numberOfLines={2}>{center.name}</Text>
+                        {center.isPriority ? <View style={styles.priorityPill}><Text style={styles.priorityPillText}>Priority</Text></View> : null}
+                      </View>
+                      <Text style={styles.reviewMeta} numberOfLines={2}>
+                        {center.barangayId ? barangayNameById.get(center.barangayId) || 'Barangay unavailable' : 'Barangay unavailable'}
+                      </Text>
+                      <Text style={styles.reviewMeta}>
+                        {center.capacity == null ? 'Capacity not set' : `Capacity ${center.capacity}`} · Updated {formatUpdate(center.lastUpdatedAt)}
+                      </Text>
+                      <TouchableOpacity style={styles.reviewAction} onPress={manageCenters}>
+                        <Text style={styles.reviewActionText}>Review center</Text>
+                        <Ionicons name="arrow-forward" size={18} color="#1A56DB" />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                );
+              })}
+              {summary.missingCapacityCount > 0 ? (
+                <TouchableOpacity style={styles.incompleteRow} onPress={manageCenters}>
+                  <Ionicons name="information-circle" size={28} color="#64748B" />
+                  <Text style={styles.incompleteCopy}>Capacity information incomplete</Text>
+                  <Text style={styles.linkText}>Complete details</Text>
+                  <Ionicons name="arrow-forward" size={19} color="#1A56DB" />
+                </TouchableOpacity>
+              ) : null}
+            </>
+          ) : null}
         </>
       )}
     </View>

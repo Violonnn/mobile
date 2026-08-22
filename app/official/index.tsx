@@ -29,6 +29,7 @@ import { NotificationsPlaceholder } from '../../components/navigation/AppHeader'
 import MdrrmoHeader from '../../components/official/MdrrmoHeader';
 import EvacuationSummarySection from '../../components/official/EvacuationSummarySection';
 import MayorDashboard from '../../components/official/MayorDashboard';
+import MdrrmoCommandDashboard from '../../components/official/MdrrmoCommandDashboard';
 import {
   fetchMyOfficialPublicProfile,
   type OfficialPublicProfile,
@@ -140,8 +141,8 @@ export default function OfficialCommandScreen() {
   }, []);
 
   useEffect(() => {
-    if (isOperationalCommand) void loadProfile();
-  }, [isOperationalCommand, loadProfile]);
+    if (officialKind === 'BDRRMO') void loadProfile();
+  }, [officialKind, loadProfile]);
 
   async function handleLogout() {
     setLoggingOut(true);
@@ -193,6 +194,23 @@ export default function OfficialCommandScreen() {
           </View>
         </View>
       </SafeAreaView>
+    );
+  }
+
+  if (officialKind === 'MDRRMO') {
+    return (
+      <MdrrmoCommandDashboard
+        reports={reports}
+        counts={counts}
+        reportsError={error}
+        reportsLoading={loading}
+        reportsRefreshing={refreshing}
+        reloadReports={reload}
+        refreshReports={refresh}
+        centers={centers}
+        centersError={centersError}
+        refreshCenters={refreshCenters}
+      />
     );
   }
 

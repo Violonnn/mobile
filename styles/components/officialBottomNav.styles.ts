@@ -1,75 +1,82 @@
-// styles/components/officialBottomNav.styles.ts
-// Fixed white bottom bar for the official portal — five equal destinations,
-// soft-blue active circle matching AdminBottomNav (no Report action).
-
 import { StyleSheet } from 'react-native';
-import { colors, fonts } from '../theme';
+import { fonts } from '../theme';
 
 export const officialNavMetrics = {
-  barHeight: 74,
+  barHeight: 78,
   barRadius: 24,
-  iconSize: 22,
-  activeIconSize: 24,
-  labelGap: 3,
-  labelLineHeight: 12,
-  hlWidth: 36,
-  hlHeight: 36,
+  barMarginHorizontal: 8,
+  iconSize: 25,
+  activeIconSize: 27,
+  labelGap: 5,
+  labelLineHeight: 14,
+  hlWidth: 38,
+  hlHeight: 32,
   itemMinWidth: 56,
-  incidentSize: 54,
-  incidentIconSize: 26,
-  incidentLift: 20,
-  incidentCarveGap: 6,
+  incidentSize: 64,
+  incidentIconSize: 31,
+  incidentLift: 25,
+  incidentCarveGap: 7,
 };
 
 export const officialNavColors = {
   bar: '#FFFFFF',
-  iconInactive: '#9CA3AF',
-  iconActive: '#FFFFFF',
-  labelInactive: '#9CA3AF',
-  labelActive: colors.themeSoft,
-  circleFill: colors.themeSoft,
-  incident: '#F26E6E',
+  iconInactive: '#20252C',
+  iconActive: '#378FE7',
+  labelInactive: '#20252C',
+  labelActive: '#378FE7',
+  incident: '#F0524A',
   incidentIcon: '#FFFFFF',
-  carve: colors.white,
+  carve: '#EAF3FC',
 };
+
+const ITEM_CONTENT_HEIGHT =
+  officialNavMetrics.hlHeight +
+  officialNavMetrics.labelGap +
+  officialNavMetrics.labelLineHeight;
+const SIDE_LABEL_TOP =
+  (officialNavMetrics.barHeight - ITEM_CONTENT_HEIGHT) / 2 +
+  officialNavMetrics.hlHeight +
+  officialNavMetrics.labelGap;
+const INCIDENT_LABEL_TOP = officialNavMetrics.incidentLift + SIDE_LABEL_TOP;
 
 export const officialBottomNavStyles = StyleSheet.create({
   wrapper: {
     position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
+    left: officialNavMetrics.barMarginHorizontal,
+    right: officialNavMetrics.barMarginHorizontal,
     alignItems: 'stretch',
-    backgroundColor: officialNavColors.bar,
     overflow: 'visible',
+    backgroundColor: 'transparent',
   },
   bar: {
     width: '100%',
-    borderTopLeftRadius: officialNavMetrics.barRadius,
-    borderTopRightRadius: officialNavMetrics.barRadius,
+    borderRadius: officialNavMetrics.barRadius,
+    overflow: 'visible',
     backgroundColor: officialNavColors.bar,
-    shadowColor: '#1C2B4B',
-    shadowOffset: { width: 0, height: -4 },
+    borderWidth: 1,
+    borderColor: 'rgba(32, 37, 44, 0.08)',
+    shadowColor: '#20252C',
+    shadowOffset: { width: 0, height: -3 },
     shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 0,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(28, 43, 75, 0.06)',
+    shadowRadius: 14,
+    elevation: 7,
   },
   row: {
     height: officialNavMetrics.barHeight,
     flexDirection: 'row',
     alignItems: 'stretch',
     justifyContent: 'space-around',
+    overflow: 'visible',
   },
   centerSlot: {
-    width: officialNavMetrics.incidentSize + 18,
+    width: officialNavMetrics.incidentSize + 16,
     height: '100%',
   },
   item: {
     minWidth: officialNavMetrics.itemMinWidth,
     flex: 1,
     height: '100%',
+    zIndex: 1,
   },
   itemContent: {
     flex: 1,
@@ -85,21 +92,18 @@ export const officialBottomNavStyles = StyleSheet.create({
   activeCircle: {
     width: officialNavMetrics.hlWidth,
     height: officialNavMetrics.hlHeight,
-    borderRadius: officialNavMetrics.hlWidth / 2,
-    backgroundColor: officialNavColors.circleFill,
     alignItems: 'center',
     justifyContent: 'center',
   },
   label: {
     marginTop: officialNavMetrics.labelGap,
-    fontSize: 10,
+    fontFamily: fonts.regular,
+    fontSize: 11,
     lineHeight: officialNavMetrics.labelLineHeight,
-    fontFamily: fonts.medium,
-    letterSpacing: 0.2,
     color: officialNavColors.labelInactive,
   },
   labelActive: {
-    fontFamily: fonts.semibold,
+    fontFamily: fonts.medium,
     color: officialNavColors.labelActive,
   },
   incidentButtonWrap: {
@@ -108,12 +112,14 @@ export const officialBottomNavStyles = StyleSheet.create({
     left: 0,
     right: 0,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   incidentButtonStage: {
     width: officialNavMetrics.incidentSize,
     height: officialNavMetrics.incidentSize,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'visible',
   },
   incidentCarve: {
     position: 'absolute',
@@ -124,6 +130,14 @@ export const officialBottomNavStyles = StyleSheet.create({
     borderRadius: (officialNavMetrics.incidentSize + officialNavMetrics.incidentCarveGap * 2) / 2,
     backgroundColor: officialNavColors.carve,
   },
+  incidentWave: {
+    position: 'absolute',
+    width: officialNavMetrics.incidentSize,
+    height: officialNavMetrics.incidentSize,
+    borderRadius: officialNavMetrics.incidentSize / 2,
+    borderWidth: 1.5,
+    borderColor: 'rgba(240, 82, 74, 0.68)',
+  },
   incidentButton: {
     width: officialNavMetrics.incidentSize,
     height: officialNavMetrics.incidentSize,
@@ -131,22 +145,21 @@ export const officialBottomNavStyles = StyleSheet.create({
     backgroundColor: officialNavColors.incident,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#F26E6E',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 8,
-    elevation: 6,
+    shadowColor: officialNavColors.incident,
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.32,
+    shadowRadius: 10,
+    elevation: 8,
   },
   incidentLabel: {
     position: 'absolute',
-    top: officialNavMetrics.incidentLift + 51,
+    top: INCIDENT_LABEL_TOP,
     left: 0,
     right: 0,
     textAlign: 'center',
-    fontSize: 10,
-    lineHeight: officialNavMetrics.labelLineHeight,
     fontFamily: fonts.medium,
-    letterSpacing: 0.2,
-    color: officialNavColors.labelInactive,
+    fontSize: 11,
+    lineHeight: officialNavMetrics.labelLineHeight,
+    color: officialNavColors.labelActive,
   },
 });

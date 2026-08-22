@@ -3,8 +3,8 @@
 // BDRRMO/MDRRMO: Command, Community, centered Reports, Map, Settings
 // Mayor: Brief, Situations, Community, Map, Settings
 
-import React, { useCallback, memo, useMemo } from 'react';
-import { View, Text, Pressable } from 'react-native';
+import React, { useCallback, memo, useMemo, useRef } from 'react';
+import { Animated, View, Text, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -94,21 +94,11 @@ const NavItem = memo(function NavItem({
     >
       <View style={styles.itemContent}>
         <View style={styles.iconHolder}>
-          {focused ? (
-            <View style={styles.activeCircle}>
-              <Ionicons
-                name={config.activeIcon}
-                size={officialNavMetrics.activeIconSize}
-                color={officialNavColors.iconActive}
-              />
-            </View>
-          ) : (
-            <Ionicons
-              name={config.inactiveIcon}
-              size={officialNavMetrics.iconSize}
-              color={officialNavColors.iconInactive}
-            />
-          )}
+          <Ionicons
+            name={focused ? config.activeIcon : config.inactiveIcon}
+            size={focused ? officialNavMetrics.activeIconSize : officialNavMetrics.iconSize}
+            color={focused ? officialNavColors.iconActive : officialNavColors.iconInactive}
+          />
         </View>
         <Text
           style={[styles.label, focused && styles.labelActive]}
@@ -122,23 +112,44 @@ const NavItem = memo(function NavItem({
 });
 
 function IncidentCenterButton({ onPress, label = 'Incidents' }: { onPress: () => void; label?: string }) {
+  const buttonScale = useRef(new Animated.Value(1)).current;
+  const waveScale = useRef(new Animated.Value(0.85)).current;
+  const waveOpacity = useRef(new Animated.Value(0)).current;
+
+  const handlePress = useCallback(() => {
+    waveOpacity.setValue(0.3);
+    waveScale.setValue(0.85);
+    Animated.parallel([
+      Animated.sequence([
+        Animated.timing(buttonScale, { toValue: 1.08, duration: 100, useNativeDriver: true }),
+        Animated.spring(buttonScale, { toValue: 1, damping: 12, stiffness: 220, mass: 0.6, useNativeDriver: true }),
+      ]),
+      Animated.timing(waveScale, { toValue: 1.45, duration: 380, useNativeDriver: true }),
+      Animated.timing(waveOpacity, { toValue: 0, duration: 380, useNativeDriver: true }),
+    ]).start();
+    onPress();
+  }, [buttonScale, onPress, waveOpacity, waveScale]);
+
   return (
     <View style={styles.incidentButtonWrap} pointerEvents="box-none">
       <View style={styles.incidentButtonStage}>
         <View style={styles.incidentCarve} pointerEvents="none" />
-        <Pressable
-          style={styles.incidentButton}
-          onPress={onPress}
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityLabel={`Open ${label.toLowerCase()}`}
-        >
-          <Ionicons
-            name="alert-circle"
-            size={officialNavMetrics.incidentIconSize}
-            color={officialNavColors.incidentIcon}
-          />
-        </Pressable>
+        <Animated.View pointerEvents="none" style={[styles.incidentWave, { opacity: waveOpacity, transform: [{ scale: waveScale }] }]} />
+        <Animated.View style={{ transform: [{ scale: buttonScale }] }}>
+          <Pressable
+            style={styles.incidentButton}
+            onPress={handlePress}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={`Open ${label.toLowerCase()}`}
+          >
+            <Ionicons
+              name="alert-circle"
+              size={officialNavMetrics.incidentIconSize}
+              color={officialNavColors.incidentIcon}
+            />
+          </Pressable>
+        </Animated.View>
       </View>
       <Text style={styles.incidentLabel} pointerEvents="none">{label}</Text>
     </View>
@@ -191,7 +202,7 @@ export default function OfficialBottomNav({
         style={[
           styles.wrapper,
           {
-            bottom: -insets.bottom,
+            bottom: 0,
             height: officialNavMetrics.barHeight + insets.bottom,
           },
         ]}
@@ -203,7 +214,10 @@ export default function OfficialBottomNav({
               <NavItem
                 key={tab.name}
                 config={tab}
-                focused={currentRouteName === tab.name}
+                focused={
+                  currentRouteName === tab.name ||
+                  (tab.name === 'index' && currentRouteName === 'resources')
+                }
                 onPress={() => navigateTo(tab.name)}
               />
             ))}
@@ -228,7 +242,7 @@ export default function OfficialBottomNav({
       style={[
         styles.wrapper,
         {
-          bottom: -insets.bottom,
+          bottom: 0,
           height: officialNavMetrics.barHeight + insets.bottom,
         },
       ]}

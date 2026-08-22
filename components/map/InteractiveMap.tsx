@@ -51,6 +51,8 @@ type Props = {
   onResourceSelection?: (resource: MapResourceMarker) => void;
   focusTarget?: MapFocusTarget | null;
   showZoomControls?: boolean;
+  /** Darkens the map for high-priority command-center previews. */
+  tone?: 'light' | 'dark';
 };
 
 const DEFAULT_LAYERS: MapLayerVisibility = {
@@ -59,7 +61,8 @@ const DEFAULT_LAYERS: MapLayerVisibility = {
   evacuationCenters: true,
 };
 
-function buildMapHtml(showZoomControls: boolean): string {
+function buildMapHtml(showZoomControls: boolean, tone: 'light' | 'dark'): string {
+  const isDark = tone === 'dark';
   return `<!DOCTYPE html>
 <html>
   <head>
@@ -69,7 +72,8 @@ function buildMapHtml(showZoomControls: boolean): string {
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
     <style>
-      html, body, #map { height: 100%; margin: 0; padding: 0; background: #F0F4FF; }
+      html, body, #map { height: 100%; margin: 0; padding: 0; background: ${isDark ? '#07182A' : '#F0F4FF'}; }
+      ${isDark ? '.leaflet-tile-pane { filter: invert(100%) hue-rotate(180deg) brightness(66%) saturate(72%) contrast(112%); }' : ''}
       .leaflet-control-attribution { display: none; }
 
       .report-pin-wrap, .resource-pin-wrap {
@@ -465,9 +469,13 @@ export default function InteractiveMap({
   onResourceSelection,
   focusTarget,
   showZoomControls = true,
+  tone = 'light',
 }: Props) {
   const webRef = useRef<WebView>(null);
-  const html = useMemo(() => buildMapHtml(showZoomControls), [showZoomControls]);
+  const html = useMemo(
+    () => buildMapHtml(showZoomControls, tone),
+    [showZoomControls, tone],
+  );
   const readyRef = useRef(false);
 
   const visibleReports = useMemo(
