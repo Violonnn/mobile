@@ -5,12 +5,10 @@ import {
   Image,
   TouchableOpacity,
   StyleSheet,
-  Dimensions,
   ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
+import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, {
   useSharedValue,
@@ -18,19 +16,17 @@ import Animated, {
   withTiming,
   withDelay,
   withSpring,
-  withSequence,
   runOnJS,
   Easing,
 } from 'react-native-reanimated';
-import * as SplashScreen from 'expo-splash-screen';
 import { styles } from '../styles/screens/welcome.styles';
 import { colors } from '../styles/theme';
+import { hideNativeSplashOnce } from '../lib/nativeSplash';
 import { resolveSessionDestination } from '../lib/portalAccess';
 
 export default function WelcomeScreen() {
   const router = useRouter();
   const [loadingDone, setLoadingDone] = useState(false);
-  // 'checking' until we know whether a saved session exists; then 'welcome'.
   const [phase, setPhase] = useState<'checking' | 'welcome'>('checking');
   const splashHiddenRef = useRef(false);
 
@@ -46,7 +42,6 @@ export default function WelcomeScreen() {
     setLoadingDone(true);
   }
 
-  // Auto-login: restore to the correct portal by role (resident / admin / official).
   useEffect(() => {
     let mounted = true;
 
@@ -85,7 +80,7 @@ export default function WelcomeScreen() {
   function handleSplashOverlayReady() {
     if (splashHiddenRef.current) return;
     splashHiddenRef.current = true;
-    SplashScreen.hideAsync();
+    void hideNativeSplashOnce();
   }
 
   const logoStyle = useAnimatedStyle(() => ({
@@ -109,70 +104,91 @@ export default function WelcomeScreen() {
 
   return (
     <View style={{ flex: 1 }}>
-      {/* Welcome screen underneath (only once we know there is no session) */}
       {phase === 'welcome' ? (
-        <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-        <View style={styles.content}>
-          <View style={styles.header}>
-            <Image source={require('../assets/images/AppLogo.png')} style={styles.logo} />
-          </View>
-          <View style={styles.heroSection}>
-            <Text style={styles.heroTitle}>Disaster Report and</Text>
-            <Text style={styles.heroTitleAccent}>Risk Management.</Text>
-            <Text style={styles.heroSubtitle}>
-              Report and connect with your community.{'\n'}
-              Stay informed. Keep everyone safe.
-            </Text>
-          </View>
-          <View style={styles.conceptSection}>
-            <View style={styles.conceptImageWrapper}>
-              <Image source={require('../assets/images/Concept.png')} style={styles.conceptImage} />
+        <View style={styles.container}>
+          <StatusBar style="light" />
+
+          {/* ── Hero image with overlay text ── */}
+          <View style={styles.heroImageWrapper}>
+            <Image
+              source={require('../assets/images/onboardingHeader.png')}
+              style={styles.heroImage}
+              resizeMode="cover"
+            />
+            <View style={styles.heroOverlay}>
+              <Text style={styles.brandText}>DisasterLink</Text>
+              <View style={styles.locationBlock}>
+                <Text style={styles.locationName}>Minglanilla, Cebu</Text>
+                <Text style={styles.locationCoords}>10.2443° N  ·  123.7964° E</Text>
+              </View>
             </View>
           </View>
-          <View style={styles.buttonsSection}>
-            <TouchableOpacity onPress={() => router.push('/(auth)/register')} activeOpacity={0.85}>
-              <LinearGradient
-                colors={['#000000', '#000000']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
+
+          {/* ── Content below the image ── */}
+          <View style={styles.content}>
+            <View>
+              <View style={styles.metaRow}>
+                <Text style={styles.metaText}>Local reports  ·  Verified updates</Text>
+                <Text style={styles.metaText}>DisasterLink v1.0.0</Text>
+              </View>
+
+              <Text style={styles.headline}>
+                Know sooner.{'\n'}Respond together.
+              </Text>
+
+              <Text style={styles.subtitle}>
+                One clear place to report incidents,{'\n'}follow local advisories, and stay{'\n'}connected when conditions change.
+              </Text>
+            </View>
+
+            {/* ── CTA buttons ── */}
+            <View style={styles.ctaSection}>
+              <TouchableOpacity
                 style={styles.getStartedButton}
+                onPress={() => router.push('/(auth)/register')}
+                activeOpacity={0.85}
               >
-                <Ionicons name="return-down-forward-outline" size={18} color={colors.white} />
-                <Text style={styles.getStartedText}>Get Started</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.loginButton} onPress={() => router.push('/(auth)/login')} activeOpacity={0.85}>
-              <Text style={styles.loginText}>Login</Text>
-            </TouchableOpacity>
+                <Text style={styles.getStartedText}>Get started</Text>
+                <View style={styles.arrowCircle}>
+                  <Ionicons name="arrow-forward" size={20} color={colors.white} />
+                </View>
+              </TouchableOpacity>
+
+              <View style={styles.loginRow}>
+                <Text style={styles.loginPrompt}>Already have an account?</Text>
+                <TouchableOpacity onPress={() => router.push('/(auth)/login')} activeOpacity={0.7}>
+                  <Text style={styles.loginLink}>Log in</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
           </View>
         </View>
-        </SafeAreaView>
       ) : (
-        <View style={loadingStyles.overlay}>
+        <View style={splashStyles.overlay}>
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
       )}
 
-      {/* Loading overlay on top — fades out when done */}
+      {/* ── Splash loading overlay — fades out when done ── */}
       {!loadingDone && (
         <Animated.View
-          style={[loadingStyles.overlay, overlayStyle]}
+          style={[splashStyles.overlay, overlayStyle]}
           onLayout={handleSplashOverlayReady}
         >
-          <View style={loadingStyles.centerBlock}>
+          <View style={splashStyles.centerBlock}>
             <Animated.View style={logoStyle}>
               <Image
                 source={require('../assets/images/AppLogo.png')}
-                style={loadingStyles.logo}
+                style={splashStyles.logo}
                 resizeMode="contain"
               />
             </Animated.View>
-            <Animated.Text style={[loadingStyles.appName, taglineStyle]}>
+            <Animated.Text style={[splashStyles.appName, taglineStyle]}>
               DisasterLink
             </Animated.Text>
-            <Animated.View style={[loadingStyles.line, lineStyle]} />
+            <Animated.View style={[splashStyles.line, lineStyle]} />
           </View>
-          <Animated.Text style={[loadingStyles.footer, taglineStyle]}>
+          <Animated.Text style={[splashStyles.footer, taglineStyle]}>
             Minglanilla Disaster and Risk Report
           </Animated.Text>
         </Animated.View>
@@ -181,7 +197,7 @@ export default function WelcomeScreen() {
   );
 }
 
-const loadingStyles = StyleSheet.create({
+const splashStyles = StyleSheet.create({
   overlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: '#ffffff',

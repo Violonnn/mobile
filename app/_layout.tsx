@@ -11,8 +11,9 @@ import {
   Sora_800ExtraBold,
 } from '@expo-google-fonts/sora';
 import { BarlowCondensed_600SemiBold } from '@expo-google-fonts/barlow-condensed';
+import { hideNativeSplashOnce } from '../lib/nativeSplash';
 
-SplashScreen.preventAutoHideAsync();
+void SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
 export default function RootLayout() {
   const pathname = usePathname();
@@ -31,7 +32,7 @@ export default function RootLayout() {
   useEffect(() => {
     if (!fontsLoaded) return;
     if (pathname === '/' || pathname === '/index') return;
-    void SplashScreen.hideAsync();
+    void hideNativeSplashOnce();
   }, [fontsLoaded, pathname]);
 
   // Keep the native splash up until the app font is ready so text never

@@ -18,7 +18,6 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
-import * as SplashScreen from 'expo-splash-screen';
 import { useNavigation, useRouter, type Href } from 'expo-router';
 import {
   OFFICIAL_REGISTER_STEP_LABELS,
@@ -32,6 +31,7 @@ import LabeledInput from '../components/register/LabeledInput';
 import FieldError from '../components/register/FieldError';
 import OTPInput from '../components/register/OTPInput';
 import { colors } from '../styles/theme';
+import { hideNativeSplashOnce } from '../lib/nativeSplash';
 
 /**
  * Seal must be large enough to read ring text, but never taller than ~30%
@@ -112,7 +112,7 @@ export default function InviteScreen() {
 
   // Deep-link entry never mounts welcome/index — dismiss splash here too.
   useEffect(() => {
-    void SplashScreen.hideAsync();
+    void hideNativeSplashOnce();
   }, []);
 
   // Android hardware back → previous step / leave confirm.
