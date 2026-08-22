@@ -22,6 +22,10 @@ import {
 /** Steps: 0 = phone, 1 = OTP, 2 = new PIN. */
 export type ForgotStep = 0 | 1 | 2;
 
+type ForgotPasswordFlowOptions = {
+  initialPhone?: string;
+};
+
 const OTP_RESEND_HINT =
   'Too many incorrect codes. Tap "Resend OTP" to get a new one.';
 
@@ -38,12 +42,21 @@ const GENERIC_SENT_MESSAGE =
  * - A verified OTP only authorizes the reset; it never logs the user into the app.
  *   The short-lived session is signed out after reset or when leaving the flow.
  */
-export function useForgotPasswordFlow() {
+function localPhoneDigits(phone: string | undefined): string {
+  if (!phone) return '';
+
+  const digits = phone.replace(/\D/g, '');
+  if (digits.startsWith('63')) return digits.slice(2, 12);
+  if (digits.startsWith('0')) return digits.slice(1, 11);
+  return digits.slice(0, 10);
+}
+
+export function useForgotPasswordFlow(options: ForgotPasswordFlowOptions = {}) {
   const router = useRouter();
 
   const [step, setStep] = useState<ForgotStep>(0);
 
-  const [phoneDigits, setPhoneDigits] = useState('');
+  const [phoneDigits, setPhoneDigits] = useState(() => localPhoneDigits(options.initialPhone));
   const [phoneError, setPhoneError] = useState('');
   const [otp, setOtp] = useState('');
   const [otpError, setOtpError] = useState('');

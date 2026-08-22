@@ -22,6 +22,7 @@ type Props = {
   otpLimitReached: boolean;
   otpSendCount: number;
   phoneError?: string;
+  phoneLocked?: boolean;
 };
 
 export default function PhoneStep({
@@ -40,6 +41,7 @@ export default function PhoneStep({
   otpLimitReached,
   otpSendCount,
   phoneError = '',
+  phoneLocked = false,
 }: Props) {
   const getOtpDisabled = !isValid || sendingOTP || !canRequestOtp;
   const hasPhoneError = !!phoneError;
@@ -53,7 +55,9 @@ export default function PhoneStep({
       </Text>
 
       <View style={styles.loginFieldWrap}>
-        <Text style={styles.loginFieldLabel}>Enter Mobile Number</Text>
+        <Text style={styles.loginFieldLabel}>
+          {phoneLocked ? 'Registered Mobile Number' : 'Enter Mobile Number'}
+        </Text>
         <View
           style={[
             styles.phoneRow,
@@ -83,8 +87,16 @@ export default function PhoneStep({
               onBlur();
               if (!getOtpDisabled) onSubmit();
             }}
+            editable={!phoneLocked}
+            selectTextOnFocus={!phoneLocked}
+            accessibilityLabel={phoneLocked ? 'Registered mobile number' : 'Mobile number'}
           />
         </View>
+        {phoneLocked ? (
+          <Text style={[styles.phoneHint, styles.phoneHintLarge]}>
+            For your protection, the PIN can only be changed for this registered number.
+          </Text>
+        ) : null}
         <FieldError message={phoneError} centered />
       </View>
 

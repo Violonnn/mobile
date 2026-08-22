@@ -1,125 +1,155 @@
-// styles/screens/profile.styles.ts — profile tab layout.
-// Follows the reference design: title row ("My Profile" + gear), identity
-// block (avatar, name, phone), then a rounded menu list card.
 import { StyleSheet } from 'react-native';
-import { colors, fonts, fontSizes, radius, spacing } from '../theme';
+import { colors, fonts, fontSizes, spacing } from '../theme';
 
 export const profileStyles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.white,
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   scrollContent: {
     flexGrow: 1,
     paddingHorizontal: spacing.lg,
-    // Leave room for the floating bottom navigation bar.
-    paddingBottom: 132,
+    paddingTop: spacing.md,
+    paddingBottom: 130,
   },
-
-  // ---- Title row: centered "My Profile" with the gear pinned right ------
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: spacing.md,
-  },
-  titleText: {
+  screenTitle: {
     fontFamily: fonts.bold,
     fontSize: fontSizes.xxl,
     color: colors.text,
-    textAlign: 'center',
+    marginBottom: spacing.xl,
   },
-  // Transparent gear — just the icon, no circle background. Positioned
-  // absolutely so the title stays perfectly centered.
-  gearButton: {
-    position: 'absolute',
-    right: 0,
-    padding: spacing.xs,
+  loadingContainer: {
+    minHeight: 320,
     alignItems: 'center',
     justifyContent: 'center',
   },
-
-  // ---- Identity row: big avatar on the left, name + phone on the right --
-  // The whole block is centered horizontally on the screen.
   identityRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    alignSelf: 'center',
-    gap: spacing.md,
-    paddingVertical: spacing.lg,
+    gap: spacing.lg,
+    paddingBottom: spacing.lg,
   },
-  avatarCircle: {
-    width: 168,
-    height: 168,
-    borderRadius: radius.full,
-    backgroundColor: colors.white,
-    borderWidth: 3,
-    borderColor: colors.primaryLight,
+  avatar: {
+    width: 92,
+    height: 92,
+    borderRadius: 46,
+    backgroundColor: colors.primaryLight,
+    borderWidth: 1,
+    borderColor: '#D8E3FF',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarInitial: {
+  avatarText: {
     fontFamily: fonts.bold,
-    fontSize: 64,
+    fontSize: 32,
     color: colors.primary,
   },
-  identityTextWrap: {
+  identityCopy: {
     flex: 1,
-    flexShrink: 1,
-    gap: spacing.xs,
+    minWidth: 0,
   },
-  nameText: {
+  identityName: {
     fontFamily: fonts.bold,
-    fontSize: fontSizes.xxl,
+    fontSize: fontSizes.xl,
+    lineHeight: 27,
     color: colors.text,
   },
-  phoneText: {
+  identityPhone: {
+    marginTop: spacing.xs,
     fontFamily: fonts.regular,
-    fontSize: fontSizes.lg,
+    fontSize: fontSizes.md,
     color: colors.textMuted,
   },
-  // Same soft blue as the home screen header.
-  editProfileButton: {
+  viewProfileButton: {
     alignSelf: 'flex-start',
+    marginTop: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  viewProfileText: {
+    fontFamily: fonts.medium,
+    fontSize: fontSizes.md,
+    color: colors.primary,
+  },
+  divider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: '#CBD5E1',
+    marginHorizontal: -spacing.sm,
+  },
+  section: {
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.sm,
+  },
+  sectionLabel: {
+    fontFamily: fonts.medium,
+    fontSize: fontSizes.sm,
+    color: '#53617A',
+    letterSpacing: 0.35,
+    marginBottom: spacing.sm,
+  },
+  settingsRow: {
+    minHeight: 92,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.themeSoft,
-    borderRadius: radius.full,
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.md - 4,
-    marginTop: spacing.md,
+    gap: spacing.sm,
+    paddingVertical: spacing.md,
   },
-  editProfileText: {
-    fontFamily: fonts.semibold,
-    fontSize: fontSizes.lg,
-    color: colors.white,
+  rowCopy: {
+    flex: 1,
+    minWidth: 0,
   },
-
-  // ---- Menu rows: plain, no containers, generous spacing -----------------
-  menuList: {
-    marginTop: spacing.lg,
-    // Inset the rows from the screen edges.
-    paddingHorizontal: spacing.lg,
+  rowTitle: {
+    fontFamily: fonts.medium,
+    fontSize: 18,
+    color: colors.text,
   },
-  menuRow: {
+  rowSubtitle: {
+    marginTop: 6,
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.md,
+    lineHeight: 21,
+    color: '#62708A',
+  },
+  rowValue: {
+    maxWidth: '30%',
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.md,
+    color: '#62708A',
+    textAlign: 'right',
+  },
+  logoutRow: {
+    minHeight: 104,
+    paddingVertical: spacing.lg,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    marginBottom: spacing.xl,
   },
-  menuRowLabel: {
-    flex: 1,
+  logoutTitle: {
+    fontFamily: fonts.medium,
+    fontSize: 18,
+    color: colors.unverified,
+  },
+  errorCard: {
+    marginTop: spacing.xl,
+    alignItems: 'center',
+    gap: spacing.md,
+    padding: spacing.lg,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 16,
+  },
+  errorText: {
     fontFamily: fonts.regular,
-    fontSize: fontSizes.xl,
-    color: colors.text,
+    fontSize: fontSizes.md,
+    lineHeight: 22,
+    color: colors.textMuted,
+    textAlign: 'center',
   },
-  menuRowLabelDanger: {
-    color: colors.danger,
+  retryButton: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+  },
+  retryText: {
+    fontFamily: fonts.semibold,
+    fontSize: fontSizes.md,
+    color: colors.primary,
   },
 });

@@ -11,6 +11,7 @@ import {
   TouchableWithoutFeedback,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useLocalSearchParams } from 'expo-router';
 import { responsiveImageHeight } from '../../lib/layout';
 import { useForgotPasswordFlow, ForgotStep } from '../../hooks/useForgotPasswordFlow';
 import { useRegistrationBackHandler } from '../../hooks/useRegistrationBackHandler';
@@ -26,7 +27,9 @@ const STEP_IMAGES: Record<ForgotStep, number> = {
 };
 
 export default function ForgotPasswordScreen() {
+  const params = useLocalSearchParams<{ phone?: string; source?: string }>();
   const [phoneFocused, setPhoneFocused] = useState(false);
+  const openedFromSettings = params.source === 'settings';
 
   const {
     step,
@@ -56,7 +59,9 @@ export default function ForgotPasswordScreen() {
     handleResend,
     submitReset,
     goBack,
-  } = useForgotPasswordFlow();
+  } = useForgotPasswordFlow({
+    initialPhone: typeof params.phone === 'string' ? params.phone : undefined,
+  });
 
   useRegistrationBackHandler(goBack, true);
 
@@ -65,7 +70,7 @@ export default function ForgotPasswordScreen() {
 
   const header = (
     <>
-      <Text style={styles.screenTitle}>Forgot PIN</Text>
+      <Text style={styles.screenTitle}>{openedFromSettings ? 'Change PIN' : 'Forgot PIN'}</Text>
       <View style={[styles.imageContainer, { height: imageHeight }]}>
         <Image
           source={STEP_IMAGES[step]}
@@ -95,6 +100,7 @@ export default function ForgotPasswordScreen() {
           otpLimitReached={otpLimitReached}
           otpSendCount={otpSendCount}
           phoneError={phoneError}
+          phoneLocked={openedFromSettings}
         />
       )}
       {step === 1 && (
