@@ -39,6 +39,8 @@ type Props = {
   reports: MapReportMarker[];
   visible: boolean;
   onClose: () => void;
+  /** Override when the screen uses a non-resident bottom navigation bar. */
+  bottomNavClearance?: number;
 };
 
 const BOTTOM_NAV_CLEARANCE = navMetrics.barHeight + navMetrics.reportLift + spacing.sm;
@@ -123,7 +125,12 @@ function ShrunkReportCard({
   );
 }
 
-export default function ReportMapDetailSheet({ reports, visible, onClose }: Props) {
+export default function ReportMapDetailSheet({
+  reports,
+  visible,
+  onClose,
+  bottomNavClearance = BOTTOM_NAV_CLEARANCE,
+}: Props) {
   const insets = useSafeAreaInsets();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showingAllMedia, setShowingAllMedia] = useState(false);
@@ -181,7 +188,7 @@ export default function ReportMapDetailSheet({ reports, visible, onClose }: Prop
   } = useReportDetail(selected);
 
   const showList = sorted.length > 1 && !detailReport;
-  const sheetBottom = insets.bottom + BOTTOM_NAV_CLEARANCE;
+  const sheetBottom = insets.bottom + bottomNavClearance;
   const canGoBackToList = Boolean(detailReport && sorted.length > 1);
   const showBackButton = showingAllMedia || canGoBackToList;
   // 4+ attachments skip the 2x2 "+N" collage and list everything directly —

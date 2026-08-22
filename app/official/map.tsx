@@ -1,11 +1,18 @@
 // app/official/map.tsx
 // Official map: report clusters + facility/evac layers with legend filters.
 
-import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Animated,
+  PanResponder,
+  View,
+  Text,
+  StyleSheet,
+  useWindowDimensions,
+} from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter, type Href } from 'expo-router';
 import InteractiveMap, {
   type MapLayerVisibility,
   type MapResourceMarker,
@@ -13,6 +20,7 @@ import InteractiveMap, {
 } from '../../components/map/InteractiveMap';
 import ReportMapDetailSheet from '../../components/map/ReportMapDetailSheet';
 import ResourceMapDetailSheet from '../../components/map/ResourceMapDetailSheet';
+import EscalatedReportsPanel from '../../components/map/EscalatedReportsPanel';
 import { ReportEngagementProvider } from '../../components/report/ReportEngagementProvider';
 import { useReports } from '../../hooks/useReports';
 import { useResources } from '../../hooks/useResources';
@@ -25,15 +33,25 @@ import {
 } from '../../lib/resources';
 import { type MapReportMarker } from '../../lib/reports';
 import { colors, fonts, fontSizes, spacing } from '../../styles/theme';
-import { officialStyles as styles } from '../../styles/screens/official.styles';
+import { officialStyles } from '../../styles/screens/official.styles';
+import { residentMapStyles } from '../../styles/screens/residentMap.styles';
+import { officialNavMetrics } from '../../styles/components/officialBottomNav.styles';
 import { isValidReportId } from '../../lib/officialReports';
 
+const COLLAPSED_PANEL_HEADER_HEIGHT = 88;
+
 export default function OfficialMapScreen() {
-  const { reportId } = useLocalSearchParams<{ reportId?: string | string[] }>();
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const { reportId, resourceId } = useLocalSearchParams<{
+    reportId?: string | string[];
+    resourceId?: string | string[];
+  }>();
   const { officialKind, scope } = useOfficialPortal();
   const barangayFilter =
     officialKind === 'BDRRMO' ? scope?.barangay_id ?? null : null;
-  const { reports: markers, error, loading } = useReports({
+  const { reports: markers, error, loading, reload } = useReports({
     realtime: true,
     barangayId: barangayFilter,
     includePending: false,
@@ -55,6 +73,10 @@ export default function OfficialMapScreen() {
     facilities: true,
     evacuationCenters: true,
   });
+  const [escalatedPanelCollapsed, setEscalatedPanelCollapsed] = useState(false);
+  const escalatedPanelCollapsedRef = useRef(false);
+  const escalatedPanelTranslateY = useRef(new Animated.Value(0)).current;
+  const panelDragStartOffsetRef = useRef(0);
 
   const scopedMarkers = useMemo(() => {
     if (officialKind !== 'BDRRMO' || !scope?.barangay_id) {
@@ -117,6 +139,100 @@ export default function OfficialMapScreen() {
       .filter((marker): marker is MapReportMarker => marker != null);
   }, [scopedMarkers, selectedReportIds]);
 
+  const escalatedReports = useMemo(
+    () =>
+      scopedMarkers
+        .filter((marker) => marker.status === 'escalated')
+        .sort(
+          (first, second) =>
+            new Date(second.created_at).getTime() - new Date(first.created_at).getTime(),
+        ),
+    [scopedMarkers],
+  );
+
+  const openEscalatedReport = (report: MapReportMarker) => {
+    setLayers((current) => ({ ...current, reports: true }));
+    setSelectedResource(null);
+    setSelectedReportIds([report.id]);
+    setFocusTarget({
+      reportId: report.id,
+      latitude: report.latitude,
+      longitude: report.longitude,
+    });
+  };
+
+  const landscape = windowWidth > windowHeight;
+  const escalatedPanelHeight = landscape
+    ? Math.max(240, Math.min(windowHeight * 0.7, 430))
+    : Math.max(300, Math.min(windowHeight * 0.46, 520));
+  const escalatedPanelBottomInset = officialNavMetrics.barHeight + insets.bottom + spacing.lg;
+  const collapsedPanelOffset = Math.max(
+    0,
+    escalatedPanelHeight -
+      officialNavMetrics.barHeight -
+      insets.bottom -
+      COLLAPSED_PANEL_HEADER_HEIGHT,
+  );
+
+  const settleEscalatedPanel = useCallback(
+    (collapse: boolean) => {
+      escalatedPanelCollapsedRef.current = collapse;
+      setEscalatedPanelCollapsed(collapse);
+      Animated.spring(escalatedPanelTranslateY, {
+        toValue: collapse ? collapsedPanelOffset : 0,
+        damping: 22,
+        stiffness: 230,
+        mass: 0.85,
+        useNativeDriver: true,
+      }).start();
+    },
+    [collapsedPanelOffset, escalatedPanelTranslateY],
+  );
+
+  useEffect(() => {
+    escalatedPanelTranslateY.setValue(
+      escalatedPanelCollapsedRef.current ? collapsedPanelOffset : 0,
+    );
+  }, [collapsedPanelOffset, escalatedPanelTranslateY]);
+
+  const escalatedPanelPanResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_, gesture) =>
+          Math.abs(gesture.dy) > 7 && Math.abs(gesture.dy) > Math.abs(gesture.dx),
+        onPanResponderGrant: () => {
+          escalatedPanelTranslateY.stopAnimation((currentOffset) => {
+            panelDragStartOffsetRef.current = currentOffset;
+          });
+        },
+        onPanResponderMove: (_, gesture) => {
+          const nextOffset = Math.max(
+            0,
+            Math.min(collapsedPanelOffset, panelDragStartOffsetRef.current + gesture.dy),
+          );
+          escalatedPanelTranslateY.setValue(nextOffset);
+        },
+        onPanResponderRelease: (_, gesture) => {
+          escalatedPanelTranslateY.stopAnimation((currentOffset) => {
+            const draggedDown = gesture.vy > 0.35 || gesture.dy > 54;
+            const draggedUp = gesture.vy < -0.35 || gesture.dy < -54;
+            const collapse = draggedDown
+              ? true
+              : draggedUp
+                ? false
+                : currentOffset > collapsedPanelOffset / 2;
+            settleEscalatedPanel(collapse);
+          });
+        },
+        onPanResponderTerminate: () => {
+          escalatedPanelTranslateY.stopAnimation((currentOffset) => {
+            settleEscalatedPanel(currentOffset > collapsedPanelOffset / 2);
+          });
+        },
+      }),
+    [collapsedPanelOffset, escalatedPanelTranslateY, settleEscalatedPanel],
+  );
+
   useEffect(() => {
     const requestedId = Array.isArray(reportId) ? reportId[0] : reportId;
     if (!requestedId) {
@@ -156,9 +272,106 @@ export default function OfficialMapScreen() {
     });
   }, [loading, reportId, scopedMarkers]);
 
+  useEffect(() => {
+    const requestedId = Array.isArray(resourceId) ? resourceId[0] : resourceId;
+    if (!requestedId) return;
+
+    const resource = [...facilityMarkers, ...centerMarkers].find((item) => item.id === requestedId);
+    if (!resource) return;
+
+    setFocusError(null);
+    setSelectedReportIds([]);
+    setSelectedResource(resource);
+    setFocusTarget({
+      resourceId: resource.id,
+      latitude: resource.latitude,
+      longitude: resource.longitude,
+    });
+  }, [centerMarkers, facilityMarkers, resourceId]);
+
+  if (officialKind === 'MDRRMO') {
+    return (
+      <ReportEngagementProvider reports={scopedMarkers}>
+        <View style={residentMapStyles.screen}>
+          <StatusBar style="dark" />
+          <View style={residentMapStyles.mapSection}>
+            <InteractiveMap
+              markers={scopedMarkers}
+              facilities={facilityMarkers}
+              evacuationCenters={centerMarkers}
+              layerVisibility={layers}
+              showLayerFilters
+              layerFiltersTopInset={insets.top + (error || focusError ? 70 : 24)}
+              showZoomControls={false}
+              onLayerVisibilityChange={setLayers}
+              onReportSelection={(ids) => {
+                setSelectedResource(null);
+                setSelectedReportIds(ids);
+              }}
+              onResourceSelection={(resource) => {
+                setSelectedReportIds([]);
+                setSelectedResource(resource);
+              }}
+              focusTarget={focusTarget}
+            />
+            {error || focusError ? (
+              <View
+                style={[residentMapStyles.errorBanner, { top: insets.top + spacing.sm }]}
+                pointerEvents="none"
+              >
+                <Text style={residentMapStyles.errorText}>
+                  {focusError || 'Map data could not fully refresh.'}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+
+          <Animated.View
+            style={[
+              residentMapStyles.contributionSheet,
+              {
+                height: escalatedPanelHeight,
+                transform: [{ translateY: escalatedPanelTranslateY }],
+              },
+            ]}
+          >
+            <EscalatedReportsPanel
+              reports={escalatedReports}
+              loading={loading}
+              error={error}
+              bottomInset={escalatedPanelBottomInset}
+              collapsed={escalatedPanelCollapsed}
+              onLocateReport={openEscalatedReport}
+              onReviewReport={(report) =>
+                router.push(`/official/${report.id}` as Href)
+              }
+              onRetry={() => void reload()}
+              onToggleCollapsed={() =>
+                settleEscalatedPanel(!escalatedPanelCollapsed)
+              }
+              dragHandlePanHandlers={escalatedPanelPanResponder.panHandlers}
+            />
+          </Animated.View>
+
+          <ReportMapDetailSheet
+            visible={selectedReports.length > 0}
+            reports={selectedReports}
+            bottomNavClearance={officialNavMetrics.barHeight + spacing.sm}
+            onClose={() => setSelectedReportIds([])}
+          />
+          <ResourceMapDetailSheet
+            visible={selectedResource != null}
+            resource={selectedResource}
+            onClose={() => setSelectedResource(null)}
+          />
+        </View>
+      </ReportEngagementProvider>
+    );
+  }
+
   return (
     <ReportEngagementProvider reports={scopedMarkers}>
-      <SafeAreaView style={styles.container} edges={['top']}>
+      <SafeAreaView style={officialStyles.container} edges={['top']}>
         <StatusBar style="dark" />
         <View style={localStyles.header}>
           <MdrrmoHeader
@@ -194,6 +407,7 @@ export default function OfficialMapScreen() {
         <ReportMapDetailSheet
           visible={selectedReports.length > 0}
           reports={selectedReports}
+          bottomNavClearance={officialNavMetrics.barHeight + spacing.sm}
           onClose={() => setSelectedReportIds([])}
         />
         <ResourceMapDetailSheet
