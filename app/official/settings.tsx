@@ -24,6 +24,7 @@ import LegalModal, {
   TERMS_INFORMATION_CONTENT,
 } from '../../components/register/LegalModal';
 import MdrrmoHeader from '../../components/official/MdrrmoHeader';
+import MdrrmoSettingsWorkspace from '../../components/official/MdrrmoSettingsWorkspace';
 import { officialStyles as styles } from '../../styles/screens/official.styles';
 import { colors } from '../../styles/theme';
 
@@ -142,6 +143,17 @@ export default function OfficialSettingsScreen() {
           <ActivityIndicator size="large" color={colors.themeSoft} />
         </View>
       </SafeAreaView>
+    );
+  }
+
+  if (officialKind === 'MDRRMO') {
+    return (
+      <MdrrmoSettingsWorkspace
+        profile={profile}
+        profileError={profileError}
+        profileLoading={profileLoading}
+        onRetryProfile={() => void loadProfile()}
+      />
     );
   }
 
