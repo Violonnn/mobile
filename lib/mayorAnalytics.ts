@@ -8,6 +8,7 @@ import type {
   MayorReportActivityRow,
   MayorReportTotalRow,
   MayorStatusFilter,
+  MayorStatusCounts,
 } from './mayorAnalyticsReducer';
 
 export {
@@ -61,6 +62,7 @@ type MayorSituationRow = {
 
 const MAX_SEARCH_LENGTH = 200;
 export const MAYOR_SITUATION_PAGE_SIZE = 20;
+export const MAYOR_SITUATION_INITIAL_PAGE_SIZE = 2;
 
 function asReportStatus(value: unknown): ReportStatus | null {
   if (
@@ -121,6 +123,7 @@ export async function fetchMayorSituationPage(input: {
   status: MayorStatusFilter;
   search: string;
   offset: number;
+  limit?: number;
 }): Promise<{
   reports: MayorSituationItem[];
   totalCount: number;
@@ -130,7 +133,10 @@ export async function fetchMayorSituationPage(input: {
     p_barangay_id: input.barangayId === 'all' ? null : input.barangayId,
     p_status: input.status === 'all' ? null : input.status,
     p_search: input.search.trim().slice(0, MAX_SEARCH_LENGTH) || null,
-    p_limit: MAYOR_SITUATION_PAGE_SIZE,
+    p_limit: Math.min(
+      MAYOR_SITUATION_PAGE_SIZE,
+      Math.max(1, Math.floor(input.limit ?? MAYOR_SITUATION_PAGE_SIZE)),
+    ),
     p_offset: Math.max(0, Math.floor(input.offset)),
   });
 
@@ -158,4 +164,41 @@ export async function fetchMayorSituationPage(input: {
     totalCount: rows.length > 0 ? asCount(rows[0].total_count) : 0,
     error: null,
   };
+}
+
+/** Fetch accurate full-result status totals for the current Mayor filters. */
+export async function fetchMayorSituationStatusCounts(input: {
+  barangayId: MayorBarangayFilter;
+  search: string;
+}): Promise<{
+  counts: MayorStatusCounts;
+  error: string | null;
+}> {
+  const statuses: ReportStatus[] = ['unverified', 'verified', 'escalated', 'resolved'];
+  const normalizedSearch = input.search.trim().slice(0, MAX_SEARCH_LENGTH) || null;
+  const results = await Promise.all(
+    statuses.map((status) => supabase.rpc('list_mayor_situations', {
+      p_barangay_id: input.barangayId === 'all' ? null : input.barangayId,
+      p_status: status,
+      p_search: normalizedSearch,
+      p_limit: 1,
+      p_offset: 0,
+    })),
+  );
+
+  const counts: MayorStatusCounts = {
+    unverified: 0,
+    verified: 0,
+    escalated: 0,
+    resolved: 0,
+  };
+
+  for (let index = 0; index < results.length; index += 1) {
+    const result = results[index];
+    if (result.error) return { counts, error: result.error.message };
+    const firstRow = ((result.data ?? []) as MayorSituationRow[])[0];
+    counts[statuses[index]] = firstRow ? asCount(firstRow.total_count) : 0;
+  }
+
+  return { counts, error: null };
 }
