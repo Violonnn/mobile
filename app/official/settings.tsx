@@ -146,13 +146,14 @@ export default function OfficialSettingsScreen() {
     );
   }
 
-  if (officialKind === 'MDRRMO') {
+  if (officialKind === 'MDRRMO' || officialKind === 'Mayor') {
     return (
       <MdrrmoSettingsWorkspace
         profile={profile}
         profileError={profileError}
         profileLoading={profileLoading}
         onRetryProfile={() => void loadProfile()}
+        roleVariant={officialKind === 'Mayor' ? 'mayor' : 'mdrrmo'}
       />
     );
   }
@@ -180,7 +181,6 @@ export default function OfficialSettingsScreen() {
       >
         <MdrrmoHeader
           title="Settings"
-          showDefaultControls={officialKind === 'Mayor'}
         />
 
         <View style={styles.card}>

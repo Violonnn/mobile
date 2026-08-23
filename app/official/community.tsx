@@ -236,7 +236,7 @@ export default function OfficialCommunityScreen() {
           onScroll={handleScroll}
           scrollEventThrottle={16}
         >
-          {officialKind === 'MDRRMO' ? (
+          {officialKind === 'MDRRMO' || officialKind === 'Mayor' ? (
             <MdrrmoCommunityFeed
               announcements={announcements}
               announcementError={error}
@@ -250,12 +250,12 @@ export default function OfficialCommunityScreen() {
               onLoadMoreReports={loadMoreReports}
               onRetryAnnouncements={() => void reload()}
               onRetryReports={() => void reloadReports()}
+              roleVariant={officialKind === 'Mayor' ? 'mayor' : 'mdrrmo'}
             />
           ) : (
             <>
               <MdrrmoHeader
                 title="Community"
-                showDefaultControls={officialKind === 'Mayor'}
               />
 
           {officialKind === 'BDRRMO' ? (

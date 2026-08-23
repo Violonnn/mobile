@@ -41,6 +41,7 @@ type Props = {
   onLoadMoreReports: () => void;
   onRetryAnnouncements: () => void;
   onRetryReports: () => void;
+  roleVariant?: 'mdrrmo' | 'mayor';
 };
 
 function normalizeSearchText(value: string): string {
@@ -65,6 +66,7 @@ export default function MdrrmoCommunityFeed({
   onLoadMoreReports,
   onRetryAnnouncements,
   onRetryReports,
+  roleVariant = 'mdrrmo',
 }: Props) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -124,6 +126,7 @@ export default function MdrrmoCommunityFeed({
   const reportsNeedingAction = reports.filter(
     (report) => report.status === 'unverified' || report.status === 'escalated',
   ).length;
+  const isMayor = roleVariant === 'mayor';
 
   const openReport = (reportId: string, focusComments = false) => {
     const suffix = focusComments ? '?focus=comments' : '';
@@ -186,10 +189,25 @@ export default function MdrrmoCommunityFeed({
         </View>
       ) : null}
 
+      {isMayor ? (
+        <View style={styles.publishPanel} accessibilityLabel="Mayor's municipal communication workspace">
+          <View style={styles.publishCopy}>
+            <Text style={styles.eyebrow}>{"MAYOR'S OFFICE"}</Text>
+            <Text style={styles.publishTitle}>Municipality-wide communication</Text>
+          </View>
+          <View style={styles.countPill}>
+            <Ionicons name="eye-outline" size={16} color={colors.primary} />
+            <Text style={styles.countPillText}>Executive view</Text>
+          </View>
+        </View>
+      ) : null}
+
       <View style={styles.publishPanel}>
         <View style={styles.publishCopy}>
           <Text style={styles.eyebrow}>PUBLISH</Text>
-          <Text style={styles.publishTitle}>Share an official update</Text>
+          <Text style={styles.publishTitle}>
+            {isMayor ? 'Share a municipal message' : 'Share an official update'}
+          </Text>
         </View>
         <TouchableOpacity
           style={styles.publishAction}
@@ -198,7 +216,7 @@ export default function MdrrmoCommunityFeed({
           accessibilityLabel="Create a new announcement"
         >
           <Text style={styles.publishActionText} numberOfLines={1}>
-            {compactHeader ? 'New' : 'New announcement'}
+            {compactHeader ? 'New' : isMayor ? 'New message' : 'New announcement'}
           </Text>
           <Ionicons name="add" size={20} color={colors.primary} />
         </TouchableOpacity>
@@ -207,7 +225,7 @@ export default function MdrrmoCommunityFeed({
       <View style={styles.scopeTabs} accessibilityRole="tablist">
         {([
           ['all', 'All'],
-          ['municipal', 'MDRRMO'],
+          ['municipal', isMayor ? 'Municipal' : 'MDRRMO'],
           ['barangay', 'Barangays'],
         ] as const).map(([value, label]) => {
           const selected = scopeFilter === value;

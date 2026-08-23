@@ -34,6 +34,7 @@ type Props = {
   profileError: string | null;
   profileLoading: boolean;
   onRetryProfile: () => void;
+  roleVariant?: 'mdrrmo' | 'mayor';
 };
 
 type SettingsRowProps = {
@@ -45,12 +46,12 @@ type SettingsRowProps = {
   onPress?: () => void;
 };
 
-function profileName(profile: OfficialPublicProfile | null): string {
-  if (!profile) return 'MDRRMO account';
+function profileName(profile: OfficialPublicProfile | null, fallback: string): string {
+  if (!profile) return fallback;
   return [profile.first_name, profile.middle_name, profile.last_name]
     .filter((part) => part?.trim())
     .join(' ')
-    .trim() || 'MDRRMO account';
+    .trim() || fallback;
 }
 
 function initials(profile: OfficialPublicProfile | null): string {
@@ -130,6 +131,7 @@ export default function MdrrmoSettingsWorkspace({
   profileError,
   profileLoading,
   onRetryProfile,
+  roleVariant = 'mdrrmo',
 }: Props) {
   const router = useRouter();
   const { width: windowWidth } = useWindowDimensions();
@@ -141,7 +143,8 @@ export default function MdrrmoSettingsWorkspace({
   const compactHero = windowWidth < 380;
 
   const version = Constants.expoConfig?.version || 'Unavailable';
-  const name = profileName(profile);
+  const isMayor = roleVariant === 'mayor';
+  const name = profileName(profile, isMayor ? 'Mayor account' : 'MDRRMO account');
   const documentTitle = legalDocument === 'privacy' ? 'Privacy notice' : 'Terms and conditions';
   const documentContent = legalDocument === 'privacy'
     ? PRIVACY_NOTICE_CONTENT
@@ -224,7 +227,9 @@ export default function MdrrmoSettingsWorkspace({
             </View>
             <View style={styles.heroCopy}>
               <Text style={styles.heroName} numberOfLines={2}>{name}</Text>
-              <Text style={styles.heroRole}>MDRRMO · Official account</Text>
+              <Text style={styles.heroRole}>
+                {isMayor ? 'Mayor · Executive account' : 'MDRRMO · Official account'}
+              </Text>
             </View>
             {!compactHero ? (
               <TouchableOpacity
@@ -245,19 +250,23 @@ export default function MdrrmoSettingsWorkspace({
           <StaticAlertRow
             color="#F0524A"
             title="Critical incident alerts"
-            subtitle="Escalations and urgent reports"
+            subtitle={isMayor ? 'Municipal decisions and urgent reports' : 'Escalations and urgent reports'}
           />
           <StaticAlertRow
             color="#2F6FED"
-            title="Operations updates"
-            subtitle="Assignments, comments and center status"
+            title={isMayor ? 'Executive brief updates' : 'Operations updates'}
+            subtitle={isMayor ? 'Barangay activity and shelter readiness' : 'Assignments, comments and center status'}
           />
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionLabel}>WORKSPACE</Text>
+          <Text style={styles.sectionLabel}>{isMayor ? 'EXECUTIVE WORKSPACE' : 'WORKSPACE'}</Text>
           <SettingsRow icon="location-outline" title="Default area" subtitle="Minglanilla" />
-          <SettingsRow icon="locate-outline" title="Map & location" subtitle="Enabled" />
+          <SettingsRow
+            icon="locate-outline"
+            title={isMayor ? 'Municipal map' : 'Map & location'}
+            subtitle={isMayor ? 'All barangays · Read-only awareness' : 'Enabled'}
+          />
           <SettingsRow
             icon="shield-checkmark-outline"
             title="Password & access"
