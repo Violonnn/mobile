@@ -21,6 +21,7 @@ import InteractiveMap, {
 import ReportMapDetailSheet from '../../components/map/ReportMapDetailSheet';
 import ResourceMapDetailSheet from '../../components/map/ResourceMapDetailSheet';
 import EscalatedReportsPanel from '../../components/map/EscalatedReportsPanel';
+import MayorMapPanel from '../../components/map/MayorMapPanel';
 import { ReportEngagementProvider } from '../../components/report/ReportEngagementProvider';
 import { useReports } from '../../hooks/useReports';
 import { useResources } from '../../hooks/useResources';
@@ -289,6 +290,77 @@ export default function OfficialMapScreen() {
     });
   }, [centerMarkers, facilityMarkers, resourceId]);
 
+  if (officialKind === 'Mayor') {
+    return (
+      <ReportEngagementProvider reports={scopedMarkers}>
+        <View style={residentMapStyles.screen}>
+          <StatusBar style="dark" />
+          <View style={residentMapStyles.mapSection}>
+            <InteractiveMap
+              markers={scopedMarkers}
+              facilities={facilityMarkers}
+              evacuationCenters={centerMarkers}
+              layerVisibility={layers}
+              showLayerFilters
+              layerFiltersTopInset={insets.top + (error || focusError ? 70 : 24)}
+              showZoomControls={false}
+              onLayerVisibilityChange={setLayers}
+              onReportSelection={(ids) => {
+                setSelectedResource(null);
+                setSelectedReportIds(ids);
+              }}
+              onResourceSelection={(resource) => {
+                setSelectedReportIds([]);
+                setSelectedResource(resource);
+              }}
+              focusTarget={focusTarget}
+            />
+            {error || focusError ? (
+              <View style={[residentMapStyles.errorBanner, { top: insets.top + spacing.sm }]} pointerEvents="none">
+                <Text style={residentMapStyles.errorText}>{focusError || 'Map data could not fully refresh.'}</Text>
+              </View>
+            ) : null}
+          </View>
+
+          <Animated.View
+            style={[
+              residentMapStyles.contributionSheet,
+              {
+                height: escalatedPanelHeight,
+                transform: [{ translateY: escalatedPanelTranslateY }],
+              },
+            ]}
+          >
+            <MayorMapPanel
+              reports={scopedMarkers}
+              centers={centers}
+              loading={loading}
+              error={error}
+              bottomInset={escalatedPanelBottomInset}
+              collapsed={escalatedPanelCollapsed}
+              onLocateReport={openEscalatedReport}
+              onRetry={() => void reload()}
+              onToggleCollapsed={() => settleEscalatedPanel(!escalatedPanelCollapsed)}
+              dragHandlePanHandlers={escalatedPanelPanResponder.panHandlers}
+            />
+          </Animated.View>
+
+          <ReportMapDetailSheet
+            visible={selectedReports.length > 0}
+            reports={selectedReports}
+            bottomNavClearance={officialNavMetrics.barHeight + spacing.sm}
+            onClose={() => setSelectedReportIds([])}
+          />
+          <ResourceMapDetailSheet
+            visible={selectedResource != null}
+            resource={selectedResource}
+            onClose={() => setSelectedResource(null)}
+          />
+        </View>
+      </ReportEngagementProvider>
+    );
+  }
+
   if (officialKind === 'MDRRMO') {
     return (
       <ReportEngagementProvider reports={scopedMarkers}>
@@ -376,7 +448,6 @@ export default function OfficialMapScreen() {
         <View style={localStyles.header}>
           <MdrrmoHeader
             title="Map"
-            showDefaultControls={officialKind === 'Mayor'}
           />
         </View>
         <View style={localStyles.mapFill}>

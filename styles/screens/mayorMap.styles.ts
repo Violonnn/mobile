@@ -1,0 +1,35 @@
+import { StyleSheet } from 'react-native';
+
+import { colors, fonts, fontSizes, radius, spacing } from '../theme';
+
+export const mayorMapStyles = StyleSheet.create({
+  panel: { flex: 1, backgroundColor: colors.white },
+  handleArea: { height: 24, alignItems: 'center', justifyContent: 'center' },
+  handle: { width: 48, height: 5, borderRadius: 3, backgroundColor: '#CBD1DB' },
+  header: { minHeight: 70, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.lg, paddingBottom: spacing.sm },
+  headerCopy: { flex: 1 },
+  eyebrow: { fontFamily: fonts.medium, fontSize: fontSizes.xs, letterSpacing: 0.5, color: colors.textMuted },
+  title: { marginTop: 3, fontFamily: fonts.bold, fontSize: fontSizes.lg, color: colors.text },
+  attentionBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: spacing.sm, paddingVertical: 6, borderRadius: radius.full, backgroundColor: '#FFF7ED' },
+  badgeDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.unverified },
+  attentionText: { fontFamily: fonts.medium, fontSize: 10, color: colors.text },
+  body: { flex: 1 },
+  bodyContent: { paddingHorizontal: spacing.lg },
+  metrics: { flexDirection: 'row', paddingVertical: spacing.md, borderTopWidth: 1, borderBottomWidth: 1, borderColor: colors.border },
+  metric: { flex: 1, alignItems: 'center', gap: 3 },
+  dot: { width: 9, height: 9, borderRadius: 5 },
+  metricValue: { fontFamily: fonts.bold, fontSize: fontSizes.xl, color: colors.text },
+  metricLabel: { fontFamily: fonts.regular, fontSize: 10, color: colors.textMuted, textAlign: 'center' },
+  state: { minHeight: 110, alignItems: 'center', justifyContent: 'center', gap: spacing.sm, padding: spacing.md },
+  stateTitle: { fontFamily: fonts.bold, fontSize: fontSizes.md, color: colors.text },
+  stateText: { fontFamily: fonts.regular, fontSize: fontSizes.xs, lineHeight: 17, color: colors.textMuted, textAlign: 'center' },
+  retryText: { fontFamily: fonts.semibold, fontSize: fontSizes.sm, color: colors.primary },
+  reportRow: { minHeight: 78, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border },
+  reportAccent: { width: 4, height: 48, borderRadius: 2, backgroundColor: colors.unverified },
+  reportAccentEscalated: { backgroundColor: colors.danger },
+  reportCopy: { flex: 1, gap: 3 },
+  reportStatus: { fontFamily: fonts.semibold, fontSize: 9, letterSpacing: 0.4, color: colors.danger },
+  reportTitle: { fontFamily: fonts.semibold, fontSize: fontSizes.sm, color: colors.text },
+  reportMeta: { fontFamily: fonts.regular, fontSize: 10, color: colors.textMuted },
+  locateButton: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primaryLight },
+});
