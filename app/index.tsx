@@ -10,6 +10,7 @@ import {
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -105,7 +106,7 @@ export default function WelcomeScreen() {
   return (
     <View style={{ flex: 1 }}>
       {phase === 'welcome' ? (
-        <View style={styles.container}>
+        <SafeAreaView style={styles.container} edges={['bottom']}>
           <StatusBar style="light" />
 
           {/* ── Hero image with overlay text ── */}
@@ -162,7 +163,7 @@ export default function WelcomeScreen() {
               </View>
             </View>
           </View>
-        </View>
+        </SafeAreaView>
       ) : (
         <View style={splashStyles.overlay}>
           <ActivityIndicator size="large" color={colors.primary} />
