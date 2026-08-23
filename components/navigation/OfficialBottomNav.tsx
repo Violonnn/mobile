@@ -78,10 +78,12 @@ const NavItem = memo(function NavItem({
   config,
   focused,
   onPress,
+  executiveHighlight = false,
 }: {
   config: TabConfig;
   focused: boolean;
   onPress: () => void;
+  executiveHighlight?: boolean;
 }) {
   return (
     <Pressable
@@ -93,11 +95,20 @@ const NavItem = memo(function NavItem({
       accessibilityLabel={config.label}
     >
       <View style={styles.itemContent}>
-        <View style={styles.iconHolder}>
+        <View style={[
+          styles.iconHolder,
+          executiveHighlight && focused && styles.executiveActiveIcon,
+        ]}>
           <Ionicons
             name={focused ? config.activeIcon : config.inactiveIcon}
             size={focused ? officialNavMetrics.activeIconSize : officialNavMetrics.iconSize}
-            color={focused ? officialNavColors.iconActive : officialNavColors.iconInactive}
+            color={
+              executiveHighlight && focused
+                ? officialNavColors.incidentIcon
+                : focused
+                  ? officialNavColors.iconActive
+                  : officialNavColors.iconInactive
+            }
           />
         </View>
         <Text
@@ -261,6 +272,7 @@ export default function OfficialBottomNav({
               config={tab}
               focused={currentRouteName === tab.name}
               onPress={() => navigateTo(tab.name)}
+              executiveHighlight={isMayor}
             />
           ))}
         </View>

@@ -89,6 +89,17 @@ export const officialBottomNavStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  executiveActiveIcon: {
+    width: officialNavMetrics.hlWidth,
+    height: officialNavMetrics.hlWidth,
+    borderRadius: officialNavMetrics.hlWidth / 2,
+    backgroundColor: officialNavColors.iconActive,
+    shadowColor: officialNavColors.iconActive,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.22,
+    shadowRadius: 7,
+    elevation: 4,
+  },
   activeCircle: {
     width: officialNavMetrics.hlWidth,
     height: officialNavMetrics.hlHeight,
