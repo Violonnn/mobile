@@ -2,6 +2,7 @@
 // Shared design tokens — colors, fonts, spacing used across all screens
 
 export const colors = {
+  navigationActive: "#0F2044", // dark blue used by active navigation and the resident header
   primary: "#1A56DB",        // main blue — buttons, accents
   themeSoft: "#AAC0DC",      // soft desaturated blue — in-app header + nav highlight
   primaryLight: "#EEF2FF",   // light blue — backgrounds, badges
@@ -11,7 +12,8 @@ export const colors = {
   success: "#22C55E",        // green — verified badges
   purple: "#7C3AED",         // purple — weather alert icon
   white: "#FFFFFF",
-  background: "#F0F4FF",     // light blue-grey background
+  offWhite: "#FAFAF8",
+  background: "#FFFFFF",     // pure white screen canvas — not used by onboarding
   card: "#FFFFFF",           // white cards
   text: "#111827",           // dark text
   textMuted: "#6B7280",      // grey subtitle text

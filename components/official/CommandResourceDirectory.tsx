@@ -55,10 +55,6 @@ export default function CommandResourceDirectory({ hotlines, facilities, centers
           />
         </View>
         <View style={styles.directoryMapOverlay} pointerEvents="box-none">
-          <View style={styles.directoryHeadline} pointerEvents="none">
-            <Text style={styles.directoryTitle}>Resident-facing information</Text>
-            <Text style={styles.directorySubtitle}>Status and locations at a glance</Text>
-          </View>
           <TouchableOpacity style={styles.addCircle} onPress={(event) => { event.stopPropagation(); setPickerVisible(true); }} accessibilityLabel="Add public resource">
             <Ionicons name="add" size={28} color="#111827" />
           </TouchableOpacity>

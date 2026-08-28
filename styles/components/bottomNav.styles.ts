@@ -1,6 +1,6 @@
 import { StyleSheet } from 'react-native';
 
-import { fonts } from '../theme';
+import { colors, fonts } from '../theme';
 
 export const navMetrics = {
   barHeight: 78,
@@ -23,11 +23,10 @@ export const navMetrics = {
 export const navColors = {
   bar: '#FFFFFF',
   iconInactive: '#20252C',
-  iconActive: '#378FE7',
+  iconActive: colors.navigationActive,
   labelInactive: '#20252C',
-  labelActive: '#378FE7',
-  circleFill: '#378FE7',
-  report: '#4A96E6',
+  labelActive: colors.navigationActive,
+  report: colors.navigationActive,
   reportIcon: '#FFFFFF',
   carve: '#EAF3FC',
 };
@@ -100,12 +99,6 @@ export const bottomNavStyles = StyleSheet.create({
     width: navMetrics.reportSize + 16,
     height: '100%',
   },
-  activeCircle: {
-    width: navMetrics.hlWidth,
-    height: navMetrics.hlHeight,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   reportButtonWrap: {
     position: 'absolute',
     top: -navMetrics.reportLift,
@@ -138,7 +131,7 @@ export const bottomNavStyles = StyleSheet.create({
     height: navMetrics.reportSize,
     borderRadius: navMetrics.reportSize / 2,
     borderWidth: 1.5,
-    borderColor: 'rgba(74, 150, 230, 0.72)',
+    borderColor: 'rgba(15, 32, 68, 0.72)',
   },
   reportButton: {
     width: navMetrics.reportSize,

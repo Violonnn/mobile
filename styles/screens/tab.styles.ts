@@ -6,7 +6,7 @@ import { colors, fonts, fontSizes, radius, spacing } from '../theme';
 export const tabStyles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.white,
+    backgroundColor: colors.background,
   },
 
   // ---- Feed: stacked sections ------------------------------------------
@@ -30,7 +30,7 @@ export const tabStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    backgroundColor: colors.background,
+    backgroundColor: colors.white,
     borderRadius: radius.lg,
     paddingVertical: spacing.lg,
     paddingHorizontal: spacing.md,
@@ -69,7 +69,7 @@ export const tabStyles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
     borderRadius: radius.full,
-    backgroundColor: colors.background,
+    backgroundColor: colors.white,
     borderWidth: 1,
     borderColor: colors.border,
   },
@@ -92,7 +92,7 @@ export const tabStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.sm,
-    backgroundColor: colors.background,
+    backgroundColor: colors.white,
     borderRadius: radius.lg,
     paddingVertical: spacing.xl,
     paddingHorizontal: spacing.md,

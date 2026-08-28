@@ -6,7 +6,7 @@ import { colors, fonts, fontSizes, radius, spacing } from '../theme';
 export const mdrrmoReportsStyles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.white,
+    backgroundColor: colors.background,
   },
   scrollContent: {
     paddingHorizontal: spacing.lg,

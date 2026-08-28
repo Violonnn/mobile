@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   ActivityIndicator,
   type GestureResponderHandlers,
@@ -13,19 +13,83 @@ import { formatReportLocation, type MapReportMarker } from '../../lib/reports';
 import { contributionStyles as styles } from '../../styles/components/yourContributions.styles';
 import { colors } from '../../styles/theme';
 
-function formatContributionDate(isoDate: string): string {
+type ContributionDateGroup = {
+  key: string;
+  label: string;
+  reports: MapReportMarker[];
+};
+
+function formatContributionTime(isoDate: string): string {
   const parsedDate = new Date(isoDate);
   if (Number.isNaN(parsedDate.getTime())) return 'Date unavailable';
 
-  const datePart = parsedDate.toLocaleDateString(undefined, {
-    month: 'long',
-    day: 'numeric',
-  });
-  const timePart = parsedDate.toLocaleTimeString(undefined, {
+  return parsedDate.toLocaleTimeString(undefined, {
     hour: 'numeric',
     minute: '2-digit',
   });
-  return `${datePart} · ${timePart}`;
+}
+
+function formatContributionTitle(title: string): string {
+  const normalizedTitle = title.trim().toLocaleLowerCase();
+  if (!normalizedTitle) return 'Untitled report';
+
+  return `${normalizedTitle.charAt(0).toLocaleUpperCase()}${normalizedTitle.slice(1)}`;
+}
+
+function getContributionDateKey(isoDate: string): string {
+  const parsedDate = new Date(isoDate);
+  if (Number.isNaN(parsedDate.getTime())) return 'date-unavailable';
+
+  return `${parsedDate.getFullYear()}-${parsedDate.getMonth()}-${parsedDate.getDate()}`;
+}
+
+function formatContributionGroupLabel(isoDate: string, now: Date): string {
+  const parsedDate = new Date(isoDate);
+  if (Number.isNaN(parsedDate.getTime())) return 'Date unavailable';
+
+  // UTC day numbers compare local calendar dates safely across daylight-saving changes.
+  const todayDayNumber = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+  const reportDayNumber = Date.UTC(
+    parsedDate.getFullYear(),
+    parsedDate.getMonth(),
+    parsedDate.getDate(),
+  );
+  const calendarDaysAgo = Math.round((todayDayNumber - reportDayNumber) / 86_400_000);
+
+  if (calendarDaysAgo === 0) return 'Today';
+  if (calendarDaysAgo === 1) return 'Yesterday';
+
+  return parsedDate.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
+function groupContributionsByDate(
+  reports: MapReportMarker[],
+  now: Date,
+): ContributionDateGroup[] {
+  const groups: ContributionDateGroup[] = [];
+  const groupByKey = new Map<string, ContributionDateGroup>();
+
+  reports.forEach((report) => {
+    const key = getContributionDateKey(report.created_at);
+    const existingGroup = groupByKey.get(key);
+    if (existingGroup) {
+      existingGroup.reports.push(report);
+      return;
+    }
+
+    const newGroup: ContributionDateGroup = {
+      key,
+      label: formatContributionGroupLabel(report.created_at, now),
+      reports: [report],
+    };
+    groupByKey.set(key, newGroup);
+    groups.push(newGroup);
+  });
+
+  return groups;
 }
 
 function contributionStatus(report: MapReportMarker): {
@@ -70,6 +134,10 @@ export default function YourContributionsPanel({
   dragHandlePanHandlers: GestureResponderHandlers;
 }) {
   const resolvedCount = reports.filter((report) => report.status === 'resolved').length;
+  const contributionGroups = useMemo(
+    () => groupContributionsByDate(reports, new Date()),
+    [reports],
+  );
 
   return (
     <View style={styles.panel}>
@@ -83,11 +151,7 @@ export default function YourContributionsPanel({
           accessibilityHint={collapsed ? 'You can also drag upward' : 'You can also drag downward'}
           accessibilityState={{ expanded: !collapsed }}
         >
-          <Ionicons
-            name={collapsed ? 'chevron-up' : 'chevron-down'}
-            size={19}
-            color={colors.primary}
-          />
+          <View style={styles.dragIndicator} />
         </TouchableOpacity>
 
         <View style={styles.headerRow}>
@@ -135,54 +199,58 @@ export default function YourContributionsPanel({
           </View>
         ) : (
           <>
-            {reports.map((report, index) => {
-              const status = contributionStatus(report);
-              const isLatest = index === 0;
+            {contributionGroups.map((group) => (
+              <View key={group.key} style={styles.dateGroup}>
+                <Text style={styles.dateGroupTitle}>{group.label}</Text>
 
-              return (
-                <TouchableOpacity
-                  key={report.id}
-                  style={[styles.reportCard, isLatest && styles.latestReportCard]}
-                  onPress={() => onReportPress(report)}
-                  activeOpacity={0.82}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Open report: ${report.title}`}
-                >
-                  <View style={styles.statusRow}>
-                    <Ionicons name={status.icon} size={18} color={status.color} />
-                    <Text style={[styles.statusText, { color: status.color }]}>{status.label}</Text>
-                    {isLatest ? <Text style={styles.latestBadge}>LATEST</Text> : null}
-                  </View>
+                {group.reports.map((report) => {
+                  const status = contributionStatus(report);
+                  const isLatest = report.id === reports[0]?.id;
 
-                  <Text style={[styles.reportTitle, isLatest && styles.latestReportTitle]}>
-                    {report.title || 'Untitled report'}
-                  </Text>
-                  <Text style={styles.dateText}>{formatContributionDate(report.created_at)}</Text>
-                  <View style={styles.locationRow}>
-                    <Ionicons name="location-outline" size={16} color={colors.textMuted} />
-                    <Text style={styles.locationText} numberOfLines={1}>
-                      {formatReportLocation(report)}
-                    </Text>
-                  </View>
-                  <Text style={styles.description} numberOfLines={isLatest ? 3 : 2}>
-                    {report.description || 'No description provided.'}
-                  </Text>
+                  return (
+                    <TouchableOpacity
+                      key={report.id}
+                      style={[styles.reportCard, isLatest && styles.latestReportCard]}
+                      onPress={() => onReportPress(report)}
+                      activeOpacity={0.82}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Open report: ${report.title}`}
+                    >
+                      <View style={styles.statusRow}>
+                        <Ionicons name={status.icon} size={18} color={status.color} />
+                        <Text style={[styles.statusText, { color: status.color }]}>
+                          {status.label}
+                        </Text>
+                        {isLatest ? <Text style={styles.latestBadge}>LATEST</Text> : null}
+                      </View>
 
-                  <View style={styles.cardFooter}>
-                    <View style={styles.openAction}>
-                      <Text style={styles.openActionText}>View report</Text>
-                      <Ionicons name="arrow-forward" size={18} color={colors.primary} />
-                    </View>
-                    <View style={styles.engagementSummary}>
-                      <Ionicons name="arrow-up-outline" size={16} color={colors.textMuted} />
-                      <Text style={styles.engagementText}>{report.upvoteCount}</Text>
-                      <Ionicons name="chatbubble-outline" size={15} color={colors.textMuted} />
-                      <Text style={styles.engagementText}>{report.commentCount}</Text>
-                    </View>
-                  </View>
-                </TouchableOpacity>
-              );
-            })}
+                      <Text style={[styles.reportTitle, isLatest && styles.latestReportTitle]}>
+                        {formatContributionTitle(report.title)}
+                      </Text>
+                      <Text style={styles.metadataText} numberOfLines={1}>
+                        {formatContributionTime(report.created_at)} | {formatReportLocation(report)}
+                      </Text>
+                      <Text style={styles.description} numberOfLines={isLatest ? 3 : 2}>
+                        {report.description || 'No description provided.'}
+                      </Text>
+
+                      <View style={styles.cardFooter}>
+                        <View style={styles.engagementSummary}>
+                          <Ionicons name="arrow-up-outline" size={16} color={colors.textMuted} />
+                          <Text style={styles.engagementText}>{report.upvoteCount}</Text>
+                          <Ionicons name="chatbubble-outline" size={15} color={colors.textMuted} />
+                          <Text style={styles.engagementText}>{report.commentCount}</Text>
+                        </View>
+                        <View style={styles.openAction}>
+                          <Text style={styles.openActionText}>View report</Text>
+                          <Ionicons name="arrow-forward" size={18} color={colors.primary} />
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            ))}
 
             <View style={styles.summaryRow}>
               <View style={styles.summaryCopy}>

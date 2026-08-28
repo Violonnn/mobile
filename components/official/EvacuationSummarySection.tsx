@@ -77,7 +77,10 @@ export default function EvacuationSummarySection({ centers, error, officialKind 
         <>
           <View style={styles.readinessCard}>
             <View style={styles.readinessTop}>
-              <Text style={styles.readinessLabel}>NETWORK READINESS</Text>
+              <View style={styles.capacityCopy}>
+                <Text style={styles.capacityValue}>{summary.declaredCapacity.toLocaleString()}</Text>
+                <Text style={styles.capacityLabel}>declared capacity</Text>
+              </View>
               <View style={styles.reviewBadge}>
                 <View style={[styles.alertDot, { backgroundColor: summary.attentionCount ? '#FF3B30' : '#16A34A' }]} />
                 <Text style={styles.reviewBadgeText}>
@@ -85,19 +88,14 @@ export default function EvacuationSummarySection({ centers, error, officialKind 
                 </Text>
               </View>
             </View>
-            <View>
-              <Text style={styles.capacityValue}>{summary.declaredCapacity.toLocaleString()}</Text>
-              <Text style={styles.capacityLabel}>declared capacity</Text>
-            </View>
             <View style={styles.readinessBar} />
             <View style={styles.readinessMetrics}>
               {[
-                { value: summary.openCount, label: 'Open', color: '#169B55' },
-                { value: summary.fullCount, label: 'Full', color: '#64748B' },
-                { value: summary.priorityCount, label: 'Priority', color: '#FF3B30' },
+                { value: summary.openCount, label: 'Open' },
+                { value: summary.fullCount, label: 'Full' },
+                { value: summary.priorityCount, label: 'Priority' },
               ].map((metric, index) => (
                 <View key={metric.label} style={[styles.readinessMetric, index === 2 && styles.readinessMetricLast]}>
-                  <View style={[styles.pipelineDot, { backgroundColor: metric.color }]} />
                   <Text style={styles.readinessMetricValue}>{metric.value}</Text>
                   <Text style={styles.readinessMetricLabel}>{metric.label}</Text>
                 </View>
@@ -111,8 +109,7 @@ export default function EvacuationSummarySection({ centers, error, officialKind 
           {summary.attentionCenters.length > 0 ? (
             <>
               <View style={styles.reviewHeader}>
-                <Text style={styles.sectionLabel}>REQUIRES REVIEW</Text>
-                <Text style={styles.reviewCount}>{summary.attentionCount} center{summary.attentionCount === 1 ? '' : 's'}</Text>
+                <Text style={styles.reviewLabel}>REQUIRES REVIEW</Text>
               </View>
               {summary.attentionCenters.slice(0, 1).map((center) => {
                 const marker: MapResourceMarker = {
@@ -130,13 +127,15 @@ export default function EvacuationSummarySection({ centers, error, officialKind 
                       <InteractiveMap markers={[]} facilities={[]} evacuationCenters={[marker]} showZoomControls={false} tone="dark" />
                     </View>
                     <View style={styles.reviewCopy}>
-                      <View style={styles.reviewNameRow}>
-                        <Text style={styles.reviewName} numberOfLines={2}>{center.name}</Text>
-                        {center.isPriority ? <View style={styles.priorityPill}><Text style={styles.priorityPillText}>Priority</Text></View> : null}
+                      <View style={styles.reviewIdentity}>
+                        <View style={styles.reviewNameRow}>
+                          <Text style={styles.reviewName} numberOfLines={2}>{center.name}</Text>
+                          {center.isPriority ? <View style={styles.priorityPill}><Text style={styles.priorityPillText}>Priority</Text></View> : null}
+                        </View>
+                        <Text style={styles.reviewMeta} numberOfLines={2}>
+                          {center.barangayId ? barangayNameById.get(center.barangayId) || 'Barangay unavailable' : 'Barangay unavailable'}
+                        </Text>
                       </View>
-                      <Text style={styles.reviewMeta} numberOfLines={2}>
-                        {center.barangayId ? barangayNameById.get(center.barangayId) || 'Barangay unavailable' : 'Barangay unavailable'}
-                      </Text>
                       <Text style={styles.reviewMeta}>
                         {center.capacity == null ? 'Capacity not set' : `Capacity ${center.capacity}`} · Updated {formatUpdate(center.lastUpdatedAt)}
                       </Text>

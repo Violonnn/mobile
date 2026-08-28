@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import HomeMapPreview from '../../components/home/HomeMapPreview';
+import NearbyReportAnimation from '../../components/home/NearbyReportAnimation';
 import QuickAccessModal, {
   type QuickAccessType,
 } from '../../components/home/QuickAccessModal';
@@ -40,7 +41,7 @@ import {
 } from '../../lib/reportProximity';
 import type { MapReportMarker } from '../../lib/reports';
 import { homeColors, homeStyles as styles } from '../../styles/screens/home.styles';
-import { colors } from '../../styles/theme';
+import { colors, spacing } from '../../styles/theme';
 
 type BarangayCenter = Coordinate;
 
@@ -234,6 +235,14 @@ export default function HomeScreen() {
 
   const locationValue = barangay ? `${barangay}, Minglanilla` : 'Minglanilla, Cebu';
   const isCompactLayout = windowWidth < 370;
+  // Fit three centered cards safely on narrow phones without stretching them on tablets.
+  const quickAccessContentWidth = Math.min(windowWidth, 420) -
+    (spacing.sm + spacing.xs) * 2;
+  const quickAccessCardWidth = Math.min(
+    96,
+    Math.floor((quickAccessContentWidth - spacing.sm * 2) / 3),
+  );
+  const quickAccessCardWidthStyle = { width: quickAccessCardWidth };
   const areaStatusUnavailable = Boolean(reportsError);
   const areaHasReports = activeReportsInBarangay.length > 0;
   const areaStatusText = reportsLoading
@@ -289,11 +298,12 @@ export default function HomeScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
       <StatusBar style="dark" />
       <ScrollView
-        contentContainerStyle={[styles.scrollContent, { paddingTop: insets.top + 12 }]}
+        contentContainerStyle={[styles.scrollContent, { paddingTop: spacing.xs }]}
         showsVerticalScrollIndicator={false}
+        stickyHeaderIndices={[0]}
         keyboardDismissMode="on-drag"
         keyboardShouldPersistTaps="handled"
         refreshControl={
@@ -305,177 +315,175 @@ export default function HomeScreen() {
           />
         }
       >
-        <View style={styles.heroSection}>
-          <View style={styles.greetingRow}>
-            <View style={styles.greetingCopy}>
-              <Text style={styles.greetingTitle} numberOfLines={1}>
-                Hi, {firstName || 'there'}
-              </Text>
-              <View style={styles.locationRow}>
-                <Ionicons name="location-outline" size={21} color={homeColors.ink} />
-                <Text style={styles.locationText} numberOfLines={1}>
-                  {locationValue}
+        <View style={styles.residentStickyHeader}>
+          <View style={styles.residentHeaderContent}>
+            <View style={styles.greetingRow}>
+              <View style={styles.greetingCopy}>
+                <Text style={styles.greetingTitle} numberOfLines={1}>
+                  Hi, {firstName || 'there'}
                 </Text>
+                <View style={styles.locationRow}>
+                  <Ionicons name="location-outline" size={21} color={homeColors.ink} />
+                  <Text style={styles.locationText} numberOfLines={1}>
+                    {locationValue}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.headerActions}>
+                <TouchableOpacity
+                  style={styles.notificationButton}
+                  activeOpacity={0.75}
+                  onPress={() => setNotificationsOpen(true)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Notifications"
+                >
+                  <Ionicons name="notifications-outline" size={28} color={homeColors.ink} />
+                  <View style={styles.notificationDot} />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.avatar}
+                  activeOpacity={0.82}
+                  onPress={() => router.push('/(main)/profile')}
+                  accessibilityRole="button"
+                  accessibilityLabel="Open profile"
+                >
+                  <Text style={styles.avatarText}>
+                    {firstName.trim().charAt(0).toLocaleUpperCase() || 'R'}
+                  </Text>
+                </TouchableOpacity>
               </View>
             </View>
-
-            <View style={styles.headerActions}>
-              <TouchableOpacity
-                style={styles.notificationButton}
-                activeOpacity={0.75}
-                onPress={() => setNotificationsOpen(true)}
-                accessibilityRole="button"
-                accessibilityLabel="Notifications"
-              >
-                <Ionicons name="notifications-outline" size={28} color={homeColors.ink} />
-                <View style={styles.notificationDot} />
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.avatar}
-                activeOpacity={0.82}
-                onPress={() => router.push('/(main)/profile')}
-                accessibilityRole="button"
-                accessibilityLabel="Open profile"
-              >
-                <Text style={styles.avatarText}>
-                  {firstName.trim().charAt(0).toLocaleUpperCase() || 'R'}
-                </Text>
-              </TouchableOpacity>
-            </View>
           </View>
-
-          <View style={styles.areaStatusRow}>
-            <View
-              style={[
-                styles.areaStatusDot,
-                areaHasReports && styles.areaStatusDotWarning,
-                areaStatusUnavailable && styles.areaStatusDotMuted,
-              ]}
-            />
-            <Text
-              style={[
-                styles.areaStatusText,
-                areaHasReports && styles.areaStatusTextWarning,
-                areaStatusUnavailable && styles.areaStatusTextMuted,
-              ]}
-            >
-              {areaStatusText}
-            </Text>
-          </View>
-
-          <View style={styles.searchBar}>
-            <Ionicons name="search-outline" size={23} color={homeColors.ink} />
-            <TextInput
-              style={styles.searchInput}
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              placeholder="Search announcements and reports"
-              placeholderTextColor={colors.textMuted}
-              returnKeyType="search"
-              autoCapitalize="none"
-              accessibilityLabel="Search announcements and reports"
-            />
-            {searchQuery ? (
-              <TouchableOpacity
-                onPress={() => setSearchQuery('')}
-                accessibilityRole="button"
-                accessibilityLabel="Clear search"
-              >
-                <Ionicons name="close-circle" size={20} color={colors.textMuted} />
-              </TouchableOpacity>
-            ) : null}
-          </View>
-
-          {searchQuery.trim() ? (
-            <View style={styles.searchResultsCard}>
-              {searchResults.length === 0 ? (
-                <Text style={styles.stateText}>No matching updates or reports</Text>
-              ) : (
-                searchResults.map((result, index) => (
-                  <TouchableOpacity
-                    key={`${result.kind}-${result.item.id}`}
-                    style={[
-                      styles.searchResultRow,
-                      index < searchResults.length - 1 && styles.searchResultDivider,
-                    ]}
-                    onPress={() => {
-                      setSearchQuery('');
-                      if (result.kind === 'report') {
-                        openReportInMap(result.item.id);
-                        return;
-                      }
-                      goToFeed();
-                    }}
-                    accessibilityRole="button"
-                  >
-                    <Ionicons
-                      name={result.kind === 'report' ? 'location-outline' : 'megaphone-outline'}
-                      size={18}
-                      color={colors.primary}
-                    />
-                    <View style={styles.searchResultCopy}>
-                      <Text style={styles.searchResultTitle} numberOfLines={1}>
-                        {result.item.title || 'Untitled update'}
-                      </Text>
-                      <Text style={styles.searchResultType}>
-                        {result.kind === 'report' ? 'Report' : 'Official announcement'}
-                      </Text>
-                    </View>
-                    <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-                  </TouchableOpacity>
-                ))
-              )}
-            </View>
-          ) : null}
         </View>
 
-        <View
-          style={styles.contentSection}
-        >
-          <View style={styles.sectionBlock}>
-            <Text style={[styles.sectionTitle, styles.quickAccessTitle]}>Quick access</Text>
-            <View style={styles.quickAccessRow}>
-              <TouchableOpacity
-                style={styles.quickAccessCard}
-                activeOpacity={0.82}
-                onPress={() => setQuickAccessType('hotlines')}
-                accessibilityRole="button"
-                accessibilityLabel="Go to hotlines"
-              >
-                <View style={[styles.quickAccessIcon, styles.hotlineIconBackground]}>
-                  <Ionicons name="call-outline" size={18} color={homeColors.ink} />
-                </View>
-                <Text style={styles.quickAccessText}>Hotlines</Text>
-              </TouchableOpacity>
+        <View style={styles.headerBody}>
+          <View style={styles.heroSection}>
+            <View style={styles.searchBar}>
+              <Ionicons name="search-outline" size={23} color={homeColors.ink} />
+              <TextInput
+                style={styles.searchInput}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                placeholder="Search announcements and reports"
+                placeholderTextColor={colors.textMuted}
+                returnKeyType="search"
+                autoCapitalize="none"
+                accessibilityLabel="Search announcements and reports"
+              />
+              {searchQuery ? (
+                <TouchableOpacity
+                  onPress={() => setSearchQuery('')}
+                  accessibilityRole="button"
+                  accessibilityLabel="Clear search"
+                >
+                  <Ionicons name="close-circle" size={20} color={colors.textMuted} />
+                </TouchableOpacity>
+              ) : null}
+            </View>
 
-              <TouchableOpacity
-                style={styles.quickAccessCard}
-                activeOpacity={0.82}
-                onPress={() => setQuickAccessType('facilities')}
-                accessibilityRole="button"
-                accessibilityLabel="Go to facilities"
-              >
-                <View style={[styles.quickAccessIcon, styles.facilityIconBackground]}>
-                  <Ionicons name="business-outline" size={18} color={homeColors.ink} />
-                </View>
-                <Text style={styles.quickAccessText}>Facilities</Text>
-              </TouchableOpacity>
+            {searchQuery.trim() ? (
+              <View style={styles.searchResultsCard}>
+                {searchResults.length === 0 ? (
+                  <Text style={styles.stateText}>No matching updates or reports</Text>
+                ) : (
+                  searchResults.map((result, index) => (
+                    <TouchableOpacity
+                      key={`${result.kind}-${result.item.id}`}
+                      style={[
+                        styles.searchResultRow,
+                        index < searchResults.length - 1 && styles.searchResultDivider,
+                      ]}
+                      onPress={() => {
+                        setSearchQuery('');
+                        if (result.kind === 'report') {
+                          openReportInMap(result.item.id);
+                          return;
+                        }
+                        goToFeed();
+                      }}
+                      accessibilityRole="button"
+                    >
+                      <Ionicons
+                        name={result.kind === 'report' ? 'location-outline' : 'megaphone-outline'}
+                        size={18}
+                        color={colors.primary}
+                      />
+                      <View style={styles.searchResultCopy}>
+                        <Text style={styles.searchResultTitle} numberOfLines={1}>
+                          {result.item.title || 'Untitled update'}
+                        </Text>
+                        <Text style={styles.searchResultType}>
+                          {result.kind === 'report' ? 'Report' : 'Official announcement'}
+                        </Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+                    </TouchableOpacity>
+                  ))
+                )}
+              </View>
+            ) : null}
 
-              <TouchableOpacity
-                style={styles.quickAccessCard}
-                activeOpacity={0.82}
-                onPress={() => setQuickAccessType('evacuation')}
-                accessibilityRole="button"
-                accessibilityLabel={`View ${centers.length} evacuation centers`}
+            <View style={styles.nearbyReportBlock}>
+              <NearbyReportAnimation />
+              <Text
+                style={styles.areaStatusText}
+                accessibilityLiveRegion="polite"
               >
-                <View style={[styles.quickAccessIcon, styles.evacuationIconBackground]}>
-                  <Ionicons name="exit-outline" size={18} color={colors.white} />
-                </View>
-                <Text style={styles.quickAccessText}>Evacuation{`\n`}Centers</Text>
-              </TouchableOpacity>
+                {areaStatusText}
+              </Text>
             </View>
           </View>
 
+          <View style={styles.quickAccessSpacer} />
+
+          <View style={styles.quickAccessSection}>
+            <View style={styles.quickAccessContent}>
+              <View style={styles.quickAccessRow}>
+                <TouchableOpacity
+                  style={[styles.quickAccessCard, quickAccessCardWidthStyle]}
+                  activeOpacity={0.82}
+                  onPress={() => setQuickAccessType('hotlines')}
+                  accessibilityRole="button"
+                  accessibilityLabel="Go to hotlines"
+                >
+                  <View style={styles.quickAccessIcon}>
+                    <Ionicons name="call-outline" size={22} color={homeColors.accentBlue} />
+                  </View>
+                  <Text style={styles.quickAccessText}>Hotlines</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.quickAccessCard, quickAccessCardWidthStyle]}
+                  activeOpacity={0.82}
+                  onPress={() => setQuickAccessType('facilities')}
+                  accessibilityRole="button"
+                  accessibilityLabel="Go to facilities"
+                >
+                  <View style={styles.quickAccessIcon}>
+                    <Ionicons name="business-outline" size={22} color={homeColors.accentBlue} />
+                  </View>
+                  <Text style={styles.quickAccessText}>Facilities</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.quickAccessCard, quickAccessCardWidthStyle]}
+                  activeOpacity={0.82}
+                  onPress={() => setQuickAccessType('evacuation')}
+                  accessibilityRole="button"
+                  accessibilityLabel={`View ${centers.length} evacuation centers`}
+                >
+                  <View style={styles.quickAccessIcon}>
+                    <Ionicons name="exit-outline" size={22} color={homeColors.accentBlue} />
+                  </View>
+                  <Text style={styles.quickAccessText}>Evacuation{`\n`}Centers</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.contentSection}>
           <View style={styles.sectionBlock}>
             <View style={[styles.sectionHeaderRow, styles.municipalHeaderRow]}>
               <Text style={styles.sectionTitle}>Municipal update</Text>
@@ -505,6 +513,36 @@ export default function HomeScreen() {
               <View style={styles.stateCard}>
                 <Ionicons name="megaphone-outline" size={19} color={colors.textMuted} />
                 <Text style={styles.stateText}>No municipal updates yet</Text>
+              </View>
+            )}
+          </View>
+
+          <View style={styles.sectionBlock}>
+            <View style={styles.sectionHeaderRow}>
+              <Text style={styles.sectionTitle}>Barangay update</Text>
+              <TouchableOpacity onPress={goToFeed} accessibilityRole="button">
+                <Text style={styles.sectionLink}>See all</Text>
+              </TouchableOpacity>
+            </View>
+            {announcementsLoading ? (
+              <View style={styles.stateCard}>
+                <ActivityIndicator color={colors.primary} />
+              </View>
+            ) : announcementsError ? (
+              <View style={styles.stateCard}>
+                <Ionicons name="warning-outline" size={19} color={colors.textMuted} />
+                <Text style={styles.stateText}>Could not load barangay updates</Text>
+              </View>
+            ) : barangayAnnouncement ? (
+              <HomeUpdateCard
+                announcement={barangayAnnouncement}
+                label="Barangay update"
+                onPress={goToFeed}
+              />
+            ) : (
+              <View style={styles.stateCard}>
+                <Ionicons name="megaphone-outline" size={19} color={colors.textMuted} />
+                <Text style={styles.stateText}>No updates for {barangay || 'your barangay'} yet</Text>
               </View>
             )}
           </View>
@@ -591,7 +629,12 @@ export default function HomeScreen() {
                             </Text>
                           ) : null}
                           <View style={styles.reportLocationRow}>
-                            <Ionicons name="location" size={16} color={colors.primary} />
+                            <Ionicons
+                              name="location-outline"
+                              size={16}
+                              color={colors.primary}
+                              style={styles.reportLocationIcon}
+                            />
                             <Text
                               style={styles.reportAddress}
                               numberOfLines={1}
@@ -620,41 +663,10 @@ export default function HomeScreen() {
                 <HomeMapPreview
                   reports={nearbyReports}
                   focusedReport={focusedNearbyReport}
-                  onFocusReport={setFocusedNearbyReportId}
                   onOpenReport={openReportInMap}
                 />
               </View>
             </View>
-          </View>
-
-          <View style={styles.sectionBlock}>
-            <View style={styles.sectionHeaderRow}>
-              <Text style={styles.sectionTitle}>Barangay update</Text>
-              <TouchableOpacity onPress={goToFeed} accessibilityRole="button">
-                <Text style={styles.sectionLink}>See all</Text>
-              </TouchableOpacity>
-            </View>
-            {announcementsLoading ? (
-              <View style={styles.stateCard}>
-                <ActivityIndicator color={colors.primary} />
-              </View>
-            ) : announcementsError ? (
-              <View style={styles.stateCard}>
-                <Ionicons name="warning-outline" size={19} color={colors.textMuted} />
-                <Text style={styles.stateText}>Could not load barangay updates</Text>
-              </View>
-            ) : barangayAnnouncement ? (
-              <HomeUpdateCard
-                announcement={barangayAnnouncement}
-                label="Barangay update"
-                onPress={goToFeed}
-              />
-            ) : (
-              <View style={styles.stateCard}>
-                <Ionicons name="megaphone-outline" size={19} color={colors.textMuted} />
-                <Text style={styles.stateText}>No updates for {barangay || 'your barangay'} yet</Text>
-              </View>
-            )}
           </View>
 
         </View>

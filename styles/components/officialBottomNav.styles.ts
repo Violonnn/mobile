@@ -1,5 +1,5 @@
 import { StyleSheet } from 'react-native';
-import { fonts } from '../theme';
+import { colors, fonts } from '../theme';
 
 export const officialNavMetrics = {
   barHeight: 78,
@@ -21,9 +21,9 @@ export const officialNavMetrics = {
 export const officialNavColors = {
   bar: '#FFFFFF',
   iconInactive: '#20252C',
-  iconActive: '#378FE7',
+  iconActive: colors.navigationActive,
   labelInactive: '#20252C',
-  labelActive: '#378FE7',
+  labelActive: colors.navigationActive,
   incident: '#F0524A',
   incidentIcon: '#FFFFFF',
   carve: '#EAF3FC',

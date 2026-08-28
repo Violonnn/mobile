@@ -39,7 +39,13 @@ function asMapMarker(report: OfficialReportQueueItem): MapReportMarker | null {
   };
 }
 
-export default function CommandEscalationMap({ reports }: { reports: OfficialReportQueueItem[] }) {
+export default function CommandEscalationMap({
+  reports,
+  onGestureActiveChange,
+}: {
+  reports: OfficialReportQueueItem[];
+  onGestureActiveChange?: (active: boolean) => void;
+}) {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const escalations = useMemo(
@@ -58,7 +64,16 @@ export default function CommandEscalationMap({ reports }: { reports: OfficialRep
     [escalations],
   );
   const heroHeight = Math.min(540, Math.max(410, width * 1.2));
-  const activeMarker = activeReport ? asMapMarker(activeReport) : null;
+  const focusTarget = useMemo(() => {
+    if (activeReport == null || activeReport.latitude == null || activeReport.longitude == null) {
+      return null;
+    }
+    return {
+      reportId: activeReport.id,
+      latitude: activeReport.latitude,
+      longitude: activeReport.longitude,
+    };
+  }, [activeReport?.id, activeReport?.latitude, activeReport?.longitude]);
 
   function move(direction: -1 | 1) {
     if (escalations.length < 2) return;
@@ -67,26 +82,25 @@ export default function CommandEscalationMap({ reports }: { reports: OfficialRep
 
   return (
     <View style={[styles.mapHero, { height: heroHeight }]}>
-      {markers.length > 0 ? (
-        <View style={styles.mapFill}>
-          <InteractiveMap
-            markers={markers}
-            facilities={[]}
-            evacuationCenters={[]}
-            showZoomControls={false}
-            tone="dark"
-            focusTarget={activeMarker ? {
-              reportId: activeMarker.id,
-              latitude: activeMarker.latitude,
-              longitude: activeMarker.longitude,
-            } : null}
-            onReportSelection={(ids) => {
-              const selectedIndex = escalations.findIndex((report) => ids.includes(report.id));
-              if (selectedIndex >= 0) setActiveIndex(selectedIndex);
-            }}
-          />
-        </View>
-      ) : null}
+      <View
+        collapsable={false}
+        style={[styles.mapFill, !activeReport && styles.emptyMap]}
+      >
+        <InteractiveMap
+          markers={markers}
+          facilities={[]}
+          evacuationCenters={[]}
+          showZoomControls={false}
+          tone="dark"
+          stickyFocus
+          onGestureActiveChange={onGestureActiveChange}
+          focusTarget={focusTarget}
+          onReportSelection={(ids) => {
+            const selectedIndex = escalations.findIndex((report) => ids.includes(report.id));
+            if (selectedIndex >= 0) setActiveIndex(selectedIndex);
+          }}
+        />
+      </View>
       <LinearGradient
         pointerEvents="none"
         colors={['rgba(4,17,31,0.88)', 'rgba(4,17,31,0.2)', 'rgba(4,17,31,0.82)']}
@@ -95,26 +109,29 @@ export default function CommandEscalationMap({ reports }: { reports: OfficialRep
       />
 
       {!activeReport ? (
-        <View style={styles.emptyHero}>
-          <Ionicons name="shield-checkmark-outline" size={34} color="#66A3FF" />
-          <Text style={styles.emptyHeroTitle}>No active escalations</Text>
-          <Text style={styles.emptyHeroText}>Escalated reports will appear here with their verified map location.</Text>
+        <View style={styles.emptyMapContent} pointerEvents="none">
+          <Text style={styles.escalationTitle}>No active escalations</Text>
+          <Text style={styles.emptyHeroText}>
+            Escalated reports will appear here with their verified map location.
+          </Text>
         </View>
       ) : (
-        <View style={styles.mapContent} pointerEvents="box-none">
+        <>
           <View style={styles.escalationTop} pointerEvents="none">
-            <View style={styles.escalationCountRow}>
-              <View style={styles.alertDot} />
-              <Text style={styles.escalationCount}>
-                {escalations.length} active escalation{escalations.length === 1 ? '' : 's'}
+            <View style={styles.escalationMeta}>
+              <View style={styles.escalationCountRow}>
+                <View style={styles.alertDot} />
+                <Text style={styles.escalationCount}>
+                  {escalations.length} active escalation{escalations.length === 1 ? '' : 's'}
+                </Text>
+              </View>
+              <Text style={styles.escalationStatus}>
+                ESCALATED <Text style={styles.escalationBarangay}>· {activeReport.barangayName || 'Minglanilla'}</Text>
+              </Text>
+              <Text style={styles.escalationDate}>
+                {formatEscalationDate(activeReport.escalatedAt || activeReport.createdAt)}
               </Text>
             </View>
-            <Text style={styles.escalationStatus}>
-              ESCALATED <Text style={styles.escalationBarangay}>· {activeReport.barangayName || 'Minglanilla'}</Text>
-            </Text>
-            <Text style={styles.escalationDate}>
-              {formatEscalationDate(activeReport.escalatedAt || activeReport.createdAt)}
-            </Text>
             <Text style={styles.escalationTitle} numberOfLines={3}>{activeReport.title || 'Untitled incident'}</Text>
             <View>
               <View style={styles.mediaThumb}>
@@ -135,7 +152,7 @@ export default function CommandEscalationMap({ reports }: { reports: OfficialRep
             </View>
           </View>
 
-          <View style={styles.heroBottom}>
+          <View style={styles.heroBottom} pointerEvents="box-none">
             <View style={styles.heroActions}>
               <TouchableOpacity
                 style={styles.incidentLink}
@@ -158,7 +175,7 @@ export default function CommandEscalationMap({ reports }: { reports: OfficialRep
               ) : null}
             </View>
           </View>
-        </View>
+        </>
       )}
     </View>
   );

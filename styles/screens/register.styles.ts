@@ -3,7 +3,7 @@ import { colors as themeColors, fonts, fontSizes, fontWeights, radius, spacing }
 import { scaleByWidth } from '../../lib/layout';
 
 export const registerColors = {
-  background: '#ffffff',
+  background: themeColors.background,
   stepNode: '#e8f2ff',
   accent: '#000000',
   white: '#ffffff',

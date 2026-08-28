@@ -6,7 +6,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -23,6 +23,7 @@ import { useEvacuationCenters } from '../../hooks/useEvacuationCenters';
 import { useReports } from '../../hooks/useReports';
 import { useResources } from '../../hooks/useResources';
 import { getActiveSession } from '../../lib/auth';
+import { getResidentMapTheme, type ResidentMapTheme } from '../../lib/mapPreferences';
 import type { MapReportMarker } from '../../lib/reports';
 import { evacuationStatusLabel, facilityTypeLabel } from '../../lib/resources';
 import { navMetrics } from '../../styles/components/bottomNav.styles';
@@ -50,6 +51,7 @@ export default function MapScreen() {
 
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [identityLoading, setIdentityLoading] = useState(true);
+  const [mapTheme, setMapTheme] = useState<ResidentMapTheme>('light');
   const [selectedReportIds, setSelectedReportIds] = useState<string[]>([]);
   const [selectedResource, setSelectedResource] = useState<MapResourceMarker | null>(null);
   const [focusTarget, setFocusTarget] = useState<MapFocusTarget | null>(null);
@@ -83,6 +85,20 @@ export default function MapScreen() {
       cancelled = true;
     };
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+
+      void getResidentMapTheme().then((storedTheme) => {
+        if (active) setMapTheme(storedTheme);
+      });
+
+      return () => {
+        active = false;
+      };
+    }, []),
+  );
 
   useEffect(() => {
     if (!requestedReportId) {
@@ -289,7 +305,7 @@ export default function MapScreen() {
   return (
     <ReportEngagementProvider reports={markers}>
       <View style={styles.screen}>
-        <StatusBar style="dark" />
+        <StatusBar style={mapTheme === 'dark' ? 'light' : 'dark'} />
 
         <View style={styles.mapSection}>
           <InteractiveMap
@@ -298,8 +314,11 @@ export default function MapScreen() {
             evacuationCenters={centerMarkers}
             layerVisibility={layers}
             showLayerFilters
+            compactLayerFilters
             layerFiltersTopInset={insets.top + (error ? 70 : 24)}
             showZoomControls={false}
+            showMapDetails={false}
+            tone={mapTheme}
             onLayerVisibilityChange={setLayers}
             focusTarget={focusTarget}
             onReportSelection={(ids) => {

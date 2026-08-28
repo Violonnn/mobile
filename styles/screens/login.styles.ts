@@ -5,7 +5,7 @@ import { layout, scaleByWidth } from '../../lib/layout';
 const HERO_HEIGHT_RATIO = layout.isSmallScreen ? 0.22 : 0.28;
 
 export const loginColors = {
-  background: '#FAFAF8',
+  background: colors.background,
   white: '#ffffff',
   text: '#111827',
   textMuted: '#6B7280',
@@ -227,7 +227,7 @@ export const loginStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: loginColors.text,
-    borderRadius: radius.xl,
+    borderRadius: radius.md,
     paddingVertical: spacing.sm + 4,
     paddingLeft: spacing.lg,
     paddingRight: spacing.md,

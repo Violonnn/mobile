@@ -1,44 +1,44 @@
 // Resident-style announcement post for the official Community screen.
 // Matches report feed cards: collage media, engagement row, and detail sheet.
+import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  Modal,
-  Platform,
-  Pressable,
-  RefreshControl,
-  Share,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  useWindowDimensions,
-  View,
-  type StyleProp,
-  type ViewStyle,
+    Modal,
+    Platform,
+    Pressable,
+    RefreshControl,
+    ScrollView,
+    Share,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    useWindowDimensions,
+    View,
+    type StyleProp,
+    type ViewStyle,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useKeyboardHeight } from '../../hooks/useKeyboardHeight';
 import {
-  CollageCellContent,
-  EngagementActionsRow,
-  MediaCollage,
-  ReportMediaPreviewModal,
-  VerticalAttachmentList,
-  reportDetailStyles,
-} from '../report/ReportDetailCard';
-import { ReporterAvatar } from '../report/ReporterAvatar';
-import CommentsSection from '../report/CommentsSection';
-import { useAnnouncementEngagement } from './AnnouncementEngagementProvider';
-import {
-  formatAnnouncementAuthorName,
-  type AnnouncementRecord,
-  type AnnouncementMediaAttachment,
+    formatAnnouncementAuthorName,
+    type AnnouncementMediaAttachment,
+    type AnnouncementRecord,
 } from '../../lib/announcements';
 import { formatPublishedAt } from '../../lib/formatTime';
 import type { ReportMediaAttachment } from '../../lib/reports';
-import { useKeyboardHeight } from '../../hooks/useKeyboardHeight';
-import { colors, fonts, fontSizes, radius, spacing } from '../../styles/theme';
 import { officialNavMetrics } from '../../styles/components/officialBottomNav.styles';
+import { colors, fonts, fontSizes, radius, spacing } from '../../styles/theme';
+import CommentsSection from '../report/CommentsSection';
+import {
+    CollageCellContent,
+    EngagementActionsRow,
+    MediaCollage,
+    reportDetailStyles,
+    ReportMediaPreviewModal,
+    VerticalAttachmentList,
+} from '../report/ReportDetailCard';
+import { ReporterAvatar } from '../report/ReporterAvatar';
+import { useAnnouncementEngagement } from './AnnouncementEngagementProvider';
 
 const BOTTOM_NAV_CLEARANCE = officialNavMetrics.barHeight + spacing.sm;
 
@@ -807,7 +807,9 @@ const residentFeedAnnouncementStyles = StyleSheet.create({
   },
   featuredCopy: {
     gap: spacing.sm,
-    padding: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.md,
+    paddingBottom: 0,
   },
   scopeRow: {
     flexDirection: 'row',
@@ -822,7 +824,7 @@ const residentFeedAnnouncementStyles = StyleSheet.create({
   },
   scopeText: {
     fontFamily: fonts.medium,
-    fontSize: fontSizes.md,
+    fontSize: fontSizes.lg,
     color: '#F05B4F',
   },
   officialMeta: {
@@ -852,7 +854,8 @@ const residentFeedAnnouncementStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    paddingVertical: spacing.sm,
+    paddingTop: spacing.xs,
+    paddingBottom: spacing.xs,
   },
   readText: {
     fontFamily: fonts.semibold,
@@ -863,7 +866,8 @@ const residentFeedAnnouncementStyles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
+    paddingTop: spacing.xs,
+    paddingBottom: spacing.md,
   },
   actionButton: {
     flex: 1,

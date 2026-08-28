@@ -496,7 +496,7 @@ const localStyles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.sm,
     paddingBottom: spacing.sm,
-    backgroundColor: colors.white,
+    backgroundColor: colors.background,
   },
   mapFill: {
     flex: 1,

@@ -3,8 +3,8 @@ import { StyleSheet } from 'react-native';
 import { colors, fonts, fontSizes, radius, spacing } from '../theme';
 
 export const mayorSituationsStyles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.white },
-  horizontalContent: { paddingHorizontal: spacing.lg, backgroundColor: colors.white },
+  screen: { flex: 1, backgroundColor: colors.background },
+  horizontalContent: { paddingHorizontal: spacing.lg, backgroundColor: colors.background },
   flexCopy: { flex: 1 },
   sectionSwitch: { minHeight: 64, flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: colors.border },
   sectionSwitchButton: { flex: 1, alignItems: 'center', justifyContent: 'center', borderBottomWidth: 3, borderBottomColor: 'transparent' },
@@ -20,7 +20,7 @@ export const mayorSituationsStyles = StyleSheet.create({
   openMapButton: { position: 'absolute', right: spacing.md, top: spacing.md, minHeight: 38, justifyContent: 'center', paddingHorizontal: spacing.sm, borderRadius: radius.full, backgroundColor: 'rgba(255,255,255,0.92)' },
   openMapText: { fontFamily: fonts.semibold, fontSize: fontSizes.sm, color: colors.primary },
   mapError: { position: 'absolute', left: spacing.md, right: spacing.md, bottom: spacing.sm, padding: spacing.sm, borderRadius: radius.sm, backgroundColor: 'rgba(17,24,39,0.82)', fontFamily: fonts.medium, fontSize: fontSizes.xs, color: colors.white, textAlign: 'center' },
-  stickyToolbar: { paddingHorizontal: spacing.md, paddingTop: spacing.md, backgroundColor: colors.white, borderBottomWidth: 1, borderBottomColor: colors.border },
+  stickyToolbar: { paddingHorizontal: spacing.md, paddingTop: spacing.md, backgroundColor: colors.background, borderBottomWidth: 1, borderBottomColor: colors.border },
   searchRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   searchBox: { flex: 1, minHeight: 58, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.md, borderWidth: 1, borderColor: '#BBC3CE', borderRadius: radius.lg, backgroundColor: colors.white },
   searchInput: { flex: 1, minHeight: 56, fontFamily: fonts.regular, fontSize: fontSizes.md, color: colors.text },

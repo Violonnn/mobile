@@ -3,7 +3,7 @@ import { StyleSheet } from 'react-native';
 import { colors, fonts, fontSizes, radius, spacing } from '../theme';
 
 export const mayorBriefStyles = StyleSheet.create({
-  content: { paddingHorizontal: spacing.lg, paddingTop: spacing.sm, gap: spacing.lg, backgroundColor: colors.white },
+  content: { paddingHorizontal: spacing.lg, paddingTop: spacing.sm, gap: spacing.lg, backgroundColor: colors.background },
   eyebrow: { fontFamily: fonts.medium, fontSize: fontSizes.sm, color: '#53617A', letterSpacing: 0.5 },
   scopeCard: { minHeight: 86, flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.md, borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, backgroundColor: colors.white },
   scopeCopy: { flex: 1, gap: 5 },

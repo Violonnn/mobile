@@ -46,7 +46,7 @@ export default function MainLayout() {
 
   if (!allowed) {
     return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background }}>
         <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
@@ -57,6 +57,7 @@ export default function MainLayout() {
       screenOptions={{
         headerShown: false,
         animation: 'none',
+        sceneStyle: { backgroundColor: colors.background },
       }}
       tabBar={(props) => <BottomNav {...props} />}
     >

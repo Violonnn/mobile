@@ -5,10 +5,10 @@ import { colors, fonts, fontSizes, radius, spacing } from '../theme';
 export const feedStyles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: colors.white,
+    backgroundColor: colors.background,
   },
   header: {
-    backgroundColor: colors.white,
+    backgroundColor: colors.background,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
@@ -20,12 +20,12 @@ export const feedStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingBottom: spacing.md,
+    paddingBottom: spacing.xs,
   },
   title: {
     fontFamily: fonts.bold,
-    fontSize: 35,
-    lineHeight: 43,
+    fontSize: fontSizes.xxl,
+    lineHeight: 34,
     color: colors.text,
   },
   municipality: {
@@ -76,7 +76,7 @@ export const feedStyles = StyleSheet.create({
   },
   tabButton: {
     flex: 1,
-    minHeight: 58,
+    minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
@@ -112,6 +112,10 @@ export const feedStyles = StyleSheet.create({
     alignSelf: 'center',
     paddingHorizontal: 20,
     paddingTop: spacing.xl,
+  },
+  // Match the LATEST row's gap above to the gap down to the featured image.
+  officialContentInner: {
+    paddingTop: spacing.md,
   },
   sectionHeadingRow: {
     flexDirection: 'row',

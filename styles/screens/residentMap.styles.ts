@@ -6,7 +6,7 @@ export const residentMapStyles = StyleSheet.create({
   screen: {
     flex: 1,
     overflow: 'hidden',
-    backgroundColor: colors.white,
+    backgroundColor: colors.background,
   },
   mapSection: {
     ...StyleSheet.absoluteFillObject,

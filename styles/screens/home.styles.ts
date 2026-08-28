@@ -3,14 +3,13 @@ import { StyleSheet } from 'react-native';
 import { colors, fonts, fontSizes, radius, spacing } from '../theme';
 
 export const homeColors = {
-  background: '#FFFEFC',
+  background: colors.background,
   ink: '#20252C',
   border: '#E7E3DE',
   clear: '#56865B',
   warning: '#D97706',
-  peach: '#F8C29F',
-  gold: '#F4D99B',
-  green: '#6F9B75',
+  accentBlue: '#378FE7',
+  searchFill: '#E8F4FC',
 };
 
 export const homeStyles = StyleSheet.create({
@@ -28,6 +27,18 @@ export const homeStyles = StyleSheet.create({
     flexGrow: 1,
     paddingBottom: 132,
   },
+  residentStickyHeader: {
+    width: '100%',
+    backgroundColor: homeColors.background,
+    zIndex: 10,
+  },
+  residentHeaderContent: {
+    width: '100%',
+    maxWidth: 760,
+    alignSelf: 'center',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.xs,
+  },
 
   // Header and resident identity
   heroSection: {
@@ -35,6 +46,9 @@ export const homeStyles = StyleSheet.create({
     maxWidth: 760,
     alignSelf: 'center',
     paddingHorizontal: spacing.lg,
+  },
+  headerBody: {
+    paddingBottom: spacing.md,
   },
   greetingRow: {
     flexDirection: 'row',
@@ -100,55 +114,49 @@ export const homeStyles = StyleSheet.create({
     fontSize: 21,
     color: homeColors.ink,
   },
-  areaStatusRow: {
-    flexDirection: 'row',
+  nearbyReportBlock: {
+    width: '100%',
     alignItems: 'center',
-    gap: spacing.sm,
     marginTop: spacing.xl,
   },
-  areaStatusDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: homeColors.clear,
+  nearbyReportAnimationWrap: {
+    width: 128,
+    height: 117,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  areaStatusDotWarning: {
-    backgroundColor: homeColors.warning,
-  },
-  areaStatusDotMuted: {
-    backgroundColor: colors.textMuted,
+  nearbyReportAnimation: {
+    width: 128,
+    height: 117,
   },
   areaStatusText: {
-    flex: 1,
+    marginTop: spacing.xs,
+    paddingHorizontal: spacing.md,
     fontFamily: fonts.regular,
     fontSize: fontSizes.md,
-    color: homeColors.clear,
-  },
-  areaStatusTextWarning: {
-    color: homeColors.warning,
-  },
-  areaStatusTextMuted: {
-    color: colors.textMuted,
+    color: homeColors.ink,
+    textAlign: 'center',
   },
   searchBar: {
-    minHeight: 54,
-    flexDirection: 'row',
+    minHeight: 48,
+    flexDirection: 'row-reverse',
     alignItems: 'center',
     gap: spacing.md,
-    marginTop: spacing.lg,
+    marginTop: spacing.sm + spacing.xs,
     paddingHorizontal: spacing.md,
     borderWidth: 1,
     borderColor: homeColors.border,
-    borderRadius: radius.lg,
-    backgroundColor: colors.white,
+    borderRadius: radius.md,
+    backgroundColor: homeColors.searchFill,
   },
   searchInput: {
     flex: 1,
     minWidth: 0,
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.sm + 2,
     fontFamily: fonts.regular,
     fontSize: fontSizes.md,
     color: homeColors.ink,
+    textAlign: 'left',
   },
   searchResultsCard: {
     marginTop: spacing.sm,
@@ -197,33 +205,44 @@ export const homeStyles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
   },
   sectionBlock: {
-    marginTop: spacing.xl,
+    marginTop: spacing.md,
   },
   sectionHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: spacing.md,
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
   },
   municipalHeaderRow: {
-    marginBottom: spacing.lg,
+    marginBottom: spacing.sm,
   },
   sectionTitle: {
     flexShrink: 1,
     fontFamily: fonts.bold,
-    fontSize: 20,
-    lineHeight: 26,
+    fontSize: 18,
+    lineHeight: 24,
     letterSpacing: -0.4,
     color: homeColors.ink,
   },
   sectionLink: {
     fontFamily: fonts.medium,
     fontSize: fontSizes.md,
-    color: '#378FE7',
+    color: homeColors.accentBlue,
   },
-  quickAccessTitle: {
-    marginBottom: spacing.md,
+  quickAccessSpacer: {
+    height: spacing.lg,
+  },
+  quickAccessSection: {
+    width: '100%',
+    backgroundColor: 'transparent',
+  },
+  quickAccessContent: {
+    width: '100%',
+    maxWidth: 760,
+    alignSelf: 'center',
+    paddingHorizontal: spacing.sm + spacing.xs,
+    paddingVertical: spacing.xs,
   },
   stateCard: {
     minHeight: 80,
@@ -234,7 +253,7 @@ export const homeStyles = StyleSheet.create({
     padding: spacing.md,
     borderWidth: 1,
     borderColor: homeColors.border,
-    borderRadius: radius.lg,
+    borderRadius: radius.md,
     backgroundColor: colors.white,
   },
   stateText: {
@@ -254,7 +273,7 @@ export const homeStyles = StyleSheet.create({
     padding: spacing.md,
     borderWidth: 1,
     borderColor: homeColors.border,
-    borderRadius: radius.lg,
+    borderRadius: radius.md,
     backgroundColor: colors.white,
   },
   updateSeal: {
@@ -268,7 +287,7 @@ export const homeStyles = StyleSheet.create({
   updateLabel: {
     fontFamily: fonts.medium,
     fontSize: fontSizes.xs,
-    color: '#378FE7',
+    color: homeColors.accentBlue,
   },
   updateTitle: {
     marginTop: 2,
@@ -299,75 +318,129 @@ export const homeStyles = StyleSheet.create({
     borderColor: homeColors.border,
     borderRadius: radius.lg,
     backgroundColor: colors.white,
+    shadowColor: homeColors.ink,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
   },
-  featuredUpdateMedia: {
-    width: '100%',
-    height: 140,
+  featuredUpdateContent: {
+    paddingTop: 0,
+    paddingRight: 0,
+    paddingBottom: 0,
+    paddingLeft: 0,
+  },
+  featuredOfficialRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  featuredOfficialBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: radius.full,
+    backgroundColor: homeColors.searchFill,
+  },
+  featuredOfficialBadgeText: {
+    fontFamily: fonts.semibold,
+    fontSize: fontSizes.xs,
+    color: homeColors.accentBlue,
+  },
+  featuredOfficeLabel: {
+    flexShrink: 1,
+    fontFamily: fonts.medium,
+    fontSize: fontSizes.sm,
+    color: colors.textMuted,
+  },
+  featuredMainRow: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    gap: 0,
+  },
+  featuredCopy: {
+    flex: 1,
+    minWidth: 0,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.sm,
+    paddingLeft: spacing.md,
+    paddingRight: spacing.sm,
+  },
+  featuredThumb: {
+    width: 112,
+    minHeight: 148,
+    flexShrink: 0,
+    alignSelf: 'stretch',
+    marginTop: spacing.sm,
+    marginRight: spacing.sm,
+    marginBottom: spacing.sm,
     overflow: 'hidden',
-    backgroundColor: '#EEF2F4',
+    borderRadius: radius.sm,
+    backgroundColor: '#F4F7FA',
   },
-  featuredUpdateMediaFallback: {
+  featuredThumbMedia: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  featuredThumbFallback: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#F4F7FA',
   },
-  featuredUpdateContent: {
-    paddingTop: 12,
-    paddingHorizontal: 14,
-  },
-  featuredUpdateAuthorRow: {
-    flexDirection: 'row',
+  featuredVideoBadge: {
+    position: 'absolute',
+    right: 6,
+    bottom: 6,
+    width: 22,
+    height: 22,
     alignItems: 'center',
-    gap: spacing.xs,
-  },
-  featuredUpdateAuthor: {
-    fontFamily: fonts.semibold,
-    fontSize: fontSizes.sm,
-    color: homeColors.ink,
-  },
-  featuredUpdateAuthorDivider: {
-    fontFamily: fonts.regular,
-    fontSize: fontSizes.sm,
-    color: colors.textMuted,
-  },
-  featuredUpdateVerified: {
-    fontFamily: fonts.medium,
-    fontSize: fontSizes.sm,
-    color: colors.primary,
-  },
-  featuredUpdateDate: {
-    marginTop: spacing.xs,
-    fontFamily: fonts.regular,
-    fontSize: fontSizes.sm,
-    color: colors.textMuted,
+    justifyContent: 'center',
+    borderRadius: 11,
+    backgroundColor: 'rgba(15, 32, 68, 0.72)',
   },
   featuredUpdateTitle: {
-    marginTop: spacing.sm,
     fontFamily: fonts.bold,
-    fontSize: 18,
-    lineHeight: 24,
+    fontSize: fontSizes.lg,
+    lineHeight: 21,
     letterSpacing: -0.3,
     color: homeColors.ink,
   },
   featuredUpdateBody: {
-    marginTop: 6,
+    marginTop: spacing.xs,
     fontFamily: fonts.regular,
     fontSize: fontSizes.sm,
-    lineHeight: 19,
+    lineHeight: 17,
     color: colors.textMuted,
   },
-  featuredReadMoreButton: {
-    alignSelf: 'flex-start',
-    paddingVertical: 10,
+  featuredDateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: spacing.sm,
+  },
+  featuredDateIcon: {
+    marginTop: 1,
+  },
+  featuredUpdateDate: {
+    flex: 1,
+    minWidth: 0,
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.sm,
+    color: colors.textMuted,
+  },
+  featuredReadMoreRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    marginTop: 6,
   },
   featuredReadMoreText: {
     fontFamily: fonts.medium,
     fontSize: fontSizes.sm,
-    color: colors.primary,
+    color: homeColors.accentBlue,
   },
   featuredActionsRow: {
-    minHeight: 50,
+    minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
     borderTopWidth: 1,
@@ -376,16 +449,17 @@ export const homeStyles = StyleSheet.create({
   featuredActionButton: {
     flex: 1,
     minWidth: 0,
+    minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.xs,
+    gap: 4,
     paddingHorizontal: spacing.xs,
-    paddingVertical: 10,
+    paddingVertical: spacing.sm,
   },
   featuredActionDivider: {
     width: 1,
-    height: 28,
+    height: 22,
     backgroundColor: homeColors.border,
   },
   featuredActionIcon: {
@@ -394,12 +468,12 @@ export const homeStyles = StyleSheet.create({
   featuredActionIconActive: {
     color: colors.primary,
   },
-  featuredActionText: {
+  featuredActionCount: {
     fontFamily: fonts.regular,
     fontSize: fontSizes.sm,
     color: homeColors.ink,
   },
-  featuredActionTextActive: {
+  featuredActionCountActive: {
     fontFamily: fonts.medium,
     color: colors.primary,
   },
@@ -408,36 +482,27 @@ export const homeStyles = StyleSheet.create({
   quickAccessRow: {
     flexDirection: 'row',
     alignItems: 'stretch',
-    gap: 6,
+    justifyContent: 'center',
+    gap: spacing.sm,
   },
   quickAccessCard: {
-    flex: 1,
+    flex: 0,
     minWidth: 0,
-    minHeight: 76,
+    minHeight: 70,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.xs,
     paddingVertical: 6,
     borderWidth: 1,
     borderColor: homeColors.border,
-    borderRadius: radius.lg,
+    borderRadius: radius.sm,
     backgroundColor: colors.white,
   },
   quickAccessIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 28,
+    height: 28,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  hotlineIconBackground: {
-    backgroundColor: homeColors.peach,
-  },
-  facilityIconBackground: {
-    backgroundColor: homeColors.gold,
-  },
-  evacuationIconBackground: {
-    backgroundColor: homeColors.green,
   },
   quickAccessText: {
     marginTop: 4,
@@ -450,26 +515,26 @@ export const homeStyles = StyleSheet.create({
 
   // Nearby report list + live map
   nearbyPanel: {
-    minHeight: 246,
+    minHeight: 210,
     flexDirection: 'row',
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: homeColors.border,
-    borderRadius: radius.lg,
+    borderRadius: radius.md,
     backgroundColor: colors.white,
   },
   nearbyPanelCompact: {
-    minHeight: 430,
+    minHeight: 350,
     flexDirection: 'column',
   },
   nearbyReportList: {
-    flex: 1.08,
+    flex: 0.95,
     minWidth: 0,
     paddingHorizontal: spacing.sm,
   },
   nearbyReportListCompact: {
     flex: 0,
-    minHeight: 242,
+    minHeight: 195,
   },
   nearbyReportRow: {
     flex: 1,
@@ -491,7 +556,7 @@ export const homeStyles = StyleSheet.create({
   },
   reportThumbnail: {
     width: 72,
-    height: 90,
+    height: 76,
     flexShrink: 0,
     overflow: 'hidden',
     alignItems: 'center',
@@ -519,6 +584,9 @@ export const homeStyles = StyleSheet.create({
     gap: 3,
     marginTop: 5,
   },
+  reportLocationIcon: {
+    opacity: 0.65,
+  },
   reportDistance: {
     marginTop: 3,
     fontFamily: fonts.regular,
@@ -540,73 +608,30 @@ export const homeStyles = StyleSheet.create({
   },
   nearbyState: {
     flex: 1,
-    minHeight: 220,
+    minHeight: 170,
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.sm,
     padding: spacing.md,
   },
   nearbyMapWrap: {
-    flex: 0.92,
+    flex: 1.05,
     minWidth: 0,
     borderLeftWidth: 1,
     borderLeftColor: homeColors.border,
   },
   nearbyMapWrapCompact: {
     flex: 1,
-    minHeight: 188,
+    minHeight: 150,
     borderLeftWidth: 0,
     borderTopWidth: 1,
     borderTopColor: homeColors.border,
   },
   nearbyMap: {
     flex: 1,
-    minHeight: 188,
+    minHeight: 150,
     backgroundColor: colors.background,
   },
-  nearbyMapDetailsButton: {
-    position: 'absolute',
-    right: 8,
-    bottom: 8,
-    minHeight: 44,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingLeft: 7,
-    paddingRight: 6,
-    borderRadius: radius.full,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.92)',
-    backgroundColor: 'rgba(255, 255, 255, 0.96)',
-    shadowColor: '#111827',
-    shadowOffset: { width: 0, height: 5 },
-    shadowOpacity: 0.2,
-    shadowRadius: 10,
-    elevation: 7,
-  },
-  nearbyMapDetailsIcon: {
-    width: 30,
-    height: 30,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 15,
-    backgroundColor: colors.primary,
-  },
-  nearbyMapDetailsText: {
-    fontFamily: fonts.semibold,
-    fontSize: 11,
-    color: homeColors.ink,
-  },
-  nearbyMapDetailsArrow: {
-    width: 24,
-    height: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 12,
-    backgroundColor: colors.primaryLight,
-  },
-
   // Shared by the existing post-registration welcome modal.
   welcomeOverlay: {
     flex: 1,

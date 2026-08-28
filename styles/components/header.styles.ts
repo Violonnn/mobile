@@ -22,7 +22,7 @@ export const headerStyles = StyleSheet.create({
     borderBottomRightRadius: 28,
   },
   headerLight: {
-    backgroundColor: colors.white,
+    backgroundColor: colors.background,
     paddingBottom: spacing.lg,
     borderBottomLeftRadius: 0,
     borderBottomRightRadius: 0,

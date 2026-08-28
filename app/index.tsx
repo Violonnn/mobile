@@ -1,34 +1,72 @@
-import { useEffect, useRef, useState } from 'react';
-import {
-  View,
-  Text,
-  Image,
-  TouchableOpacity,
-  StyleSheet,
-  ActivityIndicator,
-} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { Ionicons } from '@expo/vector-icons';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useEffect, useRef, useState } from 'react';
+import type { ImageSourcePropType } from 'react-native';
+import {
+    ActivityIndicator,
+    Image,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+} from 'react-native';
+import type { SharedValue } from 'react-native-reanimated';
 import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withTiming,
-  withDelay,
-  withSpring,
-  runOnJS,
-  Easing,
+    Easing,
+    runOnJS,
+    useAnimatedStyle,
+    useSharedValue,
+    withDelay,
+    withSpring,
+    withTiming,
 } from 'react-native-reanimated';
-import { styles } from '../styles/screens/welcome.styles';
-import { colors } from '../styles/theme';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { hideNativeSplashOnce } from '../lib/nativeSplash';
 import { resolveSessionDestination } from '../lib/portalAccess';
+import { styles } from '../styles/screens/welcome.styles';
+import { colors } from '../styles/theme';
+
+const ONBOARDING_IMAGES: ImageSourcePropType[] = [
+  require('../assets/images/municipal.png'),
+  require('../assets/images/police.png'),
+  require('../assets/images/bombero3.png'),
+  require('../assets/images/bombero4.png'),
+];
+
+type FadingHeroImageProps = {
+  activeImageIndex: SharedValue<number>;
+  imageIndex: number;
+  source: ImageSourcePropType;
+};
+
+function FadingHeroImage({
+  activeImageIndex,
+  imageIndex,
+  source,
+}: FadingHeroImageProps) {
+  const fadeStyle = useAnimatedStyle(() => ({
+    opacity: withTiming(activeImageIndex.value === imageIndex ? 1 : 0, {
+      duration: 900,
+      easing: Easing.inOut(Easing.cubic),
+    }),
+  }));
+
+  return (
+    <Animated.Image
+      source={source}
+      style={[styles.heroImage, styles.fadingHeroImage, fadeStyle]}
+      resizeMode="cover"
+      accessible={false}
+    />
+  );
+}
 
 export default function WelcomeScreen() {
   const router = useRouter();
   const [loadingDone, setLoadingDone] = useState(false);
   const [phase, setPhase] = useState<'checking' | 'welcome'>('checking');
+  const [activeImageIndex, setActiveImageIndex] = useState(0);
   const splashHiddenRef = useRef(false);
 
   const logoOpacity = useSharedValue(0);
@@ -38,6 +76,7 @@ export default function WelcomeScreen() {
   const lineWidth = useSharedValue(0);
   const lineOpacity = useSharedValue(0);
   const overlayOpacity = useSharedValue(1);
+  const visibleImageIndex = useSharedValue(0);
 
   function onLoadingDone() {
     setLoadingDone(true);
@@ -59,6 +98,19 @@ export default function WelcomeScreen() {
       mounted = false;
     };
   }, [router]);
+
+  useEffect(() => {
+    if (phase !== 'welcome') return;
+
+    const fadeTimer = setTimeout(() => {
+      const nextImageIndex = (activeImageIndex + 1) % ONBOARDING_IMAGES.length;
+
+      visibleImageIndex.value = nextImageIndex;
+      setActiveImageIndex(nextImageIndex);
+    }, 4000);
+
+    return () => clearTimeout(fadeTimer);
+  }, [activeImageIndex, phase, visibleImageIndex]);
 
   useEffect(() => {
     logoOpacity.value = withTiming(1, { duration: 520, easing: Easing.out(Easing.cubic) });
@@ -111,16 +163,34 @@ export default function WelcomeScreen() {
 
           {/* ── Hero image with overlay text ── */}
           <View style={styles.heroImageWrapper}>
-            <Image
-              source={require('../assets/images/onboardingHeader.png')}
-              style={styles.heroImage}
-              resizeMode="cover"
-            />
-            <View style={styles.heroOverlay}>
+            {ONBOARDING_IMAGES.map((imageSource, imageIndex) => (
+              <FadingHeroImage
+                key={`onboarding-image-${imageIndex}`}
+                source={imageSource}
+                imageIndex={imageIndex}
+                activeImageIndex={visibleImageIndex}
+              />
+            ))}
+            <View style={styles.heroOverlay} pointerEvents="none">
               <Text style={styles.brandText}>DisasterLink</Text>
               <View style={styles.locationBlock}>
                 <Text style={styles.locationName}>Minglanilla, Cebu</Text>
                 <Text style={styles.locationCoords}>10.2443° N  ·  123.7964° E</Text>
+              </View>
+              <View
+                style={styles.paginationDots}
+                accessible
+                accessibilityLabel={`Image ${activeImageIndex + 1} of ${ONBOARDING_IMAGES.length}`}
+              >
+                {ONBOARDING_IMAGES.map((_, index) => (
+                  <View
+                    key={`pagination-dot-${index}`}
+                    style={[
+                      styles.paginationDot,
+                      index === activeImageIndex && styles.paginationDotActive,
+                    ]}
+                  />
+                ))}
               </View>
             </View>
           </View>

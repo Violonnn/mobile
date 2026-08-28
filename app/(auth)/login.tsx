@@ -1,26 +1,26 @@
+import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import React, { useCallback, useRef, useState } from 'react';
 import {
-  View,
+  ActivityIndicator,
+  Alert,
+  Image,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
   Text,
   TextInput,
   TouchableOpacity,
-  ScrollView,
-  KeyboardAvoidingView,
-  Platform,
-  ActivityIndicator,
-  Image,
-  Keyboard,
   TouchableWithoutFeedback,
-  Pressable,
-  Alert,
+  View,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { StatusBar } from 'expo-status-bar';
-import { useFocusEffect } from 'expo-router';
-import { useLoginFlow } from '../../hooks/useLoginFlow';
-import { loginStyles as styles, loginColors } from '../../styles/screens/login.styles';
-import NumericKeyboardAccessory, { NUMERIC_ACCESSORY_ID } from '../../components/ui/NumericKeyboardAccessory';
 import FieldError from '../../components/register/FieldError';
+import NumericKeyboardAccessory, { NUMERIC_ACCESSORY_ID } from '../../components/ui/NumericKeyboardAccessory';
+import { useLoginFlow } from '../../hooks/useLoginFlow';
+import { loginColors, loginStyles as styles } from '../../styles/screens/login.styles';
 
 const PIN_LENGTH = 6;
 const PLACEHOLDER_DOTS = '······';
@@ -117,7 +117,7 @@ export default function LoginScreen() {
 
             {/* ── Content section ── */}
             <View style={styles.content}>
-              <Text style={styles.sectionLabel}>Resident login</Text>
+              <Text style={styles.sectionLabel}>Resident Login</Text>
               <Text style={styles.headline}>Welcome back.</Text>
               <Text style={styles.subtitle}>Enter your mobile number and PIN.</Text>
 

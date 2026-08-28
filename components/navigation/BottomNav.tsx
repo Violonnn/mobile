@@ -32,7 +32,7 @@ type TabConfig = {
 // Bar layout, left → right. The center is the Report action button (not a tab).
 const LEFT_TABS: TabConfig[] = [
   { name: 'home', label: 'Home', activeIcon: 'home', inactiveIcon: 'home-outline' },
-  { name: 'feed', label: 'Feed', activeIcon: 'newspaper', inactiveIcon: 'newspaper-outline' },
+  { name: 'feed', label: 'Community', activeIcon: 'reader', inactiveIcon: 'reader-outline' },
 ];
 const RIGHT_TABS: TabConfig[] = [
   { name: 'map', label: 'Map', activeIcon: 'map', inactiveIcon: 'map-outline' },

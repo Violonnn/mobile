@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   ScrollView,
+  Switch,
   Text,
   TouchableOpacity,
   View,
@@ -18,6 +19,11 @@ import LegalModal, {
 import ResidentProfileModal from '../../components/profile/ResidentProfileModal';
 import ResidentSecurityModal from '../../components/profile/ResidentSecurityModal';
 import { logout } from '../../lib/auth';
+import {
+  getResidentMapTheme,
+  setResidentMapTheme,
+  type ResidentMapTheme,
+} from '../../lib/mapPreferences';
 import {
   fetchMyProfile,
   fetchProfileUpdateEligibility,
@@ -53,9 +59,20 @@ type SettingsRowProps = {
   subtitle?: string;
   value?: string;
   onPress?: () => void;
+  switchValue?: boolean;
+  switchDisabled?: boolean;
+  onSwitchChange?: (value: boolean) => void;
 };
 
-function SettingsRow({ title, subtitle, value, onPress }: SettingsRowProps) {
+function SettingsRow({
+  title,
+  subtitle,
+  value,
+  onPress,
+  switchValue,
+  switchDisabled,
+  onSwitchChange,
+}: SettingsRowProps) {
   const content = (
     <>
       <View style={styles.rowCopy}>
@@ -63,6 +80,17 @@ function SettingsRow({ title, subtitle, value, onPress }: SettingsRowProps) {
         {subtitle ? <Text style={styles.rowSubtitle}>{subtitle}</Text> : null}
       </View>
       {value ? <Text style={styles.rowValue}>{value}</Text> : null}
+      {typeof switchValue === 'boolean' && onSwitchChange ? (
+        <Switch
+          value={switchValue}
+          onValueChange={onSwitchChange}
+          disabled={switchDisabled}
+          trackColor={{ false: '#CBD5E1', true: colors.primary }}
+          thumbColor={colors.white}
+          ios_backgroundColor="#CBD5E1"
+          accessibilityLabel={`${title}: ${switchValue ? 'dark' : 'light'}`}
+        />
+      ) : null}
       {onPress ? <Ionicons name="chevron-forward" size={22} color={colors.textMuted} /> : null}
     </>
   );
@@ -92,6 +120,8 @@ export default function ProfileScreen() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [mapTheme, setMapTheme] = useState<ResidentMapTheme>('light');
+  const [mapThemeSaving, setMapThemeSaving] = useState(false);
   const [profileVisible, setProfileVisible] = useState(false);
   const [securityVisible, setSecurityVisible] = useState(false);
   const [legalDocument, setLegalDocument] = useState<LegalDocument>(null);
@@ -121,6 +151,40 @@ export default function ProfileScreen() {
       void loadProfile();
     }, [loadProfile]),
   );
+
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+
+      void getResidentMapTheme().then((storedTheme) => {
+        if (active) setMapTheme(storedTheme);
+      });
+
+      return () => {
+        active = false;
+      };
+    }, []),
+  );
+
+  async function handleMapThemeChange(useDarkMap: boolean) {
+    if (mapThemeSaving) return;
+
+    const previousTheme = mapTheme;
+    const nextTheme: ResidentMapTheme = useDarkMap ? 'dark' : 'light';
+    if (nextTheme === previousTheme) return;
+
+    setMapTheme(nextTheme);
+    setMapThemeSaving(true);
+
+    try {
+      await setResidentMapTheme(nextTheme);
+    } catch {
+      setMapTheme(previousTheme);
+      Alert.alert('Map setting not saved', 'Please try changing the map appearance again.');
+    } finally {
+      setMapThemeSaving(false);
+    }
+  }
 
   async function handleLogout() {
     if (loggingOut) return;
@@ -223,6 +287,13 @@ export default function ProfileScreen() {
                 title="Notifications"
                 subtitle="Alerts, advisories, and report updates"
                 value="On"
+              />
+              <SettingsRow
+                title="Dark map"
+                subtitle="Use a dark map for low-light viewing"
+                switchValue={mapTheme === 'dark'}
+                switchDisabled={mapThemeSaving}
+                onSwitchChange={(useDarkMap) => void handleMapThemeChange(useDarkMap)}
               />
               <SettingsRow title="Language" subtitle="App language" value="English" />
               <SettingsRow title="Accessibility" subtitle="Text size and motion" />

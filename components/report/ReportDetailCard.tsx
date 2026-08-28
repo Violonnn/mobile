@@ -3,40 +3,40 @@
 // feed. Keeping every report primitive (avatar, media collage, engagement row,
 // media preview) here means the map and the feed always look and behave the
 // same — there is a single source of truth for a report's detail layout.
-import React, { useEffect, useRef, useState } from 'react';
-import {
-  Modal,
-  View,
-  Text,
-  TouchableOpacity,
-  Pressable,
-  Image,
-  ScrollView,
-  RefreshControl,
-  Share,
-  StyleSheet,
-  ActivityIndicator,
-  Platform,
-  useWindowDimensions,
-} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import * as VideoThumbnails from 'expo-video-thumbnails';
-import { navMetrics } from '../../styles/components/bottomNav.styles';
-import { colors, fonts, fontSizes, radius, spacing } from '../../styles/theme';
+import React, { useEffect, useRef, useState } from 'react';
 import {
-  formatReportLocation,
-  formatReporterName,
-  type MapReportMarker,
-  type ReportMediaAttachment,
-} from '../../lib/reports';
-import { formatPublishedAt } from '../../lib/formatTime';
+    ActivityIndicator,
+    Image,
+    Modal,
+    Platform,
+    Pressable,
+    RefreshControl,
+    ScrollView,
+    Share,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    useWindowDimensions,
+    View,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useKeyboardHeight } from '../../hooks/useKeyboardHeight';
 import { useReportDetail } from '../../hooks/useReportDetail';
+import { formatPublishedAt } from '../../lib/formatTime';
+import {
+    formatReporterName,
+    formatReportLocation,
+    type MapReportMarker,
+    type ReportMediaAttachment,
+} from '../../lib/reports';
+import { navMetrics } from '../../styles/components/bottomNav.styles';
+import { colors, fonts, fontSizes, radius, spacing } from '../../styles/theme';
+import CommentsSection from './CommentsSection';
 import { useReportEngagement } from './ReportEngagementProvider';
 import { ReporterAvatar } from './ReporterAvatar';
-import CommentsSection from './CommentsSection';
 
 const COLLAGE_GAP = 4;
 const MAX_COLLAGE_CELLS = 4;

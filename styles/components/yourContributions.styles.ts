@@ -26,6 +26,12 @@ export const contributionStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  dragIndicator: {
+    width: 36,
+    height: 4,
+    borderRadius: radius.full,
+    backgroundColor: colors.textMuted,
+  },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -114,6 +120,16 @@ export const contributionStyles = StyleSheet.create({
     fontSize: fontSizes.sm,
     color: colors.white,
   },
+  dateGroup: {
+    marginTop: spacing.sm,
+  },
+  dateGroupTitle: {
+    paddingTop: spacing.xs,
+    paddingBottom: spacing.sm,
+    fontFamily: fonts.bold,
+    fontSize: fontSizes.lg,
+    color: colors.text,
+  },
   reportCard: {
     gap: spacing.sm,
     paddingVertical: spacing.md,
@@ -155,6 +171,11 @@ export const contributionStyles = StyleSheet.create({
   latestReportTitle: {
     fontSize: 22,
     lineHeight: 29,
+  },
+  metadataText: {
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.sm,
+    color: colors.textMuted,
   },
   dateText: {
     fontFamily: fonts.regular,

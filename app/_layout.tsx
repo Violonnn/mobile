@@ -12,6 +12,7 @@ import {
 } from '@expo-google-fonts/sora';
 import { BarlowCondensed_600SemiBold } from '@expo-google-fonts/barlow-condensed';
 import { hideNativeSplashOnce } from '../lib/nativeSplash';
+import { colors } from '../styles/theme';
 
 void SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
@@ -45,6 +46,7 @@ export default function RootLayout() {
         screenOptions={{
           headerShown: false,
           animation: 'none',
+          contentStyle: { backgroundColor: colors.background },
         }}
       />
     </SafeAreaProvider>

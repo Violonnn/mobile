@@ -19,6 +19,7 @@ function OfficialTabs() {
       screenOptions={{
         headerShown: false,
         animation: 'none',
+        sceneStyle: { backgroundColor: colors.background },
       }}
       tabBar={(props) => <OfficialBottomNav {...props} />}
     >
@@ -69,7 +70,7 @@ export default function OfficialLayout() {
 
   if (!allowed) {
     return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background }}>
         <ActivityIndicator size="large" color={colors.themeSoft} />
       </View>
     );

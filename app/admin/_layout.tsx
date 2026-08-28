@@ -42,7 +42,7 @@ export default function AdminLayout() {
 
   if (!allowed) {
     return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background }}>
         <ActivityIndicator size="large" color={colors.themeSoft} />
       </View>
     );
@@ -53,6 +53,7 @@ export default function AdminLayout() {
       screenOptions={{
         headerShown: false,
         animation: 'none',
+        sceneStyle: { backgroundColor: colors.background },
       }}
       tabBar={(props) => <AdminBottomNav {...props} />}
     >

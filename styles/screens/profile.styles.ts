@@ -4,7 +4,7 @@ import { colors, fonts, fontSizes, spacing } from '../theme';
 export const profileStyles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.white,
+    backgroundColor: colors.background,
   },
   scrollContent: {
     flexGrow: 1,

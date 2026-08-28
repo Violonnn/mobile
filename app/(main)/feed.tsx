@@ -235,7 +235,7 @@ export default function FeedScreen() {
           <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
             <View style={styles.headerInner}>
               <View>
-                <Text style={styles.title}>Feed</Text>
+                <Text style={styles.title}>Community</Text>
                 <Text style={styles.municipality}>{municipality}</Text>
               </View>
               <View style={styles.headerActions}>
@@ -363,7 +363,7 @@ export default function FeedScreen() {
                 )}
               </View>
             ) : (
-              <View style={styles.contentInner}>
+              <View style={[styles.contentInner, styles.officialContentInner]}>
                 <View style={styles.latestRow}>
                   <Text style={styles.latestLabel}>LATEST</Text>
                   {filteredAnnouncements.length > 0 ? (

@@ -8,7 +8,7 @@ const IMAGE_HEIGHT_RATIO = layout.isSmallScreen ? 0.46 : 0.55;
 export const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.white,
+    backgroundColor: colors.offWhite,
   },
 
   /* ── Hero image area ── */
@@ -20,6 +20,9 @@ export const styles = StyleSheet.create({
   heroImage: {
     width: '100%',
     height: '100%',
+  },
+  fadingHeroImage: {
+    ...StyleSheet.absoluteFillObject,
   },
   heroOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -49,6 +52,24 @@ export const styles = StyleSheet.create({
     fontSize: fontSizes.xs,
     color: 'rgba(255,255,255,0.7)',
     letterSpacing: 1.2,
+  },
+  paginationDots: {
+    position: 'absolute',
+    right: spacing.lg,
+    bottom: spacing.lg + 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  paginationDot: {
+    width: 7,
+    height: 7,
+    borderRadius: radius.full,
+    backgroundColor: 'rgba(255,255,255,0.45)',
+  },
+  paginationDotActive: {
+    width: 20,
+    backgroundColor: colors.white,
   },
 
   /* ── Content area below the image ── */
@@ -96,7 +117,7 @@ export const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: colors.text,
-    borderRadius: radius.xl,
+    borderRadius: radius.md,
     paddingVertical: spacing.sm + 4,
     paddingHorizontal: spacing.lg,
   },

@@ -43,16 +43,29 @@ type Props = {
   showLayerFilters?: boolean;
   /** Keeps resident layer controls clear of the device status bar. */
   layerFiltersTopInset?: number;
+  /** Reduces vertical spacing for filters shown over a full-screen map. */
+  compactLayerFilters?: boolean;
   onLayerVisibilityChange?: (next: MapLayerVisibility) => void;
   onReportSelection?: (reportIds: string[]) => void;
-  /** Used by the home preview: opens a marker popup with a details action. */
+  /** Opens a marker popup with a separate report-details action when requested. */
   showReportDetailsPopup?: boolean;
+  /** Adds a subtle red pulse around report clusters in compact map previews. */
+  pulseReportClusters?: boolean;
   onReportDetailsRequest?: (reportId: string) => void;
   onResourceSelection?: (resource: MapResourceMarker) => void;
   focusTarget?: MapFocusTarget | null;
   showZoomControls?: boolean;
-  /** Darkens the map for high-priority command-center previews. */
+  /** Shows the base map's roads, labels, and geographic details. */
+  showMapDetails?: boolean;
+  /** Adjusts map contrast for resident and command-center contexts. */
   tone?: 'light' | 'dark';
+  /** Lets a parent ScrollView freeze while the user is panning or zooming the map. */
+  onGestureActiveChange?: (active: boolean) => void;
+  /**
+   * Recapture the camera only when the focused pin changes.
+   * Use this inside a ScrollView so parent re-renders do not yank the map back.
+   */
+  stickyFocus?: boolean;
 };
 
 const DEFAULT_LAYERS: MapLayerVisibility = {
@@ -61,7 +74,13 @@ const DEFAULT_LAYERS: MapLayerVisibility = {
   evacuationCenters: true,
 };
 
-function buildMapHtml(showZoomControls: boolean, tone: 'light' | 'dark'): string {
+function buildMapHtml(
+  showZoomControls: boolean,
+  tone: 'light' | 'dark',
+  pulseReportClusters: boolean,
+  initialShowMapDetails: boolean,
+  stickyFocus: boolean,
+): string {
   const isDark = tone === 'dark';
   return `<!DOCTYPE html>
 <html>
@@ -72,8 +91,10 @@ function buildMapHtml(showZoomControls: boolean, tone: 'light' | 'dark'): string
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
     <style>
-      html, body, #map { height: 100%; margin: 0; padding: 0; background: ${isDark ? '#07182A' : '#F0F4FF'}; }
-      ${isDark ? '.leaflet-tile-pane { filter: invert(100%) hue-rotate(180deg) brightness(66%) saturate(72%) contrast(112%); }' : ''}
+      html, body, #map { height: 100%; margin: 0; padding: 0; background: ${isDark ? '#343B44' : '#F0F4FF'}; }
+      .leaflet-tile-pane {
+        ${isDark ? 'filter: invert(82%) hue-rotate(180deg) brightness(88%) saturate(65%) contrast(96%);' : ''}
+      }
       .leaflet-control-attribution { display: none; }
 
       .report-pin-wrap, .resource-pin-wrap {
@@ -142,6 +163,7 @@ function buildMapHtml(showZoomControls: boolean, tone: 'light' | 'dark'): string
       }
 
       .marker-cluster-report {
+        overflow: visible;
         background: rgba(255, 92, 92, 0.18);
         border: 2px solid rgba(255, 255, 255, 0.95);
         border-radius: 50%;
@@ -149,6 +171,8 @@ function buildMapHtml(showZoomControls: boolean, tone: 'light' | 'dark'): string
       }
 
       .marker-cluster-report div {
+        position: relative;
+        z-index: 1;
         width: 34px;
         height: 34px;
         margin-left: 2px;
@@ -158,6 +182,38 @@ function buildMapHtml(showZoomControls: boolean, tone: 'light' | 'dark'): string
         font: 700 13px/34px system-ui, sans-serif;
         border-radius: 50%;
         text-align: center;
+      }
+
+      .cluster-pulse {
+        position: absolute;
+        inset: 0;
+        border-radius: 50%;
+        background: rgba(220, 38, 38, 0.48);
+        box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.38);
+        pointer-events: none;
+        animation: clusterPulse 1.8s ease-out infinite;
+      }
+
+      @keyframes clusterPulse {
+        0% {
+          opacity: 0.78;
+          transform: scale(0.88);
+        }
+        70% {
+          opacity: 0.14;
+          transform: scale(1.8);
+        }
+        100% {
+          opacity: 0;
+          transform: scale(2.15);
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .cluster-pulse {
+          animation: none;
+          opacity: 0;
+        }
       }
 
       .report-details-popup-button {
@@ -200,9 +256,81 @@ function buildMapHtml(showZoomControls: boolean, tone: 'light' | 'dark'): string
         attributionControl: false
       });
 
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      function postMapGesture(active) {
+        if (!window.ReactNativeWebView) return;
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'mapGesture',
+          active: active
+        }));
+      }
+
+      var pointerCount = 0;
+      var lastFocusSignature = null;
+      var stickyFocus = ${stickyFocus ? 'true' : 'false'};
+
+      function focusSignature(target) {
+        return String(target.reportId || '') + '|' + String(target.resourceId || '') + '|' + target.latitude + '|' + target.longitude;
+      }
+
+      // Tell React Native as soon as a finger is on the map so a parent
+      // ScrollView cannot steal the pan on Android.
+      document.addEventListener('touchstart', function(event) {
+        pointerCount = event.touches.length;
+        postMapGesture(true);
+      }, { capture: true, passive: true });
+      document.addEventListener('touchend', function(event) {
+        pointerCount = event.touches.length;
+        if (pointerCount === 0) postMapGesture(false);
+      }, { capture: true, passive: true });
+      document.addEventListener('touchcancel', function(event) {
+        pointerCount = event.touches.length;
+        if (pointerCount === 0) postMapGesture(false);
+      }, { capture: true, passive: true });
+
+      var detailedTileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 19
-      }).addTo(map);
+      });
+
+      // This layer retains roads and geography but removes basemap labels and POI icons.
+      var cleanTileLayer = L.tileLayer(
+        'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+        {
+          maxNativeZoom: 16,
+          maxZoom: 19
+        }
+      );
+
+      var cleanMapMaximumZoom = 16;
+      var showDetailsRequested = ${initialShowMapDetails ? 'true' : 'false'};
+      var currentBaseLayer = null;
+
+      function updateBaseLayer(nextZoom) {
+        // Close zoom levels fall back to OSM so the limited clean layer never stretches.
+        var zoomLevel = typeof nextZoom === 'number' ? nextZoom : map.getZoom();
+        var useDetailedLayer = showDetailsRequested || zoomLevel > cleanMapMaximumZoom;
+        var nextBaseLayer = useDetailedLayer ? detailedTileLayer : cleanTileLayer;
+        if (currentBaseLayer === nextBaseLayer) return;
+
+        nextBaseLayer.addTo(map);
+        if (currentBaseLayer) {
+          map.removeLayer(currentBaseLayer);
+        }
+        currentBaseLayer = nextBaseLayer;
+      }
+
+      window.setMapDetailsVisibility = function(showDetails) {
+        showDetailsRequested = showDetails;
+        updateBaseLayer();
+      };
+
+      // Switch before animated zoom frames request unsupported clean-map tiles.
+      map.on('zoomanim', function(event) {
+        updateBaseLayer(event.zoom);
+      });
+      map.on('zoomend', function() {
+        updateBaseLayer();
+      });
+      updateBaseLayer();
 
       var reportPinIcon = L.divIcon({
         className: 'report-pin-wrap',
@@ -240,7 +368,7 @@ function buildMapHtml(showZoomControls: boolean, tone: 'light' | 'dark'): string
         iconCreateFunction: function(cluster) {
           var count = cluster.getChildCount();
           return L.divIcon({
-            html: '<div><span>' + count + '</span></div>',
+            html: '${pulseReportClusters ? '<span class="cluster-pulse"></span>' : ''}<div><span>' + count + '</span></div>',
             className: 'marker-cluster-report',
             iconSize: L.point(38, 38)
           });
@@ -373,6 +501,12 @@ function buildMapHtml(showZoomControls: boolean, tone: 'light' | 'dark'): string
 
       window.focusReport = function(target) {
         if (!target || typeof target.latitude !== 'number' || typeof target.longitude !== 'number') return;
+        var signature = focusSignature(target);
+        var sameTarget = signature === lastFocusSignature;
+        // Keep an in-progress pan, but still jump when a different report is selected.
+        if (pointerCount > 0 && sameTarget) return;
+        if (stickyFocus && sameTarget) return;
+        lastFocusSignature = signature;
         map.setView([target.latitude, target.longitude], 16, { animate: true });
         var marker = reportMarkersById[target.reportId];
         if (marker && marker.getPopup()) {
@@ -443,6 +577,11 @@ function resourcesToInjectScript(resources: MapResourceMarker[]): string {
   })(); true;`;
 }
 
+function focusSignature(target: MapFocusTarget | null | undefined): string {
+  if (!target) return '';
+  return `${target.reportId ?? ''}|${target.resourceId ?? ''}|${target.latitude}|${target.longitude}`;
+}
+
 function focusToInjectScript(target: MapFocusTarget): string {
   const json = JSON.stringify(target).replace(/</g, '\\u003c');
   return `(function() {
@@ -455,6 +594,14 @@ function focusToInjectScript(target: MapFocusTarget): string {
   })(); true;`;
 }
 
+function mapDetailsToInjectScript(showMapDetails: boolean): string {
+  return `(function() {
+    if (window.setMapDetailsVisibility) {
+      window.setMapDetailsVisibility(${showMapDetails ? 'true' : 'false'});
+    }
+  })(); true;`;
+}
+
 export default function InteractiveMap({
   markers = [],
   facilities = [],
@@ -462,21 +609,39 @@ export default function InteractiveMap({
   layerVisibility = DEFAULT_LAYERS,
   showLayerFilters = false,
   layerFiltersTopInset = spacing.md,
+  compactLayerFilters = false,
   onLayerVisibilityChange,
   onReportSelection,
   showReportDetailsPopup = false,
+  pulseReportClusters = false,
   onReportDetailsRequest,
   onResourceSelection,
   focusTarget,
   showZoomControls = true,
+  showMapDetails = true,
   tone = 'light',
+  onGestureActiveChange,
+  stickyFocus = false,
 }: Props) {
   const webRef = useRef<WebView>(null);
+  const initialShowMapDetailsRef = useRef(showMapDetails);
+  const lastFocusSignatureRef = useRef('');
   const html = useMemo(
-    () => buildMapHtml(showZoomControls, tone),
-    [showZoomControls, tone],
+    () =>
+      buildMapHtml(
+        showZoomControls,
+        tone,
+        pulseReportClusters,
+        initialShowMapDetailsRef.current,
+        stickyFocus,
+      ),
+    [pulseReportClusters, showZoomControls, stickyFocus, tone],
   );
   const readyRef = useRef(false);
+
+  useEffect(() => {
+    lastFocusSignatureRef.current = '';
+  }, [html]);
 
   const visibleReports = useMemo(
     () => (layerVisibility.reports ? markers : []),
@@ -507,18 +672,32 @@ export default function InteractiveMap({
 
   useEffect(() => {
     if (!focusTarget || !readyRef.current || !webRef.current) return;
+    const signature = focusSignature(focusTarget);
+    // Sticky command maps keep the same pin selected across parent re-renders.
+    if (stickyFocus && signature === lastFocusSignatureRef.current) return;
+    lastFocusSignatureRef.current = signature;
     webRef.current.injectJavaScript(focusToInjectScript(focusTarget));
-  }, [focusTarget]);
+  }, [focusTarget, stickyFocus]);
+
+  useEffect(() => {
+    if (!readyRef.current || !webRef.current) return;
+    webRef.current.injectJavaScript(mapDetailsToInjectScript(showMapDetails));
+  }, [showMapDetails]);
 
   const handleMessage = useCallback(
     (event: WebViewMessageEvent) => {
       try {
         const data = JSON.parse(event.nativeEvent.data) as {
           type?: string;
+          active?: boolean;
           reportIds?: string[];
           reportId?: string;
           resource?: MapResourceMarker;
         };
+        if (data.type === 'mapGesture' && typeof data.active === 'boolean') {
+          onGestureActiveChange?.(data.active);
+          return;
+        }
         if (data.type === 'reportSelection' && Array.isArray(data.reportIds)) {
           onReportSelection?.(data.reportIds.filter(Boolean));
           return;
@@ -534,7 +713,7 @@ export default function InteractiveMap({
         // Ignore malformed WebView messages.
       }
     },
-    [onReportSelection, onReportDetailsRequest, onResourceSelection],
+    [onGestureActiveChange, onReportSelection, onReportDetailsRequest, onResourceSelection],
   );
 
   function toggleLayer(key: keyof MapLayerVisibility) {
@@ -546,13 +725,21 @@ export default function InteractiveMap({
   }
 
   return (
-    <View style={mapStyles.container}>
+    <View
+      style={mapStyles.container}
+      collapsable={false}
+      onTouchStart={onGestureActiveChange ? () => onGestureActiveChange(true) : undefined}
+      onTouchEnd={onGestureActiveChange ? () => onGestureActiveChange(false) : undefined}
+      onTouchCancel={onGestureActiveChange ? () => onGestureActiveChange(false) : undefined}
+    >
       <WebView
         ref={webRef}
         style={mapStyles.webview}
         originWhitelist={['*']}
         source={{ html }}
         androidLayerType="hardware"
+        nestedScrollEnabled
+        overScrollMode="never"
         onMessage={handleMessage}
         onLoadEnd={() => {
           readyRef.current = true;
@@ -560,7 +747,9 @@ export default function InteractiveMap({
             markersToInjectScript(visibleReports, showReportDetailsPopup),
           );
           webRef.current?.injectJavaScript(resourcesToInjectScript(visibleResources));
+          webRef.current?.injectJavaScript(mapDetailsToInjectScript(showMapDetails));
           if (focusTarget) {
+            lastFocusSignatureRef.current = focusSignature(focusTarget);
             webRef.current?.injectJavaScript(focusToInjectScript(focusTarget));
           }
         }}
@@ -575,12 +764,17 @@ export default function InteractiveMap({
 
       {showLayerFilters ? (
         <View
-          style={[mapStyles.legend, { top: layerFiltersTopInset }]}
+          style={[
+            mapStyles.legend,
+            compactLayerFilters && mapStyles.legendCompact,
+            { top: layerFiltersTopInset },
+          ]}
           pointerEvents="box-none"
         >
           <Pressable
             style={[
               mapStyles.legendRow,
+              compactLayerFilters && mapStyles.legendRowCompact,
               !layerVisibility.reports && mapStyles.legendRowInactive,
             ]}
             onPress={() => toggleLayer('reports')}
@@ -593,11 +787,14 @@ export default function InteractiveMap({
                 { backgroundColor: layerVisibility.reports ? '#F04444' : '#9CA3AF' },
               ]}
             />
-            <Text style={mapStyles.legendText}>Reports</Text>
+            <Text style={[mapStyles.legendText, tone === 'dark' && mapStyles.legendTextDark]}>
+              Reports
+            </Text>
           </Pressable>
           <Pressable
             style={[
               mapStyles.legendRow,
+              compactLayerFilters && mapStyles.legendRowCompact,
               !layerVisibility.facilities && mapStyles.legendRowInactive,
             ]}
             onPress={() => toggleLayer('facilities')}
@@ -610,11 +807,14 @@ export default function InteractiveMap({
                 { backgroundColor: layerVisibility.facilities ? '#1A56DB' : '#9CA3AF' },
               ]}
             />
-            <Text style={mapStyles.legendText}>Facilities</Text>
+            <Text style={[mapStyles.legendText, tone === 'dark' && mapStyles.legendTextDark]}>
+              Facilities
+            </Text>
           </Pressable>
           <Pressable
             style={[
               mapStyles.legendRow,
+              compactLayerFilters && mapStyles.legendRowCompact,
               !layerVisibility.evacuationCenters && mapStyles.legendRowInactive,
             ]}
             onPress={() => toggleLayer('evacuationCenters')}
@@ -631,9 +831,19 @@ export default function InteractiveMap({
                 },
               ]}
             />
-            <Text style={mapStyles.legendText}>Evacuation centers</Text>
+            <Text style={[mapStyles.legendText, tone === 'dark' && mapStyles.legendTextDark]}>
+              Evacuation centers
+            </Text>
           </Pressable>
-          <Text style={mapStyles.legendHint}>Tap a layer to show or hide</Text>
+          <Text
+            style={[
+              mapStyles.legendHint,
+              compactLayerFilters && mapStyles.legendHintCompact,
+              tone === 'dark' && mapStyles.legendHintDark,
+            ]}
+          >
+            Tap a layer to show or hide
+          </Text>
         </View>
       ) : null}
     </View>
@@ -668,11 +878,19 @@ const mapStyles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.sm,
   },
+  legendCompact: {
+    gap: 2,
+    paddingVertical: 2,
+  },
   legendRow: {
     minHeight: 25,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+  },
+  legendRowCompact: {
+    minHeight: 22,
+    gap: spacing.sm,
   },
   legendRowInactive: {
     opacity: 0.65,
@@ -687,10 +905,19 @@ const mapStyles = StyleSheet.create({
     fontSize: 14,
     color: colors.text,
   },
+  legendTextDark: {
+    color: colors.white,
+  },
   legendHint: {
     marginTop: 2,
     fontFamily: fonts.regular,
     fontSize: 11,
     color: colors.primary,
+  },
+  legendHintCompact: {
+    marginTop: 0,
+  },
+  legendHintDark: {
+    color: '#FCA5A5',
   },
 });

@@ -4,7 +4,7 @@ import { colors, fonts, fontSizes, radius, spacing } from '../theme';
 export const residentProfileModalStyles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: colors.white,
+    backgroundColor: colors.background,
   },
   header: {
     minHeight: 64,

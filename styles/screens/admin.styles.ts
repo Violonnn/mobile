@@ -14,7 +14,7 @@ const navBlueSoft = 'rgba(170, 192, 220, 0.28)';
 export const adminStyles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.white,
+    backgroundColor: colors.background,
   },
   loadingContainer: {
     flex: 1,

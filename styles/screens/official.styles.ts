@@ -13,7 +13,7 @@ const BOTTOM_BAR_CLEARANCE = officialNavMetrics.barHeight + spacing.lg;
 export const officialStyles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.white,
+    backgroundColor: colors.background,
   },
   // Non-scroll shell layout (loading/error states). Prefer scrollContent for ScrollViews.
   content: {

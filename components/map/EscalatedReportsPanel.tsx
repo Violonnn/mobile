@@ -51,20 +51,14 @@ export default function EscalatedReportsPanel({
           accessibilityHint={collapsed ? 'You can also drag upward' : 'You can also drag downward'}
           accessibilityState={{ expanded: !collapsed }}
         >
-          <Ionicons
-            name={collapsed ? 'chevron-up' : 'chevron-down'}
-            size={19}
-            color={colors.primary}
-          />
+          <View style={styles.dragIndicator} />
         </TouchableOpacity>
 
         <View style={styles.headerRow}>
           <View style={styles.headerCopy}>
             <Text style={styles.eyebrow}>ESCALATED REPORTS</Text>
             <Text style={styles.headerSubtitle}>
-              {collapsed
-                ? 'Drag up to view the response queue'
-                : 'Tap to locate · review to manage'}
+              {collapsed ? 'Drag up to view the response queue' : 'Drag down to maximize the map'}
             </Text>
           </View>
           <View style={styles.countPill}>

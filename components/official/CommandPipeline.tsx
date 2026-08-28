@@ -17,7 +17,6 @@ export default function CommandPipeline({ counts }: { counts: OfficialStatusCoun
 
   return (
     <View style={styles.section}>
-      <Text style={styles.sectionLabel}>REPORT PIPELINE</Text>
       <View style={styles.pipelineRow}>
         {STEPS.map((step, index) => (
           <React.Fragment key={step.status}>
@@ -27,7 +26,6 @@ export default function CommandPipeline({ counts }: { counts: OfficialStatusCoun
               accessibilityRole="button"
               accessibilityLabel={`View ${step.label.toLowerCase()} reports`}
             >
-              <View style={[styles.pipelineDot, { backgroundColor: step.color }]} />
               <Text style={[styles.pipelineValue, { color: step.color }]}>{counts[step.status]}</Text>
               <Text style={styles.pipelineLabel}>{step.label}</Text>
             </TouchableOpacity>
