@@ -385,6 +385,7 @@ export default function FeedScreen() {
                   <>
                     <OfficialAnnouncementPostCard
                       announcement={filteredAnnouncements[0]}
+                      featuredSlides={filteredAnnouncements}
                       variant="residentFeedFeatured"
                       cardStyle={styles.featuredAnnouncementCard}
                       isUnread={!readAnnouncementIds.has(filteredAnnouncements[0].id)}

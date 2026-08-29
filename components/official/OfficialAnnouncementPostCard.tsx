@@ -1,7 +1,7 @@
 // Resident-style announcement post for the official Community screen.
 // Matches report feed cards: collage media, engagement row, and detail sheet.
 import { Ionicons } from '@expo/vector-icons';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
     Modal,
     Platform,
@@ -39,6 +39,7 @@ import {
 } from '../report/ReportDetailCard';
 import { ReporterAvatar } from '../report/ReporterAvatar';
 import { useAnnouncementEngagement } from './AnnouncementEngagementProvider';
+import ResidentFeedFeaturedHero from './ResidentFeedFeaturedHero';
 
 const BOTTOM_NAV_CLEARANCE = officialNavMetrics.barHeight + spacing.sm;
 
@@ -262,119 +263,33 @@ function ResidentAnnouncementCompactContent({
 
 function ResidentFeedAnnouncementContent({
   announcement,
-  compact,
   isUnread,
-  onRequestExpand,
-  onRequestComments,
 }: {
   announcement: AnnouncementRecord;
-  compact: boolean;
   isUnread: boolean;
-  onRequestExpand: () => void;
-  onRequestComments: () => void;
 }) {
-  const { getState, toggleUpvote } = useAnnouncementEngagement();
-  const { upvoteCount, commentCount, hasUpvoted } = getState(announcement);
-  const firstMedia = announcement.media[0] ? toReportMedia(announcement.media[0]) : null;
-  const scopeLabel = announcement.scope === 'municipal' ? 'MUNICIPAL UPDATE' : 'BARANGAY UPDATE';
   const title = announcement.title.trim() || announcement.body.trim() || 'Official update';
 
-  const shareAnnouncement = async () => {
-    try {
-      await Share.share({
-        message: `${title}\n${announcement.body}`,
-        title,
-      });
-    } catch {
-      // Closing or unavailable native share sheets should not interrupt the feed.
-    }
-  };
-
-  if (compact) {
-    return (
-      <View style={residentFeedAnnouncementStyles.compactContent}>
-        <View style={residentFeedAnnouncementStyles.compactCopy}>
-          <Text style={residentFeedAnnouncementStyles.compactMeta}>
-            {announcement.author.roleLabel}  ·  OFFICIAL
-          </Text>
-          <Text style={residentFeedAnnouncementStyles.compactDate}>
-            {formatPublishedAt(announcement.createdAt)}
-          </Text>
-          <Text style={residentFeedAnnouncementStyles.compactTitle} numberOfLines={2}>
-            {title}
-          </Text>
-          {announcement.body.trim() && announcement.body.trim() !== title ? (
-            <Text style={residentFeedAnnouncementStyles.compactBody} numberOfLines={2}>
-              {announcement.body.trim()}
-            </Text>
-          ) : null}
-        </View>
-        {isUnread ? <View style={residentFeedAnnouncementStyles.unreadDot} /> : null}
-        <Ionicons name="chevron-forward" size={24} color={colors.textMuted} />
-      </View>
-    );
-  }
-
   return (
-    <View style={residentFeedAnnouncementStyles.featuredContent}>
-      {firstMedia ? (
-        <View style={residentFeedAnnouncementStyles.featuredMedia}>
-          <CollageCellContent item={firstMedia} />
-          {announcement.media.length > 1 ? (
-            <View style={residentFeedAnnouncementStyles.mediaCountBadge}>
-              <Ionicons name="images-outline" size={14} color={colors.white} />
-              <Text style={residentFeedAnnouncementStyles.mediaCountText}>
-                {announcement.media.length}
-              </Text>
-            </View>
-          ) : null}
-        </View>
-      ) : null}
-
-      <View style={residentFeedAnnouncementStyles.featuredCopy}>
-        <View style={residentFeedAnnouncementStyles.scopeRow}>
-          <View style={residentFeedAnnouncementStyles.scopeAccent} />
-          <Text style={residentFeedAnnouncementStyles.scopeText}>{scopeLabel}</Text>
-        </View>
-        <Text style={residentFeedAnnouncementStyles.officialMeta}>
+    <View style={residentFeedAnnouncementStyles.compactContent}>
+      <View style={residentFeedAnnouncementStyles.compactCopy}>
+        <Text style={residentFeedAnnouncementStyles.compactMeta}>
           {announcement.author.roleLabel}  ·  OFFICIAL
         </Text>
-        <Text style={residentFeedAnnouncementStyles.dateText}>
+        <Text style={residentFeedAnnouncementStyles.compactDate}>
           {formatPublishedAt(announcement.createdAt)}
         </Text>
-        <Text style={residentFeedAnnouncementStyles.featuredTitle}>{title}</Text>
+        <Text style={residentFeedAnnouncementStyles.compactTitle} numberOfLines={2}>
+          {title}
+        </Text>
         {announcement.body.trim() && announcement.body.trim() !== title ? (
-          <Text style={residentFeedAnnouncementStyles.featuredBody} numberOfLines={3}>
+          <Text style={residentFeedAnnouncementStyles.compactBody} numberOfLines={2}>
             {announcement.body.trim()}
           </Text>
         ) : null}
-        <TouchableOpacity style={residentFeedAnnouncementStyles.readButton} onPress={onRequestExpand}>
-          <Text style={residentFeedAnnouncementStyles.readText}>Read full advisory</Text>
-          <Ionicons name="arrow-forward" size={18} color={colors.primary} />
-        </TouchableOpacity>
       </View>
-
-      <View style={residentFeedAnnouncementStyles.actionRow}>
-        <TouchableOpacity style={residentFeedAnnouncementStyles.actionButton} onPress={shareAnnouncement}>
-          <Ionicons name="paper-plane-outline" size={23} color={colors.text} />
-          <Text style={residentFeedAnnouncementStyles.actionText}>Share</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={residentFeedAnnouncementStyles.actionButton}
-          onPress={() => toggleUpvote(announcement)}
-        >
-          <Ionicons
-            name={hasUpvoted ? 'arrow-up-circle' : 'arrow-up-outline'}
-            size={24}
-            color={hasUpvoted ? colors.primary : colors.text}
-          />
-          <Text style={residentFeedAnnouncementStyles.actionText}>{upvoteCount} Upvote</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={residentFeedAnnouncementStyles.actionButton} onPress={onRequestComments}>
-          <Ionicons name="chatbubble-outline" size={22} color={colors.text} />
-          <Text style={residentFeedAnnouncementStyles.actionText}>{commentCount} Comments</Text>
-        </TouchableOpacity>
-      </View>
+      {isUnread ? <View style={residentFeedAnnouncementStyles.unreadDot} /> : null}
+      <Ionicons name="chevron-forward" size={24} color={colors.textMuted} />
     </View>
   );
 }
@@ -496,6 +411,7 @@ function OfficialCommunityAnnouncementContent({
 
 export default function OfficialAnnouncementPostCard({
   announcement,
+  featuredSlides,
   moderationMode = 'none',
   cardStyle,
   variant = 'default',
@@ -503,6 +419,8 @@ export default function OfficialAnnouncementPostCard({
   onOpened,
 }: {
   announcement: AnnouncementRecord;
+  /** Official updates shown as onboarding-style fading slides on the LATEST card. */
+  featuredSlides?: AnnouncementRecord[];
   moderationMode?: 'none' | 'scoped';
   /** Lets horizontally scrolling resident cards keep the shared post layout. */
   cardStyle?: StyleProp<ViewStyle>;
@@ -514,6 +432,8 @@ export default function OfficialAnnouncementPostCard({
   const [focusComments, setFocusComments] = useState(false);
   const [refreshSignal, setRefreshSignal] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
+  const [featuredAnnouncement, setFeaturedAnnouncement] = useState(announcement);
+  const [detailAnnouncement, setDetailAnnouncement] = useState(announcement);
   const insets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
   const sheetBottom = insets.bottom + BOTTOM_NAV_CLEARANCE;
@@ -539,8 +459,23 @@ export default function OfficialAnnouncementPostCard({
     return () => clearTimeout(timer);
   }, [expanded, keyboardOpen]);
 
+  useEffect(() => {
+    setFeaturedAnnouncement(announcement);
+    // Reset only when the LATEST seed update changes, not on every object refresh.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- announcement.id is the intended trigger
+  }, [announcement.id]);
+
+  const handleFeaturedActiveChange = useCallback((nextAnnouncement: AnnouncementRecord) => {
+    setFeaturedAnnouncement((current) =>
+      current.id === nextAnnouncement.id ? current : nextAnnouncement,
+    );
+  }, []);
+
   const openExpanded = (withComments: boolean) => {
-    onOpened?.(announcement.id);
+    const target =
+      variant === 'residentFeedFeatured' ? featuredAnnouncement : announcement;
+    onOpened?.(target.id);
+    setDetailAnnouncement(target);
     pendingScrollToComments.current = withComments;
     setFocusComments(withComments);
     setExpanded(true);
@@ -570,13 +505,19 @@ export default function OfficialAnnouncementPostCard({
             onRequestExpand={() => openExpanded(false)}
             onRequestComments={() => openExpanded(true)}
           />
-        ) : variant === 'residentFeedFeatured' || variant === 'residentFeedCompact' ? (
+        ) : variant === 'residentFeedFeatured' ? (
+          <ResidentFeedFeaturedHero
+            announcements={
+              featuredSlides && featuredSlides.length > 0 ? featuredSlides : [announcement]
+            }
+            paused={expanded}
+            onActiveChange={handleFeaturedActiveChange}
+            onRequestComments={() => openExpanded(true)}
+          />
+        ) : variant === 'residentFeedCompact' ? (
           <ResidentFeedAnnouncementContent
             announcement={announcement}
-            compact={variant === 'residentFeedCompact'}
             isUnread={isUnread}
-            onRequestExpand={() => openExpanded(false)}
-            onRequestComments={() => openExpanded(true)}
           />
         ) : variant === 'officialCommunity' ? (
           <OfficialCommunityAnnouncementContent
@@ -660,13 +601,13 @@ export default function OfficialAnnouncementPostCard({
               }}
             >
               <AnnouncementDetailContent
-                announcement={announcement}
+                announcement={detailAnnouncement}
                 showingAllMedia
                 onRequestComments={jumpToComments}
               />
 
               <CommentsSection
-                announcementId={announcement.id}
+                announcementId={detailAnnouncement.id}
                 autoFocus={focusComments}
                 highlighted={focusComments}
                 refreshSignal={refreshSignal}
@@ -777,111 +718,6 @@ const residentStyles = StyleSheet.create({
 });
 
 const residentFeedAnnouncementStyles = StyleSheet.create({
-  featuredContent: {
-    overflow: 'hidden',
-    borderRadius: radius.lg,
-  },
-  featuredMedia: {
-    width: '100%',
-    aspectRatio: 1.75,
-    position: 'relative',
-    overflow: 'hidden',
-    backgroundColor: colors.background,
-  },
-  mediaCountBadge: {
-    position: 'absolute',
-    top: spacing.md,
-    right: spacing.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: radius.full,
-    backgroundColor: 'rgba(17, 24, 39, 0.72)',
-  },
-  mediaCountText: {
-    fontFamily: fonts.semibold,
-    fontSize: fontSizes.sm,
-    color: colors.white,
-  },
-  featuredCopy: {
-    gap: spacing.sm,
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.md,
-    paddingBottom: 0,
-  },
-  scopeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  scopeAccent: {
-    width: 3,
-    height: 24,
-    borderRadius: radius.full,
-    backgroundColor: '#F05B4F',
-  },
-  scopeText: {
-    fontFamily: fonts.medium,
-    fontSize: fontSizes.lg,
-    color: '#F05B4F',
-  },
-  officialMeta: {
-    fontFamily: fonts.medium,
-    fontSize: fontSizes.md,
-    color: colors.textMuted,
-  },
-  dateText: {
-    fontFamily: fonts.regular,
-    fontSize: fontSizes.md,
-    color: colors.textMuted,
-  },
-  featuredTitle: {
-    fontFamily: fonts.bold,
-    fontSize: fontSizes.xl,
-    lineHeight: 28,
-    color: colors.text,
-  },
-  featuredBody: {
-    fontFamily: fonts.regular,
-    fontSize: fontSizes.lg,
-    lineHeight: 25,
-    color: colors.textMuted,
-  },
-  readButton: {
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingTop: spacing.xs,
-    paddingBottom: spacing.xs,
-  },
-  readText: {
-    fontFamily: fonts.semibold,
-    fontSize: fontSizes.lg,
-    color: colors.primary,
-  },
-  actionRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.xs,
-    paddingBottom: spacing.md,
-  },
-  actionButton: {
-    flex: 1,
-    minHeight: 40,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-  },
-  actionText: {
-    fontFamily: fonts.regular,
-    fontSize: 11,
-    color: colors.text,
-  },
   compactContent: {
     minHeight: 122,
     flexDirection: 'row',
