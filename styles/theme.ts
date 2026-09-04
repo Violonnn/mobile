@@ -15,7 +15,7 @@ export const colors = {
   offWhite: "#FAFAF8",
   background: "#FFFFFF",     // pure white screen canvas — not used by onboarding
   card: "#FFFFFF",           // white cards
-  text: "#111827",           // dark text
+  text: "#1C2B4B",           // subtle dark blue — default body/title text
   textMuted: "#6B7280",      // grey subtitle text
   border: "#E5E7EB",         // light border
 };
@@ -49,13 +49,17 @@ export const fonts = {
   extrabold: "Sora_800ExtraBold",
   // Condensed display face for escalation card titles — elongated, modern.
   display: "BarlowCondensed_600SemiBold",
+  // Neutral UI face for home section titles — pairs with Sora without looking as heavy.
+  section: "Inter_600SemiBold",
 };
 
+// md/lg/xl match onboarding: boxy with a slight round. full stays for
+// pills, chips, and circles.
 export const radius = {
   sm: 8,
   md: 12,
-  lg: 16,
-  xl: 24,
+  lg: 12,
+  xl: 12,
   full: 9999,
 };
 

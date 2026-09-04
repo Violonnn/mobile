@@ -1,28 +1,27 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  ImageBackground,
   RefreshControl,
   ScrollView,
   Text,
   TextInput,
   TouchableOpacity,
-  useWindowDimensions,
   View,
 } from 'react-native';
-import { Image } from 'expo-image';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import HomeMapPreview from '../../components/home/HomeMapPreview';
-import NearbyReportAnimation from '../../components/home/NearbyReportAnimation';
+import ReminderBanner from '../../components/home/ReminderBanner';
 import QuickAccessModal, {
   type QuickAccessType,
 } from '../../components/home/QuickAccessModal';
 import HomeUpdateCard from '../../components/home/HomeUpdateCard';
 import { NotificationsPlaceholder } from '../../components/navigation/AppHeader';
-import { AnnouncementEngagementProvider } from '../../components/official/AnnouncementEngagementProvider';
+import ReportModal from '../../components/ui/ReportModal';
 import WelcomeModal from '../../components/ui/WelcomeModal';
 import { useAnnouncements } from '../../hooks/useAnnouncements';
 import { useEvacuationCenters } from '../../hooks/useEvacuationCenters';
@@ -31,11 +30,10 @@ import { useResources } from '../../hooks/useResources';
 import type { AnnouncementRecord } from '../../lib/announcements';
 import { getActiveSession } from '../../lib/auth';
 import { fetchBarangays } from '../../lib/barangays';
-import { formatPublishedAt } from '../../lib/formatTime';
+import { getResidentMapTheme, type ResidentMapTheme } from '../../lib/mapPreferences';
 import { fetchMyProfile } from '../../lib/profile';
 import {
   distanceInMeters,
-  formatDistance,
   normalizeSearchText,
   type Coordinate,
 } from '../../lib/reportProximity';
@@ -49,17 +47,11 @@ type HomeSearchResult =
   | { kind: 'announcement'; item: AnnouncementRecord }
   | { kind: 'report'; item: MapReportMarker };
 
-function formatHomeTime(iso: string): string {
-  const label = formatPublishedAt(iso);
-  if (/^\d+(s|m|hr)$/.test(label)) return `${label} ago`;
-  return label;
-}
-
 export default function HomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { width: windowWidth } = useWindowDimensions();
   const { welcome } = useLocalSearchParams<{ welcome?: string }>();
+  const searchInputRef = useRef<TextInput>(null);
 
   const [loading, setLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -73,6 +65,9 @@ export default function HomeScreen() {
   const [focusedNearbyReportId, setFocusedNearbyReportId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [isHeaderCollapsed, setIsHeaderCollapsed] = useState(false);
+  const [mapTheme, setMapTheme] = useState<ResidentMapTheme>('light');
 
   const {
     announcements,
@@ -150,6 +145,21 @@ export default function HomeScreen() {
     }, [loadSession]),
   );
 
+  // Keep the Home preview synchronized with the resident's saved Map preference.
+  useFocusEffect(
+    useCallback(() => {
+      let isActive = true;
+
+      void getResidentMapTheme().then((storedTheme) => {
+        if (isActive) setMapTheme(storedTheme);
+      });
+
+      return () => {
+        isActive = false;
+      };
+    }, []),
+  );
+
   useEffect(() => {
     if (!loading && !isAuthenticated) router.replace('/');
   }, [loading, isAuthenticated, router]);
@@ -174,10 +184,7 @@ export default function HomeScreen() {
     );
   }, [barangayCenter, normalizedBarangay, reports, residentBarangayId]);
 
-  const nearbyReports = useMemo(
-    () => reportsInBarangay.slice(0, 2),
-    [reportsInBarangay],
-  );
+  const nearbyReports = reportsInBarangay;
   const focusedNearbyReport =
     nearbyReports.find((report) => report.id === focusedNearbyReportId) ??
     nearbyReports[0] ??
@@ -195,6 +202,7 @@ export default function HomeScreen() {
           announcement.barangayId === residentBarangayId,
       )
     : undefined;
+  const featuredAnnouncement = municipalAnnouncement ?? barangayAnnouncement;
 
   const searchResults = useMemo<HomeSearchResult[]>(() => {
     const query = normalizeSearchText(searchQuery);
@@ -234,27 +242,24 @@ export default function HomeScreen() {
   }
 
   const locationValue = barangay ? `${barangay}, Minglanilla` : 'Minglanilla, Cebu';
-  const isCompactLayout = windowWidth < 370;
-  // Fit three centered cards safely on narrow phones without stretching them on tablets.
-  const quickAccessContentWidth = Math.min(windowWidth, 420) -
-    (spacing.sm + spacing.xs) * 2;
-  const quickAccessCardWidth = Math.min(
-    96,
-    Math.floor((quickAccessContentWidth - spacing.sm * 2) / 3),
-  );
-  const quickAccessCardWidthStyle = { width: quickAccessCardWidth };
   const areaStatusUnavailable = Boolean(reportsError);
   const areaHasReports = activeReportsInBarangay.length > 0;
-  const areaStatusText = reportsLoading
-    ? 'Checking your area status…'
+  const areaStatusTitle = reportsLoading
+    ? 'Checking your area'
     : areaStatusUnavailable
-      ? 'Area status is temporarily unavailable'
+      ? 'Status unavailable'
       : areaHasReports
         ? `${activeReportsInBarangay.length} active ${
-            activeReportsInBarangay.length === 1 ? 'report' : 'reports'
-          } in your area`
-        : 'Your area is currently clear';
-
+            activeReportsInBarangay.length === 1 ? 'alert' : 'alerts'
+          }`
+        : 'No active alerts';
+  const areaStatusSupportingText = reportsLoading
+    ? 'Loading nearby reports…'
+    : areaStatusUnavailable
+      ? 'Pull down to try again'
+      : `${reportsInBarangay.length} ${
+          reportsInBarangay.length === 1 ? 'report' : 'reports'
+        } nearby`;
   const goToFeed = () => router.push('/(main)/feed');
   const openReportInMap = (reportId: string) => {
     router.push({ pathname: '/(main)/map', params: { reportId } });
@@ -297,6 +302,38 @@ export default function HomeScreen() {
     setRefreshing(false);
   };
 
+  const areaStatusContent = (
+    <View style={styles.areaCardContent}>
+      <Text style={styles.areaEyebrow}>YOUR AREA</Text>
+      <Text style={styles.areaTitle} accessibilityLiveRegion="polite">
+        {areaStatusTitle}
+      </Text>
+      <Text style={styles.areaSupportingText}>{areaStatusSupportingText}</Text>
+
+      <View style={styles.areaActions}>
+        <TouchableOpacity
+          style={styles.reportIncidentButton}
+          activeOpacity={0.84}
+          onPress={() => setReportOpen(true)}
+          accessibilityRole="button"
+          accessibilityLabel="Report an incident"
+        >
+          <Ionicons name="location" size={20} color={colors.white} />
+          <Text style={styles.reportIncidentText}>Report an incident</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.viewMapButton}
+          activeOpacity={0.76}
+          onPress={() => router.push('/(main)/map')}
+          accessibilityRole="button"
+          accessibilityLabel="View map"
+        >
+          <Text style={styles.viewMapText}>View map</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <StatusBar style="dark" />
@@ -304,6 +341,13 @@ export default function HomeScreen() {
         contentContainerStyle={[styles.scrollContent, { paddingTop: spacing.xs }]}
         showsVerticalScrollIndicator={false}
         stickyHeaderIndices={[0]}
+        scrollEventThrottle={16}
+        onScroll={({ nativeEvent }) => {
+          const shouldCollapseHeader = nativeEvent.contentOffset.y > 72;
+          setIsHeaderCollapsed((currentValue) =>
+            currentValue === shouldCollapseHeader ? currentValue : shouldCollapseHeader,
+          );
+        }}
         keyboardDismissMode="on-drag"
         keyboardShouldPersistTaps="handled"
         refreshControl={
@@ -317,43 +361,70 @@ export default function HomeScreen() {
       >
         <View style={styles.residentStickyHeader}>
           <View style={styles.residentHeaderContent}>
-            <View style={styles.greetingRow}>
-              <View style={styles.greetingCopy}>
-                <Text style={styles.greetingTitle} numberOfLines={1}>
-                  Hi, {firstName || 'there'}
-                </Text>
-                <View style={styles.locationRow}>
-                  <Ionicons name="location-outline" size={21} color={homeColors.ink} />
-                  <Text style={styles.locationText} numberOfLines={1}>
-                    {locationValue}
-                  </Text>
+            {isHeaderCollapsed ? (
+              <View style={styles.compactHeaderRow}>
+                <Text style={styles.compactHeaderTitle}>Home</Text>
+                <View style={styles.compactHeaderActions}>
+                  <TouchableOpacity
+                    style={styles.compactHeaderButton}
+                    activeOpacity={0.75}
+                    onPress={() => searchInputRef.current?.focus()}
+                    accessibilityRole="button"
+                    accessibilityLabel="Focus search"
+                  >
+                    <Ionicons name="search-outline" size={27} color={homeColors.ink} />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.notificationButton}
+                    activeOpacity={0.75}
+                    onPress={() => setNotificationsOpen(true)}
+                    accessibilityRole="button"
+                    accessibilityLabel="Notifications"
+                  >
+                    <Ionicons name="notifications-outline" size={28} color={homeColors.ink} />
+                    <View style={styles.notificationDot} />
+                  </TouchableOpacity>
                 </View>
               </View>
-
-              <View style={styles.headerActions}>
-                <TouchableOpacity
-                  style={styles.notificationButton}
-                  activeOpacity={0.75}
-                  onPress={() => setNotificationsOpen(true)}
-                  accessibilityRole="button"
-                  accessibilityLabel="Notifications"
-                >
-                  <Ionicons name="notifications-outline" size={28} color={homeColors.ink} />
-                  <View style={styles.notificationDot} />
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.avatar}
-                  activeOpacity={0.82}
-                  onPress={() => router.push('/(main)/profile')}
-                  accessibilityRole="button"
-                  accessibilityLabel="Open profile"
-                >
-                  <Text style={styles.avatarText}>
-                    {firstName.trim().charAt(0).toLocaleUpperCase() || 'R'}
+            ) : (
+              <View style={styles.greetingRow}>
+                <View style={styles.greetingCopy}>
+                  <Text style={styles.greetingTitle} numberOfLines={1}>
+                    Hi, {firstName || 'there'}
                   </Text>
-                </TouchableOpacity>
+                  <View style={styles.locationRow}>
+                    <Ionicons name="location-outline" size={21} color={homeColors.ink} />
+                    <Text style={styles.locationText} numberOfLines={1}>
+                      {locationValue}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.headerActions}>
+                  <TouchableOpacity
+                    style={styles.notificationButton}
+                    activeOpacity={0.75}
+                    onPress={() => setNotificationsOpen(true)}
+                    accessibilityRole="button"
+                    accessibilityLabel="Notifications"
+                  >
+                    <Ionicons name="notifications-outline" size={28} color={homeColors.ink} />
+                    <View style={styles.notificationDot} />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.avatar}
+                    activeOpacity={0.82}
+                    onPress={() => router.push('/(main)/profile')}
+                    accessibilityRole="button"
+                    accessibilityLabel="Open profile"
+                  >
+                    <Text style={styles.avatarText}>
+                      {firstName.trim().charAt(0).toLocaleUpperCase() || 'R'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               </View>
-            </View>
+            )}
           </View>
         </View>
 
@@ -362,10 +433,11 @@ export default function HomeScreen() {
             <View style={styles.searchBar}>
               <Ionicons name="search-outline" size={23} color={homeColors.ink} />
               <TextInput
+                ref={searchInputRef}
                 style={styles.searchInput}
                 value={searchQuery}
                 onChangeText={setSearchQuery}
-                placeholder="Search announcements and reports"
+                placeholder="Search DisasterLink"
                 placeholderTextColor={colors.textMuted}
                 returnKeyType="search"
                 autoCapitalize="none"
@@ -379,7 +451,12 @@ export default function HomeScreen() {
                 >
                   <Ionicons name="close-circle" size={20} color={colors.textMuted} />
                 </TouchableOpacity>
-              ) : null}
+              ) : (
+                <>
+                  <View style={styles.searchDivider} />
+                  <Ionicons name="options-outline" size={21} color={homeColors.ink} />
+                </>
+              )}
             </View>
 
             {searchQuery.trim() ? (
@@ -424,15 +501,14 @@ export default function HomeScreen() {
               </View>
             ) : null}
 
-            <View style={styles.nearbyReportBlock}>
-              <NearbyReportAnimation />
-              <Text
-                style={styles.areaStatusText}
-                accessibilityLiveRegion="polite"
-              >
-                {areaStatusText}
-              </Text>
-            </View>
+            <ImageBackground
+              source={require('../../assets/images/noActiveBackground.png')}
+              style={styles.areaCard}
+              imageStyle={styles.areaCardImage}
+              resizeMode="cover"
+            >
+              {areaStatusContent}
+            </ImageBackground>
           </View>
 
           <View style={styles.quickAccessSpacer} />
@@ -441,55 +517,56 @@ export default function HomeScreen() {
             <View style={styles.quickAccessContent}>
               <View style={styles.quickAccessRow}>
                 <TouchableOpacity
-                  style={[styles.quickAccessCard, quickAccessCardWidthStyle]}
+                  style={styles.quickAccessCard}
                   activeOpacity={0.82}
                   onPress={() => setQuickAccessType('hotlines')}
                   accessibilityRole="button"
                   accessibilityLabel="Go to hotlines"
                 >
                   <View style={styles.quickAccessIcon}>
-                    <Ionicons name="call-outline" size={22} color={homeColors.accentBlue} />
+                    <Ionicons name="call-outline" size={31} color={homeColors.ink} />
                   </View>
                   <Text style={styles.quickAccessText}>Hotlines</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  style={[styles.quickAccessCard, quickAccessCardWidthStyle]}
+                  style={styles.quickAccessCard}
                   activeOpacity={0.82}
                   onPress={() => setQuickAccessType('facilities')}
                   accessibilityRole="button"
                   accessibilityLabel="Go to facilities"
                 >
                   <View style={styles.quickAccessIcon}>
-                    <Ionicons name="business-outline" size={22} color={homeColors.accentBlue} />
+                    <Ionicons name="business-outline" size={31} color={homeColors.ink} />
                   </View>
                   <Text style={styles.quickAccessText}>Facilities</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  style={[styles.quickAccessCard, quickAccessCardWidthStyle]}
+                  style={styles.quickAccessCard}
                   activeOpacity={0.82}
                   onPress={() => setQuickAccessType('evacuation')}
                   accessibilityRole="button"
                   accessibilityLabel={`View ${centers.length} evacuation centers`}
                 >
                   <View style={styles.quickAccessIcon}>
-                    <Ionicons name="exit-outline" size={22} color={homeColors.accentBlue} />
+                    <Ionicons name="exit-outline" size={31} color={homeColors.ink} />
                   </View>
-                  <Text style={styles.quickAccessText}>Evacuation{`\n`}Centers</Text>
+                  <Text style={styles.quickAccessText}>Evacuation</Text>
                 </TouchableOpacity>
               </View>
             </View>
           </View>
         </View>
 
+        <View style={styles.reminderBannerSection}>
+          <ReminderBanner />
+        </View>
+
         <View style={styles.contentSection}>
           <View style={styles.sectionBlock}>
-            <View style={[styles.sectionHeaderRow, styles.municipalHeaderRow]}>
-              <Text style={styles.sectionTitle}>Municipal update</Text>
-              <TouchableOpacity onPress={goToFeed} accessibilityRole="button">
-                <Text style={styles.sectionLink}>See all</Text>
-              </TouchableOpacity>
+            <View style={styles.sectionHeaderRow}>
+              <Text style={styles.sectionTitle}>Latest official update</Text>
             </View>
             {announcementsLoading ? (
               <View style={styles.stateCard}>
@@ -498,175 +575,63 @@ export default function HomeScreen() {
             ) : announcementsError ? (
               <View style={styles.stateCard}>
                 <Ionicons name="warning-outline" size={19} color={colors.textMuted} />
-                <Text style={styles.stateText}>Could not load municipal updates</Text>
+                <Text style={styles.stateText}>Could not load updates</Text>
               </View>
-            ) : municipalAnnouncement ? (
-              <AnnouncementEngagementProvider announcements={[municipalAnnouncement]}>
+            ) : !featuredAnnouncement ? (
+              <View style={styles.stateCard}>
+                <Ionicons name="megaphone-outline" size={19} color={colors.textMuted} />
+                <Text style={styles.stateText}>No recent updates yet</Text>
+              </View>
+            ) : (
+              <View style={styles.officialUpdatesBlock}>
                 <HomeUpdateCard
-                  announcement={municipalAnnouncement}
-                  label="Municipal update"
+                  announcement={featuredAnnouncement}
+                  label={
+                    featuredAnnouncement.scope === 'municipal'
+                      ? 'Municipal update'
+                      : 'Barangay update'
+                  }
                   variant="featured"
                   onPress={goToFeed}
                 />
-              </AnnouncementEngagementProvider>
-            ) : (
-              <View style={styles.stateCard}>
-                <Ionicons name="megaphone-outline" size={19} color={colors.textMuted} />
-                <Text style={styles.stateText}>No municipal updates yet</Text>
+                {municipalAnnouncement && barangayAnnouncement ? (
+                  <HomeUpdateCard
+                    announcement={barangayAnnouncement}
+                    label="Barangay update"
+                    onPress={goToFeed}
+                  />
+                ) : null}
               </View>
             )}
           </View>
 
-          <View style={styles.sectionBlock}>
-            <View style={styles.sectionHeaderRow}>
-              <Text style={styles.sectionTitle}>Barangay update</Text>
-              <TouchableOpacity onPress={goToFeed} accessibilityRole="button">
-                <Text style={styles.sectionLink}>See all</Text>
-              </TouchableOpacity>
-            </View>
-            {announcementsLoading ? (
-              <View style={styles.stateCard}>
-                <ActivityIndicator color={colors.primary} />
-              </View>
-            ) : announcementsError ? (
-              <View style={styles.stateCard}>
-                <Ionicons name="warning-outline" size={19} color={colors.textMuted} />
-                <Text style={styles.stateText}>Could not load barangay updates</Text>
-              </View>
-            ) : barangayAnnouncement ? (
-              <HomeUpdateCard
-                announcement={barangayAnnouncement}
-                label="Barangay update"
-                onPress={goToFeed}
-              />
-            ) : (
-              <View style={styles.stateCard}>
-                <Ionicons name="megaphone-outline" size={19} color={colors.textMuted} />
-                <Text style={styles.stateText}>No updates for {barangay || 'your barangay'} yet</Text>
-              </View>
-            )}
-          </View>
-
-          <View style={styles.sectionBlock}>
+          <View style={styles.reportsSectionBlock}>
             <View style={styles.sectionHeaderRow}>
               <Text style={styles.sectionTitle}>Reports near you</Text>
-              <TouchableOpacity onPress={goToFeed} accessibilityRole="button">
-                <Text style={styles.sectionLink}>See all</Text>
+              <TouchableOpacity
+                style={styles.sectionLinkButton}
+                onPress={goToFeed}
+                accessibilityRole="button"
+                accessibilityLabel="View all nearby reports"
+              >
+                <Ionicons name="chevron-forward" size={22} color={homeColors.ink} />
               </TouchableOpacity>
             </View>
 
-            <View
-              style={[
-                styles.nearbyPanel,
-                isCompactLayout && styles.nearbyPanelCompact,
-              ]}
-            >
-              <View
-                style={[
-                  styles.nearbyReportList,
-                  isCompactLayout && styles.nearbyReportListCompact,
-                ]}
-              >
-                {reportsLoading ? (
-                  <View style={styles.nearbyState}>
-                    <ActivityIndicator color={colors.primary} />
-                  </View>
-                ) : reportsError ? (
-                  <View style={styles.nearbyState}>
-                    <Ionicons name="warning-outline" size={19} color={colors.textMuted} />
-                    <Text style={styles.stateText}>Could not load nearby reports</Text>
-                  </View>
-                ) : nearbyReports.length === 0 ? (
-                  <View style={styles.nearbyState}>
-                    <Ionicons name="shield-checkmark-outline" size={21} color={homeColors.clear} />
-                    <Text style={styles.stateText}>No reports in {barangay || 'your area'}</Text>
-                  </View>
-                ) : (
-                  nearbyReports.map((report, index) => {
-                    const reportPhoto = report.media.find((media) => media.type === 'photo');
-                    const distance = barangayCenter
-                      ? formatDistance(distanceInMeters(barangayCenter, report))
-                      : null;
-                    return (
-                      <TouchableOpacity
-                        key={report.id}
-                        style={[
-                          styles.nearbyReportRow,
-                          report.id === focusedNearbyReport?.id &&
-                            styles.nearbyReportRowFocused,
-                          index < nearbyReports.length - 1 && styles.nearbyReportDivider,
-                        ]}
-                        activeOpacity={0.84}
-                        onPress={() => setFocusedNearbyReportId(report.id)}
-                        accessibilityRole="button"
-                        accessibilityState={{ selected: report.id === focusedNearbyReport?.id }}
-                        accessibilityLabel={`Focus ${report.title || 'nearby report'} on the map preview`}
-                      >
-                        <View style={styles.reportThumbnail}>
-                          {reportPhoto ? (
-                            <Image
-                              source={{ uri: reportPhoto.url }}
-                              style={styles.reportThumbnailImage}
-                              contentFit="cover"
-                              transition={150}
-                            />
-                          ) : (
-                            <Ionicons name="image-outline" size={24} color={colors.textMuted} />
-                          )}
-                        </View>
-                        <View style={styles.reportSummary}>
-                          <Text
-                            style={styles.reportTitle}
-                            numberOfLines={1}
-                            adjustsFontSizeToFit
-                            minimumFontScale={0.65}
-                          >
-                            {report.title || 'Resident report'}
-                          </Text>
-                          {distance ? (
-                            <Text style={styles.reportDistance} numberOfLines={1}>
-                              {distance}
-                            </Text>
-                          ) : null}
-                          <View style={styles.reportLocationRow}>
-                            <Ionicons
-                              name="location-outline"
-                              size={16}
-                              color={colors.primary}
-                              style={styles.reportLocationIcon}
-                            />
-                            <Text
-                              style={styles.reportAddress}
-                              numberOfLines={1}
-                              adjustsFontSizeToFit
-                              minimumFontScale={0.65}
-                            >
-                              {report.addressText || barangay || 'Minglanilla'}
-                            </Text>
-                          </View>
-                          <Text style={styles.reportTime} numberOfLines={1}>
-                            {formatHomeTime(report.created_at)}
-                          </Text>
-                        </View>
-                      </TouchableOpacity>
-                    );
-                  })
-                )}
-              </View>
-
-              <View
-                style={[
-                  styles.nearbyMapWrap,
-                  isCompactLayout && styles.nearbyMapWrapCompact,
-                ]}
-              >
+            <View style={styles.nearbyPanel}>
+              <View style={styles.nearbyMapWrap}>
                 <HomeMapPreview
                   reports={nearbyReports}
                   focusedReport={focusedNearbyReport}
+                  tone={mapTheme}
+                  loading={reportsLoading}
+                  error={reportsError}
+                  onFocusReport={setFocusedNearbyReportId}
                   onOpenReport={openReportInMap}
                 />
               </View>
             </View>
+
           </View>
 
         </View>
@@ -683,6 +648,12 @@ export default function HomeScreen() {
         onClose={() => setQuickAccessType(null)}
         onRetry={retryQuickAccess}
         onOpenMap={openResourceInMap}
+      />
+
+      <ReportModal
+        visible={reportOpen}
+        onClose={() => setReportOpen(false)}
+        onSubmitted={openReportInMap}
       />
 
       <NotificationsPlaceholder

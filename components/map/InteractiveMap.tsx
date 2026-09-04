@@ -1,8 +1,16 @@
 // Interactive Leaflet map in a WebView (OSM tiles, Minglanilla).
 // Soft red report pins with clustering; blue facility + green evac markers.
 // Layer filters live in React Native so report clustering stays unchanged.
-import React, { useCallback, useEffect, useMemo, useRef } from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Keyboard,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, fonts, fontSizes, spacing } from '../../styles/theme';
@@ -27,6 +35,12 @@ export type MapLayerVisibility = {
   evacuationCenters: boolean;
 };
 
+export type MapUserLocation = {
+  latitude: number;
+  longitude: number;
+  accuracyMeters?: number | null;
+};
+
 /** Imperative camera target supplied by a parent route after markers are scoped. */
 export type MapFocusTarget = {
   reportId?: string;
@@ -45,6 +59,10 @@ type Props = {
   layerFiltersTopInset?: number;
   /** Reduces vertical spacing for filters shown over a full-screen map. */
   compactLayerFilters?: boolean;
+  /** Adds the resident search field and filter-panel control from the map design. */
+  showSearchBar?: boolean;
+  searchBarTopInset?: number;
+  userLocation?: MapUserLocation | null;
   onLayerVisibilityChange?: (next: MapLayerVisibility) => void;
   onReportSelection?: (reportIds: string[]) => void;
   /** Opens a marker popup with a separate report-details action when requested. */
@@ -61,6 +79,8 @@ type Props = {
   tone?: 'light' | 'dark';
   /** Lets a parent ScrollView freeze while the user is panning or zooming the map. */
   onGestureActiveChange?: (active: boolean) => void;
+  /** Controls how close the camera moves when a report is focused. */
+  focusZoomLevel?: number;
   /**
    * Recapture the camera only when the focused pin changes.
    * Use this inside a ScrollView so parent re-renders do not yank the map back.
@@ -80,6 +100,7 @@ function buildMapHtml(
   pulseReportClusters: boolean,
   initialShowMapDetails: boolean,
   stickyFocus: boolean,
+  focusZoomLevel: number,
 ): string {
   const isDark = tone === 'dark';
   return `<!DOCTYPE html>
@@ -103,59 +124,56 @@ function buildMapHtml(
       }
 
       .report-pin {
-        width: 30px;
-        height: 30px;
+        width: 46px;
+        height: 46px;
         position: relative;
-        transform: translate(-50%, -100%);
-      }
-
-      .report-pin-bubble {
-        width: 26px;
-        height: 26px;
-        margin: 0 auto;
-        border-radius: 50% 50% 50% 8px;
-        transform: rotate(-45deg);
-        background: linear-gradient(145deg, #FF8A8A 0%, #FF5C5C 55%, #F04444 100%);
-        border: 2.5px solid #FFFFFF;
-        box-shadow: 0 4px 14px rgba(255, 92, 92, 0.38);
-      }
-
-      .report-pin-dot {
-        position: absolute;
-        top: 9px;
-        left: 50%;
-        width: 7px;
-        height: 7px;
-        margin-left: -3.5px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
         border-radius: 50%;
-        background: rgba(255, 255, 255, 0.92);
+        background: rgba(169, 51, 64, 0.14);
+        border: 1px solid rgba(169, 51, 64, 0.2);
       }
 
-      .report-pin-tail {
-        width: 0;
-        height: 0;
-        margin: -3px auto 0;
-        border-left: 5px solid transparent;
-        border-right: 5px solid transparent;
-        border-top: 7px solid #F04444;
-        filter: drop-shadow(0 2px 3px rgba(255, 92, 92, 0.25));
+      .report-pin-core {
+        width: 31px;
+        height: 31px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        background: #B33443;
+        border: 3px solid #FFFFFF;
+        box-shadow: 0 4px 12px rgba(106, 24, 36, 0.34);
+      }
+
+      .report-pin-core svg {
+        width: 17px;
+        height: 17px;
       }
 
       .resource-pin {
-        width: 28px;
-        height: 28px;
+        width: 32px;
+        height: 32px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
         border-radius: 50%;
-        border: 2.5px solid #FFFFFF;
+        border: 3px solid #FFFFFF;
         box-shadow: 0 3px 10px rgba(28, 43, 75, 0.28);
-        transform: translate(-50%, -50%);
+      }
+
+      .resource-pin svg {
+        width: 18px;
+        height: 18px;
       }
 
       .resource-pin.facility {
-        background: linear-gradient(145deg, #60A5FA 0%, #1A56DB 100%);
+        background: #4B82B5;
       }
 
       .resource-pin.evacuation {
-        background: linear-gradient(145deg, #4ADE80 0%, #16A34A 100%);
+        background: #3F7B6C;
       }
 
       .resource-pin.evacuation.priority {
@@ -164,10 +182,10 @@ function buildMapHtml(
 
       .marker-cluster-report {
         overflow: visible;
-        background: rgba(255, 92, 92, 0.18);
+        background: rgba(169, 51, 64, 0.13);
         border: 2px solid rgba(255, 255, 255, 0.95);
         border-radius: 50%;
-        box-shadow: 0 4px 14px rgba(255, 92, 92, 0.28);
+        box-shadow: 0 4px 14px rgba(106, 24, 36, 0.25);
       }
 
       .marker-cluster-report div {
@@ -177,7 +195,7 @@ function buildMapHtml(
         height: 34px;
         margin-left: 2px;
         margin-top: 2px;
-        background: linear-gradient(145deg, #FF8A8A, #F04444);
+        background: #B33443;
         color: #FFFFFF;
         font: 700 13px/34px system-ui, sans-serif;
         border-radius: 50%;
@@ -241,6 +259,26 @@ function buildMapHtml(
 
       .leaflet-popup-content {
         margin: 10px;
+      }
+
+      .user-location-marker {
+        width: 30px;
+        height: 30px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        background: rgba(47, 103, 171, 0.13);
+      }
+
+      .user-location-marker::after {
+        content: '';
+        width: 11px;
+        height: 11px;
+        border-radius: 50%;
+        background: #2F67AB;
+        border: 2.5px solid #FFFFFF;
+        box-shadow: 0 2px 7px rgba(32, 72, 125, 0.4);
       }
     </style>
   </head>
@@ -336,24 +374,38 @@ function buildMapHtml(
         className: 'report-pin-wrap',
         html:
           '<div class="report-pin">' +
-            '<div class="report-pin-bubble"></div>' +
-            '<div class="report-pin-dot"></div>' +
-            '<div class="report-pin-tail"></div>' +
+            '<div class="report-pin-core">' +
+              '<svg viewBox="0 0 24 24" aria-hidden="true">' +
+                '<path d="M12 3.4 21 20H3L12 3.4Z" fill="#FFFFFF"/>' +
+                '<path d="M12 8v6" stroke="#B33443" stroke-width="2.2" stroke-linecap="round"/>' +
+                '<circle cx="12" cy="17.2" r="1.25" fill="#B33443"/>' +
+              '</svg>' +
+            '</div>' +
           '</div>',
-        iconSize: [30, 38],
-        iconAnchor: [15, 38],
-        popupAnchor: [0, -34]
+        iconSize: [46, 46],
+        iconAnchor: [23, 23],
+        popupAnchor: [0, -25]
       });
 
       function resourceIcon(kind, isPriority) {
         var extra = kind === 'evacuation' && isPriority ? ' priority' : '';
+        var icon = kind === 'facility'
+          ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 6v12M6 12h12" stroke="#FFFFFF" stroke-width="2.7" stroke-linecap="round"/></svg>'
+          : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 11 8-6 8 6v8H4v-8Z" fill="#FFFFFF"/><path d="M10 19v-5h4v5" fill="#3F7B6C"/></svg>';
         return L.divIcon({
           className: 'resource-pin-wrap',
-          html: '<div class="resource-pin ' + kind + extra + '"></div>',
-          iconSize: [28, 28],
-          iconAnchor: [14, 14]
+          html: '<div class="resource-pin ' + kind + extra + '">' + icon + '</div>',
+          iconSize: [32, 32],
+          iconAnchor: [16, 16]
         });
       }
+
+      var userLocationIcon = L.divIcon({
+        className: 'resource-pin-wrap',
+        html: '<div class="user-location-marker"></div>',
+        iconSize: [30, 30],
+        iconAnchor: [15, 15]
+      });
 
       // Animations stay off: leaflet.markercluster throws internally when
       // layers are cleared/re-added while a zoom animation is running, which
@@ -376,6 +428,7 @@ function buildMapHtml(
       }).addTo(map);
 
       var resourceGroup = L.layerGroup().addTo(map);
+      var userLocationGroup = L.layerGroup().addTo(map);
       var reportMarkersById = {};
 
       function postSelection(reportIds) {
@@ -499,6 +552,16 @@ function buildMapHtml(
         });
       };
 
+      window.setUserLocation = function(location) {
+        userLocationGroup.clearLayers();
+        if (!location || typeof location.latitude !== 'number' || typeof location.longitude !== 'number') return;
+        L.marker([location.latitude, location.longitude], {
+          icon: userLocationIcon,
+          interactive: false,
+          zIndexOffset: 900
+        }).addTo(userLocationGroup);
+      };
+
       window.focusReport = function(target) {
         if (!target || typeof target.latitude !== 'number' || typeof target.longitude !== 'number') return;
         var signature = focusSignature(target);
@@ -507,7 +570,7 @@ function buildMapHtml(
         if (pointerCount > 0 && sameTarget) return;
         if (stickyFocus && sameTarget) return;
         lastFocusSignature = signature;
-        map.setView([target.latitude, target.longitude], 16, { animate: true });
+        map.setView([target.latitude, target.longitude], ${focusZoomLevel}, { animate: true });
         var marker = reportMarkersById[target.reportId];
         if (marker && marker.getPopup()) {
           window.setTimeout(function() { marker.openPopup(); }, 150);
@@ -524,6 +587,10 @@ function buildMapHtml(
       if (window.__pendingResourceMarkers) {
         window.setResourceMarkers(window.__pendingResourceMarkers);
         window.__pendingResourceMarkers = null;
+      }
+      if (window.__pendingUserLocation) {
+        window.setUserLocation(window.__pendingUserLocation);
+        window.__pendingUserLocation = null;
       }
       if (window.__pendingFocusTarget) {
         window.focusReport(window.__pendingFocusTarget);
@@ -577,6 +644,18 @@ function resourcesToInjectScript(resources: MapResourceMarker[]): string {
   })(); true;`;
 }
 
+function userLocationToInjectScript(location: MapUserLocation | null): string {
+  const json = JSON.stringify(location).replace(/</g, '\\u003c');
+  return `(function() {
+    var location = ${json};
+    if (window.setUserLocation) {
+      window.setUserLocation(location);
+    } else {
+      window.__pendingUserLocation = location;
+    }
+  })(); true;`;
+}
+
 function focusSignature(target: MapFocusTarget | null | undefined): string {
   if (!target) return '';
   return `${target.reportId ?? ''}|${target.resourceId ?? ''}|${target.latitude}|${target.longitude}`;
@@ -610,6 +689,9 @@ export default function InteractiveMap({
   showLayerFilters = false,
   layerFiltersTopInset = spacing.md,
   compactLayerFilters = false,
+  showSearchBar = false,
+  searchBarTopInset = spacing.md,
+  userLocation = null,
   onLayerVisibilityChange,
   onReportSelection,
   showReportDetailsPopup = false,
@@ -621,11 +703,14 @@ export default function InteractiveMap({
   showMapDetails = true,
   tone = 'light',
   onGestureActiveChange,
+  focusZoomLevel = 16,
   stickyFocus = false,
 }: Props) {
   const webRef = useRef<WebView>(null);
   const initialShowMapDetailsRef = useRef(showMapDetails);
   const lastFocusSignatureRef = useRef('');
+  // Leaflet supports a wider range, but the app's tile sources are configured for levels 1-19.
+  const safeFocusZoomLevel = Math.min(19, Math.max(1, Math.round(focusZoomLevel)));
   const html = useMemo(
     () =>
       buildMapHtml(
@@ -634,10 +719,14 @@ export default function InteractiveMap({
         pulseReportClusters,
         initialShowMapDetailsRef.current,
         stickyFocus,
+        safeFocusZoomLevel,
       ),
-    [pulseReportClusters, showZoomControls, stickyFocus, tone],
+    [pulseReportClusters, safeFocusZoomLevel, showZoomControls, stickyFocus, tone],
   );
   const readyRef = useRef(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchFocused, setSearchFocused] = useState(false);
+  const [layerPanelVisible, setLayerPanelVisible] = useState(showLayerFilters);
 
   useEffect(() => {
     lastFocusSignatureRef.current = '';
@@ -669,6 +758,11 @@ export default function InteractiveMap({
     );
     webRef.current.injectJavaScript(resourcesToInjectScript(visibleResources));
   }, [visibleReports, visibleResources, showReportDetailsPopup]);
+
+  useEffect(() => {
+    if (!readyRef.current || !webRef.current) return;
+    webRef.current.injectJavaScript(userLocationToInjectScript(userLocation));
+  }, [userLocation]);
 
   useEffect(() => {
     if (!focusTarget || !readyRef.current || !webRef.current) return;
@@ -724,6 +818,73 @@ export default function InteractiveMap({
     });
   }
 
+  const normalizedSearchQuery = searchQuery.trim().toLocaleLowerCase();
+  const searchResults = useMemo(() => {
+    if (normalizedSearchQuery.length < 2) return [];
+
+    const reportResults = markers
+      .filter((report) =>
+        `${report.title} ${report.description} ${report.addressText ?? ''}`
+          .toLocaleLowerCase()
+          .includes(normalizedSearchQuery),
+      )
+      .slice(0, 4)
+      .map((report) => ({
+        id: report.id,
+        kind: 'report' as const,
+        title: report.title || 'Untitled report',
+        subtitle: report.addressText || 'Community report',
+        latitude: report.latitude,
+        longitude: report.longitude,
+      }));
+
+    const resourceResults = [...facilities, ...evacuationCenters]
+      .filter((resource) =>
+        `${resource.name} ${resource.subtitle ?? ''}`
+          .toLocaleLowerCase()
+          .includes(normalizedSearchQuery),
+      )
+      .slice(0, 4)
+      .map((resource) => ({
+        id: resource.id,
+        kind: resource.kind,
+        title: resource.name,
+        subtitle: resource.subtitle || (resource.kind === 'facility' ? 'Facility' : 'Evacuation center'),
+        latitude: resource.latitude,
+        longitude: resource.longitude,
+        resource,
+      }));
+
+    return [...reportResults, ...resourceResults].slice(0, 6);
+  }, [evacuationCenters, facilities, markers, normalizedSearchQuery]);
+
+  function selectSearchResult(result: (typeof searchResults)[number]) {
+    Keyboard.dismiss();
+    setSearchFocused(false);
+    setSearchQuery(result.title);
+    if (result.kind === 'report') {
+      onReportSelection?.([result.id]);
+      webRef.current?.injectJavaScript(
+        focusToInjectScript({
+          reportId: result.id,
+          latitude: result.latitude,
+          longitude: result.longitude,
+        }),
+      );
+      return;
+    }
+
+    if (!('resource' in result)) return;
+    onResourceSelection?.(result.resource);
+    webRef.current?.injectJavaScript(
+      focusToInjectScript({
+        resourceId: result.id,
+        latitude: result.latitude,
+        longitude: result.longitude,
+      }),
+    );
+  }
+
   return (
     <View
       style={mapStyles.container}
@@ -747,6 +908,7 @@ export default function InteractiveMap({
             markersToInjectScript(visibleReports, showReportDetailsPopup),
           );
           webRef.current?.injectJavaScript(resourcesToInjectScript(visibleResources));
+          webRef.current?.injectJavaScript(userLocationToInjectScript(userLocation));
           webRef.current?.injectJavaScript(mapDetailsToInjectScript(showMapDetails));
           if (focusTarget) {
             lastFocusSignatureRef.current = focusSignature(focusTarget);
@@ -762,7 +924,85 @@ export default function InteractiveMap({
         startInLoadingState={false}
       />
 
-      {showLayerFilters ? (
+      {showSearchBar ? (
+        <View style={[mapStyles.searchOverlay, { top: searchBarTopInset }]} pointerEvents="box-none">
+          <View style={mapStyles.searchBar}>
+            <Ionicons name="search-outline" size={22} color={colors.navigationActive} />
+            <TextInput
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              onFocus={() => setSearchFocused(true)}
+              placeholder="Search reports or places"
+              placeholderTextColor="#75819A"
+              style={mapStyles.searchInput}
+              returnKeyType="search"
+              autoCorrect={false}
+              onSubmitEditing={() => {
+                const firstResult = searchResults[0];
+                if (firstResult) selectSearchResult(firstResult);
+              }}
+              accessibilityLabel="Search reports or places"
+            />
+            {searchQuery ? (
+              <Pressable
+                style={mapStyles.searchAction}
+                onPress={() => setSearchQuery('')}
+                accessibilityRole="button"
+                accessibilityLabel="Clear map search"
+              >
+                <Ionicons name="close" size={19} color={colors.textMuted} />
+              </Pressable>
+            ) : null}
+            <Pressable
+              style={mapStyles.searchAction}
+              onPress={() => setLayerPanelVisible((current) => !current)}
+              accessibilityRole="button"
+              accessibilityLabel="Show or hide map layers"
+              accessibilityState={{ expanded: layerPanelVisible }}
+            >
+              <Ionicons name="options-outline" size={22} color={colors.navigationActive} />
+            </Pressable>
+          </View>
+
+          {searchFocused && normalizedSearchQuery.length >= 2 ? (
+            <View style={mapStyles.searchResults}>
+              {searchResults.length > 0 ? (
+                <ScrollView keyboardShouldPersistTaps="handled" style={mapStyles.searchResultsScroll}>
+                  {searchResults.map((result) => (
+                    <Pressable
+                      key={`${result.kind}-${result.id}`}
+                      style={mapStyles.searchResultRow}
+                      onPress={() => selectSearchResult(result)}
+                    >
+                      <View style={mapStyles.searchResultIcon}>
+                        <Ionicons
+                          name={
+                            result.kind === 'report'
+                              ? 'warning-outline'
+                              : result.kind === 'facility'
+                                ? 'medical-outline'
+                                : 'home-outline'
+                          }
+                          size={17}
+                          color={colors.navigationActive}
+                        />
+                      </View>
+                      <View style={mapStyles.searchResultCopy}>
+                        <Text style={mapStyles.searchResultTitle} numberOfLines={1}>{result.title}</Text>
+                        <Text style={mapStyles.searchResultSubtitle} numberOfLines={1}>{result.subtitle}</Text>
+                      </View>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              ) : (
+                <Text style={mapStyles.searchEmptyText}>No matching reports or places</Text>
+              )}
+            </View>
+          ) : null}
+        </View>
+      ) : null}
+
+      {showLayerFilters && layerPanelVisible ? (
         <View
           style={[
             mapStyles.legend,
@@ -781,15 +1021,19 @@ export default function InteractiveMap({
             accessibilityRole="button"
             accessibilityLabel="Toggle reports layer"
           >
-            <View
+            <Ionicons name="warning-outline" size={compactLayerFilters ? 18 : 20} color={colors.navigationActive} />
+            <Text
               style={[
-                mapStyles.legendDot,
-                { backgroundColor: layerVisibility.reports ? '#F04444' : '#9CA3AF' },
+                mapStyles.legendText,
+                compactLayerFilters && mapStyles.legendTextCompact,
+                tone === 'dark' && !showSearchBar && mapStyles.legendTextDark,
               ]}
-            />
-            <Text style={[mapStyles.legendText, tone === 'dark' && mapStyles.legendTextDark]}>
+            >
               Reports
             </Text>
+            <View style={[mapStyles.layerSwitch, layerVisibility.reports && mapStyles.layerSwitchActive]}>
+              <View style={[mapStyles.layerSwitchThumb, layerVisibility.reports && mapStyles.layerSwitchThumbActive]} />
+            </View>
           </Pressable>
           <Pressable
             style={[
@@ -801,15 +1045,19 @@ export default function InteractiveMap({
             accessibilityRole="button"
             accessibilityLabel="Toggle facilities layer"
           >
-            <View
+            <Ionicons name="medical-outline" size={compactLayerFilters ? 18 : 20} color={colors.navigationActive} />
+            <Text
               style={[
-                mapStyles.legendDot,
-                { backgroundColor: layerVisibility.facilities ? '#1A56DB' : '#9CA3AF' },
+                mapStyles.legendText,
+                compactLayerFilters && mapStyles.legendTextCompact,
+                tone === 'dark' && !showSearchBar && mapStyles.legendTextDark,
               ]}
-            />
-            <Text style={[mapStyles.legendText, tone === 'dark' && mapStyles.legendTextDark]}>
+            >
               Facilities
             </Text>
+            <View style={[mapStyles.layerSwitch, layerVisibility.facilities && mapStyles.layerSwitchActive]}>
+              <View style={[mapStyles.layerSwitchThumb, layerVisibility.facilities && mapStyles.layerSwitchThumbActive]} />
+            </View>
           </Pressable>
           <Pressable
             style={[
@@ -821,25 +1069,25 @@ export default function InteractiveMap({
             accessibilityRole="button"
             accessibilityLabel="Toggle evacuation centers layer"
           >
-            <View
+            <Ionicons name="home-outline" size={compactLayerFilters ? 18 : 20} color={colors.navigationActive} />
+            <Text
               style={[
-                mapStyles.legendDot,
-                {
-                  backgroundColor: layerVisibility.evacuationCenters
-                    ? '#16A34A'
-                    : '#9CA3AF',
-                },
+                mapStyles.legendText,
+                compactLayerFilters && mapStyles.legendTextCompact,
+                tone === 'dark' && !showSearchBar && mapStyles.legendTextDark,
               ]}
-            />
-            <Text style={[mapStyles.legendText, tone === 'dark' && mapStyles.legendTextDark]}>
+            >
               Evacuation centers
             </Text>
+            <View style={[mapStyles.layerSwitch, layerVisibility.evacuationCenters && mapStyles.layerSwitchActive]}>
+              <View style={[mapStyles.layerSwitchThumb, layerVisibility.evacuationCenters && mapStyles.layerSwitchThumbActive]} />
+            </View>
           </Pressable>
           <Text
             style={[
               mapStyles.legendHint,
               compactLayerFilters && mapStyles.legendHintCompact,
-              tone === 'dark' && mapStyles.legendHintDark,
+              tone === 'dark' && !showSearchBar && mapStyles.legendHintDark,
             ]}
           >
             Tap a layer to show or hide
@@ -874,23 +1122,34 @@ const mapStyles = StyleSheet.create({
     position: 'absolute',
     left: spacing.md,
     alignItems: 'flex-start',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.sm,
+    width: 190,
+    gap: spacing.xs,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255, 255, 255, 0.96)',
+    shadowColor: '#1C2B4B',
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.13,
+    shadowRadius: 14,
+    elevation: 7,
   },
   legendCompact: {
+    width: 160,
     gap: 2,
-    paddingVertical: 2,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
   },
   legendRow: {
     minHeight: 25,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 9,
+    width: '100%',
   },
   legendRowCompact: {
-    minHeight: 22,
-    gap: spacing.sm,
+    minHeight: 28,
+    gap: 7,
   },
   legendRowInactive: {
     opacity: 0.65,
@@ -900,10 +1159,20 @@ const mapStyles = StyleSheet.create({
     height: 10,
     borderRadius: 5,
   },
+  legendDotCompact: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+  },
   legendText: {
+    flex: 1,
     fontFamily: fonts.medium,
     fontSize: 14,
     color: colors.text,
+  },
+  legendTextCompact: {
+    fontSize: 10,
+    lineHeight: 13,
   },
   legendTextDark: {
     color: colors.white,
@@ -912,12 +1181,125 @@ const mapStyles = StyleSheet.create({
     marginTop: 2,
     fontFamily: fonts.regular,
     fontSize: 11,
-    color: colors.primary,
+    color: colors.textMuted,
   },
   legendHintCompact: {
-    marginTop: 0,
+    marginTop: 3,
+    fontSize: 9,
+    lineHeight: 11,
   },
   legendHintDark: {
     color: '#FCA5A5',
+  },
+  layerSwitch: {
+    width: 30,
+    height: 18,
+    padding: 2,
+    justifyContent: 'center',
+    borderRadius: 9,
+    backgroundColor: '#C8CDD7',
+  },
+  layerSwitchActive: {
+    backgroundColor: colors.navigationActive,
+  },
+  layerSwitchThumb: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: colors.white,
+  },
+  layerSwitchThumbActive: {
+    alignSelf: 'flex-end',
+  },
+  searchOverlay: {
+    position: 'absolute',
+    left: 20,
+    right: 20,
+    zIndex: 20,
+  },
+  searchBar: {
+    minHeight: 52,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingLeft: 16,
+    paddingRight: 8,
+    borderRadius: 26,
+    backgroundColor: 'rgba(255, 255, 255, 0.97)',
+    shadowColor: '#1C2B4B',
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.14,
+    shadowRadius: 14,
+    elevation: 8,
+  },
+  searchInput: {
+    flex: 1,
+    minWidth: 0,
+    height: 48,
+    paddingHorizontal: 12,
+    fontFamily: fonts.regular,
+    fontSize: 13,
+    color: colors.text,
+  },
+  searchAction: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 18,
+  },
+  searchResults: {
+    marginTop: spacing.sm,
+    maxHeight: 252,
+    overflow: 'hidden',
+    borderRadius: 18,
+    backgroundColor: colors.white,
+    shadowColor: '#1C2B4B',
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.14,
+    shadowRadius: 14,
+    elevation: 8,
+  },
+  searchResultsScroll: {
+    flexGrow: 0,
+  },
+  searchResultRow: {
+    minHeight: 58,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  searchResultIcon: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 16,
+    backgroundColor: colors.primaryLight,
+  },
+  searchResultCopy: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
+  },
+  searchResultTitle: {
+    fontFamily: fonts.semibold,
+    fontSize: 12,
+    color: colors.text,
+  },
+  searchResultSubtitle: {
+    fontFamily: fonts.regular,
+    fontSize: 10,
+    color: colors.textMuted,
+  },
+  searchEmptyText: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.lg,
+    fontFamily: fonts.regular,
+    fontSize: 12,
+    textAlign: 'center',
+    color: colors.textMuted,
   },
 });

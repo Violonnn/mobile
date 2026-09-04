@@ -21,10 +21,6 @@ import { ReportDetailCard } from '../../components/report/ReportDetailCard';
 import { ReportEngagementProvider } from '../../components/report/ReportEngagementProvider';
 import { useAnnouncements } from '../../hooks/useAnnouncements';
 import { useReports } from '../../hooks/useReports';
-import {
-  loadReadAnnouncementIds,
-  saveReadAnnouncementIds,
-} from '../../lib/announcementReadState';
 import type { AnnouncementRecord } from '../../lib/announcements';
 import { fetchBarangays } from '../../lib/barangays';
 import { fetchMyProfile } from '../../lib/profile';
@@ -39,9 +35,9 @@ import { feedStyles as styles } from '../../styles/screens/feed.styles';
 import { colors } from '../../styles/theme';
 
 type FeedTab = 'official' | 'community';
-type CommunitySort = 'relevant' | 'latest' | 'distance';
+type FeedOrder = 'latest' | 'oldest';
 type OfficialFilter = 'all' | 'municipal' | 'barangay';
-type ReportStatusFilter = 'all' | 'active' | 'resolved';
+type ReportStatusFilter = 'all' | 'active' | 'verified' | 'resolved';
 
 const NEARBY_RADIUS_METERS = 5_000;
 
@@ -67,6 +63,16 @@ function matchesAnnouncementSearch(
   ).includes(searchQuery);
 }
 
+function getAnnouncementOfficeLabel(
+  announcement: AnnouncementRecord,
+  municipality: string,
+  barangay: string,
+): string {
+  if (announcement.author.roleLabel === 'MDRRMO') return `MDRRMO ${municipality}`;
+  if (announcement.author.roleLabel === 'BDRRMO') return `BDRRMO ${barangay}`;
+  return announcement.author.roleLabel;
+}
+
 export default function FeedScreen() {
   const insets = useSafeAreaInsets();
   const { reports, error: reportsError, loading: reportsLoading, reload } = useReports({
@@ -88,10 +94,10 @@ export default function FeedScreen() {
   const [searchVisible, setSearchVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterVisible, setFilterVisible] = useState(false);
-  const [communitySort, setCommunitySort] = useState<CommunitySort>('relevant');
+  const [communityOrder, setCommunityOrder] = useState<FeedOrder>('latest');
   const [statusFilter, setStatusFilter] = useState<ReportStatusFilter>('all');
   const [officialFilter, setOfficialFilter] = useState<OfficialFilter>('all');
-  const [readAnnouncementIds, setReadAnnouncementIds] = useState<Set<string>>(new Set());
+  const [officialOrder, setOfficialOrder] = useState<FeedOrder>('latest');
   const [refreshing, setRefreshing] = useState(false);
 
   useFocusEffect(
@@ -99,10 +105,9 @@ export default function FeedScreen() {
       let cancelled = false;
 
       // Profile edits must immediately update the feed's location scope.
-      void Promise.all([fetchMyProfile(), fetchBarangays(), loadReadAnnouncementIds()])
-        .then(([profileResult, barangayResult, storedReadIds]) => {
+      void Promise.all([fetchMyProfile(), fetchBarangays()])
+        .then(([profileResult, barangayResult]) => {
           if (cancelled) return;
-          setReadAnnouncementIds(storedReadIds);
 
           const profile = profileResult.profile;
           if (!profile) {
@@ -155,6 +160,7 @@ export default function FeedScreen() {
     const filteredReports = scopedReports.filter((report) => {
       if (!matchesReportSearch(report, normalizedQuery)) return false;
       if (statusFilter === 'active') return report.status !== 'resolved';
+      if (statusFilter === 'verified') return report.status === 'verified';
       if (statusFilter === 'resolved') return report.status === 'resolved';
       return true;
     });
@@ -165,22 +171,11 @@ export default function FeedScreen() {
     }));
 
     return withDistance.sort((first, second) => {
-      if (communitySort === 'distance') {
-        return (first.distance ?? Number.MAX_SAFE_INTEGER) -
-          (second.distance ?? Number.MAX_SAFE_INTEGER);
-      }
-      if (communitySort === 'latest') {
-        return new Date(second.report.created_at).getTime() -
-          new Date(first.report.created_at).getTime();
-      }
-
-      const firstScore = first.report.upvoteCount + first.report.commentCount;
-      const secondScore = second.report.upvoteCount + second.report.commentCount;
-      if (firstScore !== secondScore) return secondScore - firstScore;
-      return new Date(second.report.created_at).getTime() -
-        new Date(first.report.created_at).getTime();
+      const firstTime = new Date(first.report.created_at).getTime();
+      const secondTime = new Date(second.report.created_at).getTime();
+      return communityOrder === 'latest' ? secondTime - firstTime : firstTime - secondTime;
     });
-  }, [barangay, barangayCenter, barangayId, communitySort, normalizedQuery, reports, statusFilter]);
+  }, [barangay, barangayCenter, barangayId, communityOrder, normalizedQuery, reports, statusFilter]);
 
   const filteredAnnouncements = useMemo(() => {
     return announcements
@@ -190,28 +185,12 @@ export default function FeedScreen() {
         if (officialFilter === 'barangay') return announcement.scope === 'barangay';
         return true;
       })
-      .sort(
-        (first, second) =>
-          new Date(second.createdAt).getTime() - new Date(first.createdAt).getTime(),
-      );
-  }, [announcements, normalizedQuery, officialFilter]);
-
-  const markAnnouncementRead = useCallback((announcementId: string) => {
-    setReadAnnouncementIds((current) => {
-      if (current.has(announcementId)) return current;
-      const next = new Set(current);
-      next.add(announcementId);
-      void saveReadAnnouncementIds(next);
-      return next;
-    });
-  }, []);
-
-  const markAllAnnouncementsRead = () => {
-    const next = new Set(readAnnouncementIds);
-    announcements.forEach((announcement) => next.add(announcement.id));
-    setReadAnnouncementIds(next);
-    void saveReadAnnouncementIds(next);
-  };
+      .sort((first, second) => {
+        const firstTime = new Date(first.createdAt).getTime();
+        const secondTime = new Date(second.createdAt).getTime();
+        return officialOrder === 'latest' ? secondTime - firstTime : firstTime - secondTime;
+      });
+  }, [announcements, normalizedQuery, officialFilter, officialOrder]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -236,7 +215,10 @@ export default function FeedScreen() {
             <View style={styles.headerInner}>
               <View>
                 <Text style={styles.title}>Community</Text>
-                <Text style={styles.municipality}>{municipality}</Text>
+                <View style={styles.communityLocationRow}>
+                  <Ionicons name="location-sharp" size={14} color={colors.textMuted} />
+                  <Text style={styles.communityEyebrow}>{municipality}</Text>
+                </View>
               </View>
               <View style={styles.headerActions}>
                 <TouchableOpacity
@@ -334,13 +316,6 @@ export default function FeedScreen() {
               </View>
             ) : activeTab === 'community' ? (
               <View style={styles.contentInner}>
-                <View style={styles.sectionHeadingRow}>
-                  <View style={styles.sectionHeadingCopy}>
-                    <Text style={styles.sectionTitle}>Reports near you</Text>
-                    <Text style={styles.sectionSubtitle}>Within 5 km of {barangay}</Text>
-                  </View>
-                </View>
-
                 {nearbyReports.length === 0 ? (
                   <View style={styles.stateBlockCompact}>
                     <Ionicons name="location-outline" size={27} color={colors.textMuted} />
@@ -351,10 +326,11 @@ export default function FeedScreen() {
                   </View>
                 ) : (
                   <View style={styles.reportList}>
-                    {nearbyReports.map(({ report, distance }) => (
+                    {nearbyReports.map(({ report, distance }, reportIndex) => (
                       <ReportDetailCard
                         key={report.id}
                         report={report}
+                        isLast={reportIndex === nearbyReports.length - 1}
                         variant="residentFeed"
                         distanceLabel={distance == null ? undefined : formatDistance(distance)}
                       />
@@ -364,15 +340,6 @@ export default function FeedScreen() {
               </View>
             ) : (
               <View style={[styles.contentInner, styles.officialContentInner]}>
-                <View style={styles.latestRow}>
-                  <Text style={styles.latestLabel}>LATEST</Text>
-                  {filteredAnnouncements.length > 0 ? (
-                    <TouchableOpacity onPress={markAllAnnouncementsRead}>
-                      <Text style={styles.markAllText}>Mark all as read</Text>
-                    </TouchableOpacity>
-                  ) : null}
-                </View>
-
                 {filteredAnnouncements.length === 0 ? (
                   <View style={styles.stateBlockCompact}>
                     <Ionicons name="megaphone-outline" size={27} color={colors.textMuted} />
@@ -382,32 +349,25 @@ export default function FeedScreen() {
                     </Text>
                   </View>
                 ) : (
-                  <>
-                    <OfficialAnnouncementPostCard
-                      announcement={filteredAnnouncements[0]}
-                      featuredSlides={filteredAnnouncements}
-                      variant="residentFeedFeatured"
-                      cardStyle={styles.featuredAnnouncementCard}
-                      isUnread={!readAnnouncementIds.has(filteredAnnouncements[0].id)}
-                      onOpened={markAnnouncementRead}
-                    />
-
-                    {filteredAnnouncements.length > 1 ? (
-                      <View style={styles.earlierSection}>
-                        <Text style={styles.latestLabel}>EARLIER</Text>
-                        {filteredAnnouncements.slice(1).map((announcement) => (
-                          <OfficialAnnouncementPostCard
-                            key={announcement.id}
-                            announcement={announcement}
-                            variant="residentFeedCompact"
-                            cardStyle={styles.compactAnnouncementCard}
-                            isUnread={!readAnnouncementIds.has(announcement.id)}
-                            onOpened={markAnnouncementRead}
-                          />
-                        ))}
-                      </View>
-                    ) : null}
-                  </>
+                  <View style={styles.officialPostList}>
+                    {filteredAnnouncements.map((announcement, announcementIndex) => (
+                      <OfficialAnnouncementPostCard
+                        key={announcement.id}
+                        announcement={announcement}
+                        variant="residentFeedPost"
+                        officeLabel={getAnnouncementOfficeLabel(
+                          announcement,
+                          municipality,
+                          barangay,
+                        )}
+                        cardStyle={
+                          announcementIndex === filteredAnnouncements.length - 1
+                            ? styles.feedPostLast
+                            : undefined
+                        }
+                      />
+                    ))}
+                  </View>
                 )}
               </View>
             )}
@@ -441,21 +401,21 @@ export default function FeedScreen() {
                   <>
                     <Text style={styles.filterLabel}>Sort by</Text>
                     <View style={styles.optionRow}>
-                      {(['relevant', 'latest', 'distance'] as CommunitySort[]).map((option) => (
+                      {(['latest', 'oldest'] as FeedOrder[]).map((option) => (
                         <TouchableOpacity
                           key={option}
-                          style={[styles.optionChip, communitySort === option && styles.optionChipActive]}
-                          onPress={() => setCommunitySort(option)}
+                          style={[styles.optionChip, communityOrder === option && styles.optionChipActive]}
+                          onPress={() => setCommunityOrder(option)}
                         >
-                          <Text style={[styles.optionText, communitySort === option && styles.optionTextActive]}>
-                            {option === 'distance' ? 'Nearest' : `${option[0].toUpperCase()}${option.slice(1)}`}
+                          <Text style={[styles.optionText, communityOrder === option && styles.optionTextActive]}>
+                            {`${option[0].toUpperCase()}${option.slice(1)}`}
                           </Text>
                         </TouchableOpacity>
                       ))}
                     </View>
                     <Text style={styles.filterLabel}>Status</Text>
                     <View style={styles.optionRow}>
-                      {(['all', 'active', 'resolved'] as ReportStatusFilter[]).map((option) => (
+                      {(['all', 'active', 'verified', 'resolved'] as ReportStatusFilter[]).map((option) => (
                         <TouchableOpacity
                           key={option}
                           style={[styles.optionChip, statusFilter === option && styles.optionChipActive]}
@@ -470,6 +430,20 @@ export default function FeedScreen() {
                   </>
                 ) : (
                   <>
+                    <Text style={styles.filterLabel}>Sort by</Text>
+                    <View style={styles.optionRow}>
+                      {(['latest', 'oldest'] as FeedOrder[]).map((option) => (
+                        <TouchableOpacity
+                          key={option}
+                          style={[styles.optionChip, officialOrder === option && styles.optionChipActive]}
+                          onPress={() => setOfficialOrder(option)}
+                        >
+                          <Text style={[styles.optionText, officialOrder === option && styles.optionTextActive]}>
+                            {`${option[0].toUpperCase()}${option.slice(1)}`}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
                     <Text style={styles.filterLabel}>Update scope</Text>
                     <View style={styles.optionRow}>
                       {(['all', 'municipal', 'barangay'] as OfficialFilter[]).map((option) => (
@@ -493,6 +467,7 @@ export default function FeedScreen() {
               </View>
             </View>
           </Modal>
+
         </View>
       </AnnouncementEngagementProvider>
     </ReportEngagementProvider>

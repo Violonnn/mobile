@@ -286,7 +286,7 @@ const splashStyles = StyleSheet.create({
   appName: {
     fontSize: 26,
     fontWeight: '800',
-    color: '#111827',
+    color: colors.text,
     letterSpacing: -0.8,
   },
   line: {

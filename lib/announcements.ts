@@ -7,6 +7,7 @@ import { getActiveSession } from './auth';
 import { readEdgeFunctionErrorMessage } from './edgeFunctionErrors';
 import { randomUuid } from './reportMedia';
 import { uploadAnnouncementMedia, validateAnnouncementMedia, type AnnouncementDraftMedia } from './announcementMedia';
+import { normalizeName } from './validation/name';
 
 export type AnnouncementScope = 'barangay' | 'municipal';
 
@@ -54,7 +55,7 @@ function asScope(value: unknown): AnnouncementScope {
 export function formatAnnouncementAuthorName(author: AnnouncementAuthor): string {
   const parts = [author.firstName, author.middleName, author.lastName]
     .filter((part) => part?.trim())
-    .map((part) => part!.trim());
+    .map((part) => normalizeName(part!));
   return parts.join(' ') || 'Official';
 }
 

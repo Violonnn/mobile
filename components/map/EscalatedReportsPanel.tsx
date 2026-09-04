@@ -108,7 +108,7 @@ export default function EscalatedReportsPanel({
                   accessibilityRole="button"
                   accessibilityLabel={`Locate escalated report: ${report.title}`}
                 >
-                  <View style={styles.statusRow}>
+                  <View style={styles.dateStatusRow}>
                     <Ionicons name="warning-outline" size={18} color={colors.danger} />
                     <Text style={[styles.statusText, { color: colors.danger }]}>Escalated</Text>
                     {isLatest ? <Text style={styles.latestBadge}>LATEST</Text> : null}

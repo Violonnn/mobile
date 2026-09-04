@@ -232,10 +232,6 @@ export default function ResidentFeedFeaturedHero({
       </View>
 
       <View style={styles.actionRow}>
-        <TouchableOpacity style={styles.actionButton} onPress={() => void shareAnnouncement()}>
-          <Ionicons name="paper-plane-outline" size={23} color={colors.text} />
-          <Text style={styles.actionText}>Share</Text>
-        </TouchableOpacity>
         <TouchableOpacity
           style={styles.actionButton}
           onPress={() => toggleUpvote(currentAnnouncement)}
@@ -250,6 +246,10 @@ export default function ResidentFeedFeaturedHero({
         <TouchableOpacity style={styles.actionButton} onPress={onRequestComments}>
           <Ionicons name="chatbubble-outline" size={22} color={colors.text} />
           <Text style={styles.actionText}>{commentCount} Comments</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.actionButton} onPress={() => void shareAnnouncement()}>
+          <Ionicons name="paper-plane-outline" size={23} color={colors.text} />
+          <Text style={styles.actionText}>Share</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -354,14 +354,14 @@ const styles = StyleSheet.create({
   },
   actionRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
+    gap: spacing.md,
     paddingHorizontal: spacing.md,
     paddingTop: spacing.xs,
     paddingBottom: spacing.md,
     backgroundColor: colors.white,
   },
   actionButton: {
-    flex: 1,
     minHeight: 40,
     flexDirection: 'row',
     alignItems: 'center',

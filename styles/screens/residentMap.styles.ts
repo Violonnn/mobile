@@ -18,6 +18,9 @@ export const residentMapStyles = StyleSheet.create({
     right: 0,
     bottom: 0,
     zIndex: 5,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    overflow: 'hidden',
   },
   errorBanner: {
     position: 'absolute',

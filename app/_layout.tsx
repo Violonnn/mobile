@@ -11,6 +11,7 @@ import {
   Sora_800ExtraBold,
 } from '@expo-google-fonts/sora';
 import { BarlowCondensed_600SemiBold } from '@expo-google-fonts/barlow-condensed';
+import { Inter_600SemiBold } from '@expo-google-fonts/inter';
 import { hideNativeSplashOnce } from '../lib/nativeSplash';
 import { colors } from '../styles/theme';
 
@@ -25,6 +26,7 @@ export default function RootLayout() {
     Sora_700Bold,
     Sora_800ExtraBold,
     BarlowCondensed_600SemiBold,
+    Inter_600SemiBold,
   });
 
   // Welcome (/) does a branded splash handoff itself.

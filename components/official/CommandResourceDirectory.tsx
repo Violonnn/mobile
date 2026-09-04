@@ -5,6 +5,7 @@ import { useRouter, type Href } from 'expo-router';
 import InteractiveMap, { type MapResourceMarker } from '../map/InteractiveMap';
 import type { EvacuationCenterRecord, FacilityRecord, HotlineRecord } from '../../lib/resources';
 import { mdrrmoCommandStyles as styles } from '../../styles/screens/mdrrmoCommand.styles';
+import { colors } from '../../styles/theme';
 import ResourceTypePickerSheet, { type ResourceCreateType } from './ResourceTypePickerSheet';
 
 type CommandResourceDirectoryProps = {
@@ -56,20 +57,21 @@ export default function CommandResourceDirectory({ hotlines, facilities, centers
         </View>
         <View style={styles.directoryMapOverlay} pointerEvents="box-none">
           <TouchableOpacity style={styles.addCircle} onPress={(event) => { event.stopPropagation(); setPickerVisible(true); }} accessibilityLabel="Add public resource">
-            <Ionicons name="add" size={28} color="#111827" />
+            <Ionicons name="add" size={28} color={colors.text} />
           </TouchableOpacity>
         </View>
         <View style={styles.directoryCounts}>
           {[
-            { label: 'Hotlines', value: hotlines.length, tab: 'hotlines' as const },
-            { label: 'Facilities', value: facilities.length, tab: 'facilities' as const },
-            { label: 'Centers', value: centers.length, tab: 'centers' as const },
+            { label: 'Hotlines', value: hotlines.length, tab: 'hotlines' as const, icon: 'call-outline' as const, color: '#F04438' },
+            { label: 'Facilities', value: facilities.length, tab: 'facilities' as const, icon: 'business-outline' as const, color: '#146EF5' },
+            { label: 'Centers', value: centers.length, tab: 'centers' as const, icon: 'home-outline' as const, color: '#169B55' },
           ].map((item, index) => (
             <TouchableOpacity
               key={item.label}
               style={[styles.directoryMetric, index === 2 && styles.directoryMetricLast]}
               onPress={(event) => { event.stopPropagation(); openDirectory(item.tab); }}
             >
+              <Ionicons name={item.icon} size={18} color={item.color} />
               <Text style={styles.directoryCount}>{String(item.value).padStart(2, '0')}</Text>
               <Text style={styles.directoryMetricLabel}>{item.label}</Text>
             </TouchableOpacity>

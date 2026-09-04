@@ -12,8 +12,8 @@ export const quickAccessModalStyles = StyleSheet.create({
     maxHeight: '78%',
     minHeight: 300,
     paddingHorizontal: spacing.lg,
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
     backgroundColor: '#FFFEFC',
   },
   handle: {

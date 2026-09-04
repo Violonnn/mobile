@@ -83,11 +83,17 @@ export function useReports({
       // Anything that affects the pin or the open detail card (not just counts)
       // warrants a full reload so media/location stay in sync.
       const nextAddress = next.address_text == null ? null : String(next.address_text);
+      const nextBarangayId = next.barangay_id == null ? null : String(next.barangay_id);
+      const nextLatitude = Number(next.latitude ?? existing.latitude);
+      const nextLongitude = Number(next.longitude ?? existing.longitude);
       const pinFieldsChanged =
         String(next.title ?? '') !== existing.title ||
         String(next.description ?? '') !== existing.description ||
         String(next.status ?? '') !== existing.status ||
-        nextAddress !== existing.addressText;
+        nextAddress !== existing.addressText ||
+        nextBarangayId !== existing.barangay_id ||
+        nextLatitude !== existing.latitude ||
+        nextLongitude !== existing.longitude;
       if (pinFieldsChanged) {
         void load();
         return;

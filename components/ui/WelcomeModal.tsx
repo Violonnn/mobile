@@ -9,7 +9,7 @@ import Animated, {
   Easing,
 } from 'react-native-reanimated';
 import { homeStyles as styles } from '../../styles/screens/home.styles';
-import { colors } from '../../styles/theme';
+import { colors, radius } from '../../styles/theme';
 
 const SUCCESS_IMAGE = require('../../assets/images/registered-success1.png');
 const AnimatedImage = Animated.createAnimatedComponent(Image);
@@ -114,7 +114,7 @@ export default function WelcomeModal({ visible, firstName, barangay, onDone }: P
 const modalStyles = StyleSheet.create({
   card: {
     backgroundColor: colors.white,
-    borderRadius: 24,
+    borderRadius: radius.md,
     paddingHorizontal: 28,
     paddingTop: 32,
     paddingBottom: 28,

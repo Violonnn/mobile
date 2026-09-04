@@ -96,6 +96,40 @@ export async function getCurrentGps(): Promise<{
 }
 
 /**
+ * Read a lightweight location for the map's blue position dot without opening
+ * a permission prompt. Reporting remains the flow that asks for GPS access.
+ */
+export async function getGrantedMapGps(): Promise<GpsPosition | null> {
+  try {
+    const permission = await Location.getForegroundPermissionsAsync();
+    if (!permission.granted) return null;
+
+    const lastKnown = await Location.getLastKnownPositionAsync({
+      maxAge: 120_000,
+      requiredAccuracy: 250,
+    });
+    const location =
+      lastKnown ??
+      (await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }));
+    const latitude = location.coords.latitude;
+    const longitude = location.coords.longitude;
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+
+    return {
+      latitude,
+      longitude,
+      accuracyMeters:
+        typeof location.coords.accuracy === 'number' &&
+        Number.isFinite(location.coords.accuracy)
+          ? location.coords.accuracy
+          : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Suggest a barangay from nearest centroids. The resident must still confirm
  * the barangay before submit — this is only a preselect/display helper.
  */

@@ -12,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { formatReportLocation, type MapReportMarker } from '../../lib/reports';
 import { contributionStyles as styles } from '../../styles/components/yourContributions.styles';
 import { colors } from '../../styles/theme';
+import { CollageCellContent } from '../report/ReportDetailCard';
 
 type ContributionDateGroup = {
   key: string;
@@ -112,6 +113,28 @@ function contributionStatus(report: MapReportMarker): {
   return { label: 'Under review', icon: 'time-outline', color: '#F05B4F' };
 }
 
+function ContributionMediaThumb({ report }: { report: MapReportMarker }) {
+  const firstMedia = report.media[0];
+  if (!firstMedia) return null;
+
+  const extraCount = report.media.length - 1;
+
+  return (
+    <View
+      style={styles.mediaThumb}
+      accessible={false}
+      importantForAccessibility="no-hide-descendants"
+    >
+      <CollageCellContent item={firstMedia} />
+      {extraCount > 0 ? (
+        <View style={styles.mediaMoreBadge}>
+          <Text style={styles.mediaMoreText}>{`+${extraCount} more`}</Text>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
 export default function YourContributionsPanel({
   reports,
   loading,
@@ -201,8 +224,6 @@ export default function YourContributionsPanel({
           <>
             {contributionGroups.map((group) => (
               <View key={group.key} style={styles.dateGroup}>
-                <Text style={styles.dateGroupTitle}>{group.label}</Text>
-
                 {group.reports.map((report) => {
                   const status = contributionStatus(report);
                   const isLatest = report.id === reports[0]?.id;
@@ -214,25 +235,42 @@ export default function YourContributionsPanel({
                       onPress={() => onReportPress(report)}
                       activeOpacity={0.82}
                       accessibilityRole="button"
-                      accessibilityLabel={`Open report: ${report.title}`}
+                      accessibilityLabel={
+                        report.media.length > 1
+                          ? `Open report: ${report.title}, ${report.media.length} attachments`
+                          : `Open report: ${report.title}`
+                      }
                     >
-                      <View style={styles.statusRow}>
-                        <Ionicons name={status.icon} size={18} color={status.color} />
-                        <Text style={[styles.statusText, { color: status.color }]}>
-                          {status.label}
-                        </Text>
-                        {isLatest ? <Text style={styles.latestBadge}>LATEST</Text> : null}
-                      </View>
+                      <View style={styles.cardMain}>
+                        <View style={styles.cardCopy}>
+                          <View style={styles.dateStatusRow}>
+                            <Text style={styles.dateGroupTitle}>{group.label}</Text>
+                            <Text style={styles.dateSeparator}>•</Text>
+                            {isLatest ? <Text style={styles.latestBadge}>LATEST</Text> : null}
+                            <View style={[styles.statusPill, { borderColor: status.color }]}>
+                              <Ionicons name={status.icon} size={13} color={status.color} />
+                              <Text style={[styles.statusText, { color: status.color }]}>
+                                {status.label}
+                              </Text>
+                            </View>
+                          </View>
 
-                      <Text style={[styles.reportTitle, isLatest && styles.latestReportTitle]}>
-                        {formatContributionTitle(report.title)}
-                      </Text>
-                      <Text style={styles.metadataText} numberOfLines={1}>
-                        {formatContributionTime(report.created_at)} | {formatReportLocation(report)}
-                      </Text>
-                      <Text style={styles.description} numberOfLines={isLatest ? 3 : 2}>
-                        {report.description || 'No description provided.'}
-                      </Text>
+                          <Text style={[styles.reportTitle, isLatest && styles.latestReportTitle]}>
+                            {formatContributionTitle(report.title)}
+                          </Text>
+                          <View style={styles.metadataRow}>
+                            <Ionicons name="location-outline" size={15} color={colors.textMuted} />
+                            <Text style={styles.metadataText} numberOfLines={1}>
+                              {formatContributionTime(report.created_at)} • {formatReportLocation(report)}
+                            </Text>
+                          </View>
+                          <Text style={styles.description} numberOfLines={isLatest ? 3 : 2}>
+                            {report.description || 'No description provided.'}
+                          </Text>
+                        </View>
+
+                        <ContributionMediaThumb report={report} />
+                      </View>
 
                       <View style={styles.cardFooter}>
                         <View style={styles.engagementSummary}>

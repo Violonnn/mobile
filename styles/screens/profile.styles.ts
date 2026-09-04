@@ -1,5 +1,5 @@
 import { StyleSheet } from 'react-native';
-import { colors, fonts, fontSizes, spacing } from '../theme';
+import { colors, fonts, fontSizes, radius, spacing } from '../theme';
 
 export const profileStyles = StyleSheet.create({
   container: {
@@ -16,7 +16,7 @@ export const profileStyles = StyleSheet.create({
     fontFamily: fonts.bold,
     fontSize: fontSizes.xxl,
     color: colors.text,
-    marginBottom: spacing.xl,
+    marginBottom: spacing.md,
   },
   loadingContainer: {
     minHeight: 320,
@@ -26,8 +26,8 @@ export const profileStyles = StyleSheet.create({
   identityRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.lg,
-    paddingBottom: spacing.lg,
+    gap: spacing.md,
+    paddingBottom: spacing.md,
   },
   avatar: {
     width: 92,
@@ -76,22 +76,22 @@ export const profileStyles = StyleSheet.create({
     marginHorizontal: -spacing.sm,
   },
   section: {
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.sm,
+    paddingTop: spacing.sm,
+    paddingBottom: 2,
   },
   sectionLabel: {
     fontFamily: fonts.medium,
     fontSize: fontSizes.sm,
     color: '#53617A',
     letterSpacing: 0.35,
-    marginBottom: spacing.sm,
+    marginBottom: 2,
   },
   settingsRow: {
-    minHeight: 92,
+    minHeight: 48,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    paddingVertical: spacing.md,
+    paddingVertical: 6,
   },
   rowCopy: {
     flex: 1,
@@ -99,33 +99,33 @@ export const profileStyles = StyleSheet.create({
   },
   rowTitle: {
     fontFamily: fonts.medium,
-    fontSize: 18,
+    fontSize: 16,
     color: colors.text,
   },
   rowSubtitle: {
-    marginTop: 6,
+    marginTop: 1,
     fontFamily: fonts.regular,
-    fontSize: fontSizes.md,
-    lineHeight: 21,
+    fontSize: fontSizes.sm,
+    lineHeight: 16,
     color: '#62708A',
   },
   rowValue: {
     maxWidth: '30%',
     fontFamily: fonts.regular,
-    fontSize: fontSizes.md,
+    fontSize: fontSizes.sm,
     color: '#62708A',
     textAlign: 'right',
   },
   logoutRow: {
-    minHeight: 104,
-    paddingVertical: spacing.lg,
+    minHeight: 52,
+    paddingVertical: spacing.sm,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
   },
   logoutTitle: {
     fontFamily: fonts.medium,
-    fontSize: 18,
+    fontSize: 16,
     color: colors.unverified,
   },
   errorCard: {
@@ -134,7 +134,7 @@ export const profileStyles = StyleSheet.create({
     gap: spacing.md,
     padding: spacing.lg,
     backgroundColor: '#F8FAFC',
-    borderRadius: 16,
+    borderRadius: radius.md,
   },
   errorText: {
     fontFamily: fonts.regular,

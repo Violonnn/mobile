@@ -214,8 +214,9 @@ export default function OfficialLoginScreen() {
 const localStyles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
-    justifyContent: 'center',
-    paddingTop: 48,
+    justifyContent: 'flex-start',
+    // Clear the back button (8 + 38) and leave a short gap above the seal.
+    paddingTop: 64,
     paddingBottom: 24,
   },
   sealWrap: {

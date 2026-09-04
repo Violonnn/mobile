@@ -16,6 +16,7 @@ import InteractiveMap, {
   type MapResourceMarker,
 } from '../../components/map/InteractiveMap';
 import ReportMapDetailSheet from '../../components/map/ReportMapDetailSheet';
+import ResidentReportPreviewSheet from '../../components/map/ResidentReportPreviewSheet';
 import ResourceMapDetailSheet from '../../components/map/ResourceMapDetailSheet';
 import YourContributionsPanel from '../../components/map/YourContributionsPanel';
 import { ReportEngagementProvider } from '../../components/report/ReportEngagementProvider';
@@ -23,6 +24,7 @@ import { useEvacuationCenters } from '../../hooks/useEvacuationCenters';
 import { useReports } from '../../hooks/useReports';
 import { useResources } from '../../hooks/useResources';
 import { getActiveSession } from '../../lib/auth';
+import { getGrantedMapGps, type GpsPosition } from '../../lib/location';
 import { getResidentMapTheme, type ResidentMapTheme } from '../../lib/mapPreferences';
 import type { MapReportMarker } from '../../lib/reports';
 import { evacuationStatusLabel, facilityTypeLabel } from '../../lib/resources';
@@ -50,9 +52,11 @@ export default function MapScreen() {
   const { centers } = useEvacuationCenters();
 
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [userLocation, setUserLocation] = useState<GpsPosition | null>(null);
   const [identityLoading, setIdentityLoading] = useState(true);
   const [mapTheme, setMapTheme] = useState<ResidentMapTheme>('light');
   const [selectedReportIds, setSelectedReportIds] = useState<string[]>([]);
+  const [fullReportVisible, setFullReportVisible] = useState(false);
   const [selectedResource, setSelectedResource] = useState<MapResourceMarker | null>(null);
   const [focusTarget, setFocusTarget] = useState<MapFocusTarget | null>(null);
   const [contributionsCollapsed, setContributionsCollapsed] = useState(false);
@@ -90,9 +94,13 @@ export default function MapScreen() {
     useCallback(() => {
       let active = true;
 
-      void getResidentMapTheme().then((storedTheme) => {
-        if (active) setMapTheme(storedTheme);
-      });
+      void Promise.all([getResidentMapTheme(), getGrantedMapGps()]).then(
+        ([storedTheme, grantedLocation]) => {
+          if (!active) return;
+          setMapTheme(storedTheme);
+          setUserLocation(grantedLocation);
+        },
+      );
 
       return () => {
         active = false;
@@ -112,6 +120,7 @@ export default function MapScreen() {
 
     handledRouteReportIdRef.current = requestedReportId;
     setSelectedResource(null);
+    setFullReportVisible(false);
     setSelectedReportIds([requestedReport.id]);
     setFocusTarget({
       reportId: requestedReport.id,
@@ -180,6 +189,7 @@ export default function MapScreen() {
 
     handledRouteResourceIdRef.current = requestedResourceId;
     setSelectedReportIds([]);
+    setFullReportVisible(false);
     setSelectedResource(requestedResource);
     setLayers((current) => ({
       ...current,
@@ -222,6 +232,7 @@ export default function MapScreen() {
   const openContribution = (report: MapReportMarker) => {
     setLayers((current) => ({ ...current, reports: true }));
     setSelectedResource(null);
+    setFullReportVisible(false);
     setSelectedReportIds([report.id]);
     setFocusTarget({
       reportId: report.id,
@@ -314,8 +325,11 @@ export default function MapScreen() {
             evacuationCenters={centerMarkers}
             layerVisibility={layers}
             showLayerFilters
+            showSearchBar
             compactLayerFilters
-            layerFiltersTopInset={insets.top + (error ? 70 : 24)}
+            searchBarTopInset={insets.top + 12}
+            layerFiltersTopInset={insets.top + (error ? 126 : 76)}
+            userLocation={userLocation}
             showZoomControls={false}
             showMapDetails={false}
             tone={mapTheme}
@@ -323,15 +337,17 @@ export default function MapScreen() {
             focusTarget={focusTarget}
             onReportSelection={(ids) => {
               setSelectedResource(null);
+              setFullReportVisible(false);
               setSelectedReportIds(ids);
             }}
             onResourceSelection={(resource) => {
               setSelectedReportIds([]);
+              setFullReportVisible(false);
               setSelectedResource(resource);
             }}
           />
           {error ? (
-            <View style={[styles.errorBanner, { top: insets.top + 8 }]} pointerEvents="none">
+            <View style={[styles.errorBanner, { top: insets.top + 70 }]} pointerEvents="none">
               <Text style={styles.errorText}>Map data could not fully refresh.</Text>
             </View>
           ) : null}
@@ -359,10 +375,23 @@ export default function MapScreen() {
           />
         </Animated.View>
 
+        <ResidentReportPreviewSheet
+          visible={selectedReports.length === 1 && !fullReportVisible}
+          report={selectedReports[0] ?? null}
+          onClose={() => {
+            setFullReportVisible(false);
+            setSelectedReportIds([]);
+          }}
+          onViewActivity={() => setFullReportVisible(true)}
+          onOpenFullReport={() => setFullReportVisible(true)}
+        />
         <ReportMapDetailSheet
-          visible={selectedReports.length > 0}
+          visible={selectedReports.length > 1 || fullReportVisible}
           reports={selectedReports}
-          onClose={() => setSelectedReportIds([])}
+          onClose={() => {
+            setFullReportVisible(false);
+            setSelectedReportIds([]);
+          }}
         />
         <ResourceMapDetailSheet
           visible={selectedResource != null}

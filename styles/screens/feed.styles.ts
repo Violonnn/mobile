@@ -23,15 +23,23 @@ export const feedStyles = StyleSheet.create({
     paddingBottom: spacing.xs,
   },
   title: {
-    fontFamily: fonts.bold,
-    fontSize: fontSizes.xxl,
-    lineHeight: 34,
+    fontFamily: fonts.semibold,
+    fontSize: 24,
+    lineHeight: 30,
+    letterSpacing: 0.8,
     color: colors.text,
   },
-  municipality: {
+  communityEyebrow: {
     fontFamily: fonts.regular,
-    fontSize: 18,
+    fontSize: fontSizes.md,
+    lineHeight: 18,
     color: colors.textMuted,
+  },
+  communityLocationRow: {
+    marginTop: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
   },
   headerActions: {
     flexDirection: 'row',
@@ -111,69 +119,19 @@ export const feedStyles = StyleSheet.create({
     maxWidth: 760,
     alignSelf: 'center',
     paddingHorizontal: 20,
-    paddingTop: spacing.xl,
+    paddingTop: spacing.md,
   },
-  // Match the LATEST row's gap above to the gap down to the featured image.
   officialContentInner: {
     paddingTop: spacing.md,
   },
-  sectionHeadingRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: spacing.md,
-    marginBottom: spacing.lg,
-  },
-  sectionHeadingCopy: {
-    flex: 1,
-    minWidth: 0,
-    gap: spacing.sm,
-  },
-  sectionTitle: {
-    fontFamily: fonts.bold,
-    fontSize: 21,
-    color: colors.text,
-  },
-  sectionSubtitle: {
-    fontFamily: fonts.regular,
-    fontSize: 16,
-    lineHeight: 23,
-    color: colors.textMuted,
-  },
   reportList: {
-    gap: spacing.lg,
+    gap: 0,
   },
-  latestRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.md,
+  officialPostList: {
+    gap: 0,
   },
-  latestLabel: {
-    fontFamily: fonts.medium,
-    fontSize: fontSizes.md,
-    letterSpacing: 0.7,
-    color: colors.textMuted,
-  },
-  markAllText: {
-    fontFamily: fonts.medium,
-    fontSize: fontSizes.lg,
-    color: colors.primary,
-  },
-  featuredAnnouncementCard: {
-    paddingVertical: 0,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.lg,
-    overflow: 'hidden',
-    backgroundColor: colors.white,
-  },
-  earlierSection: {
-    marginTop: spacing.lg,
-  },
-  compactAnnouncementCard: {
-    paddingVertical: 0,
-    backgroundColor: colors.white,
+  feedPostLast: {
+    borderBottomWidth: 0,
   },
   stateBlock: {
     flex: 1,
@@ -290,8 +248,8 @@ export const feedStyles = StyleSheet.create({
     backgroundColor: colors.white,
   },
   optionChipActive: {
-    borderColor: colors.primary,
-    backgroundColor: colors.primaryLight,
+    borderColor: colors.navigationActive,
+    backgroundColor: colors.navigationActive,
   },
   optionText: {
     fontFamily: fonts.medium,
@@ -299,14 +257,14 @@ export const feedStyles = StyleSheet.create({
     color: colors.textMuted,
   },
   optionTextActive: {
-    color: colors.primary,
+    color: colors.white,
   },
   applyButton: {
     minHeight: 52,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.lg,
-    backgroundColor: colors.primary,
+    backgroundColor: colors.navigationActive,
   },
   applyButtonText: {
     fontFamily: fonts.semibold,

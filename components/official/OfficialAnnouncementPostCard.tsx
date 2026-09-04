@@ -294,6 +294,169 @@ function ResidentFeedAnnouncementContent({
   );
 }
 
+function ResidentFeedOfficialPostContent({
+  announcement,
+  officeLabel,
+  onRequestExpand,
+  onRequestComments,
+}: {
+  announcement: AnnouncementRecord;
+  officeLabel: string;
+  onRequestExpand: () => void;
+  onRequestComments: () => void;
+}) {
+  const { getState, toggleUpvote } = useAnnouncementEngagement();
+  const { upvoteCount, commentCount, hasUpvoted } = getState(announcement);
+  const firstMedia = announcement.media[0]
+    ? toReportMedia(announcement.media[0])
+    : null;
+  const displayName = formatAnnouncementAuthorName(announcement.author);
+  const updateLabel =
+    announcement.scope === 'municipal' ? 'MUNICIPAL ADVISORY' : 'BARANGAY UPDATE';
+  const title = announcement.title.trim() || announcement.body.trim() || 'Official update';
+  const body = announcement.body.trim();
+
+  const shareAnnouncement = async () => {
+    try {
+      await Share.share({ message: `${title}\n${body}`, title });
+    } catch {
+      // Closing or unavailable native share sheets should not interrupt the feed.
+    }
+  };
+
+  return (
+    <View style={residentFeedOfficialStyles.content}>
+      <View style={residentFeedOfficialStyles.authorRow}>
+        <ReporterAvatar
+          reporter={{
+            id: announcement.author.id,
+            firstName: announcement.author.firstName,
+            lastName: announcement.author.lastName,
+            middleName: announcement.author.middleName,
+          }}
+          size={40}
+        />
+
+        <View style={residentFeedOfficialStyles.authorCopy}>
+          <View style={residentFeedOfficialStyles.nameDateRow}>
+            <View style={residentFeedOfficialStyles.posterNameRow}>
+              <Text style={residentFeedOfficialStyles.posterName} numberOfLines={1}>
+                {displayName}
+              </Text>
+              <Ionicons name="checkmark-circle" size={15} color={colors.primary} />
+            </View>
+            <Text style={residentFeedOfficialStyles.date} numberOfLines={1}>
+              {formatPublishedAt(announcement.createdAt)}
+            </Text>
+          </View>
+          <Text style={residentFeedOfficialStyles.officeLabel} numberOfLines={1}>
+            {officeLabel}
+          </Text>
+        </View>
+
+        <TouchableOpacity
+          style={residentFeedOfficialStyles.moreButton}
+          onPress={(event) => {
+            event.stopPropagation?.();
+            onRequestExpand();
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="Open announcement details"
+        >
+          <Ionicons name="ellipsis-horizontal" size={20} color={colors.textMuted} />
+        </TouchableOpacity>
+      </View>
+
+      <View style={residentFeedOfficialStyles.copyBlock}>
+        <Text style={residentFeedOfficialStyles.updateLabel}>{updateLabel}</Text>
+        <Text style={residentFeedOfficialStyles.title}>{title}</Text>
+        {body && body !== title ? (
+          <Text style={residentFeedOfficialStyles.body} numberOfLines={3}>
+            {body}
+          </Text>
+        ) : null}
+      </View>
+
+      {firstMedia ? (
+        <View style={residentFeedOfficialStyles.mediaFrame}>
+          <CollageCellContent item={firstMedia} />
+          {announcement.media.length > 1 ? (
+            <View style={residentFeedOfficialStyles.mediaCountBadge}>
+              <Text style={residentFeedOfficialStyles.mediaCountText}>
+                1 / {announcement.media.length}
+              </Text>
+            </View>
+          ) : null}
+        </View>
+      ) : null}
+
+      <View style={residentFeedOfficialStyles.actionRow}>
+        <TouchableOpacity
+          style={residentFeedOfficialStyles.readAction}
+          onPress={(event) => {
+            event.stopPropagation?.();
+            onRequestExpand();
+          }}
+        >
+          <Text style={residentFeedOfficialStyles.readActionText}>Read advisory</Text>
+          <Ionicons name="chevron-forward" size={18} color={colors.text} />
+        </TouchableOpacity>
+
+        <View style={residentFeedOfficialStyles.engagementActions}>
+          <TouchableOpacity
+            style={residentFeedOfficialStyles.iconAction}
+            onPress={(event) => {
+              event.stopPropagation?.();
+              toggleUpvote(announcement);
+            }}
+            accessibilityLabel={hasUpvoted ? 'Remove announcement upvote' : 'Upvote announcement'}
+            accessibilityState={{ selected: hasUpvoted }}
+          >
+            <Ionicons
+              name={hasUpvoted ? 'arrow-up-circle' : 'arrow-up-circle-outline'}
+              size={24}
+              color={hasUpvoted ? colors.primary : colors.text}
+            />
+            {upvoteCount > 0 ? (
+              <Text
+                style={[
+                  residentFeedOfficialStyles.actionCount,
+                  hasUpvoted && residentFeedOfficialStyles.actionCountActive,
+                ]}
+              >
+                {upvoteCount}
+              </Text>
+            ) : null}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={residentFeedOfficialStyles.iconAction}
+            onPress={(event) => {
+              event.stopPropagation?.();
+              onRequestComments();
+            }}
+            accessibilityLabel="View announcement comments"
+          >
+            <Ionicons name="chatbubble-outline" size={22} color={colors.text} />
+            <Text style={residentFeedOfficialStyles.actionCount}>{commentCount}</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={residentFeedOfficialStyles.iconAction}
+            onPress={(event) => {
+              event.stopPropagation?.();
+              void shareAnnouncement();
+            }}
+            accessibilityLabel="Share announcement"
+          >
+            <Ionicons name="arrow-redo-outline" size={24} color={colors.text} />
+          </TouchableOpacity>
+        </View>
+      </View>
+    </View>
+  );
+}
+
 /**
  * Full-width official feed post. This keeps the resident engagement language,
  * while giving officials clearer authorship, scope, and publishing context.
@@ -416,6 +579,7 @@ export default function OfficialAnnouncementPostCard({
   cardStyle,
   variant = 'default',
   isUnread = false,
+  officeLabel = '',
   onOpened,
 }: {
   announcement: AnnouncementRecord;
@@ -424,8 +588,9 @@ export default function OfficialAnnouncementPostCard({
   moderationMode?: 'none' | 'scoped';
   /** Lets horizontally scrolling resident cards keep the shared post layout. */
   cardStyle?: StyleProp<ViewStyle>;
-  variant?: 'default' | 'residentCompact' | 'residentFeedFeatured' | 'residentFeedCompact' | 'officialCommunity';
+  variant?: 'default' | 'residentCompact' | 'residentFeedFeatured' | 'residentFeedCompact' | 'residentFeedPost' | 'officialCommunity';
   isUnread?: boolean;
+  officeLabel?: string;
   onOpened?: (announcementId: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -518,6 +683,13 @@ export default function OfficialAnnouncementPostCard({
           <ResidentFeedAnnouncementContent
             announcement={announcement}
             isUnread={isUnread}
+          />
+        ) : variant === 'residentFeedPost' ? (
+          <ResidentFeedOfficialPostContent
+            announcement={announcement}
+            officeLabel={officeLabel || announcement.author.roleLabel}
+            onRequestExpand={() => openExpanded(false)}
+            onRequestComments={() => openExpanded(true)}
           />
         ) : variant === 'officialCommunity' ? (
           <OfficialCommunityAnnouncementContent
@@ -714,6 +886,139 @@ const residentStyles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.xs,
     paddingVertical: 2,
+  },
+});
+
+const residentFeedOfficialStyles = StyleSheet.create({
+  content: {
+    gap: spacing.sm,
+  },
+  authorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  authorCopy: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
+  },
+  nameDateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  posterNameRow: {
+    minWidth: 0,
+    maxWidth: '68%',
+    flexShrink: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  posterName: {
+    flexShrink: 1,
+    fontFamily: fonts.semibold,
+    fontSize: fontSizes.md,
+    color: colors.text,
+  },
+  date: {
+    flexShrink: 0,
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.xs,
+    color: colors.textMuted,
+  },
+  officeLabel: {
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.xs,
+    color: colors.textMuted,
+  },
+  moreButton: {
+    width: 32,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  copyBlock: {
+    gap: 3,
+  },
+  updateLabel: {
+    fontFamily: fonts.medium,
+    fontSize: fontSizes.xs,
+    letterSpacing: 0.65,
+    color: colors.textMuted,
+  },
+  title: {
+    fontFamily: fonts.bold,
+    fontSize: fontSizes.lg,
+    lineHeight: 22,
+    color: colors.text,
+  },
+  body: {
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.md,
+    lineHeight: 20,
+    color: colors.text,
+  },
+  mediaFrame: {
+    width: '100%',
+    aspectRatio: 1.9,
+    position: 'relative',
+    overflow: 'hidden',
+    borderRadius: radius.md,
+    backgroundColor: colors.background,
+  },
+  mediaCountBadge: {
+    position: 'absolute',
+    top: spacing.sm,
+    right: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 5,
+    borderRadius: radius.full,
+    backgroundColor: 'rgba(15, 32, 68, 0.82)',
+  },
+  mediaCountText: {
+    fontFamily: fonts.medium,
+    fontSize: fontSizes.xs,
+    color: colors.white,
+  },
+  actionRow: {
+    minHeight: 42,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  readAction: {
+    minHeight: 40,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  readActionText: {
+    fontFamily: fonts.semibold,
+    fontSize: 13,
+    color: colors.text,
+  },
+  engagementActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  iconAction: {
+    minWidth: 34,
+    minHeight: 40,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  actionCount: {
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.sm,
+    color: colors.text,
+  },
+  actionCountActive: {
+    color: colors.primary,
   },
 });
 

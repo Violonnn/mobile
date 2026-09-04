@@ -53,10 +53,10 @@ export function statusLabel(status: string): string {
 }
 
 function residentStatusLabel(status: string): string {
-  if (status === 'verified') return 'RECEIVED';
-  if (status === 'escalated') return 'ESCALATED';
-  if (status === 'resolved') return 'RESOLVED';
-  return 'UNDER REVIEW';
+  if (status === 'verified') return 'Verified';
+  if (status === 'escalated') return 'Escalated';
+  if (status === 'resolved') return 'Resolved';
+  return 'Under review';
 }
 
 export function statusStyle(status: string) {
@@ -264,22 +264,13 @@ export function EngagementActionsRow({
   onCommentPress?: () => void;
 }) {
   return (
-    <View style={[reportDetailStyles.engagementRow, compact && reportDetailStyles.engagementRowCompact]}>
-      {!hideShare ? (
-        <TouchableOpacity
-          style={reportDetailStyles.engagementButton}
-          activeOpacity={0.7}
-          onPress={(event) => event.stopPropagation?.()}
-          accessibilityRole="button"
-          accessibilityLabel="Share"
-        >
-          <Ionicons
-            name="paper-plane-outline"
-            size={compact ? 18 : 21}
-            color={colors.text}
-          />
-        </TouchableOpacity>
-      ) : null}
+    <View
+      style={[
+        reportDetailStyles.engagementRow,
+        !hideShare && reportDetailStyles.engagementRowThreeActions,
+        compact && reportDetailStyles.engagementRowCompact,
+      ]}
+    >
       <TouchableOpacity
         style={reportDetailStyles.engagementItem}
         activeOpacity={0.7}
@@ -332,6 +323,21 @@ export function EngagementActionsRow({
           <Text style={reportDetailStyles.engagementCount}>{commentCount}</Text>
         ) : null}
       </TouchableOpacity>
+      {!hideShare ? (
+        <TouchableOpacity
+          style={reportDetailStyles.engagementButton}
+          activeOpacity={0.7}
+          onPress={(event) => event.stopPropagation?.()}
+          accessibilityRole="button"
+          accessibilityLabel="Share"
+        >
+          <Ionicons
+            name="paper-plane-outline"
+            size={compact ? 18 : 21}
+            color={colors.text}
+          />
+        </TouchableOpacity>
+      ) : null}
     </View>
   );
 }
@@ -630,12 +636,12 @@ function ResidentFeedReportContent({
   const firstMedia = report.media[0] ?? null;
   const statusColor =
     report.status === 'resolved'
-      ? colors.success
+      ? '#15805F'
       : report.status === 'verified'
-        ? colors.themeSoft
+        ? colors.primary
         : report.status === 'escalated'
-          ? colors.danger
-          : '#F05B4F';
+          ? '#B45309'
+          : '#A16207';
 
   const shareReport = async () => {
     try {
@@ -651,18 +657,19 @@ function ResidentFeedReportContent({
   return (
     <View style={residentFeedStyles.reportContent}>
       <View style={residentFeedStyles.reporterRow}>
-        <ReporterAvatar reporter={report.reporter} size={46} />
+        <ReporterAvatar reporter={report.reporter} size={40} />
         <View style={residentFeedStyles.reporterDetails}>
           <Text style={residentFeedStyles.reporterName} numberOfLines={1}>
             {formatReporterName(report.reporter)}
           </Text>
-          <Text style={residentFeedStyles.metaText}>
-            {formatPublishedAt(report.created_at)}
-          </Text>
-          <Text style={residentFeedStyles.metaText} numberOfLines={2}>
-            {formatReportLocation(report)}
-            {distanceLabel ? `  ·  ${distanceLabel}` : ''}
-          </Text>
+          <View style={residentFeedStyles.reportMetaRow}>
+            <Ionicons name="location-sharp" size={12} color={colors.textMuted} />
+            <Text style={residentFeedStyles.metaText} numberOfLines={1}>
+              {formatReportLocation(report)}
+              {distanceLabel ? `  ·  ${distanceLabel}` : ''}
+              {report.created_at ? `  ·  ${formatPublishedAt(report.created_at)}` : ''}
+            </Text>
+          </View>
         </View>
         <TouchableOpacity
           style={residentFeedStyles.moreButton}
@@ -675,12 +682,12 @@ function ResidentFeedReportContent({
       </View>
 
       <View style={residentFeedStyles.statusRow}>
-        <View style={[residentFeedStyles.statusDot, { backgroundColor: statusColor }]} />
-        <Text style={[residentFeedStyles.statusText, { color: statusColor }]}>
-          {residentStatusLabel(report.status)}
-        </Text>
-        <View style={residentFeedStyles.statusDivider} />
-        <Text style={residentFeedStyles.typeText}>COMMUNITY REPORT</Text>
+        <View style={[residentFeedStyles.statusPill, { borderColor: statusColor }]}>
+          <Text style={[residentFeedStyles.statusText, { color: statusColor }]}>
+            {residentStatusLabel(report.status)}
+          </Text>
+        </View>
+        <Text style={residentFeedStyles.typeText}>Community report</Text>
       </View>
 
       {firstMedia ? (
@@ -688,10 +695,7 @@ function ResidentFeedReportContent({
           <CollageCellContent item={firstMedia} />
           {report.media.length > 1 ? (
             <View style={residentFeedStyles.mediaCountBadge}>
-              <Text style={residentFeedStyles.mediaCountText}>
-                {report.media.length} items
-              </Text>
-              <Ionicons name="play" size={13} color={colors.white} />
+              <Text style={residentFeedStyles.mediaCountText}>1 / {report.media.length}</Text>
             </View>
           ) : null}
         </View>
@@ -703,41 +707,70 @@ function ResidentFeedReportContent({
       )}
 
       <View style={residentFeedStyles.copyBlock}>
+        <Text style={residentFeedStyles.reportCategory}>INCIDENT REPORT</Text>
         <Text style={residentFeedStyles.reportTitle}>{report.title || 'Untitled report'}</Text>
-        <Text style={residentFeedStyles.reportDescription}>
+        <Text style={residentFeedStyles.reportDescription} numberOfLines={3}>
           {report.description || 'No description provided.'}
         </Text>
+      </View>
+
+      <View style={residentFeedStyles.actionRow}>
+        <View style={residentFeedStyles.engagementActions}>
+          <TouchableOpacity
+            style={residentFeedStyles.confirmationAction}
+            onPress={(event) => {
+              event.stopPropagation?.();
+              toggleUpvote(report);
+            }}
+            disabled={Boolean(report.isPending)}
+          >
+            <Ionicons
+              name={hasUpvoted ? 'arrow-up-circle' : 'arrow-up-outline'}
+              size={21}
+              color={hasUpvoted ? colors.primary : colors.text}
+            />
+            <Text
+              style={[
+                residentFeedStyles.actionText,
+                hasUpvoted && residentFeedStyles.actionTextActive,
+              ]}
+            >
+              {upvoteCount} confirmation{upvoteCount === 1 ? '' : 's'}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={residentFeedStyles.iconAction}
+            onPress={(event) => {
+              event.stopPropagation?.();
+              onRequestComments();
+            }}
+            accessibilityLabel="View report comments"
+          >
+            <Ionicons name="chatbubble-outline" size={21} color={colors.text} />
+            <Text style={residentFeedStyles.actionText}>{commentCount}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={residentFeedStyles.iconAction}
+            onPress={(event) => {
+              event.stopPropagation?.();
+              void shareReport();
+            }}
+            accessibilityLabel="Share report"
+          >
+            <Ionicons name="arrow-redo-outline" size={23} color={colors.text} />
+          </TouchableOpacity>
+        </View>
         <TouchableOpacity
           style={residentFeedStyles.viewReportButton}
-          onPress={onRequestExpand}
+          onPress={(event) => {
+            event.stopPropagation?.();
+            onRequestExpand();
+          }}
           accessibilityRole="button"
           accessibilityLabel="View report details"
         >
           <Text style={residentFeedStyles.viewReportText}>View report</Text>
-          <Ionicons name="arrow-forward" size={18} color={colors.primary} />
-        </TouchableOpacity>
-      </View>
-
-      <View style={residentFeedStyles.actionRow}>
-        <TouchableOpacity style={residentFeedStyles.actionButton} onPress={shareReport}>
-          <Ionicons name="paper-plane-outline" size={23} color={colors.text} />
-          <Text style={residentFeedStyles.actionText}>Share</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={residentFeedStyles.actionButton}
-          onPress={() => toggleUpvote(report)}
-          disabled={Boolean(report.isPending)}
-        >
-          <Ionicons
-            name={hasUpvoted ? 'arrow-up-circle' : 'arrow-up-outline'}
-            size={24}
-            color={hasUpvoted ? colors.primary : colors.text}
-          />
-          <Text style={residentFeedStyles.actionText}>{upvoteCount} Upvote</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={residentFeedStyles.actionButton} onPress={onRequestComments}>
-          <Ionicons name="chatbubble-outline" size={22} color={colors.text} />
-          <Text style={residentFeedStyles.actionText}>{commentCount} Comments</Text>
+          <Ionicons name="chevron-forward" size={18} color={colors.primary} />
         </TouchableOpacity>
       </View>
     </View>
@@ -958,11 +991,11 @@ export function ReportDetailCard({
 
 const residentFeedStyles = StyleSheet.create({
   reportContent: {
-    gap: spacing.md,
+    gap: spacing.sm,
   },
   reporterRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     gap: spacing.sm,
   },
   reporterDetails: {
@@ -977,14 +1010,21 @@ const residentFeedStyles = StyleSheet.create({
     justifyContent: 'center',
   },
   reporterName: {
-    fontFamily: fonts.bold,
-    fontSize: 17,
+    fontFamily: fonts.semibold,
+    fontSize: fontSizes.md,
     color: colors.text,
   },
+  reportMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
   metaText: {
+    flex: 1,
+    minWidth: 0,
     fontFamily: fonts.regular,
-    fontSize: fontSizes.md,
-    lineHeight: 20,
+    fontSize: 11,
+    lineHeight: 16,
     color: colors.textMuted,
   },
   statusRow: {
@@ -992,49 +1032,42 @@ const residentFeedStyles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
   },
-  statusDot: {
-    width: 10,
-    height: 10,
-    borderRadius: radius.full,
+  statusPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderWidth: 1,
+    borderRadius: 6,
   },
   statusText: {
     fontFamily: fonts.medium,
-    fontSize: fontSizes.md,
-  },
-  statusDivider: {
-    width: 1,
-    height: 20,
-    backgroundColor: colors.border,
+    fontSize: 11,
   },
   typeText: {
     flex: 1,
-    fontFamily: fonts.medium,
-    fontSize: fontSizes.sm,
+    fontFamily: fonts.regular,
+    fontSize: 11,
     color: colors.textMuted,
   },
   heroMedia: {
     position: 'relative',
     width: '100%',
-    aspectRatio: 1.75,
-    borderRadius: radius.lg,
+    aspectRatio: 2.1,
+    borderRadius: radius.md,
     overflow: 'hidden',
     backgroundColor: colors.background,
   },
   mediaCountBadge: {
     position: 'absolute',
-    top: spacing.md,
-    right: spacing.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    top: spacing.sm,
+    right: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 5,
     borderRadius: radius.full,
     backgroundColor: 'rgba(17, 24, 39, 0.75)',
   },
   mediaCountText: {
     fontFamily: fonts.medium,
-    fontSize: fontSizes.md,
+    fontSize: fontSizes.xs,
     color: colors.white,
   },
   mediaPlaceholder: {
@@ -1052,51 +1085,72 @@ const residentFeedStyles = StyleSheet.create({
     color: colors.textMuted,
   },
   copyBlock: {
-    gap: spacing.sm,
+    gap: 3,
+  },
+  reportCategory: {
+    fontFamily: fonts.medium,
+    fontSize: fontSizes.xs,
+    letterSpacing: 0.55,
+    color: colors.textMuted,
   },
   reportTitle: {
     fontFamily: fonts.bold,
-    fontSize: fontSizes.xl,
-    lineHeight: 27,
+    fontSize: fontSizes.lg,
+    lineHeight: 22,
     color: colors.text,
   },
   reportDescription: {
     fontFamily: fonts.regular,
     fontSize: fontSizes.md,
     lineHeight: 22,
-    color: colors.textMuted,
+    color: colors.text,
   },
   viewReportButton: {
-    alignSelf: 'flex-start',
+    minHeight: 40,
+    marginLeft: 'auto',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.sm,
+    gap: spacing.xs,
   },
   viewReportText: {
     fontFamily: fonts.semibold,
-    fontSize: fontSizes.lg,
+    fontSize: fontSizes.sm,
     color: colors.primary,
   },
   actionRow: {
+    minHeight: 42,
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    // The parent already provides spacing; pull this row slightly closer to
-    // the View report action while keeping the two controls visually separate.
-    marginTop: -spacing.sm,
+    alignItems: 'center',
+    gap: spacing.sm,
   },
-  actionButton: {
-    flex: 1,
+  engagementActions: {
+    flexShrink: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  confirmationAction: {
+    minHeight: 40,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  iconAction: {
+    minWidth: 38,
+    minHeight: 40,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    minHeight: 40,
+    gap: 4,
   },
   actionText: {
     fontFamily: fonts.regular,
     fontSize: 11,
-    color: colors.text,
+    color: colors.textMuted,
+  },
+  actionTextActive: {
+    color: colors.primary,
   },
 });
 
@@ -1346,6 +1400,9 @@ export const reportDetailStyles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.lg,
     paddingVertical: spacing.xs,
+  },
+  engagementRowThreeActions: {
+    gap: spacing.md,
   },
   engagementRowCompact: {
     gap: spacing.md,

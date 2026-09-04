@@ -187,22 +187,57 @@ export default function MayorDashboard({
       >
         <MdrrmoHeader title="Brief" showDefaultControls />
 
-        <TouchableOpacity
-          style={styles.scopeCard}
-          onPress={() => setScopeVisible(true)}
-          activeOpacity={0.75}
-          accessibilityRole="button"
-          accessibilityLabel={`Municipal scope, ${selectedBarangayName}, ${statusLabel(status)}`}
-        >
-          <View style={styles.scopeCopy}>
-            <Text style={styles.eyebrow}>MUNICIPAL SCOPE</Text>
-            <Text style={styles.scopeValue} numberOfLines={1}>
-              {selectedBarangayName} · {statusLabel(status)}
-            </Text>
-          </View>
-          <Ionicons name="options-outline" size={29} color={colors.textMuted} />
-          <Ionicons name="chevron-down" size={24} color={colors.textMuted} />
-        </TouchableOpacity>
+        <View style={styles.briefIntro}>
+          <TouchableOpacity
+            style={styles.scopeCard}
+            onPress={() => setScopeVisible(true)}
+            activeOpacity={0.75}
+            accessibilityRole="button"
+            accessibilityLabel={`Municipal scope, ${selectedBarangayName}, ${statusLabel(status)}`}
+          >
+            <View style={styles.scopeCopy}>
+              <Text style={styles.scopeEyebrow}>MUNICIPAL SCOPE</Text>
+              <Text style={styles.scopeValue} numberOfLines={1}>
+                {selectedBarangayName} · {statusLabel(status)}
+              </Text>
+            </View>
+            <Ionicons name="options-outline" size={20} color={colors.textMuted} />
+            <Ionicons name="chevron-down" size={16} color={colors.textMuted} />
+          </TouchableOpacity>
+
+          {snapshot ? (
+            <View style={styles.mapBlock}>
+              <View style={styles.mapCard}>
+                <View style={styles.mapViewport} pointerEvents="none">
+                  <InteractiveMap
+                    markers={visibleMapReports}
+                    showZoomControls={false}
+                    layerVisibility={{ reports: true, facilities: false, evacuationCenters: false }}
+                  />
+                </View>
+                <View style={styles.mapHeaderOverlay} pointerEvents="none">
+                  <View>
+                    <Text style={styles.mapTotal}>{snapshot.matchingTotal.toLocaleString()} current reports</Text>
+                    <Text style={styles.mapSubtitle}>
+                      Across {affectedBarangays.length.toLocaleString()} barangay{affectedBarangays.length === 1 ? '' : 's'}
+                    </Text>
+                  </View>
+                  <Text style={styles.updatedText}>{formatUpdatedAt(snapshot.fetchedAt)}</Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                style={styles.mapAction}
+                onPress={() => openSituations()}
+                accessibilityRole="button"
+                accessibilityLabel="View matching situations"
+              >
+                <Text style={styles.mapActionText}>View situations</Text>
+                <Ionicons name="arrow-forward" size={18} color={colors.primary} />
+              </TouchableOpacity>
+              {mapError ? <Text style={styles.inlineNote}>Map pins could not fully refresh.</Text> : null}
+            </View>
+          ) : null}
+        </View>
 
         {loading && !snapshot ? (
           <View style={styles.stateCard}>
@@ -232,37 +267,7 @@ export default function MayorDashboard({
               </View>
             ) : null}
 
-            <View style={styles.mapCard}>
-              <View style={styles.mapHeaderOverlay} pointerEvents="none">
-                <View>
-                  <Text style={styles.eyebrow}>MUNICIPAL BRIEF</Text>
-                  <Text style={styles.mapTotal}>{snapshot.matchingTotal.toLocaleString()} current reports</Text>
-                  <Text style={styles.mapSubtitle}>
-                    Across {affectedBarangays.length.toLocaleString()} barangay{affectedBarangays.length === 1 ? '' : 's'}
-                  </Text>
-                </View>
-                <Text style={styles.updatedText}>{formatUpdatedAt(snapshot.fetchedAt)}</Text>
-              </View>
-              <View style={styles.mapViewport} pointerEvents="none">
-                <InteractiveMap
-                  markers={visibleMapReports}
-                  showZoomControls={false}
-                  layerVisibility={{ reports: true, facilities: false, evacuationCenters: false }}
-                />
-              </View>
-              <TouchableOpacity
-                style={styles.mapAction}
-                onPress={() => openSituations()}
-                accessibilityRole="button"
-                accessibilityLabel="View matching situations"
-              >
-                <Text style={styles.mapActionText}>View situations</Text>
-                <Ionicons name="arrow-forward" size={22} color={colors.primary} />
-              </TouchableOpacity>
-            </View>
-            {mapError ? <Text style={styles.inlineNote}>Map pins could not fully refresh.</Text> : null}
-
-            <View style={styles.section}>
+            <View style={[styles.section, styles.decisionSection]}>
               <Text style={styles.eyebrow}>NEEDS DECISION</Text>
               <DecisionRow
                 color={colors.unverified}

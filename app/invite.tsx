@@ -30,7 +30,7 @@ import Stepper from '../components/register/Stepper';
 import LabeledInput from '../components/register/LabeledInput';
 import FieldError from '../components/register/FieldError';
 import OTPInput from '../components/register/OTPInput';
-import { colors } from '../styles/theme';
+import { colors, radius } from '../styles/theme';
 import { hideNativeSplashOnce } from '../lib/nativeSplash';
 
 /**
@@ -628,7 +628,7 @@ const localStyles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 16,
     paddingHorizontal: 20,
-    borderRadius: 20,
+    borderRadius: radius.md,
     backgroundColor: colors.primaryLight,
     shadowColor: '#0F2044',
     shadowOpacity: 0.06,

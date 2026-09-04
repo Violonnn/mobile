@@ -2,6 +2,7 @@ import React from 'react';
 import { Modal, Pressable, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { mdrrmoCommandStyles as styles } from '../../styles/screens/mdrrmoCommand.styles';
+import { colors } from '../../styles/theme';
 
 export type ResourceCreateType = 'hotline' | 'facility' | 'center';
 
@@ -41,7 +42,7 @@ export default function ResourceTypePickerSheet({ visible, onClose, onSelect }: 
                 <Text style={styles.pickerTitle}>{option.title}</Text>
                 <Text style={styles.pickerSubtitle}>{option.subtitle}</Text>
               </View>
-              <Ionicons name="arrow-forward" size={24} color="#111827" />
+              <Ionicons name="arrow-forward" size={24} color={colors.text} />
             </TouchableOpacity>
           ))}
           <TouchableOpacity style={styles.cancelButton} onPress={onClose}>

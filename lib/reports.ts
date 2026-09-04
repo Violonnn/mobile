@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { normalizeName } from './validation/name';
 import { getActiveSession } from './auth';
 import {
   CapturedMedia,
@@ -62,9 +63,11 @@ const REPORT_MEDIA_BUCKET = 'report-media';
 
 /** Build a display name; middle name is abbreviated to its initial only. */
 export function formatReporterName(reporter: MapReportReporter): string {
-  const middle = reporter.middleName?.trim();
+  const firstName = normalizeName(reporter.firstName);
+  const lastName = normalizeName(reporter.lastName);
+  const middle = reporter.middleName ? normalizeName(reporter.middleName) : '';
   const middleInitial = middle ? `${middle.charAt(0).toUpperCase()}.` : null;
-  const parts = [reporter.firstName, middleInitial, reporter.lastName].filter(
+  const parts = [firstName, middleInitial, lastName].filter(
     (part) => part && part.trim(),
   );
   return parts.join(' ').trim() || 'Resident';
@@ -72,7 +75,7 @@ export function formatReporterName(reporter: MapReportReporter): string {
 
 /** First initial for avatar fallback (no profile photo stored yet). */
 export function reporterInitial(reporter: MapReportReporter): string {
-  return reporter.firstName.trim().charAt(0).toUpperCase() || 'R';
+  return normalizeName(reporter.firstName).charAt(0).toLocaleUpperCase() || 'R';
 }
 
 /** Human-readable location label for a map report. */

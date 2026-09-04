@@ -7,7 +7,7 @@ const HERO_HEIGHT_RATIO = layout.isSmallScreen ? 0.22 : 0.28;
 export const loginColors = {
   background: colors.background,
   white: '#ffffff',
-  text: '#111827',
+  text: colors.text,
   textMuted: '#6B7280',
   textLight: '#5A6A85',
   gray: '#8A94A6',
