@@ -1,12 +1,13 @@
 // hooks/useAnnouncements.ts — ranked announcements with Realtime refresh.
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
 import {
   fetchRankedAnnouncements,
   type AnnouncementRecord,
 } from '../lib/announcements';
 import { supabase } from '../lib/supabase';
+import { useRealtimeChannelName } from './useRealtimeChannelName';
 
 export function useAnnouncements(options?: { limit?: number; realtime?: boolean }) {
   const limit = options?.limit ?? 50;
@@ -16,10 +17,7 @@ export function useAnnouncements(options?: { limit?: number; realtime?: boolean 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const channelName = useMemo(
-    () => `announcements-${Math.random().toString(36).slice(2)}`,
-    [],
-  );
+  const channelName = useRealtimeChannelName('announcements');
 
   const load = useCallback(async () => {
     const result = await fetchRankedAnnouncements({ limit });

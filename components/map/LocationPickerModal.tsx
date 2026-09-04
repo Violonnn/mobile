@@ -1,5 +1,5 @@
 // Shared Leaflet-in-WebView location picker for reports and operational resources.
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Modal,
@@ -125,12 +125,19 @@ export default function LocationPickerModal({
   const [draft, setDraft] = useState<MapPickerCoordinate>(initialCoordinate);
   const [mapError, setMapError] = useState<string | null>(null);
   const [retryKey, setRetryKey] = useState(0);
+  const coordinateResetKey = visible
+    ? `${initialCoordinate.latitude}:${initialCoordinate.longitude}`
+    : 'hidden';
+  const [previousCoordinateResetKey, setPreviousCoordinateResetKey] =
+    useState(coordinateResetKey);
 
-  useEffect(() => {
-    if (!visible) return;
-    setDraft(initialCoordinate);
-    setMapError(null);
-  }, [initialCoordinate, visible]);
+  if (coordinateResetKey !== previousCoordinateResetKey) {
+    setPreviousCoordinateResetKey(coordinateResetKey);
+    if (visible) {
+      setDraft(initialCoordinate);
+      setMapError(null);
+    }
+  }
 
   const html = useMemo(
     () => buildPickerHtml(initialCoordinate.latitude, initialCoordinate.longitude),
@@ -239,7 +246,7 @@ export default function LocationPickerModal({
 
 const localStyles = StyleSheet.create({
   overlay: { flex: 1, justifyContent: 'center', padding: spacing.md },
-  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(17, 24, 39, 0.45)' },
+  backdrop: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(17, 24, 39, 0.45)' },
   card: { width: '100%', maxWidth: 440, alignSelf: 'center', borderRadius: radius.xl, backgroundColor: colors.white, padding: spacing.lg, gap: spacing.sm },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
   headerTitleRow: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.sm },

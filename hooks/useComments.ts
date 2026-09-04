@@ -2,7 +2,7 @@
 // Top-level comments start at 3 and grow by 5. Replies remain collapsed and,
 // when opened, also grow by 5. Realtime reloads only the currently visible
 // pages for this report.
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   addReportComment,
   fetchCommentReplies,
@@ -10,6 +10,7 @@ import {
   type ReportComment,
 } from '../lib/comments';
 import { supabase } from '../lib/supabase';
+import { useRealtimeChannelName } from './useRealtimeChannelName';
 
 const INITIAL_COMMENT_COUNT = 3;
 const PAGE_SIZE = 5;
@@ -34,20 +35,28 @@ export function useComments(
     new Map(),
   );
   const replyPagesRef = useRef(replyPages);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(Boolean(reportId));
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [previousReportId, setPreviousReportId] = useState(reportId);
+
+  if (reportId !== previousReportId) {
+    setPreviousReportId(reportId);
+    setComments([]);
+    setTotalComments(0);
+    setCommentLimit(INITIAL_COMMENT_COUNT);
+    setReplyPages(new Map());
+    setError(null);
+    setLoading(Boolean(reportId));
+  }
 
   useEffect(() => {
     replyPagesRef.current = replyPages;
   }, [replyPages]);
 
   // Unique channel name so reopening a sheet never collides with a stale channel.
-  const channelName = useMemo(
-    () => `comments-${reportId ?? 'none'}-${Math.random().toString(36).slice(2)}`,
-    [reportId],
-  );
+  const channelName = useRealtimeChannelName(`comments-${reportId ?? 'none'}`);
 
   const load = useCallback(async () => {
     if (!reportId) return;
@@ -115,17 +124,9 @@ export function useComments(
 
   // Reset + fetch whenever the selected report changes.
   useEffect(() => {
-    if (!reportId) {
-      setComments([]);
-      setTotalComments(0);
-      setCommentLimit(INITIAL_COMMENT_COUNT);
-      setReplyPages(new Map());
-      setError(null);
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    void load();
+    if (!reportId) return;
+    const loadTimer = setTimeout(() => void load(), 0);
+    return () => clearTimeout(loadTimer);
   }, [reportId, load]);
 
   // Live thread: refetch on any change to this report's comments.

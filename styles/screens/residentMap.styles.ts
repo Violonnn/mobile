@@ -9,7 +9,7 @@ export const residentMapStyles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   mapSection: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: colors.background,
   },
   contributionSheet: {

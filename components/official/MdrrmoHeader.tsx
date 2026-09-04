@@ -1,6 +1,6 @@
 // Shared MDRRMO tab header: municipal seal + Name · Role (+ optional right controls).
 
-import React, { useCallback, useEffect, useState, type ReactNode } from 'react';
+import React, { useEffect, useState, type ReactNode } from 'react';
 import { Image, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, type Href } from 'expo-router';
@@ -40,14 +40,15 @@ export default function MdrrmoHeader({
   const [profile, setProfile] = useState<OfficialPublicProfile | null>(null);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
 
-  const loadProfile = useCallback(async () => {
-    const result = await fetchMyOfficialPublicProfile();
-    setProfile(result.profile);
-  }, []);
-
   useEffect(() => {
-    void loadProfile();
-  }, [loadProfile]);
+    let cancelled = false;
+    void fetchMyOfficialPublicProfile().then((result) => {
+      if (!cancelled) setProfile(result.profile);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const name = fullNameFromProfile(profile);
   const roleLabel =

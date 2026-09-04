@@ -98,7 +98,7 @@ export const mayorBriefStyles = StyleSheet.create({
   centerName: { fontFamily: fonts.bold, fontSize: fontSizes.md, color: colors.text },
   centerMeta: { marginTop: spacing.xs, fontFamily: fonts.regular, fontSize: fontSizes.sm, color: colors.textMuted },
   modalRoot: { flex: 1, justifyContent: 'flex-end' },
-  modalBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(15, 23, 42, 0.45)' },
+  modalBackdrop: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(15, 23, 42, 0.45)' },
   scopeSheet: { maxHeight: '86%', gap: spacing.md, paddingHorizontal: spacing.lg, paddingTop: spacing.sm, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, backgroundColor: colors.white },
   sheetHandle: { alignSelf: 'center', width: 48, height: 5, borderRadius: 3, backgroundColor: '#C7CDD6' },
   sheetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md },

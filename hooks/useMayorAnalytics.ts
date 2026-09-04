@@ -1,6 +1,6 @@
 // Mayor dashboard data with focus, pull-to-refresh, and Realtime updates.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { fetchBarangays, type BarangayOption } from '../lib/barangays';
 import {
@@ -15,6 +15,7 @@ import {
   type MayorStatusActivitySeries,
 } from '../lib/mayorAnalytics';
 import { supabase } from '../lib/supabase';
+import { useRealtimeChannelName } from './useRealtimeChannelName';
 
 export function useMayorAnalytics(input: {
   enabled: boolean;
@@ -31,10 +32,7 @@ export function useMayorAnalytics(input: {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const barangaysRef = useRef<BarangayOption[]>([]);
-  const channelName = useMemo(
-    () => `mayor-analytics-${Math.random().toString(36).slice(2)}`,
-    [],
-  );
+  const channelName = useRealtimeChannelName('mayor-analytics');
 
   const load = useCallback(async () => {
     if (!input.enabled) {

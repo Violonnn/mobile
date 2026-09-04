@@ -99,21 +99,32 @@ export default function ResidentProfileModal({
   const [middleName, setMiddleName] = useState(profile.middle_name);
   const [lastName, setLastName] = useState(profile.last_name);
   const [barangay, setBarangay] = useState(profile.barangay);
+  const [previousVisible, setPreviousVisible] = useState(visible);
+  const [previousProfile, setPreviousProfile] = useState(profile);
+
+  if (visible !== previousVisible || profile !== previousProfile) {
+    setPreviousVisible(visible);
+    setPreviousProfile(profile);
+    if (visible) {
+      setEditing(false);
+      setBarangayListOpen(false);
+      setFirstName(profile.first_name);
+      setMiddleName(profile.middle_name);
+      setLastName(profile.last_name);
+      setBarangay(profile.barangay);
+    }
+  }
 
   useEffect(() => {
     if (!visible) return;
-
-    setEditing(false);
-    setBarangayListOpen(false);
-    setFirstName(profile.first_name);
-    setMiddleName(profile.middle_name);
-    setLastName(profile.last_name);
-    setBarangay(profile.barangay);
-
+    let cancelled = false;
     void fetchBarangays().then((result) => {
-      if (result.error) return;
+      if (cancelled || result.error) return;
       setBarangays(result.barangays);
     });
+    return () => {
+      cancelled = true;
+    };
   }, [profile, visible]);
 
   const nextUpdateDate = useMemo(() => {

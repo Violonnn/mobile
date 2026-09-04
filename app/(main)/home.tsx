@@ -68,6 +68,13 @@ export default function HomeScreen() {
   const [reportOpen, setReportOpen] = useState(false);
   const [isHeaderCollapsed, setIsHeaderCollapsed] = useState(false);
   const [mapTheme, setMapTheme] = useState<ResidentMapTheme>('light');
+  const shouldShowWelcome = welcome === '1' && isAuthenticated && !loading;
+  const [previousWelcomeTrigger, setPreviousWelcomeTrigger] = useState(false);
+
+  if (shouldShowWelcome !== previousWelcomeTrigger) {
+    setPreviousWelcomeTrigger(shouldShowWelcome);
+    if (shouldShowWelcome) setShowWelcome(true);
+  }
 
   const {
     announcements,
@@ -164,10 +171,6 @@ export default function HomeScreen() {
     if (!loading && !isAuthenticated) router.replace('/');
   }, [loading, isAuthenticated, router]);
 
-  useEffect(() => {
-    if (welcome === '1' && isAuthenticated && !loading) setShowWelcome(true);
-  }, [welcome, isAuthenticated, loading]);
-
   const normalizedBarangay = normalizeSearchText(barangay);
   const reportsInBarangay = useMemo(() => {
     const scopedReports = reports.filter((report) => {
@@ -223,13 +226,6 @@ export default function HomeScreen() {
 
     return [...announcementMatches, ...reportMatches].slice(0, 6);
   }, [announcements, reports, searchQuery]);
-
-  useEffect(() => {
-    setFocusedNearbyReportId((currentId) => {
-      if (nearbyReports.some((report) => report.id === currentId)) return currentId;
-      return nearbyReports[0]?.id ?? null;
-    });
-  }, [nearbyReports]);
 
   if (loading || !isAuthenticated) {
     return (

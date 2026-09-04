@@ -86,6 +86,7 @@ export default function MdrrmoReportsWorkspace({
   const [filterVisible, setFilterVisible] = useState(false);
   const [reportModalVisible, setReportModalVisible] = useState(false);
   const [officialProfile, setOfficialProfile] = useState<OfficialPublicProfile | null>(null);
+  const [previousInitialStatus, setPreviousInitialStatus] = useState(initialStatus);
 
   const compactHeader = windowWidth < 360;
   const profileInitials = [officialProfile?.first_name, officialProfile?.last_name]
@@ -93,9 +94,10 @@ export default function MdrrmoReportsWorkspace({
     .map((part) => part!.trim().charAt(0).toUpperCase())
     .join('') || 'M';
 
-  useEffect(() => {
+  if (initialStatus !== previousInitialStatus) {
+    setPreviousInitialStatus(initialStatus);
     setStatusFilter(initialStatus ?? 'escalated');
-  }, [initialStatus]);
+  }
 
   useEffect(() => {
     let cancelled = false;

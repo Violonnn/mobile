@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { registerStyles as styles, registerColors } from '../../styles/screens/register.styles';
@@ -77,48 +77,59 @@ export default function DetailsStep({ details, onUpdateDetails, onSubmit }: Deta
     barangay,
     agreedToTerms,
   } = details;
+  const fieldValueKey = JSON.stringify([
+    lastName,
+    firstName,
+    middleName,
+    birthYear,
+    birthMonth,
+    barangay,
+    agreedToTerms,
+  ]);
+  const [previousFieldValueKey, setPreviousFieldValueKey] = useState(fieldValueKey);
 
-  useEffect(() => {
-    setFieldErrors((prev) => {
-      const next = { ...prev };
-      let changed = false;
+  if (fieldValueKey !== previousFieldValueKey) {
+    setPreviousFieldValueKey(fieldValueKey);
+    const next = { ...fieldErrors };
+    let changed = false;
 
-      if (lastName && next.lastName) {
-        delete next.lastName;
-        changed = true;
-      }
-      if (firstName && next.firstName) {
-        delete next.firstName;
-        changed = true;
-      }
-      if (next.middleName) {
-        delete next.middleName;
-        changed = true;
-      }
-      if (birthMonth && next.birthMonth && next.birthMonth !== ERROR_MIN_AGE) {
-        delete next.birthMonth;
-        changed = true;
-      }
-      if (birthYear && next.birthYear && next.birthYear !== ERROR_MIN_AGE) {
-        delete next.birthYear;
-        changed = true;
-      }
-      if (barangay && next.barangay) {
-        delete next.barangay;
-        changed = true;
-      }
-      if (agreedToTerms && next.terms) {
-        delete next.terms;
-        changed = true;
-      }
+    if (lastName && next.lastName) {
+      delete next.lastName;
+      changed = true;
+    }
+    if (firstName && next.firstName) {
+      delete next.firstName;
+      changed = true;
+    }
+    if (next.middleName) {
+      delete next.middleName;
+      changed = true;
+    }
+    if (birthMonth && next.birthMonth && next.birthMonth !== ERROR_MIN_AGE) {
+      delete next.birthMonth;
+      changed = true;
+    }
+    if (birthYear && next.birthYear && next.birthYear !== ERROR_MIN_AGE) {
+      delete next.birthYear;
+      changed = true;
+    }
+    if (barangay && next.barangay) {
+      delete next.barangay;
+      changed = true;
+    }
+    if (agreedToTerms && next.terms) {
+      delete next.terms;
+      changed = true;
+    }
 
-      if (changed && Object.keys(next).length === 0) {
-        setError('');
-      }
+    if (changed && Object.keys(next).length === 0) {
+      setError('');
+    }
 
-      return changed ? next : prev;
-    });
-  }, [lastName, firstName, middleName, birthYear, birthMonth, barangay, agreedToTerms]);
+    if (changed) {
+      setFieldErrors(next);
+    }
+  }
 
   function validateAndSubmit() {
     const nextErrors: FieldErrors = {};

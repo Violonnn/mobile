@@ -112,7 +112,7 @@ export const headerStyles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
   },
   notifBackdrop: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(17, 24, 39, 0.45)',
   },
   notifCard: {

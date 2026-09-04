@@ -40,7 +40,7 @@ export const loginStyles = StyleSheet.create({
     height: '100%',
   },
   heroOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'flex-start',
     paddingTop: spacing.xxl,
@@ -201,7 +201,7 @@ export const loginStyles = StyleSheet.create({
     textAlign: 'left',
   },
   pinHiddenInput: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     color: 'transparent',
     fontSize: 1,
     letterSpacing: 0,

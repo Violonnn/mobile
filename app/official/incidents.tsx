@@ -2,7 +2,7 @@
 // Filterable incident queue. Defaults: BDRRMO=unverified, MDRRMO=escalated,
 // Mayor=read-only search across all statuses.
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -93,17 +93,20 @@ export default function OfficialIncidentsScreen() {
   const { scope, officialKind, loading: scopeLoading, error: scopeError } =
     useOfficialPortal();
 
-  const [statusFilter, setStatusFilter] = useState<StatusFilter | null>(null);
+  const requestedStatus = routeStatus(status);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter | null>(requestedStatus);
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState<OfficialReportSort>('recent');
   const [statusOpen, setStatusOpen] = useState(false);
   const [sortOpen, setSortOpen] = useState(false);
+  const [previousRequestedStatus, setPreviousRequestedStatus] =
+    useState(requestedStatus);
 
-  useEffect(() => {
+  if (requestedStatus !== previousRequestedStatus) {
+    setPreviousRequestedStatus(requestedStatus);
     // A validated link temporarily overrides the role's normal queue default.
-    const requestedStatus = routeStatus(status);
     setStatusFilter(requestedStatus);
-  }, [status]);
+  }
 
   const activeFilter = statusFilter ?? defaultFilter(officialKind);
   const { reports, counts, error, loading, refreshing, refresh, reload } =

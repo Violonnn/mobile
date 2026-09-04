@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
-import { Tabs, useRouter, type Href } from 'expo-router';
+import { useRouter, type Href } from 'expo-router';
+import { Tabs } from 'expo-router/js-tabs';
 import BottomNav from '../../components/navigation/BottomNav';
 import { startReportQueueWatcher } from '../../lib/reportQueueFlush';
 import { resolveSessionDestination } from '../../lib/portalAccess';

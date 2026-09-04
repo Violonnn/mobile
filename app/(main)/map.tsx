@@ -26,6 +26,7 @@ import { useResources } from '../../hooks/useResources';
 import { getActiveSession } from '../../lib/auth';
 import { getGrantedMapGps, type GpsPosition } from '../../lib/location';
 import { getResidentMapTheme, type ResidentMapTheme } from '../../lib/mapPreferences';
+import { createMutableNumber } from '../../lib/mutableNumber';
 import type { MapReportMarker } from '../../lib/reports';
 import { evacuationStatusLabel, facilityTypeLabel } from '../../lib/resources';
 import { navMetrics } from '../../styles/components/bottomNav.styles';
@@ -60,9 +61,8 @@ export default function MapScreen() {
   const [selectedResource, setSelectedResource] = useState<MapResourceMarker | null>(null);
   const [focusTarget, setFocusTarget] = useState<MapFocusTarget | null>(null);
   const [contributionsCollapsed, setContributionsCollapsed] = useState(false);
-  const contributionsCollapsedRef = useRef(false);
-  const contributionTranslateY = useRef(new Animated.Value(0)).current;
-  const dragStartOffsetRef = useRef(0);
+  const [contributionTranslateY] = useState(() => new Animated.Value(0));
+  const [dragStartOffset] = useState(() => createMutableNumber());
   const [layers, setLayers] = useState<MapLayerVisibility>({
     reports: true,
     facilities: true,
@@ -109,25 +109,29 @@ export default function MapScreen() {
   );
 
   useEffect(() => {
-    if (!requestedReportId) {
-      handledRouteReportIdRef.current = null;
-      return;
-    }
-    if (handledRouteReportIdRef.current === requestedReportId) return;
+    // Route state is external to React; apply it after commit to avoid a cascading render.
+    const routeSyncTimer = setTimeout(() => {
+      if (!requestedReportId) {
+        handledRouteReportIdRef.current = null;
+        return;
+      }
+      if (handledRouteReportIdRef.current === requestedReportId) return;
 
-    const requestedReport = markers.find((marker) => marker.id === requestedReportId);
-    if (!requestedReport) return;
+      const requestedReport = markers.find((marker) => marker.id === requestedReportId);
+      if (!requestedReport) return;
 
-    handledRouteReportIdRef.current = requestedReportId;
-    setSelectedResource(null);
-    setFullReportVisible(false);
-    setSelectedReportIds([requestedReport.id]);
-    setFocusTarget({
-      reportId: requestedReport.id,
-      latitude: requestedReport.latitude,
-      longitude: requestedReport.longitude,
-    });
-    router.setParams({ reportId: undefined });
+      handledRouteReportIdRef.current = requestedReportId;
+      setSelectedResource(null);
+      setFullReportVisible(false);
+      setSelectedReportIds([requestedReport.id]);
+      setFocusTarget({
+        reportId: requestedReport.id,
+        latitude: requestedReport.latitude,
+        longitude: requestedReport.longitude,
+      });
+      router.setParams({ reportId: undefined });
+    }, 0);
+    return () => clearTimeout(routeSyncTimer);
   }, [markers, requestedReportId, router]);
 
   const facilityMarkers = useMemo<MapResourceMarker[]>(
@@ -174,35 +178,39 @@ export default function MapScreen() {
   );
 
   useEffect(() => {
-    if (!requestedResourceId) {
-      handledRouteResourceIdRef.current = null;
-      return;
-    }
-    if (handledRouteResourceIdRef.current === requestedResourceId) return;
+    // Route state is external to React; apply it after commit to avoid a cascading render.
+    const routeSyncTimer = setTimeout(() => {
+      if (!requestedResourceId) {
+        handledRouteResourceIdRef.current = null;
+        return;
+      }
+      if (handledRouteResourceIdRef.current === requestedResourceId) return;
 
-    const availableResources =
-      requestedResourceKind === 'evacuation' ? centerMarkers : facilityMarkers;
-    const requestedResource = availableResources.find(
-      (resource) => resource.id === requestedResourceId,
-    );
-    if (!requestedResource) return;
+      const availableResources =
+        requestedResourceKind === 'evacuation' ? centerMarkers : facilityMarkers;
+      const requestedResource = availableResources.find(
+        (resource) => resource.id === requestedResourceId,
+      );
+      if (!requestedResource) return;
 
-    handledRouteResourceIdRef.current = requestedResourceId;
-    setSelectedReportIds([]);
-    setFullReportVisible(false);
-    setSelectedResource(requestedResource);
-    setLayers((current) => ({
-      ...current,
-      facilities: requestedResource.kind === 'facility' ? true : current.facilities,
-      evacuationCenters:
-        requestedResource.kind === 'evacuation' ? true : current.evacuationCenters,
-    }));
-    setFocusTarget({
-      resourceId: requestedResource.id,
-      latitude: requestedResource.latitude,
-      longitude: requestedResource.longitude,
-    });
-    router.setParams({ resourceId: undefined, resourceKind: undefined });
+      handledRouteResourceIdRef.current = requestedResourceId;
+      setSelectedReportIds([]);
+      setFullReportVisible(false);
+      setSelectedResource(requestedResource);
+      setLayers((current) => ({
+        ...current,
+        facilities: requestedResource.kind === 'facility' ? true : current.facilities,
+        evacuationCenters:
+          requestedResource.kind === 'evacuation' ? true : current.evacuationCenters,
+      }));
+      setFocusTarget({
+        resourceId: requestedResource.id,
+        latitude: requestedResource.latitude,
+        longitude: requestedResource.longitude,
+      });
+      router.setParams({ resourceId: undefined, resourceKind: undefined });
+    }, 0);
+    return () => clearTimeout(routeSyncTimer);
   }, [
     centerMarkers,
     facilityMarkers,
@@ -256,7 +264,6 @@ export default function MapScreen() {
 
   const settleContributions = useCallback(
     (collapse: boolean) => {
-      contributionsCollapsedRef.current = collapse;
       setContributionsCollapsed(collapse);
       Animated.spring(contributionTranslateY, {
         toValue: collapse ? collapsedOffset : 0,
@@ -271,9 +278,9 @@ export default function MapScreen() {
 
   useEffect(() => {
     contributionTranslateY.setValue(
-      contributionsCollapsedRef.current ? collapsedOffset : 0,
+      contributionsCollapsed ? collapsedOffset : 0,
     );
-  }, [collapsedOffset, contributionTranslateY]);
+  }, [collapsedOffset, contributionTranslateY, contributionsCollapsed]);
 
   const contributionPanResponder = useMemo(
     () =>
@@ -282,13 +289,13 @@ export default function MapScreen() {
           Math.abs(gesture.dy) > 7 && Math.abs(gesture.dy) > Math.abs(gesture.dx),
         onPanResponderGrant: () => {
           contributionTranslateY.stopAnimation((currentOffset) => {
-            dragStartOffsetRef.current = currentOffset;
+            dragStartOffset.write(currentOffset);
           });
         },
         onPanResponderMove: (_, gesture) => {
           const nextOffset = Math.max(
             0,
-            Math.min(collapsedOffset, dragStartOffsetRef.current + gesture.dy),
+            Math.min(collapsedOffset, dragStartOffset.read() + gesture.dy),
           );
           contributionTranslateY.setValue(nextOffset);
         },
@@ -310,7 +317,7 @@ export default function MapScreen() {
           });
         },
       }),
-    [collapsedOffset, contributionTranslateY, settleContributions],
+    [collapsedOffset, contributionTranslateY, dragStartOffset, settleContributions],
   );
 
   return (

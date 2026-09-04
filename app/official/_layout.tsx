@@ -4,7 +4,8 @@
 
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
-import { Tabs, useRouter, type Href } from 'expo-router';
+import { useRouter, type Href } from 'expo-router';
+import { Tabs } from 'expo-router/js-tabs';
 import OfficialBottomNav from '../../components/navigation/OfficialBottomNav';
 import { OfficialPortalProvider } from '../../context/OfficialPortalContext';
 import {

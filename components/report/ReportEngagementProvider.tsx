@@ -66,6 +66,7 @@ export function ReportEngagementProvider({
 }) {
   const [myUpvotes, setMyUpvotes] = useState<Set<string>>(new Set());
   const [overrides, setOverrides] = useState<Map<string, CountOverride>>(new Map());
+  const [previousReports, setPreviousReports] = useState(reports);
 
   // Stable key for the current set of report ids — changes only when reports are
   // added/removed, not when their counts change (so map count patches are free).
@@ -90,7 +91,8 @@ export function ReportEngagementProvider({
   // Drop an optimistic override once the authoritative marker count matches it
   // (server caught up via refresh/Realtime). Overrides for reports whose count
   // hasn't caught up yet are kept.
-  useEffect(() => {
+  if (reports !== previousReports) {
+    setPreviousReports(reports);
     setOverrides((prev) => {
       if (prev.size === 0) return prev;
       const next = new Map(prev);
@@ -111,7 +113,7 @@ export function ReportEngagementProvider({
       }
       return next.size === prev.size ? prev : next;
     });
-  }, [reports]);
+  }
 
   const getState = useCallback(
     (report: MapReportMarker): EngagementState => {

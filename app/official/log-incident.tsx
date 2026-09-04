@@ -66,7 +66,7 @@ export function OfficialReportForm({
   const [barangaysLoading, setBarangaysLoading] = useState(false);
   const [barangaysError, setBarangaysError] = useState<string | null>(null);
   const [selectedBarangayId, setSelectedBarangayId] = useState<string | null>(
-    null,
+    officialKind === 'BDRRMO' ? scope?.barangay_id ?? null : null,
   );
 
   const [title, setTitle] = useState('');
@@ -80,6 +80,16 @@ export function OfficialReportForm({
   const submitLock = useRef(false);
   const isBdrrmo = officialKind === 'BDRRMO';
   const canCreate = officialKind === 'BDRRMO' || officialKind === 'MDRRMO';
+  const scopeBarangayId = scope?.barangay_id ?? null;
+  const scopeBarangayName = scope?.barangay_name ?? null;
+  const assignedBarangayId = isBdrrmo ? scopeBarangayId : null;
+  const [previousAssignedBarangayId, setPreviousAssignedBarangayId] =
+    useState(assignedBarangayId);
+
+  if (assignedBarangayId !== previousAssignedBarangayId) {
+    setPreviousAssignedBarangayId(assignedBarangayId);
+    if (assignedBarangayId) setSelectedBarangayId(assignedBarangayId);
+  }
 
   const closeForm = () => {
     if (onClose) {
@@ -96,13 +106,13 @@ export function OfficialReportForm({
     // BDRRMO reports always use the server-assigned barangay, so do not show
     // other barangays as client-side choices.
     if (isBdrrmo) {
-      if (!scope?.barangay_id || !scope.barangay_name) {
+      if (!scopeBarangayId || !scopeBarangayName) {
         setBarangays([]);
         setBarangaysError('Your assigned barangay is unavailable. Please sign in again.');
         return;
       }
 
-      setBarangays([{ id: scope.barangay_id, name: scope.barangay_name }]);
+      setBarangays([{ id: scopeBarangayId, name: scopeBarangayName }]);
       setBarangaysError(null);
       return;
     }
@@ -117,7 +127,7 @@ export function OfficialReportForm({
     }
     setBarangays(result.barangays);
     setBarangaysError(null);
-  }, [isBdrrmo, scope?.barangay_id, scope?.barangay_name]);
+  }, [isBdrrmo, scopeBarangayId, scopeBarangayName]);
 
   const fetchLocation = useCallback(async () => {
     setLocationLoading(true);
@@ -154,15 +164,12 @@ export function OfficialReportForm({
 
   useEffect(() => {
     if (!canCreate) return;
-    void loadBarangays();
-    void fetchLocation();
+    const initializationTimer = setTimeout(() => {
+      void loadBarangays();
+      void fetchLocation();
+    }, 0);
+    return () => clearTimeout(initializationTimer);
   }, [canCreate, loadBarangays, fetchLocation]);
-
-  useEffect(() => {
-    if (isBdrrmo && scope?.barangay_id) {
-      setSelectedBarangayId(scope.barangay_id);
-    }
-  }, [isBdrrmo, scope?.barangay_id]);
 
   async function handleAddPhoto() {
     const result = await captureReportPhoto();

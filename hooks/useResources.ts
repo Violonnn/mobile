@@ -1,6 +1,6 @@
 // hooks/useResources.ts — hotlines + facilities for resident and official UIs.
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
 import {
   fetchActiveFacilities,
@@ -11,6 +11,7 @@ import {
   type HotlineRecord,
 } from '../lib/resources';
 import { supabase } from '../lib/supabase';
+import { useRealtimeChannelName } from './useRealtimeChannelName';
 
 type Mode = 'resident' | 'official';
 
@@ -29,10 +30,7 @@ export function useResources(options?: {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const channelName = useMemo(
-    () => `resources-${Math.random().toString(36).slice(2)}`,
-    [],
-  );
+  const channelName = useRealtimeChannelName('resources');
 
   const load = useCallback(async () => {
     const [hotlineResult, facilityResult] =

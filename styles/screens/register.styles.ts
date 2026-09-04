@@ -672,7 +672,7 @@ export const registerStyles = StyleSheet.create({
     textAlign: 'left',
   },
   pinHiddenInput: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     color: 'transparent',
     fontSize: 1,
     letterSpacing: 0,

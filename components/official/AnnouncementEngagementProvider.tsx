@@ -53,6 +53,7 @@ export function AnnouncementEngagementProvider({
 }) {
   const [myUpvotes, setMyUpvotes] = useState<Set<string>>(new Set());
   const [overrides, setOverrides] = useState<Map<string, CountOverride>>(new Map());
+  const [previousAnnouncements, setPreviousAnnouncements] = useState(announcements);
 
   const announcementIdsKey = useMemo(
     () => announcements.map((item) => item.id).sort().join(','),
@@ -71,7 +72,8 @@ export function AnnouncementEngagementProvider({
     };
   }, [announcementIdsKey]);
 
-  useEffect(() => {
+  if (announcements !== previousAnnouncements) {
+    setPreviousAnnouncements(announcements);
     setOverrides((prev) => {
       if (prev.size === 0) return prev;
       const next = new Map(prev);
@@ -92,7 +94,7 @@ export function AnnouncementEngagementProvider({
       }
       return next.size === prev.size ? prev : next;
     });
-  }, [announcements]);
+  }
 
   const getState = useCallback(
     (announcement: AnnouncementRecord): AnnouncementEngagementState => {

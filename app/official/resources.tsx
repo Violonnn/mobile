@@ -1,5 +1,5 @@
 // Resources (BDRRMO/MDRRMO) / Priority (Mayor): compact, scoped directory management.
-import React, { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import React, { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -215,7 +215,9 @@ export function ResourceManagementContent({ header }: { header?: ReactNode }) {
   const isBdrrmo = officialKind === 'BDRRMO';
   const isMdrrmo = officialKind === 'MDRRMO';
   const canManageDirectory = isBdrrmo || isMdrrmo;
-  const barangayFilter = isBdrrmo ? scope?.barangay_id ?? null : null;
+  const scopeBarangayId = scope?.barangay_id ?? null;
+  const scopeBarangayName = scope?.barangay_name ?? null;
+  const barangayFilter = isBdrrmo ? scopeBarangayId : null;
 
   const {
     hotlines,
@@ -236,7 +238,14 @@ export function ResourceManagementContent({ header }: { header?: ReactNode }) {
     reload: reloadCenters,
   } = useEvacuationCenters({ barangayId: barangayFilter });
 
-  const [tab, setTab] = useState<TabKey>(isMayor ? 'centers' : 'hotlines');
+  const requestedTab = Array.isArray(tabParam) ? tabParam[0] : tabParam;
+  const routeTab: TabKey | null =
+    requestedTab === 'hotlines' ||
+    requestedTab === 'facilities' ||
+    requestedTab === 'centers'
+      ? requestedTab
+      : null;
+  const [tab, setTab] = useState<TabKey>(routeTab ?? (isMayor ? 'centers' : 'hotlines'));
   const [search, setSearch] = useState('');
   const [editor, setEditor] = useState<EditorKey>(null);
   const [editingHotline, setEditingHotline] = useState<HotlineRecord | null>(null);
@@ -249,40 +258,48 @@ export function ResourceManagementContent({ header }: { header?: ReactNode }) {
   const [pickerVisible, setPickerVisible] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
-  const handledCreateParam = useRef<string | null>(null);
+  const [previousRouteTab, setPreviousRouteTab] = useState(routeTab);
+  const requestedCreate = Array.isArray(createParam) ? createParam[0] : createParam;
+  const routeCreate: ResourceCreateType | null =
+    requestedCreate === 'hotline' ||
+    requestedCreate === 'facility' ||
+    requestedCreate === 'center'
+      ? requestedCreate
+      : null;
+  const [handledCreateParam, setHandledCreateParam] =
+    useState<ResourceCreateType | null>(null);
 
-  useEffect(() => {
-    const requestedTab = Array.isArray(tabParam) ? tabParam[0] : tabParam;
-    if (requestedTab === 'hotlines' || requestedTab === 'facilities' || requestedTab === 'centers') {
-      setTab(requestedTab);
+  if (routeTab !== previousRouteTab) {
+    setPreviousRouteTab(routeTab);
+    if (routeTab) {
+      setTab(routeTab);
+      setSearch('');
     }
-  }, [tabParam]);
+  }
 
-  useEffect(() => {
-    const requestedCreate = Array.isArray(createParam) ? createParam[0] : createParam;
-    if (!requestedCreate) {
-      handledCreateParam.current = null;
-      return;
-    }
-    if (!isMdrrmo || handledCreateParam.current === requestedCreate) return;
-    if (requestedCreate !== 'hotline' && requestedCreate !== 'facility' && requestedCreate !== 'center') return;
-
-    handledCreateParam.current = requestedCreate;
-    if (requestedCreate === 'hotline') {
+  if (!routeCreate && handledCreateParam) {
+    setHandledCreateParam(null);
+  } else if (isMdrrmo && routeCreate && handledCreateParam !== routeCreate) {
+    setHandledCreateParam(routeCreate);
+    if (routeCreate === 'hotline') {
       setEditingHotline(null);
       setEditor('hotline');
     }
-    if (requestedCreate === 'facility') {
+    if (routeCreate === 'facility') {
       setEditingFacility(null);
       setEditor('facility');
     }
-    if (requestedCreate === 'center') {
+    if (routeCreate === 'center') {
       setEditingCenter(null);
       setEditor('center');
     }
+  }
+
+  useEffect(() => {
+    if (!routeCreate || handledCreateParam !== routeCreate) return;
     // Consume the command-route intent so adding the same type works again.
     router.setParams({ create: '' });
-  }, [createParam, isMdrrmo, router]);
+  }, [handledCreateParam, routeCreate, router]);
 
   useEffect(() => {
     if (!isMdrrmo) return;
@@ -292,21 +309,17 @@ export function ResourceManagementContent({ header }: { header?: ReactNode }) {
     });
   }, [isMdrrmo]);
 
-  useEffect(() => {
-    setSearch('');
-  }, [tab]);
-
   const facilityById = useMemo(
     () => new Map(facilities.map((facility) => [facility.id, facility])),
     [facilities],
   );
   const barangayNameById = useMemo(() => {
     const names = new Map(barangays.map((barangay) => [barangay.id, barangay.name]));
-    if (isBdrrmo && scope?.barangay_id && scope.barangay_name) {
-      names.set(scope.barangay_id, scope.barangay_name);
+    if (isBdrrmo && scopeBarangayId && scopeBarangayName) {
+      names.set(scopeBarangayId, scopeBarangayName);
     }
     return names;
-  }, [barangays, isBdrrmo, scope?.barangay_id, scope?.barangay_name]);
+  }, [barangays, isBdrrmo, scopeBarangayId, scopeBarangayName]);
   const visibleHotlines = useMemo(
     () => hotlines.filter((item) => {
       if (statusFilter === 'active' && !item.isActive) return false;
@@ -423,15 +436,18 @@ export function ResourceManagementContent({ header }: { header?: ReactNode }) {
     setPickerVisible(false);
     if (type === 'hotline') {
       setTab('hotlines');
+      setSearch('');
       openHotlineEditor(null);
       return;
     }
     if (type === 'facility') {
       setTab('facilities');
+      setSearch('');
       openFacilityEditor(null);
       return;
     }
     setTab('centers');
+    setSearch('');
     openCenterEditor(null);
   }
 
@@ -488,7 +504,7 @@ export function ResourceManagementContent({ header }: { header?: ReactNode }) {
             {(['hotlines', 'facilities', 'centers'] as TabKey[]).map((item) => {
               const active = tab === item;
               const count = item === 'hotlines' ? hotlines.length : item === 'facilities' ? facilities.length : centers.length;
-              return <TouchableOpacity key={item} style={[isMdrrmo ? styles.resourceDirectoryTab : styles.resourceTabChip, active && (isMdrrmo ? styles.resourceDirectoryTabActive : styles.resourceTabChipActive)]} onPress={() => { setTab(item); setStatusFilter('all'); }} accessibilityRole="button" accessibilityState={{ selected: active }}><Text style={[isMdrrmo ? styles.resourceDirectoryTabText : styles.resourceTabChipText, active && (isMdrrmo ? styles.resourceDirectoryTabTextActive : styles.resourceTabChipTextActive)]}>{item.charAt(0).toUpperCase() + item.slice(1)}{isMdrrmo ? `  ${String(count).padStart(2, '0')}` : ''}</Text></TouchableOpacity>;
+              return <TouchableOpacity key={item} style={[isMdrrmo ? styles.resourceDirectoryTab : styles.resourceTabChip, active && (isMdrrmo ? styles.resourceDirectoryTabActive : styles.resourceTabChipActive)]} onPress={() => { setTab(item); setSearch(''); setStatusFilter('all'); }} accessibilityRole="button" accessibilityState={{ selected: active }}><Text style={[isMdrrmo ? styles.resourceDirectoryTabText : styles.resourceTabChipText, active && (isMdrrmo ? styles.resourceDirectoryTabTextActive : styles.resourceTabChipTextActive)]}>{item.charAt(0).toUpperCase() + item.slice(1)}{isMdrrmo ? `  ${String(count).padStart(2, '0')}` : ''}</Text></TouchableOpacity>;
             })}
           </View>
         ) : null}

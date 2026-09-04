@@ -40,23 +40,24 @@ function createRandomImageOrder(previousImageIndex?: number): number[] {
   return randomOrder;
 }
 
+// Randomize once when the JavaScript module loads so rendering remains deterministic.
+const SESSION_INITIAL_IMAGE_ORDER = createRandomImageOrder();
+
 export default function ReminderBanner() {
-  const initialOrderRef = useRef(createRandomImageOrder());
-  const imageOrderRef = useRef(initialOrderRef.current);
+  const [initialImageOrder] = useState(() => [...SESSION_INITIAL_IMAGE_ORDER]);
+  const imageOrderRef = useRef(initialImageOrder);
   const orderPositionRef = useRef(0);
   const isTransitioningRef = useRef(false);
   const isFocusedRef = useRef(false);
   const activeSlotRef = useRef<0 | 1>(0);
   const pendingSlotRef = useRef<0 | 1 | null>(null);
-  const slotImageIndexesRef = useRef<[number, number]>([
-    initialOrderRef.current[0],
-    initialOrderRef.current[0],
+  const [slotImageIndexes, setSlotImageIndexes] = useState<[number, number]>(() => [
+    initialImageOrder[0],
+    initialImageOrder[0],
   ]);
-  const firstSlotOpacity = useRef(new Animated.Value(1)).current;
-  const secondSlotOpacity = useRef(new Animated.Value(0)).current;
-  const [slotImageIndexes, setSlotImageIndexes] = useState<[number, number]>(
-    slotImageIndexesRef.current,
-  );
+  const slotImageIndexesRef = useRef(slotImageIndexes);
+  const [firstSlotOpacity] = useState(() => new Animated.Value(1));
+  const [secondSlotOpacity] = useState(() => new Animated.Value(0));
   const [cyclePosition, setCyclePosition] = useState(0);
 
   const crossfadeToSlot = useCallback(

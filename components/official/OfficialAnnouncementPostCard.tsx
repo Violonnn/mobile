@@ -599,6 +599,7 @@ export default function OfficialAnnouncementPostCard({
   const [refreshing, setRefreshing] = useState(false);
   const [featuredAnnouncement, setFeaturedAnnouncement] = useState(announcement);
   const [detailAnnouncement, setDetailAnnouncement] = useState(announcement);
+  const [previousAnnouncementId, setPreviousAnnouncementId] = useState(announcement.id);
   const insets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
   const sheetBottom = insets.bottom + BOTTOM_NAV_CLEARANCE;
@@ -624,11 +625,10 @@ export default function OfficialAnnouncementPostCard({
     return () => clearTimeout(timer);
   }, [expanded, keyboardOpen]);
 
-  useEffect(() => {
+  if (announcement.id !== previousAnnouncementId) {
+    setPreviousAnnouncementId(announcement.id);
     setFeaturedAnnouncement(announcement);
-    // Reset only when the LATEST seed update changes, not on every object refresh.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- announcement.id is the intended trigger
-  }, [announcement.id]);
+  }
 
   const handleFeaturedActiveChange = useCallback((nextAnnouncement: AnnouncementRecord) => {
     setFeaturedAnnouncement((current) =>

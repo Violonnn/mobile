@@ -22,11 +22,11 @@ function AnimatedConnector({ filled }: AnimatedConnectorProps) {
   const progress = useSharedValue(filled ? 1 : 0);
 
   useEffect(() => {
-    progress.value = withTiming(filled ? 1 : 0, { duration: 420 });
+    progress.set(withTiming(filled ? 1 : 0, { duration: 420 }));
   }, [filled, progress]);
 
   const fillStyle = useAnimatedStyle(() => ({
-    transform: [{ scaleX: progress.value }],
+    transform: [{ scaleX: progress.get() }],
   }));
 
   return (
@@ -74,27 +74,27 @@ export default function Stepper({
     const target = markerCenters[current];
     if (target == null) return;
 
-    leap.value = withSequence(
+    leap.set(withSequence(
       withTiming(10, { duration: 80 }),
       withTiming(-22, { duration: 180 }),
       withTiming(-22, { duration: 80 }),
       withSpring(0, { damping: 10, stiffness: 160 }),
-    );
+    ));
 
-    translateX.value = withSpring(target, {
+    translateX.set(withSpring(target, {
       damping: 16,
       stiffness: 170,
       mass: 0.9,
-    });
+    }));
 
-    scale.value = withSequence(
+    scale.set(withSequence(
       withSpring(1.22, { damping: 8, stiffness: 200 }),
       withSpring(1, { damping: 13, stiffness: 170 }),
-    );
+    ));
   }, [current, markerCenters, translateX, scale, leap]);
 
   useEffect(() => {
-    scale.value = withSequence(
+    scale.set(withSequence(
       withTiming(1, { duration: 420 }),
       withSpring(1.4, { damping: 4, stiffness: 180 }),
       withSpring(1.0, { damping: 6, stiffness: 120 }),
@@ -112,14 +112,14 @@ export default function Stepper({
       withSpring(1.0, { damping: 6, stiffness: 120 }),
       withSpring(1.4, { damping: 4, stiffness: 180 }),
       withSpring(1.0, { damping: 6, stiffness: 120 }),
-    );
+    ));
   }, [current, scale]);
 
   const activeMarkerStyle = useAnimatedStyle(() => ({
     transform: [
-      { translateX: translateX.value },
-      { translateY: leap.value },
-      { scale: scale.value },
+      { translateX: translateX.get() },
+      { translateY: leap.get() },
+      { scale: scale.get() },
     ],
   }));
 

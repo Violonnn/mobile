@@ -3,12 +3,12 @@
 // BDRRMO/MDRRMO: Command, Community, centered Reports, Map, Settings
 // Mayor: Brief, Situations, Community, Map, Settings
 
-import React, { useCallback, memo, useMemo, useRef } from 'react';
+import React, { useCallback, memo, useMemo, useState } from 'react';
 import { Animated, View, Text, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
+import type { BottomTabBarProps } from 'expo-router/js-tabs';
 import { useOfficialPortal } from '../../context/OfficialPortalContext';
 import {
   officialBottomNavStyles as styles,
@@ -123,9 +123,9 @@ const NavItem = memo(function NavItem({
 });
 
 function IncidentCenterButton({ onPress, label = 'Incidents' }: { onPress: () => void; label?: string }) {
-  const buttonScale = useRef(new Animated.Value(1)).current;
-  const waveScale = useRef(new Animated.Value(0.85)).current;
-  const waveOpacity = useRef(new Animated.Value(0)).current;
+  const [buttonScale] = useState(() => new Animated.Value(1));
+  const [waveScale] = useState(() => new Animated.Value(0.85));
+  const [waveOpacity] = useState(() => new Animated.Value(0));
 
   const handlePress = useCallback(() => {
     waveOpacity.setValue(0.3);

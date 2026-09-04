@@ -146,7 +146,8 @@ export default function CommentsSection({
   const [draft, setDraft] = useState('');
   const [replyTo, setReplyTo] = useState<ThreadComment | null>(null);
   const [sendError, setSendError] = useState<string | null>(null);
-  const [highlightActive, setHighlightActive] = useState(false);
+  const [highlightActive, setHighlightActive] = useState(highlighted);
+  const [previousHighlighted, setPreviousHighlighted] = useState(highlighted);
   const inputRef = useRef<TextInput>(null);
   const previousRefreshSignal = useRef(refreshSignal);
 
@@ -188,13 +189,17 @@ export default function CommentsSection({
     return () => clearTimeout(timer);
   }, [autoFocus]);
 
+  if (highlighted !== previousHighlighted) {
+    setPreviousHighlighted(highlighted);
+    setHighlightActive(highlighted);
+  }
+
   // Show the highlight tint briefly, then let the section settle to normal.
   useEffect(() => {
-    if (!highlighted) return;
-    setHighlightActive(true);
+    if (!highlightActive) return;
     const timer = setTimeout(() => setHighlightActive(false), 2200);
     return () => clearTimeout(timer);
-  }, [highlighted]);
+  }, [highlightActive]);
 
   // A detail pull-to-refresh refreshes this report's currently visible comment
   // and reply pages too, without touching any other feed/map report.

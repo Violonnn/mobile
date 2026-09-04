@@ -202,10 +202,13 @@ export function useReportFlow(active: boolean) {
 
   useEffect(() => {
     if (!active) return;
-    reset();
-    void loadBarangays();
-    void fetchLocation(true);
+    const initializationTimer = setTimeout(() => {
+      reset();
+      void loadBarangays();
+      void fetchLocation(true);
+    }, 0);
     return () => {
+      clearTimeout(initializationTimer);
       if (advanceTimer.current) clearTimeout(advanceTimer.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -334,12 +337,13 @@ export function useReportFlow(active: boolean) {
     }
   }, [step, media]);
 
-  // Details step is "live": progress reflects title + description.
-  useEffect(() => {
-    if (step !== 'details') return;
-    const ready = title.trim() && description.trim();
-    setProgress(ready ? PROGRESS.detailsFilled : PROGRESS.bothAttachments);
-  }, [step, title, description]);
+  // Details progress is derived directly so typing does not require an effect-driven render.
+  const visibleProgress =
+    step === 'details'
+      ? title.trim() && description.trim()
+        ? PROGRESS.detailsFilled
+        : PROGRESS.bothAttachments
+      : progress;
 
   const submit = useCallback(async () => {
     if (submitLock.current || !position) return;
@@ -450,7 +454,7 @@ export function useReportFlow(active: boolean) {
 
   return {
     step,
-    progress,
+    progress: visibleProgress,
     // location
     position,
     address,

@@ -29,13 +29,13 @@ export const mdrrmoCommandStyles = StyleSheet.create({
   linkText: { fontFamily: fonts.medium, fontSize: fontSizes.sm, color: colors.primary },
 
   mapHero: { width: '100%', overflow: 'hidden', backgroundColor: '#07182A' },
-  mapFill: { ...StyleSheet.absoluteFillObject },
+  mapFill: { ...StyleSheet.absoluteFill },
   emptyMap: {
     opacity: 0.72,
     filter: 'blur(2px)',
     transform: [{ scale: 1.02 }],
   },
-  mapScrim: { ...StyleSheet.absoluteFillObject },
+  mapScrim: { ...StyleSheet.absoluteFill },
   emptyMapContent: {
     position: 'absolute',
     left: spacing.lg,
@@ -161,7 +161,7 @@ export const mdrrmoCommandStyles = StyleSheet.create({
     elevation: 3,
   },
   directoryMap: { height: 250, backgroundColor: '#EDF2F5' },
-  directoryMapOverlay: { ...StyleSheet.absoluteFillObject, padding: spacing.md },
+  directoryMapOverlay: { ...StyleSheet.absoluteFill, padding: spacing.md },
   addCircle: {
     position: 'absolute',
     top: spacing.md,

@@ -707,7 +707,7 @@ export default function InteractiveMap({
   stickyFocus = false,
 }: Props) {
   const webRef = useRef<WebView>(null);
-  const initialShowMapDetailsRef = useRef(showMapDetails);
+  const [initialShowMapDetails] = useState(showMapDetails);
   const lastFocusSignatureRef = useRef('');
   // Leaflet supports a wider range, but the app's tile sources are configured for levels 1-19.
   const safeFocusZoomLevel = Math.min(19, Math.max(1, Math.round(focusZoomLevel)));
@@ -717,11 +717,18 @@ export default function InteractiveMap({
         showZoomControls,
         tone,
         pulseReportClusters,
-        initialShowMapDetailsRef.current,
+        initialShowMapDetails,
         stickyFocus,
         safeFocusZoomLevel,
       ),
-    [pulseReportClusters, safeFocusZoomLevel, showZoomControls, stickyFocus, tone],
+    [
+      initialShowMapDetails,
+      pulseReportClusters,
+      safeFocusZoomLevel,
+      showZoomControls,
+      stickyFocus,
+      tone,
+    ],
   );
   const readyRef = useRef(false);
   const [searchQuery, setSearchQuery] = useState('');

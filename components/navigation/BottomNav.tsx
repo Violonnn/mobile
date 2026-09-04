@@ -7,12 +7,12 @@
 //  - The center Report control is a large blue location action above the bar.
 // No animations — static highlight for best performance on low-end devices.
 
-import React, { useCallback, useRef, useState, memo } from 'react';
+import React, { useCallback, useState, memo } from 'react';
 import { Animated, View, Text, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
+import type { BottomTabBarProps } from 'expo-router/js-tabs';
 import {
   bottomNavStyles as styles,
   navColors,
@@ -80,9 +80,9 @@ const NavItem = memo(function NavItem({
 
 /** Center Report action button — carved, borderless, soft red. Not a tab. */
 const ReportButton = memo(function ReportButton({ onPress }: { onPress: () => void }) {
-  const buttonScale = useRef(new Animated.Value(1)).current;
-  const waveScale = useRef(new Animated.Value(0.85)).current;
-  const waveOpacity = useRef(new Animated.Value(0)).current;
+  const [buttonScale] = useState(() => new Animated.Value(1));
+  const [waveScale] = useState(() => new Animated.Value(0.85));
+  const [waveOpacity] = useState(() => new Animated.Value(0));
 
   const handlePress = useCallback(() => {
     buttonScale.stopAnimation();

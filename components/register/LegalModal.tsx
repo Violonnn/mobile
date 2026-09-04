@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
   Modal,
   NativeScrollEvent,
@@ -99,11 +99,16 @@ export default function LegalModal({
   requireRead = true,
   onClose,
 }: LegalModalProps) {
-  const [hasScrolledToBottom, setHasScrolledToBottom] = useState(false);
+  const [hasScrolledToBottom, setHasScrolledToBottom] = useState(!requireRead);
+  const resetKey = `${visible}:${requireRead}`;
+  const [previousResetKey, setPreviousResetKey] = useState(resetKey);
 
-  useEffect(() => {
-    if (visible) setHasScrolledToBottom(!requireRead);
-  }, [requireRead, visible]);
+  if (resetKey !== previousResetKey) {
+    setPreviousResetKey(resetKey);
+    if (visible) {
+      setHasScrolledToBottom(!requireRead);
+    }
+  }
 
   function handleScroll(e: NativeSyntheticEvent<NativeScrollEvent>) {
     const { layoutMeasurement, contentOffset, contentSize } = e.nativeEvent;

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Image, Text, TouchableOpacity, useWindowDimensions, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -53,18 +53,19 @@ export default function CommandEscalationMap({
     [reports],
   );
   const [activeIndex, setActiveIndex] = useState(0);
+  const maximumActiveIndex = Math.max(0, escalations.length - 1);
 
-  useEffect(() => {
-    setActiveIndex((current) => Math.min(current, Math.max(0, escalations.length - 1)));
-  }, [escalations.length]);
+  if (activeIndex > maximumActiveIndex) {
+    setActiveIndex(maximumActiveIndex);
+  }
 
-  const activeReport = escalations[activeIndex] ?? null;
+  const activeReport = escalations[Math.min(activeIndex, maximumActiveIndex)] ?? null;
   const markers = useMemo(
     () => escalations.map(asMapMarker).filter((marker): marker is MapReportMarker => marker !== null),
     [escalations],
   );
   const heroHeight = Math.min(540, Math.max(410, width * 1.2));
-  const focusTarget = useMemo(() => {
+  const focusTarget = (() => {
     if (activeReport == null || activeReport.latitude == null || activeReport.longitude == null) {
       return null;
     }
@@ -73,7 +74,7 @@ export default function CommandEscalationMap({
       latitude: activeReport.latitude,
       longitude: activeReport.longitude,
     };
-  }, [activeReport?.id, activeReport?.latitude, activeReport?.longitude]);
+  })();
 
   function move(direction: -1 | 1) {
     if (escalations.length < 2) return;

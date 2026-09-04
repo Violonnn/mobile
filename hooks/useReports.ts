@@ -2,12 +2,13 @@
 // Loads reports on focus and refreshes when a local report is queued/uploaded.
 // With `realtime: true` (default) it also stays live via a Supabase Realtime
 // subscription; the feed opts out and relies on pull-to-refresh instead.
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
 import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js';
 import { fetchMapReports, type MapReportMarker } from '../lib/reports';
 import { onReportQueueChange } from '../lib/reportQueueFlush';
 import { supabase } from '../lib/supabase';
+import { useRealtimeChannelName } from './useRealtimeChannelName';
 
 type UseReportsOptions = {
   /** Subscribe to live database changes. Defaults to true (used by the map). */
@@ -29,10 +30,7 @@ export function useReports({
 
   // Unique channel name per hook instance so the map and feed subscriptions
   // (which can be mounted at the same time) never collide.
-  const channelName = useMemo(
-    () => `reports-${Math.random().toString(36).slice(2)}`,
-    [],
-  );
+  const channelName = useRealtimeChannelName('reports');
 
   // Latest reports kept in a ref so the Realtime handler can diff an incoming
   // row against what we already have without re-subscribing on every change.

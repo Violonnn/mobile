@@ -1,5 +1,5 @@
 // Focused MDRRMO create/edit form for one evacuation center.
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -47,23 +47,34 @@ export default function EvacuationCenterFormSheet({
   onSaved,
   onClose,
 }: EvacuationCenterFormSheetProps) {
-  const [name, setName] = useState('');
-  const [barangayId, setBarangayId] = useState<string | null>(null);
-  const [coordinate, setCoordinate] = useState<MapPickerCoordinate | null>(null);
-  const [capacity, setCapacity] = useState('');
-  const [status, setStatus] = useState<EvacuationStatus>('closed_temporarily');
+  const [name, setName] = useState(center?.name ?? '');
+  const [barangayId, setBarangayId] = useState<string | null>(center?.barangayId ?? null);
+  const [coordinate, setCoordinate] = useState<MapPickerCoordinate | null>(
+    recordCoordinate(center),
+  );
+  const [capacity, setCapacity] = useState(
+    center?.capacity == null ? '' : String(center.capacity),
+  );
+  const [status, setStatus] = useState<EvacuationStatus>(
+    center?.status ?? 'closed_temporarily',
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [previousVisible, setPreviousVisible] = useState(visible);
+  const [previousCenter, setPreviousCenter] = useState(center);
 
-  useEffect(() => {
-    if (!visible) return;
-    setName(center?.name ?? '');
-    setBarangayId(center?.barangayId ?? null);
-    setCoordinate(recordCoordinate(center));
-    setCapacity(center?.capacity == null ? '' : String(center.capacity));
-    setStatus(center?.status ?? 'closed_temporarily');
-    setError(null);
-  }, [center, visible]);
+  if (visible !== previousVisible || center !== previousCenter) {
+    setPreviousVisible(visible);
+    setPreviousCenter(center);
+    if (visible) {
+      setName(center?.name ?? '');
+      setBarangayId(center?.barangayId ?? null);
+      setCoordinate(recordCoordinate(center));
+      setCapacity(center?.capacity == null ? '' : String(center.capacity));
+      setStatus(center?.status ?? 'closed_temporarily');
+      setError(null);
+    }
+  }
 
   const hasUnsavedChanges = useMemo(() => {
     const original = recordCoordinate(center);

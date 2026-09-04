@@ -199,7 +199,7 @@ export const mdrrmoCommunityStyles = StyleSheet.create({
     backgroundColor: 'rgba(17, 24, 39, 0.42)',
   },
   modalBackdrop: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   filterSheet: {
     paddingHorizontal: spacing.lg,

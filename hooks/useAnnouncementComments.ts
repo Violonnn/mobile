@@ -1,6 +1,6 @@
 // hooks/useAnnouncementComments.ts — paged comment data for one announcement.
 // Mirrors useComments (report threads) with announcement-specific tables.
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   addAnnouncementComment,
   fetchAnnouncementCommentReplies,
@@ -8,6 +8,7 @@ import {
   type AnnouncementComment,
 } from '../lib/announcementComments';
 import { supabase } from '../lib/supabase';
+import { useRealtimeChannelName } from './useRealtimeChannelName';
 
 const INITIAL_COMMENT_COUNT = 3;
 const PAGE_SIZE = 5;
@@ -32,19 +33,29 @@ export function useAnnouncementComments(
     new Map(),
   );
   const replyPagesRef = useRef(replyPages);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(Boolean(announcementId));
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [previousAnnouncementId, setPreviousAnnouncementId] =
+    useState(announcementId);
+
+  if (announcementId !== previousAnnouncementId) {
+    setPreviousAnnouncementId(announcementId);
+    setComments([]);
+    setTotalComments(0);
+    setCommentLimit(INITIAL_COMMENT_COUNT);
+    setReplyPages(new Map());
+    setError(null);
+    setLoading(Boolean(announcementId));
+  }
 
   useEffect(() => {
     replyPagesRef.current = replyPages;
   }, [replyPages]);
 
-  const channelName = useMemo(
-    () =>
-      `announcement-comments-${announcementId ?? 'none'}-${Math.random().toString(36).slice(2)}`,
-    [announcementId],
+  const channelName = useRealtimeChannelName(
+    `announcement-comments-${announcementId ?? 'none'}`,
   );
 
   const load = useCallback(async () => {
@@ -116,17 +127,9 @@ export function useAnnouncementComments(
   }, [load, loadReplies]);
 
   useEffect(() => {
-    if (!announcementId) {
-      setComments([]);
-      setTotalComments(0);
-      setCommentLimit(INITIAL_COMMENT_COUNT);
-      setReplyPages(new Map());
-      setError(null);
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    void load();
+    if (!announcementId) return;
+    const loadTimer = setTimeout(() => void load(), 0);
+    return () => clearTimeout(loadTimer);
   }, [announcementId, load]);
 
   useEffect(() => {

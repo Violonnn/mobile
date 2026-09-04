@@ -1,5 +1,5 @@
 // Focused create/edit form for one hotline directory record.
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -51,23 +51,28 @@ export default function HotlineFormSheet({
   onSaved,
   onClose,
 }: HotlineFormSheetProps) {
-  const [name, setName] = useState('');
-  const [number, setNumber] = useState('');
-  const [category, setCategory] = useState<HotlineCategory>('lgu');
-  const [facilityId, setFacilityId] = useState<string | null>(null);
-  const [isActive, setIsActive] = useState(true);
+  const [name, setName] = useState(hotline?.name ?? '');
+  const [number, setNumber] = useState(hotline?.number ?? '');
+  const [category, setCategory] = useState<HotlineCategory>(hotline?.category ?? 'lgu');
+  const [facilityId, setFacilityId] = useState<string | null>(hotline?.facilityId ?? null);
+  const [isActive, setIsActive] = useState(hotline?.isActive ?? true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [previousVisible, setPreviousVisible] = useState(visible);
+  const [previousHotline, setPreviousHotline] = useState(hotline);
 
-  useEffect(() => {
-    if (!visible) return;
-    setName(hotline?.name ?? '');
-    setNumber(hotline?.number ?? '');
-    setCategory(hotline?.category ?? 'lgu');
-    setFacilityId(hotline?.facilityId ?? null);
-    setIsActive(hotline?.isActive ?? true);
-    setError(null);
-  }, [hotline, visible]);
+  if (visible !== previousVisible || hotline !== previousHotline) {
+    setPreviousVisible(visible);
+    setPreviousHotline(hotline);
+    if (visible) {
+      setName(hotline?.name ?? '');
+      setNumber(hotline?.number ?? '');
+      setCategory(hotline?.category ?? 'lgu');
+      setFacilityId(hotline?.facilityId ?? null);
+      setIsActive(hotline?.isActive ?? true);
+      setError(null);
+    }
+  }
 
   const isNational = hotline?.category === 'national_emergency';
   const hasUnsavedChanges = useMemo(() => {

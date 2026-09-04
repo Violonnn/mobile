@@ -76,7 +76,7 @@ function RemoteVideoPreview({ uri }: { uri: string }) {
       style={reportDetailStyles.previewVideo}
       player={player}
       nativeControls
-      allowsFullscreen
+      fullscreenOptions={{ enable: true }}
       contentFit="contain"
     />
   );
@@ -87,14 +87,18 @@ function VideoThumbnail({ uri }: { uri: string }) {
     () => videoThumbCache.get(uri) ?? null,
   );
   const [failed, setFailed] = useState(false);
+  const [previousUri, setPreviousUri] = useState(uri);
+
+  if (uri !== previousUri) {
+    setPreviousUri(uri);
+    setThumbUri(videoThumbCache.get(uri) ?? null);
+    setFailed(false);
+  }
 
   useEffect(() => {
     let cancelled = false;
     const cached = videoThumbCache.get(uri);
-    if (cached) {
-      setThumbUri(cached);
-      return;
-    }
+    if (cached) return;
 
     void (async () => {
       try {
@@ -1194,7 +1198,7 @@ export const reportDetailStyles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   postModalBackdrop: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(17, 24, 39, 0.48)',
   },
   // Anchored to the bottom — same max height as the map detail sheet.
@@ -1385,7 +1389,7 @@ export const reportDetailStyles = StyleSheet.create({
     justifyContent: 'center',
   },
   overflowOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(17, 24, 39, 0.55)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1444,7 +1448,7 @@ export const reportDetailStyles = StyleSheet.create({
     paddingHorizontal: spacing.md,
   },
   previewBackdropTap: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   previewContent: {
     borderRadius: radius.lg,

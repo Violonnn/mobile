@@ -1,7 +1,7 @@
 // hooks/useOfficialReports.ts
 // Official queue + detail loading with pull-to-refresh and Realtime updates.
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
 import type { OfficialAccessScope } from '../lib/officialRegistration';
 import {
@@ -12,6 +12,7 @@ import {
   type OfficialStatusCounts,
 } from '../lib/officialReports';
 import { supabase } from '../lib/supabase';
+import { useRealtimeChannelName } from './useRealtimeChannelName';
 
 function emptyCounts(): OfficialStatusCounts {
   return {
@@ -31,10 +32,7 @@ export function useOfficialReportQueue(scope: OfficialAccessScope | null) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const channelName = useMemo(
-    () => `official-queue-${Math.random().toString(36).slice(2)}`,
-    [],
-  );
+  const channelName = useRealtimeChannelName('official-queue');
 
   const load = useCallback(async () => {
     if (!scope) {
@@ -116,10 +114,7 @@ export function useOfficialReportDetail(
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const channelName = useMemo(
-    () => `official-detail-${Math.random().toString(36).slice(2)}`,
-    [],
-  );
+  const channelName = useRealtimeChannelName('official-detail');
 
   const load = useCallback(async () => {
     if (!scope || !reportId) {

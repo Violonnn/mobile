@@ -157,7 +157,7 @@ export default function AnnouncementComposerModal(props: Props) {
 
 const localStyles = StyleSheet.create({
   overlay: { flex: 1 },
-  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(17,24,39,0.48)' },
+  backdrop: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(17,24,39,0.48)' },
   sheet: {
     flex: 1,
     backgroundColor: colors.card,

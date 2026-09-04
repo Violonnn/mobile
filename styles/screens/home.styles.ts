@@ -351,7 +351,7 @@ export const homeStyles = StyleSheet.create({
     backgroundColor: '#EDF3F9',
   },
   reminderBannerImageLayer: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -463,7 +463,7 @@ export const homeStyles = StyleSheet.create({
     backgroundColor: '#EDF3F9',
   },
   featuredThumbMedia: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   featuredThumbFallback: {
     flex: 1,
@@ -585,7 +585,7 @@ export const homeStyles = StyleSheet.create({
     backgroundColor: '#07182A',
   },
   nearbyMapCanvas: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   nearbyMapReportContent: {
     position: 'absolute',

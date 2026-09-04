@@ -1,7 +1,7 @@
 // app/official/map.tsx
 // Official map: report clusters + facility/evac layers with legend filters.
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Animated,
   PanResponder,
@@ -38,6 +38,7 @@ import { officialStyles } from '../../styles/screens/official.styles';
 import { residentMapStyles } from '../../styles/screens/residentMap.styles';
 import { officialNavMetrics } from '../../styles/components/officialBottomNav.styles';
 import { isValidReportId } from '../../lib/officialReports';
+import { createMutableNumber } from '../../lib/mutableNumber';
 
 const COLLAPSED_PANEL_HEADER_HEIGHT = 88;
 
@@ -50,8 +51,9 @@ export default function OfficialMapScreen() {
     resourceId?: string | string[];
   }>();
   const { officialKind, scope } = useOfficialPortal();
+  const scopeBarangayId = scope?.barangay_id ?? null;
   const barangayFilter =
-    officialKind === 'BDRRMO' ? scope?.barangay_id ?? null : null;
+    officialKind === 'BDRRMO' ? scopeBarangayId : null;
   const { reports: markers, error, loading, reload } = useReports({
     realtime: true,
     barangayId: barangayFilter,
@@ -75,18 +77,17 @@ export default function OfficialMapScreen() {
     evacuationCenters: true,
   });
   const [escalatedPanelCollapsed, setEscalatedPanelCollapsed] = useState(false);
-  const escalatedPanelCollapsedRef = useRef(false);
-  const escalatedPanelTranslateY = useRef(new Animated.Value(0)).current;
-  const panelDragStartOffsetRef = useRef(0);
+  const [escalatedPanelTranslateY] = useState(() => new Animated.Value(0));
+  const [panelDragStartOffset] = useState(() => createMutableNumber());
 
   const scopedMarkers = useMemo(() => {
-    if (officialKind !== 'BDRRMO' || !scope?.barangay_id) {
+    if (officialKind !== 'BDRRMO' || !scopeBarangayId) {
       return markers;
     }
     return markers.filter(
-      (marker) => marker.barangay_id === scope.barangay_id,
+      (marker) => marker.barangay_id === scopeBarangayId,
     );
-  }, [markers, officialKind, scope?.barangay_id]);
+  }, [markers, officialKind, scopeBarangayId]);
 
   const facilityMarkers = useMemo<MapResourceMarker[]>(
     () =>
@@ -177,7 +178,6 @@ export default function OfficialMapScreen() {
 
   const settleEscalatedPanel = useCallback(
     (collapse: boolean) => {
-      escalatedPanelCollapsedRef.current = collapse;
       setEscalatedPanelCollapsed(collapse);
       Animated.spring(escalatedPanelTranslateY, {
         toValue: collapse ? collapsedPanelOffset : 0,
@@ -192,9 +192,9 @@ export default function OfficialMapScreen() {
 
   useEffect(() => {
     escalatedPanelTranslateY.setValue(
-      escalatedPanelCollapsedRef.current ? collapsedPanelOffset : 0,
+      escalatedPanelCollapsed ? collapsedPanelOffset : 0,
     );
-  }, [collapsedPanelOffset, escalatedPanelTranslateY]);
+  }, [collapsedPanelOffset, escalatedPanelCollapsed, escalatedPanelTranslateY]);
 
   const escalatedPanelPanResponder = useMemo(
     () =>
@@ -203,13 +203,13 @@ export default function OfficialMapScreen() {
           Math.abs(gesture.dy) > 7 && Math.abs(gesture.dy) > Math.abs(gesture.dx),
         onPanResponderGrant: () => {
           escalatedPanelTranslateY.stopAnimation((currentOffset) => {
-            panelDragStartOffsetRef.current = currentOffset;
+            panelDragStartOffset.write(currentOffset);
           });
         },
         onPanResponderMove: (_, gesture) => {
           const nextOffset = Math.max(
             0,
-            Math.min(collapsedPanelOffset, panelDragStartOffsetRef.current + gesture.dy),
+            Math.min(collapsedPanelOffset, panelDragStartOffset.read() + gesture.dy),
           );
           escalatedPanelTranslateY.setValue(nextOffset);
         },
@@ -231,63 +231,76 @@ export default function OfficialMapScreen() {
           });
         },
       }),
-    [collapsedPanelOffset, escalatedPanelTranslateY, settleEscalatedPanel],
+    [
+      collapsedPanelOffset,
+      escalatedPanelTranslateY,
+      panelDragStartOffset,
+      settleEscalatedPanel,
+    ],
   );
 
   useEffect(() => {
-    const requestedId = Array.isArray(reportId) ? reportId[0] : reportId;
-    if (!requestedId) {
-      setFocusTarget(null);
+    // Route state is external to React; apply it after commit to avoid a cascading render.
+    const routeSyncTimer = setTimeout(() => {
+      const requestedId = Array.isArray(reportId) ? reportId[0] : reportId;
+      if (!requestedId) {
+        setFocusTarget(null);
+        setFocusError(null);
+        return;
+      }
+      if (!isValidReportId(requestedId)) {
+        setFocusTarget(null);
+        setSelectedReportIds([]);
+        setFocusError('The requested report link is invalid.');
+        return;
+      }
+      if (loading) return;
+
+      const targetReport = scopedMarkers.find((marker) => marker.id === requestedId);
+      if (!targetReport) {
+        setFocusTarget(null);
+        setSelectedReportIds([]);
+        setFocusError('That report is unavailable in your current scope.');
+        return;
+      }
+      if (!Number.isFinite(targetReport.latitude) || !Number.isFinite(targetReport.longitude)) {
+        setFocusTarget(null);
+        setSelectedReportIds([]);
+        setFocusError('That report does not have a valid map location.');
+        return;
+      }
+
       setFocusError(null);
-      return;
-    }
-    if (!isValidReportId(requestedId)) {
-      setFocusTarget(null);
-      setSelectedReportIds([]);
-      setFocusError('The requested report link is invalid.');
-      return;
-    }
-    if (loading) return;
-
-    const targetReport = scopedMarkers.find((marker) => marker.id === requestedId);
-    if (!targetReport) {
-      setFocusTarget(null);
-      setSelectedReportIds([]);
-      setFocusError('That report is unavailable in your current scope.');
-      return;
-    }
-    if (!Number.isFinite(targetReport.latitude) || !Number.isFinite(targetReport.longitude)) {
-      setFocusTarget(null);
-      setSelectedReportIds([]);
-      setFocusError('That report does not have a valid map location.');
-      return;
-    }
-
-    setFocusError(null);
-    setSelectedResource(null);
-    setSelectedReportIds([targetReport.id]);
-    setFocusTarget({
-      reportId: targetReport.id,
-      latitude: targetReport.latitude,
-      longitude: targetReport.longitude,
-    });
+      setSelectedResource(null);
+      setSelectedReportIds([targetReport.id]);
+      setFocusTarget({
+        reportId: targetReport.id,
+        latitude: targetReport.latitude,
+        longitude: targetReport.longitude,
+      });
+    }, 0);
+    return () => clearTimeout(routeSyncTimer);
   }, [loading, reportId, scopedMarkers]);
 
   useEffect(() => {
-    const requestedId = Array.isArray(resourceId) ? resourceId[0] : resourceId;
-    if (!requestedId) return;
+    // Route state is external to React; apply it after commit to avoid a cascading render.
+    const routeSyncTimer = setTimeout(() => {
+      const requestedId = Array.isArray(resourceId) ? resourceId[0] : resourceId;
+      if (!requestedId) return;
 
-    const resource = [...facilityMarkers, ...centerMarkers].find((item) => item.id === requestedId);
-    if (!resource) return;
+      const resource = [...facilityMarkers, ...centerMarkers].find((item) => item.id === requestedId);
+      if (!resource) return;
 
-    setFocusError(null);
-    setSelectedReportIds([]);
-    setSelectedResource(resource);
-    setFocusTarget({
-      resourceId: resource.id,
-      latitude: resource.latitude,
-      longitude: resource.longitude,
-    });
+      setFocusError(null);
+      setSelectedReportIds([]);
+      setSelectedResource(resource);
+      setFocusTarget({
+        resourceId: resource.id,
+        latitude: resource.latitude,
+        longitude: resource.longitude,
+      });
+    }, 0);
+    return () => clearTimeout(routeSyncTimer);
   }, [centerMarkers, facilityMarkers, resourceId]);
 
   if (officialKind === 'Mayor') {

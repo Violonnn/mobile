@@ -1,5 +1,5 @@
 // Focused create/edit form for one facility directory record.
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -55,25 +55,32 @@ export default function FacilityFormSheet({
   onSaved,
   onClose,
 }: FacilityFormSheetProps) {
-  const [name, setName] = useState('');
-  const [type, setType] = useState<FacilityType>('other');
-  const [coordinate, setCoordinate] = useState<MapPickerCoordinate | null>(null);
-  const [address, setAddress] = useState('');
-  const [contact, setContact] = useState('');
-  const [isActive, setIsActive] = useState(true);
+  const [name, setName] = useState(facility?.name ?? '');
+  const [type, setType] = useState<FacilityType>(facility?.type ?? 'other');
+  const [coordinate, setCoordinate] = useState<MapPickerCoordinate | null>(
+    recordCoordinate(facility),
+  );
+  const [address, setAddress] = useState(facility?.address ?? '');
+  const [contact, setContact] = useState(facility?.contact ?? '');
+  const [isActive, setIsActive] = useState(facility?.isActive ?? true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [previousVisible, setPreviousVisible] = useState(visible);
+  const [previousFacility, setPreviousFacility] = useState(facility);
 
-  useEffect(() => {
-    if (!visible) return;
-    setName(facility?.name ?? '');
-    setType(facility?.type ?? 'other');
-    setCoordinate(recordCoordinate(facility));
-    setAddress(facility?.address ?? '');
-    setContact(facility?.contact ?? '');
-    setIsActive(facility?.isActive ?? true);
-    setError(null);
-  }, [facility, visible]);
+  if (visible !== previousVisible || facility !== previousFacility) {
+    setPreviousVisible(visible);
+    setPreviousFacility(facility);
+    if (visible) {
+      setName(facility?.name ?? '');
+      setType(facility?.type ?? 'other');
+      setCoordinate(recordCoordinate(facility));
+      setAddress(facility?.address ?? '');
+      setContact(facility?.contact ?? '');
+      setIsActive(facility?.isActive ?? true);
+      setError(null);
+    }
+  }
 
   const hasUnsavedChanges = useMemo(() => {
     const original = recordCoordinate(facility);

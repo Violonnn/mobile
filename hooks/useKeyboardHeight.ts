@@ -8,12 +8,15 @@ import { Keyboard, Platform, type KeyboardEvent } from 'react-native';
 
 export function useKeyboardHeight(enabled: boolean = true): number {
   const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [previousEnabled, setPreviousEnabled] = useState(enabled);
+
+  if (enabled !== previousEnabled) {
+    setPreviousEnabled(enabled);
+    if (!enabled) setKeyboardHeight(0);
+  }
 
   useEffect(() => {
-    if (!enabled) {
-      setKeyboardHeight(0);
-      return;
-    }
+    if (!enabled) return;
 
     // iOS fires "will" events before the slide animation, letting the sheet
     // move in step with the keyboard; Android only reliably fires "did".

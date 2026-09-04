@@ -73,7 +73,7 @@ export const mayorSituationsStyles = StyleSheet.create({
   loadMoreText: { fontFamily: fonts.medium, fontSize: fontSizes.md, color: colors.primary },
   showingText: { paddingVertical: spacing.sm, fontFamily: fonts.regular, fontSize: fontSizes.sm, color: colors.textMuted, textAlign: 'center' },
   modalRoot: { flex: 1, justifyContent: 'flex-end' },
-  modalBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(15,23,42,0.45)' },
+  modalBackdrop: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(15,23,42,0.45)' },
   filterSheet: { maxHeight: '86%', gap: spacing.md, paddingHorizontal: spacing.lg, paddingTop: spacing.sm, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, backgroundColor: colors.white },
   filterSheetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md },
   filterSheetTitle: { marginTop: spacing.xs, fontFamily: fonts.bold, fontSize: fontSizes.xl, color: colors.text },

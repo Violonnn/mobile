@@ -141,7 +141,9 @@ export default function OfficialCommandScreen() {
   }, []);
 
   useEffect(() => {
-    if (officialKind === 'BDRRMO') void loadProfile();
+    if (officialKind !== 'BDRRMO') return;
+    const profileTimer = setTimeout(() => void loadProfile(), 0);
+    return () => clearTimeout(profileTimer);
   }, [officialKind, loadProfile]);
 
   async function handleLogout() {

@@ -1,12 +1,13 @@
 // hooks/useEvacuationCenters.ts — evacuation center list with Realtime.
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
 import {
   fetchEvacuationCenters,
   type EvacuationCenterRecord,
 } from '../lib/resources';
 import { supabase } from '../lib/supabase';
+import { useRealtimeChannelName } from './useRealtimeChannelName';
 
 export function useEvacuationCenters(options?: {
   barangayId?: string | null;
@@ -20,10 +21,7 @@ export function useEvacuationCenters(options?: {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const channelName = useMemo(
-    () => `evac-centers-${Math.random().toString(36).slice(2)}`,
-    [],
-  );
+  const channelName = useRealtimeChannelName('evac-centers');
 
   const load = useCallback(async () => {
     const result = await fetchEvacuationCenters({ barangayId, priorityOnly });

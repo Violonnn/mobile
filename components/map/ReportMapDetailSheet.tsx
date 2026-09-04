@@ -135,6 +135,8 @@ export default function ReportMapDetailSheet({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showingAllMedia, setShowingAllMedia] = useState(false);
   const [listVisibleCount, setListVisibleCount] = useState(LIST_INITIAL_COUNT);
+  const [previousVisible, setPreviousVisible] = useState(visible);
+  const [previousReports, setPreviousReports] = useState(reports);
   // Comment-button flow: scroll the opened detail down to the comments section
   // and focus the composer.
   const [focusComments, setFocusComments] = useState(false);
@@ -199,23 +201,24 @@ export default function ReportMapDetailSheet({
   const visibleListReports = sorted.slice(0, listVisibleCount);
   const hasMoreListReports = listVisibleCount < sorted.length;
 
-  useEffect(() => {
+  if (visible !== previousVisible) {
+    setPreviousVisible(visible);
     if (!visible) {
       setSelectedId(null);
       setShowingAllMedia(false);
       setListVisibleCount(LIST_INITIAL_COUNT);
       setFocusComments(false);
-      pendingScrollToComments.current = false;
     }
-  }, [visible]);
+  }
 
-  useEffect(() => {
-    setShowingAllMedia(false);
-  }, [selectedId]);
-
-  useEffect(() => {
+  if (reports !== previousReports) {
+    setPreviousReports(reports);
     setListVisibleCount(LIST_INITIAL_COUNT);
-  }, [reports]);
+  }
+
+  useEffect(() => {
+    if (!visible) pendingScrollToComments.current = false;
+  }, [visible]);
 
   const handleClose = () => {
     setSelectedId(null);
@@ -240,6 +243,7 @@ export default function ReportMapDetailSheet({
   const openReportComments = (reportId: string) => {
     pendingScrollToComments.current = true;
     setFocusComments(true);
+    setShowingAllMedia(false);
     setSelectedId(reportId);
   };
 
@@ -327,7 +331,10 @@ export default function ReportMapDetailSheet({
                   <ShrunkReportCard
                     key={report.id}
                     report={report}
-                    onPress={() => setSelectedId(report.id)}
+                    onPress={() => {
+                      setShowingAllMedia(false);
+                      setSelectedId(report.id);
+                    }}
                     onCommentPress={() => openReportComments(report.id)}
                   />
                 ))}
@@ -418,7 +425,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   backdrop: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(17, 24, 39, 0.48)',
   },
   sheet: {

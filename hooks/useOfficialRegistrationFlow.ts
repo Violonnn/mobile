@@ -32,6 +32,50 @@ function firstParam(value: string | string[] | undefined): string {
   return value ?? '';
 }
 
+type InitialInviteTokenState = {
+  rawToken: string;
+  maskedToken: string;
+  inviteUnavailable: boolean;
+  validatingToken: boolean;
+  tokenError: string;
+};
+
+function parseInitialInviteToken(
+  value: string | string[] | undefined,
+): InitialInviteTokenState {
+  const paramToken = firstParam(value).trim();
+  if (!paramToken) {
+    return {
+      rawToken: '',
+      maskedToken: '',
+      inviteUnavailable: true,
+      validatingToken: false,
+      tokenError: 'This invite is unavailable. Open a valid invite link to register.',
+    };
+  }
+
+  const extracted = extractInviteToken(paramToken);
+  if (extracted.error || !extracted.token) {
+    return {
+      rawToken: '',
+      maskedToken: '',
+      inviteUnavailable: true,
+      validatingToken: false,
+      tokenError:
+        extracted.error ??
+        'This invite is unavailable. It may be invalid, expired, used, or revoked.',
+    };
+  }
+
+  return {
+    rawToken: extracted.token,
+    maskedToken: maskInviteToken(extracted.token),
+    inviteUnavailable: false,
+    validatingToken: true,
+    tokenError: '',
+  };
+}
+
 /**
  * Invite-only official registration (4 steps):
  * Invite → SMS verify → Details → Password/create account.
@@ -39,18 +83,23 @@ function firstParam(value: string | string[] | undefined): string {
  */
 export function useOfficialRegistrationFlow() {
   const params = useLocalSearchParams<{ token?: string | string[] }>();
+  const [initialInviteToken] = useState(() => parseInitialInviteToken(params.token));
 
   const [step, setStep] = useState<RegistrationStep>(0);
-  const [inviteUnavailable, setInviteUnavailable] = useState(false);
+  const [inviteUnavailable, setInviteUnavailable] = useState(
+    initialInviteToken.inviteUnavailable,
+  );
 
   // Raw opaque token — in-memory only.
-  const [rawToken, setRawToken] = useState('');
-  const [maskedToken, setMaskedToken] = useState('');
+  const [rawToken] = useState(initialInviteToken.rawToken);
+  const [maskedToken] = useState(initialInviteToken.maskedToken);
   const [validatedInvite, setValidatedInvite] = useState<ValidatedInvite | null>(
     null,
   );
-  const [validatingToken, setValidatingToken] = useState(true);
-  const [tokenError, setTokenError] = useState('');
+  const [validatingToken, setValidatingToken] = useState(
+    initialInviteToken.validatingToken,
+  );
+  const [tokenError, setTokenError] = useState(initialInviteToken.tokenError);
 
   const [phoneVerified, setPhoneVerified] = useState(false);
   const [lastName, setLastName] = useState('');
@@ -81,7 +130,6 @@ export function useOfficialRegistrationFlow() {
     null,
   );
 
-  const validatedOnce = useRef(false);
   /** Auto-continue runs only on the first successful Invite open — not when returning. */
   const autoContinueUsedRef = useRef(false);
   /** First SMS send is triggered when entering the Verify step. */
@@ -101,38 +149,11 @@ export function useOfficialRegistrationFlow() {
 
   // Parse + validate the incoming invite token once on mount.
   useEffect(() => {
-    if (validatedOnce.current) return;
-    validatedOnce.current = true;
-
-    const paramToken = firstParam(params.token).trim();
-    if (!paramToken) {
-      setValidatingToken(false);
-      setInviteUnavailable(true);
-      setTokenError(
-        'This invite is unavailable. Open a valid invite link to register.',
-      );
-      return;
-    }
-
-    const extracted = extractInviteToken(paramToken);
-    if (extracted.error || !extracted.token) {
-      setValidatingToken(false);
-      setInviteUnavailable(true);
-      setTokenError(
-        extracted.error ??
-          'This invite is unavailable. It may be invalid, expired, used, or revoked.',
-      );
-      return;
-    }
-
-    const token = extracted.token;
-    setRawToken(token);
-    setMaskedToken(maskInviteToken(token));
-    setValidatingToken(true);
+    if (!rawToken) return;
 
     let cancelled = false;
     (async () => {
-      const { invite, error } = await validateInviteToken(token);
+      const { invite, error } = await validateInviteToken(rawToken);
       if (cancelled) return;
 
       setValidatingToken(false);
@@ -156,7 +177,7 @@ export function useOfficialRegistrationFlow() {
     return () => {
       cancelled = true;
     };
-  }, [params.token]);
+  }, [rawToken]);
 
   useEffect(() => {
     if (resendCooldown <= 0) return;
@@ -253,17 +274,17 @@ export function useOfficialRegistrationFlow() {
   // Soft auto-continue on Invite step: once only, on first ready open.
   useEffect(() => {
     if (step !== 0 || !canProceedFromInvite) {
-      setAutoContinueSeconds(null);
-      return;
+      const resetTimer = setTimeout(() => setAutoContinueSeconds(null), 0);
+      return () => clearTimeout(resetTimer);
     }
 
     if (autoContinueUsedRef.current) {
-      setAutoContinueSeconds(null);
-      return;
+      const resetTimer = setTimeout(() => setAutoContinueSeconds(null), 0);
+      return () => clearTimeout(resetTimer);
     }
 
     autoContinueUsedRef.current = true;
-    setAutoContinueSeconds(10);
+    const startTimer = setTimeout(() => setAutoContinueSeconds(10), 0);
     const timer = setInterval(() => {
       setAutoContinueSeconds((prev) => {
         if (prev == null) return null;
@@ -272,14 +293,18 @@ export function useOfficialRegistrationFlow() {
       });
     }, 1000);
 
-    return () => clearInterval(timer);
+    return () => {
+      clearTimeout(startTimer);
+      clearInterval(timer);
+    };
   }, [step, canProceedFromInvite]);
 
   // When countdown reaches 0, advance automatically to SMS verify.
   useEffect(() => {
     if (step !== 0 || !canProceedFromInvite) return;
     if (autoContinueSeconds !== 0) return;
-    void goToVerifyStep();
+    const continueTimer = setTimeout(() => void goToVerifyStep(), 0);
+    return () => clearTimeout(continueTimer);
   }, [autoContinueSeconds, canProceedFromInvite, goToVerifyStep, step]);
 
   const submitOtp = useCallback(async () => {

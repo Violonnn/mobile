@@ -1,5 +1,5 @@
 import React from 'react';
-import { Modal, View, Image, Pressable, TouchableOpacity } from 'react-native';
+import { Modal, Image, Pressable, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { reportStyles as styles, reportColors } from '../../styles/screens/report.styles';
@@ -17,7 +17,7 @@ function VideoPreview({ uri }: { uri: string }) {
       style={styles.previewVideo}
       player={player}
       nativeControls
-      allowsFullscreen
+      fullscreenOptions={{ enable: true }}
       contentFit="contain"
     />
   );

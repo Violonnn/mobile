@@ -270,7 +270,7 @@ export default function WelcomeScreen() {
 
 const splashStyles = StyleSheet.create({
   overlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: '#ffffff',
     alignItems: 'center',
     justifyContent: 'center',

@@ -73,7 +73,8 @@ export default function OfficialSettingsScreen() {
       officialKind === 'BDRRMO' ||
       officialKind === 'Mayor'
     ) {
-      void loadProfile();
+      const profileTimer = setTimeout(() => void loadProfile(), 0);
+      return () => clearTimeout(profileTimer);
     }
   }, [officialKind, loadProfile]);
 

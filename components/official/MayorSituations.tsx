@@ -37,6 +37,7 @@ import type { MapReportMarker } from '../../lib/reports';
 import { supabase } from '../../lib/supabase';
 import { useEvacuationCenters } from '../../hooks/useEvacuationCenters';
 import { useReports } from '../../hooks/useReports';
+import { useRealtimeChannelName } from '../../hooks/useRealtimeChannelName';
 import { officialNavMetrics } from '../../styles/components/officialBottomNav.styles';
 import { mayorSituationsStyles as styles } from '../../styles/screens/mayorSituations.styles';
 import { colors } from '../../styles/theme';
@@ -233,10 +234,10 @@ function MayorSituationsList() {
   const [filtersVisible, setFiltersVisible] = useState(false);
   const [compactHeader, setCompactHeader] = useState(false);
   const [compactSearchVisible, setCompactSearchVisible] = useState(false);
-  const appliedRouteKeyRef = useRef<string | null>(null);
+  const [appliedRouteKey, setAppliedRouteKey] = useState<string | null>(null);
   const requestSequenceRef = useRef(0);
   const compactHeaderRef = useRef(false);
-  const channelName = useMemo(() => `mayor-situations-${Math.random().toString(36).slice(2)}`, []);
+  const channelName = useRealtimeChannelName('mayor-situations');
 
   useEffect(() => {
     // Delay database searches until typing pauses to avoid a request per key press.
@@ -254,16 +255,20 @@ function MayorSituationsList() {
     setBarangayError(null);
   }, []);
 
-  useEffect(() => {
-    const routeBarangay = Array.isArray(routeBarangayId) ? routeBarangayId[0] : routeBarangayId;
-    const routeStatusValue = Array.isArray(routeStatus) ? routeStatus[0] : routeStatus;
-    const routeKey = `${routeBarangay ?? ''}:${routeStatusValue ?? ''}`;
-    if (appliedRouteKeyRef.current === routeKey) return;
-    if (routeBarangay && routeBarangay !== 'all' && barangays.length === 0 && !barangayError) return;
+  const routeBarangay = Array.isArray(routeBarangayId) ? routeBarangayId[0] : routeBarangayId;
+  const routeStatusValue = Array.isArray(routeStatus) ? routeStatus[0] : routeStatus;
+  const routeKey = `${routeBarangay ?? ''}:${routeStatusValue ?? ''}`;
+  const routeBarangayReady =
+    !routeBarangay ||
+    routeBarangay === 'all' ||
+    barangays.length > 0 ||
+    Boolean(barangayError);
+
+  if (routeBarangayReady && appliedRouteKey !== routeKey) {
+    setAppliedRouteKey(routeKey);
     setStatus(normalizeMayorStatusFilter(routeStatus));
     setBarangayId(normalizeMayorBarangayFilter(routeBarangayId, barangays));
-    appliedRouteKeyRef.current = routeKey;
-  }, [barangayError, barangays, routeBarangayId, routeStatus]);
+  }
 
   const loadPage = useCallback(async (offset: number, append: boolean) => {
     const requestSequence = requestSequenceRef.current + 1;

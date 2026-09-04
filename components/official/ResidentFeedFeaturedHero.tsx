@@ -73,7 +73,7 @@ function buildHeroSlides(announcements: AnnouncementRecord[]): HeroSlide[] {
 
 function FadingSlide({ activeImageIndex, imageIndex, children }: FadingSlideProps) {
   const fadeStyle = useAnimatedStyle(() => ({
-    opacity: withTiming(activeImageIndex.value === imageIndex ? 1 : 0, {
+    opacity: withTiming(activeImageIndex.get() === imageIndex ? 1 : 0, {
       duration: 900,
       easing: Easing.inOut(Easing.cubic),
     }),
@@ -103,10 +103,15 @@ export default function ResidentFeedFeaturedHero({
   const { getState, toggleUpvote } = useAnnouncementEngagement();
 
   const slideKey = slides.map((slide) => slide.key).join(',');
+  const [previousSlideKey, setPreviousSlideKey] = useState(slideKey);
+
+  if (slideKey !== previousSlideKey) {
+    setPreviousSlideKey(slideKey);
+    setActiveSlideIndex(0);
+  }
 
   useEffect(() => {
-    setActiveSlideIndex(0);
-    visibleImageIndex.value = 0;
+    visibleImageIndex.set(0);
   }, [slideKey, visibleImageIndex]);
 
   useEffect(() => {
@@ -114,7 +119,7 @@ export default function ResidentFeedFeaturedHero({
 
     const fadeTimer = setTimeout(() => {
       const nextIndex = (activeSlideIndex + 1) % slides.length;
-      visibleImageIndex.value = nextIndex;
+      visibleImageIndex.set(nextIndex);
       setActiveSlideIndex(nextIndex);
     }, SLIDE_INTERVAL_MS);
 
@@ -268,7 +273,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#111827',
   },
   slideFill: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   fallback: {
     flex: 1,
@@ -288,10 +293,10 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(17, 24, 39, 0.72)',
   },
   heroScrim: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   heroOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     justifyContent: 'space-between',
     paddingHorizontal: spacing.md,
     paddingTop: spacing.lg,
