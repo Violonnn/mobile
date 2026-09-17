@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { BlurTargetView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter, type Href } from 'expo-router';
 import LegalModal, {
@@ -17,7 +18,8 @@ import LegalModal, {
   TERMS_INFORMATION_CONTENT,
 } from '../../components/register/LegalModal';
 import ResidentProfileModal from '../../components/profile/ResidentProfileModal';
-import ResidentSecurityModal from '../../components/profile/ResidentSecurityModal';
+import ProfileAvatar from '../../components/profile/ProfileAvatar';
+import ProfilePhotoModal from '../../components/profile/ProfilePhotoModal';
 import { logout } from '../../lib/auth';
 import {
   getResidentMapTheme,
@@ -30,6 +32,7 @@ import {
   type ProfileUpdateEligibility,
   type PublicProfile,
 } from '../../lib/profile';
+import { formatNameWithMiddleInitial } from '../../lib/validation/name';
 import { profileStyles as styles } from '../../styles/screens/profile.styles';
 import { colors } from '../../styles/theme';
 
@@ -40,18 +43,6 @@ function formatPhone(phone: string): string {
   const localDigits = digits.startsWith('63') ? digits.slice(2) : digits.replace(/^0/, '');
   if (localDigits.length !== 10) return phone;
   return `+63 ${localDigits.slice(0, 3)} ${localDigits.slice(3, 6)} ${localDigits.slice(6)}`;
-}
-
-function fullName(profile: PublicProfile | null): string {
-  if (!profile) return '';
-  return [profile.first_name, profile.middle_name, profile.last_name]
-    .filter((part) => part.trim())
-    .join(' ');
-}
-
-function initials(profile: PublicProfile | null): string {
-  if (!profile) return 'R';
-  return `${profile.first_name.charAt(0)}${profile.last_name.charAt(0)}`.toUpperCase() || 'R';
 }
 
 type SettingsRowProps = {
@@ -115,6 +106,8 @@ function SettingsRow({
 
 export default function ProfileScreen() {
   const router = useRouter();
+  const blurTargetRef = useRef<View>(null);
+  const skipNextProfileReloadRef = useRef(false);
   const [profile, setProfile] = useState<PublicProfile | null>(null);
   const [eligibility, setEligibility] = useState<ProfileUpdateEligibility | null>(null);
   const [loading, setLoading] = useState(true);
@@ -123,7 +116,7 @@ export default function ProfileScreen() {
   const [mapTheme, setMapTheme] = useState<ResidentMapTheme>('light');
   const [mapThemeSaving, setMapThemeSaving] = useState(false);
   const [profileVisible, setProfileVisible] = useState(false);
-  const [securityVisible, setSecurityVisible] = useState(false);
+  const [profilePhotoVisible, setProfilePhotoVisible] = useState(false);
   const [legalDocument, setLegalDocument] = useState<LegalDocument>(null);
 
   const loadProfile = useCallback(async () => {
@@ -148,6 +141,12 @@ export default function ProfileScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      // Returning from PIN reset cannot change profile data, so keep the loaded Settings screen.
+      if (skipNextProfileReloadRef.current) {
+        skipNextProfileReloadRef.current = false;
+        return;
+      }
+
       void loadProfile();
     }, [loadProfile]),
   );
@@ -209,7 +208,8 @@ export default function ProfileScreen() {
 
   function openPinReset() {
     if (!profile) return;
-    setSecurityVisible(false);
+
+    skipNextProfileReloadRef.current = true;
     router.push({
       pathname: '/(auth)/forgot-password',
       params: { phone: profile.phone, source: 'settings' },
@@ -223,7 +223,8 @@ export default function ProfileScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar style="dark" />
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <BlurTargetView ref={blurTargetRef} style={styles.blurTarget}>
+        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <Text style={styles.screenTitle}>Settings</Text>
 
         {loading ? (
@@ -241,20 +242,30 @@ export default function ProfileScreen() {
         ) : profile ? (
           <>
             <View style={styles.identityRow}>
-              <View style={styles.avatar}>
-                <Text style={styles.avatarText}>{initials(profile)}</Text>
-              </View>
+              <ProfileAvatar
+                avatarPath={profile.avatar_path}
+                firstName={profile.first_name}
+                lastName={profile.last_name}
+                size={92}
+                style={styles.avatar}
+                textStyle={styles.avatarText}
+                accessibilityLabel="Your profile picture"
+              />
               <View style={styles.identityCopy}>
                 <Text style={styles.identityName} numberOfLines={2}>
-                  {fullName(profile)}
+                  {formatNameWithMiddleInitial(
+                    profile.first_name,
+                    profile.middle_name,
+                    profile.last_name,
+                  )}
                 </Text>
                 <Text style={styles.identityPhone}>{formatPhone(profile.phone)}</Text>
                 <TouchableOpacity
                   style={styles.viewProfileButton}
-                  onPress={() => setProfileVisible(true)}
+                  onPress={() => setProfilePhotoVisible(true)}
                   accessibilityRole="button"
                 >
-                  <Text style={styles.viewProfileText}>View profile</Text>
+                  <Text style={styles.viewProfileText}>View profile picture</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -271,7 +282,7 @@ export default function ProfileScreen() {
               <SettingsRow
                 title="Security & PIN"
                 subtitle="Change PIN and manage sign-in"
-                onPress={() => setSecurityVisible(true)}
+                onPress={openPinReset}
               />
               <SettingsRow
                 title="Location"
@@ -336,7 +347,8 @@ export default function ProfileScreen() {
             </TouchableOpacity>
           </>
         ) : null}
-      </ScrollView>
+        </ScrollView>
+      </BlurTargetView>
 
       {profile ? (
         <>
@@ -350,11 +362,18 @@ export default function ProfileScreen() {
               setEligibility(updatedEligibility);
             }}
           />
-          <ResidentSecurityModal
-            visible={securityVisible}
-            phone={profile.phone}
-            onClose={() => setSecurityVisible(false)}
-            onChangePin={openPinReset}
+          <ProfilePhotoModal
+            visible={profilePhotoVisible}
+            firstName={profile.first_name}
+            lastName={profile.last_name}
+            avatarPath={profile.avatar_path}
+            blurTarget={blurTargetRef}
+            onClose={() => setProfilePhotoVisible(false)}
+            onChanged={(avatarPath) => {
+              setProfile((currentProfile) =>
+                currentProfile ? { ...currentProfile, avatar_path: avatarPath } : currentProfile,
+              );
+            }}
           />
         </>
       ) : null}

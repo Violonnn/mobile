@@ -23,6 +23,7 @@ type Props = {
   otpSendCount: number;
   phoneError?: string;
   phoneLocked?: boolean;
+  settingsReset?: boolean;
 };
 
 export default function PhoneStep({
@@ -42,26 +43,43 @@ export default function PhoneStep({
   otpSendCount,
   phoneError = '',
   phoneLocked = false,
+  settingsReset = false,
 }: Props) {
   const getOtpDisabled = !isValid || sendingOTP || !canRequestOtp;
   const hasPhoneError = !!phoneError;
 
   return (
     <View style={styles.stepContent}>
-      <Text style={styles.stepTitle}>Verify Your Number</Text>
-      <Text style={styles.stepSubtitle}>
-        We will send you a{' '}
-        <Text style={styles.stepSubtitleBold}>One Time Password (OTP)</Text>
-      </Text>
+      {settingsReset ? (
+        <View style={styles.settingsResetIntro}>
+          <Text style={styles.settingsResetTitle}>RESET PIN</Text>
+          <Text style={styles.settingsResetSubtitle}>
+            Get the OTP (One Time Password) associated with your phone number account to reset your
+            PIN.
+          </Text>
+        </View>
+      ) : (
+        <>
+          <Text style={styles.stepTitle}>Verify Your Number</Text>
+          <Text style={styles.stepSubtitle}>
+            We will send you a{' '}
+            <Text style={styles.stepSubtitleBold}>One Time Password (OTP)</Text>
+          </Text>
+        </>
+      )}
 
-      <View style={styles.loginFieldWrap}>
+      <View
+        style={[styles.loginFieldWrap, settingsReset && styles.settingsResetFieldWrap]}
+      >
         <Text style={styles.loginFieldLabel}>
           {phoneLocked ? 'Registered Mobile Number' : 'Enter Mobile Number'}
         </Text>
         <View
           style={[
             styles.phoneRow,
-            phoneFocused && styles.phoneRowFocused,
+            settingsReset && styles.settingsResetPhoneRow,
+            phoneFocused &&
+              (settingsReset ? styles.settingsResetPhoneRowFocused : styles.phoneRowFocused),
             hasPhoneError && styles.inputError,
           ]}
         >
@@ -92,7 +110,7 @@ export default function PhoneStep({
             accessibilityLabel={phoneLocked ? 'Registered mobile number' : 'Mobile number'}
           />
         </View>
-        {phoneLocked ? (
+        {phoneLocked && !settingsReset ? (
           <Text style={[styles.phoneHint, styles.phoneHintLarge]}>
             For your protection, the PIN can only be changed for this registered number.
           </Text>
@@ -120,7 +138,11 @@ export default function PhoneStep({
       )}
 
       <TouchableOpacity
-        style={[styles.primaryButton, getOtpDisabled && styles.primaryButtonDisabled]}
+        style={[
+          styles.primaryButton,
+          settingsReset && styles.settingsResetPrimaryButton,
+          getOtpDisabled && styles.primaryButtonDisabled,
+        ]}
         onPress={onSubmit}
         disabled={getOtpDisabled}
         activeOpacity={0.8}
@@ -129,7 +151,9 @@ export default function PhoneStep({
           <ActivityIndicator color={registerColors.white} />
         ) : (
           <>
-            <Ionicons name="chevron-forward-outline" size={18} color={registerColors.white} />
+            {!settingsReset ? (
+              <Ionicons name="chevron-forward-outline" size={18} color={registerColors.white} />
+            ) : null}
             <Text style={[styles.primaryButtonText, !isValid && styles.primaryButtonTextDisabled]}>
               GET OTP
             </Text>
@@ -143,7 +167,12 @@ export default function PhoneStep({
           onPress={onContinueVerification}
           activeOpacity={0.7}
         >
-          <Text style={styles.continueVerificationText}>
+          <Text
+            style={[
+              styles.continueVerificationText,
+              settingsReset && styles.settingsResetContinueVerificationText,
+            ]}
+          >
             Already have a code? Continue verification →
           </Text>
         </TouchableOpacity>

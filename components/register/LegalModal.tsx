@@ -117,16 +117,23 @@ export default function LegalModal({
   }
 
   return (
-    <Modal visible={visible} animationType="slide" transparent>
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={styles.modalOverlay}>
         <View style={styles.legalModalSheet}>
-          <View style={styles.legalModalHeader}>
-            <Text style={styles.legalModalTitle}>{title}</Text>
-            {onClose ? (
-              <TouchableOpacity style={styles.legalModalClose} onPress={onClose}>
-                <Text style={styles.legalModalTitle}>×</Text>
-              </TouchableOpacity>
-            ) : null}
+          <View
+            style={[
+              styles.legalModalHeader,
+              !requireRead && styles.settingsLegalModalHeader,
+            ]}
+          >
+            <Text
+              style={[
+                styles.legalModalTitle,
+                !requireRead && styles.settingsLegalModalTitle,
+              ]}
+            >
+              {title}
+            </Text>
           </View>
 
           <ScrollView
@@ -149,6 +156,7 @@ export default function LegalModal({
           <TouchableOpacity
             style={[
               styles.legalAcceptButton,
+              !requireRead && styles.settingsLegalCloseButton,
               requireRead && !hasScrolledToBottom && styles.legalAcceptButtonDisabled,
             ]}
             onPress={onAccept}

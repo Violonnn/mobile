@@ -29,3 +29,21 @@ export function normalizeName(value: string): string {
     })
     .join('');
 }
+
+/** Format a stored middle name as a single display initial. */
+export function formatMiddleInitial(value: string | null | undefined): string {
+  const middleName = normalizeName(value ?? '');
+  if (!middleName) return '';
+  return `${middleName.charAt(0).toLocaleUpperCase()}.`;
+}
+
+/** Build a display name without exposing the resident's full middle name. */
+export function formatNameWithMiddleInitial(
+  firstName: string,
+  middleName: string | null | undefined,
+  lastName: string,
+): string {
+  return [normalizeName(firstName), formatMiddleInitial(middleName), normalizeName(lastName)]
+    .filter((namePart) => namePart.trim())
+    .join(' ');
+}

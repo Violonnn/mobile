@@ -10,6 +10,7 @@ import {
   Keyboard,
   TouchableWithoutFeedback,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams } from 'expo-router';
 import { responsiveImageHeight } from '../../lib/layout';
@@ -19,6 +20,7 @@ import { registerStyles as styles } from '../../styles/screens/register.styles';
 import PhoneStep from '../../components/register/PhoneStep';
 import OTPStep from '../../components/register/OTPStep';
 import PINStep from '../../components/register/PINStep';
+import { colors } from '../../styles/theme';
 
 const STEP_IMAGES: Record<ForgotStep, number> = {
   0: require('../../assets/images/inputPhone.png'),
@@ -66,6 +68,7 @@ export default function ForgotPasswordScreen() {
   useRegistrationBackHandler(goBack, true);
 
   const isPinStep = step === 2;
+  const showSettingsResetDesign = openedFromSettings && step === 0;
   const imageHeight = responsiveImageHeight(0.22);
 
   const header = (
@@ -101,6 +104,7 @@ export default function ForgotPasswordScreen() {
           otpSendCount={otpSendCount}
           phoneError={phoneError}
           phoneLocked={openedFromSettings}
+          settingsReset={showSettingsResetDesign}
         />
       )}
       {step === 1 && (
@@ -134,7 +138,7 @@ export default function ForgotPasswordScreen() {
 
   const centeredBody = (
     <View style={styles.centeredBlock}>
-      {header}
+      {!showSettingsResetDesign ? header : null}
       {stepContent}
     </View>
   );
@@ -146,9 +150,30 @@ export default function ForgotPasswordScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}
       >
-        <TouchableOpacity style={styles.backButton} onPress={goBack} activeOpacity={0.8}>
-          <Text style={styles.backButtonText}>‹</Text>
-        </TouchableOpacity>
+        {showSettingsResetDesign ? (
+          <View style={styles.settingsHeader}>
+            <TouchableOpacity
+              style={styles.settingsHeaderButton}
+              onPress={goBack}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Back to settings"
+            >
+              <Ionicons name="chevron-back" size={28} color={colors.text} />
+            </TouchableOpacity>
+            <View
+              style={styles.settingsHeaderButton}
+              pointerEvents="none"
+              accessible={false}
+            >
+              <Ionicons name="help-circle-outline" size={27} color={colors.text} />
+            </View>
+          </View>
+        ) : (
+          <TouchableOpacity style={styles.backButton} onPress={goBack} activeOpacity={0.8}>
+            <Text style={styles.backButtonText}>‹</Text>
+          </TouchableOpacity>
+        )}
 
         {isPinStep ? (
           <ScrollView
@@ -162,7 +187,11 @@ export default function ForgotPasswordScreen() {
         ) : (
           <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
             <ScrollView
-              contentContainerStyle={styles.fixedScrollContent}
+              contentContainerStyle={
+                showSettingsResetDesign
+                  ? styles.settingsResetScrollContent
+                  : styles.fixedScrollContent
+              }
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
               bounces={false}

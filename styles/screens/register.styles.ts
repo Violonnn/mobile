@@ -58,6 +58,26 @@ export const registerStyles = StyleSheet.create({
     marginTop: -1,
   },
 
+  settingsHeader: {
+    minHeight: 64,
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  settingsHeaderButton: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  settingsResetScrollContent: {
+    flexGrow: 1,
+    paddingTop: spacing.xl,
+    paddingBottom: spacing.lg,
+  },
+
   screenTitle: {
     fontSize: scaleByWidth(28),
     fontWeight: '800',
@@ -196,6 +216,30 @@ export const registerStyles = StyleSheet.create({
     fontWeight: '900',
     color: registerColors.primary,
   },
+  settingsResetIntro: {
+    alignSelf: 'center',
+    width: '100%',
+    maxWidth: 340,
+    marginBottom: spacing.xl,
+  },
+  settingsResetFieldWrap: {
+    marginBottom: 0,
+  },
+  settingsResetTitle: {
+    fontFamily: fonts.extrabold,
+    fontSize: scaleByWidth(34),
+    letterSpacing: -1,
+    color: themeColors.text,
+    textAlign: 'left',
+  },
+  settingsResetSubtitle: {
+    marginTop: spacing.sm,
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.md,
+    lineHeight: 21,
+    color: themeColors.textMuted,
+    textAlign: 'left',
+  },
 
   fieldLabel: {
     fontSize: fontSizes.sm,
@@ -229,6 +273,22 @@ export const registerStyles = StyleSheet.create({
     elevation: 8,
     borderWidth: 1.5,
     borderColor: registerColors.primary,
+  },
+  settingsResetPhoneRow: {
+    minHeight: 52,
+    paddingVertical: spacing.xs,
+    borderWidth: 1,
+    borderColor: registerColors.inputBorder,
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    elevation: 0,
+  },
+  settingsResetPhoneRowFocused: {
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    elevation: 0,
+    borderWidth: 1.5,
+    borderColor: themeColors.text,
   },
   phonePrefixBox: {
     paddingRight: spacing.sm,
@@ -270,6 +330,9 @@ export const registerStyles = StyleSheet.create({
     fontSize: fontSizes.sm,
     fontWeight: '600',
     textAlign: 'center',
+  },
+  settingsResetContinueVerificationText: {
+    color: themeColors.text,
   },
 
   otpTargetText: {
@@ -356,6 +419,15 @@ export const registerStyles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     gap: 5,
+  },
+  settingsResetPrimaryButton: {
+    alignSelf: 'center',
+    width: '100%',
+    maxWidth: 340,
+    paddingVertical: spacing.md,
+    marginTop: spacing.sm + spacing.xs,
+    borderRadius: radius.md,
+    backgroundColor: themeColors.navigationActive,
   },
   primaryButtonDisabled: {
     backgroundColor: registerColors.grayLight,
@@ -842,8 +914,13 @@ export const registerStyles = StyleSheet.create({
     fontWeight: '700',
     color: registerColors.text,
   },
-  legalModalClose: {
-    padding: 4,
+  settingsLegalModalHeader: {
+    justifyContent: 'center',
+    borderBottomWidth: 0,
+  },
+  settingsLegalModalTitle: {
+    width: '100%',
+    textAlign: 'center',
   },
   legalModalScroll: {
     flex: 1,
@@ -879,6 +956,10 @@ export const registerStyles = StyleSheet.create({
     borderRadius: radius.full,
     paddingVertical: spacing.md,
     alignItems: 'center',
+  },
+  settingsLegalCloseButton: {
+    backgroundColor: themeColors.navigationActive,
+    borderRadius: radius.md,
   },
   legalAcceptButtonDisabled: {
     backgroundColor: registerColors.grayLight,

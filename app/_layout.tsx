@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { Stack, usePathname } from 'expo-router';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { initialWindowMetrics, SafeAreaProvider } from 'react-native-safe-area-context';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import * as SplashScreen from 'expo-splash-screen';
 import {
   useFonts,
@@ -43,14 +44,32 @@ export default function RootLayout() {
   if (!fontsLoaded) return null;
 
   return (
-    <SafeAreaProvider>
-      <Stack
-        screenOptions={{
-          headerShown: false,
-          animation: 'none',
-          contentStyle: { backgroundColor: colors.background },
-        }}
-      />
-    </SafeAreaProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider initialMetrics={initialWindowMetrics}>
+        <Stack
+          screenOptions={{
+            headerShown: false,
+            animation: 'none',
+            // Protected portals must never reveal an older auth route via swipe-back.
+            gestureEnabled: false,
+            fullScreenGestureEnabled: false,
+            contentStyle: { backgroundColor: colors.background },
+          }}
+        >
+          <Stack.Screen
+            name="(auth)/forgot-password"
+            options={({ route }) => {
+              const routeParams = route.params as { source?: string } | undefined;
+              const openedFromSettings = routeParams?.source === 'settings';
+
+              return {
+                animation: openedFromSettings ? 'slide_from_right' : 'none',
+                gestureEnabled: openedFromSettings,
+              };
+            }}
+          />
+        </Stack>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }

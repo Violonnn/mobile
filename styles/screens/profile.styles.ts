@@ -6,6 +6,9 @@ export const profileStyles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
+  blurTarget: {
+    flex: 1,
+  },
   scrollContent: {
     flexGrow: 1,
     paddingHorizontal: spacing.lg,
