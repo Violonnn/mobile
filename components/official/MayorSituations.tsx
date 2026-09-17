@@ -41,6 +41,7 @@ import { useRealtimeChannelName } from '../../hooks/useRealtimeChannelName';
 import { officialNavMetrics } from '../../styles/components/officialBottomNav.styles';
 import { mayorSituationsStyles as styles } from '../../styles/screens/mayorSituations.styles';
 import { colors } from '../../styles/theme';
+import IncidentTypeBadge from '../report/IncidentTypeBadge';
 
 const STATUS_OPTIONS: { value: MayorStatusFilter; label: string }[] = [
   { value: 'all', label: 'All statuses' },
@@ -66,7 +67,7 @@ function statusLabel(status: MayorStatusFilter): string {
 function statusColor(status: MayorSituationItem['status']): string {
   if (status === 'unverified') return colors.unverified;
   if (status === 'verified') return colors.success;
-  if (status === 'escalated') return '#F59E0B';
+  if (status === 'escalated') return colors.escalated;
   return colors.textMuted;
 }
 
@@ -630,6 +631,10 @@ function MayorSituationRow({
             <Text style={[styles.statusPillText, { color: statusColor(report.status) }]}>{statusLabel(report.status).toUpperCase()}</Text>
           </View>
         </View>
+        <IncidentTypeBadge
+          incidentType={marker?.incidentType}
+          incidentTypeOther={marker?.incidentTypeOther}
+        />
         <Text style={styles.reportDescription} numberOfLines={1}>{report.description.trim() || 'No description provided.'}</Text>
         <Text style={styles.reportMeta} numberOfLines={1}>{report.barangayName} · {report.reporterName}</Text>
         <Text style={styles.reportMeta}>{report.createdAt ? formatPublishedAt(report.createdAt) : 'Date unavailable'}</Text>

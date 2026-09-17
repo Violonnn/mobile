@@ -11,6 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { formatPublishedAt } from '../../lib/formatTime';
 import { formatReportLocation, type MapReportMarker } from '../../lib/reports';
+import IncidentTypeBadge from '../report/IncidentTypeBadge';
 import { contributionStyles as styles } from '../../styles/components/yourContributions.styles';
 import { colors } from '../../styles/theme';
 
@@ -109,14 +110,18 @@ export default function EscalatedReportsPanel({
                   accessibilityLabel={`Locate escalated report: ${report.title}`}
                 >
                   <View style={styles.dateStatusRow}>
-                    <Ionicons name="warning-outline" size={18} color={colors.danger} />
-                    <Text style={[styles.statusText, { color: colors.danger }]}>Escalated</Text>
+              <Ionicons name="warning-outline" size={18} color={colors.escalated} />
+              <Text style={[styles.statusText, { color: colors.escalated }]}>Escalated</Text>
                     {isLatest ? <Text style={styles.latestBadge}>LATEST</Text> : null}
                   </View>
 
                   <Text style={[styles.reportTitle, isLatest && styles.latestReportTitle]}>
                     {report.title || 'Untitled report'}
                   </Text>
+                  <IncidentTypeBadge
+                    incidentType={report.incidentType}
+                    incidentTypeOther={report.incidentTypeOther}
+                  />
                   <Text style={styles.dateText}>{formatPublishedAt(report.created_at)}</Text>
                   <View style={styles.locationRow}>
                     <Ionicons name="location-outline" size={16} color={colors.textMuted} />
@@ -154,7 +159,7 @@ export default function EscalatedReportsPanel({
 
             <View style={styles.summaryRow}>
               <View style={styles.summaryCopy}>
-                <View style={[styles.summaryDot, { backgroundColor: colors.danger }]} />
+          <View style={[styles.summaryDot, { backgroundColor: colors.escalated }]} />
                 <Text style={styles.summaryText}>
                   {reports.length} awaiting MDRRMO coordination
                 </Text>

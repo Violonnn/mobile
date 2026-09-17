@@ -12,6 +12,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 
 import type { MapReportMarker } from '../../lib/reports';
+import IncidentTypeBadge from '../report/IncidentTypeBadge';
 import type { EvacuationCenterRecord } from '../../lib/resources';
 import { formatPublishedAt } from '../../lib/formatTime';
 import { mayorMapStyles as styles } from '../../styles/screens/mayorMap.styles';
@@ -95,7 +96,7 @@ export default function MayorMapPanel({
         >
           <View style={styles.metrics}>
             <Metric color={colors.unverified} value={unverified} label="Unverified" />
-            <Metric color={colors.danger} value={escalated} label="Escalated" />
+          <Metric color={colors.escalated} value={escalated} label="Escalated" />
             <Metric color={colors.danger} value={priorityCenters} label="Priority centers" />
           </View>
 
@@ -128,6 +129,10 @@ export default function MayorMapPanel({
               <View style={styles.reportCopy}>
                 <Text style={styles.reportStatus}>{report.status.toUpperCase()}</Text>
                 <Text style={styles.reportTitle} numberOfLines={1}>{report.title.trim() || 'Untitled report'}</Text>
+                <IncidentTypeBadge
+                  incidentType={report.incidentType}
+                  incidentTypeOther={report.incidentTypeOther}
+                />
                 <Text style={styles.reportMeta} numberOfLines={1}>
                   {report.addressText || 'Location on map'} · {formatPublishedAt(report.created_at)}
                 </Text>
