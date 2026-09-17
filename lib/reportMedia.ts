@@ -1,8 +1,16 @@
 import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system/legacy';
-import { decode } from 'base64-arraybuffer';
+import { Directory, File, Paths } from 'expo-file-system';
+import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
+import * as VideoThumbnails from 'expo-video-thumbnails';
 import { supabase } from './supabase';
 import { promptOpenSettings } from './permissions';
+import {
+  buildReportDerivativeStoragePath,
+  buildReportOriginalStoragePath,
+  MAX_MEDIA_DISPLAY_IMAGE_BYTES,
+  MAX_MEDIA_THUMBNAIL_BYTES,
+  MAX_MEDIA_VIDEO_BYTES,
+} from './mediaPolicy';
 
 export type CapturedMedia = {
   id: string;
@@ -10,6 +18,17 @@ export type CapturedMedia = {
   localUri: string;
   mimeType: string;
   extension: string;
+  fileSizeBytes?: number;
+  width?: number;
+  height?: number;
+  /** Prepared, purpose-sized image used only in detail views. */
+  displayLocalUri?: string;
+  displayFileSizeBytes?: number;
+  /** Prepared feed thumbnail or video poster. */
+  thumbnailLocalUri?: string;
+  thumbnailFileSizeBytes?: number;
+  thumbnailWidth?: number;
+  thumbnailHeight?: number;
   /** Required for videos; null for photos. */
   durationSeconds: number | null;
 };
@@ -17,6 +36,14 @@ export type CapturedMedia = {
 const REPORT_BUCKET = 'report-media';
 const MAX_PHOTOS = 3;
 const MAX_VIDEO_SECONDS = 30;
+const MAX_VIDEO_BYTES = MAX_MEDIA_VIDEO_BYTES;
+const MAX_DISPLAY_IMAGE_BYTES = MAX_MEDIA_DISPLAY_IMAGE_BYTES;
+const MAX_THUMBNAIL_BYTES = MAX_MEDIA_THUMBNAIL_BYTES;
+const DISPLAY_LONG_EDGE = 1600;
+const THUMBNAIL_LONG_EDGE = 480;
+const MEDIA_UPLOAD_ATTEMPTS = 2;
+const MEDIA_RETRY_DELAY_MS = 700;
+const REPORT_MEDIA_DRAFT_DIRECTORY = 'report-media-drafts';
 
 function randomUuid(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -36,6 +63,119 @@ function extensionForMime(mime: string, fallback: string): string {
   if (mime.includes('mp4')) return 'mp4';
   if (mime.includes('quicktime')) return 'mov';
   return fallback;
+}
+
+function getErrorDetail(error: unknown): string {
+  return error instanceof Error ? error.message : 'Unexpected media error';
+}
+
+function getDraftMediaDirectory(): Directory {
+  return new Directory(Paths.document, REPORT_MEDIA_DRAFT_DIRECTORY);
+}
+
+/** Copy camera output out of the temporary picker cache for reliable retries. */
+async function persistCapturedMedia(
+  sourceUri: string,
+  mediaId: string,
+  extension: string,
+  variant = 'original',
+): Promise<{ uri: string; size: number }> {
+  const draftDirectory = getDraftMediaDirectory();
+  draftDirectory.create({ idempotent: true, intermediates: true });
+
+  const sourceFile = new File(sourceUri);
+  if (!sourceFile.exists) {
+    throw new Error('The captured file is not available.');
+  }
+
+  const destinationFile = new File(
+    draftDirectory,
+    `${mediaId}-${variant}.${extension}`,
+  );
+  await sourceFile.copy(destinationFile, { overwrite: true });
+
+  if (!destinationFile.exists || destinationFile.size <= 0) {
+    throw new Error('The captured file could not be prepared.');
+  }
+
+  return { uri: destinationFile.uri, size: destinationFile.size };
+}
+
+function resizeForLongEdge(width: number, height: number, longEdge: number) {
+  if (Math.max(width, height) <= longEdge) return [];
+  return width >= height
+    ? [{ resize: { width: longEdge } }]
+    : [{ resize: { height: longEdge } }];
+}
+
+async function prepareJpegVariant(params: {
+  sourceUri: string;
+  mediaId: string;
+  variant: 'display' | 'thumbnail';
+  sourceWidth: number;
+  sourceHeight: number;
+  longEdge: number;
+  compress: number;
+  maximumBytes: number;
+}): Promise<{ uri: string; size: number; width: number; height: number }> {
+  const result = await manipulateAsync(
+    params.sourceUri,
+    resizeForLongEdge(params.sourceWidth, params.sourceHeight, params.longEdge),
+    { compress: params.compress, format: SaveFormat.JPEG },
+  );
+  const persisted = await persistCapturedMedia(
+    result.uri,
+    params.mediaId,
+    'jpg',
+    params.variant,
+  );
+  if (persisted.size > params.maximumBytes) {
+    throw new Error(
+      params.variant === 'thumbnail'
+        ? 'The prepared thumbnail is too large. Retake the photo at a lower resolution.'
+        : 'The prepared photo is too large. Retake the photo at a lower resolution.',
+    );
+  }
+  return { ...persisted, width: result.width, height: result.height };
+}
+
+/** Only remove files created in DisasterLink's own report-draft directory. */
+export function deletePersistedReportMedia(media: CapturedMedia): void {
+  const draftDirectory = getDraftMediaDirectory();
+  const localUris = [
+    media.localUri,
+    media.displayLocalUri,
+    media.thumbnailLocalUri,
+  ].filter((uri): uri is string => Boolean(uri));
+
+  for (const localUri of localUris) {
+    if (!localUri.startsWith(draftDirectory.uri)) continue;
+    try {
+      const mediaFile = new File(localUri);
+      if (mediaFile.exists) mediaFile.delete();
+    } catch {
+      // Cleanup must never block a successful report or media removal.
+    }
+  }
+}
+
+export function isTransientMediaUploadError(message: string): boolean {
+  const normalizedMessage = message.toLocaleLowerCase();
+  return (
+    normalizedMessage.includes('fetch failed') ||
+    normalizedMessage.includes('network request failed') ||
+    normalizedMessage.includes('network connection was lost') ||
+    normalizedMessage.includes('unexpectedexception') ||
+    normalizedMessage.includes('timed out') ||
+    normalizedMessage.includes('timeout') ||
+    normalizedMessage.includes('load failed')
+  );
+}
+
+function waitBeforeUploadRetry(): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, MEDIA_RETRY_DELAY_MS);
+  });
 }
 
 /**
@@ -79,31 +219,77 @@ export async function captureReportPhoto(): Promise<{
     return { media: null, error: permissionError };
   }
 
-  const result = await ImagePicker.launchCameraAsync({
-    mediaTypes: ['images'],
-    quality: 0.7,
-    allowsEditing: false,
-    exif: false,
-  });
+  try {
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ['images'],
+      quality: 0.7,
+      allowsEditing: false,
+      exif: false,
+    });
 
-  if (result.canceled || !result.assets?.[0]) {
-    return { media: null, error: null };
+    if (result.canceled || !result.assets?.[0]) {
+      return { media: null, error: null };
+    }
+
+    const asset = result.assets[0];
+    const mediaId = randomUuid();
+    const mimeType = asset.mimeType ?? 'image/jpeg';
+    const extension = extensionForMime(mimeType, 'jpg');
+    if (!asset.width || !asset.height) {
+      return { media: null, error: 'Could not read photo dimensions.' };
+    }
+    const persistedFile = await persistCapturedMedia(
+      asset.uri,
+      mediaId,
+      extension,
+    );
+    const display = await prepareJpegVariant({
+      sourceUri: persistedFile.uri,
+      mediaId,
+      variant: 'display',
+      sourceWidth: asset.width,
+      sourceHeight: asset.height,
+      longEdge: DISPLAY_LONG_EDGE,
+      compress: 0.82,
+      maximumBytes: MAX_DISPLAY_IMAGE_BYTES,
+    });
+    const thumbnail = await prepareJpegVariant({
+      sourceUri: persistedFile.uri,
+      mediaId,
+      variant: 'thumbnail',
+      sourceWidth: asset.width,
+      sourceHeight: asset.height,
+      longEdge: THUMBNAIL_LONG_EDGE,
+      compress: 0.72,
+      maximumBytes: MAX_THUMBNAIL_BYTES,
+    });
+
+    return {
+      media: {
+        id: mediaId,
+        type: 'photo',
+        localUri: persistedFile.uri,
+        mimeType,
+        extension,
+        fileSizeBytes: persistedFile.size,
+        width: display.width,
+        height: display.height,
+        displayLocalUri: display.uri,
+        displayFileSizeBytes: display.size,
+        thumbnailLocalUri: thumbnail.uri,
+        thumbnailFileSizeBytes: thumbnail.size,
+        thumbnailWidth: thumbnail.width,
+        thumbnailHeight: thumbnail.height,
+        durationSeconds: null,
+      },
+      error: null,
+    };
+  } catch (error) {
+    return {
+      media: null,
+      error: `Could not prepare the captured photo. ${getErrorDetail(error)}`,
+    };
   }
-
-  const asset = result.assets[0];
-  const mimeType = asset.mimeType ?? 'image/jpeg';
-
-  return {
-    media: {
-      id: randomUuid(),
-      type: 'photo',
-      localUri: asset.uri,
-      mimeType,
-      extension: extensionForMime(mimeType, 'jpg'),
-      durationSeconds: null,
-    },
-    error: null,
-  };
 }
 
 /** Live-capture a short video (camera only — no gallery). */
@@ -116,45 +302,96 @@ export async function captureReportVideo(): Promise<{
     return { media: null, error: permissionError };
   }
 
-  const result = await ImagePicker.launchCameraAsync({
-    mediaTypes: ['videos'],
-    videoMaxDuration: MAX_VIDEO_SECONDS,
-    allowsEditing: false,
-  });
+  try {
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ['videos'],
+      videoMaxDuration: MAX_VIDEO_SECONDS,
+      videoQuality: ImagePicker.UIImagePickerControllerQualityType.Medium,
+      allowsEditing: false,
+    });
 
-  if (result.canceled || !result.assets?.[0]) {
-    return { media: null, error: null };
-  }
+    if (result.canceled || !result.assets?.[0]) {
+      return { media: null, error: null };
+    }
 
-  const asset = result.assets[0];
-  const durationRaw = asset.duration ?? 0;
-  // iOS often returns seconds; Android may return ms. Normalize to seconds.
-  const durationSeconds =
-    durationRaw > 1000 ? durationRaw / 1000 : durationRaw;
+    const asset = result.assets[0];
+    // Expo ImagePicker reports video duration in milliseconds.
+    const durationSeconds = (asset.duration ?? 0) / 1000;
 
-  if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) {
-    return { media: null, error: 'Could not read video duration.' };
-  }
-  if (durationSeconds > MAX_VIDEO_SECONDS) {
+    if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) {
+      return { media: null, error: 'Could not read video duration.' };
+    }
+    if (durationSeconds > MAX_VIDEO_SECONDS) {
+      return {
+        media: null,
+        error: `Video must be ${MAX_VIDEO_SECONDS} seconds or less.`,
+      };
+    }
+
+    const mediaId = randomUuid();
+    const mimeType = asset.mimeType ?? 'video/mp4';
+    const extension = extensionForMime(mimeType, 'mp4');
+    const persistedFile = await persistCapturedMedia(
+      asset.uri,
+      mediaId,
+      extension,
+    );
+    if (persistedFile.size > MAX_VIDEO_BYTES) {
+      deletePersistedReportMedia({
+        id: mediaId,
+        type: 'video',
+        localUri: persistedFile.uri,
+        mimeType,
+        extension,
+        durationSeconds,
+      });
+      return {
+        media: null,
+        error: 'Video must be 20 MB or smaller. Retake it at a lower quality.',
+      };
+    }
+
+    // Generate the poster from the local file so feed rendering never touches
+    // the remote original video.
+    const posterFrame = await VideoThumbnails.getThumbnailAsync(
+      persistedFile.uri,
+      { time: 500, quality: 0.7 },
+    );
+    const poster = await prepareJpegVariant({
+      sourceUri: posterFrame.uri,
+      mediaId,
+      variant: 'thumbnail',
+      sourceWidth: posterFrame.width,
+      sourceHeight: posterFrame.height,
+      longEdge: THUMBNAIL_LONG_EDGE,
+      compress: 0.72,
+      maximumBytes: MAX_THUMBNAIL_BYTES,
+    });
+
+    return {
+      media: {
+        id: mediaId,
+        type: 'video',
+        localUri: persistedFile.uri,
+        mimeType,
+        extension,
+        fileSizeBytes: persistedFile.size,
+        width: asset.width || undefined,
+        height: asset.height || undefined,
+        thumbnailLocalUri: poster.uri,
+        thumbnailFileSizeBytes: poster.size,
+        thumbnailWidth: poster.width,
+        thumbnailHeight: poster.height,
+        durationSeconds,
+      },
+      error: null,
+    };
+  } catch (error) {
     return {
       media: null,
-      error: `Video must be ${MAX_VIDEO_SECONDS} seconds or less.`,
+      error: `Could not prepare the captured video. ${getErrorDetail(error)}`,
     };
   }
-
-  const mimeType = asset.mimeType ?? 'video/mp4';
-
-  return {
-    media: {
-      id: randomUuid(),
-      type: 'video',
-      localUri: asset.uri,
-      mimeType,
-      extension: extensionForMime(mimeType, 'mp4'),
-      durationSeconds,
-    },
-    error: null,
-  };
 }
 
 /** Combined duration (seconds) of all video items in the list. */
@@ -172,14 +409,23 @@ export function validateCapturedMedia(items: CapturedMedia[]): string | null {
     0,
   );
 
-  if (photos.length < 1 || photos.length > MAX_PHOTOS) {
-    return 'Add 1 to 3 photos taken with the camera.';
+  if (items.length < 1) {
+    return 'Add at least one clear photo or video.';
   }
-  if (videos.length < 1) {
-    return 'Add at least one short video taken with the camera.';
+  if (photos.length > MAX_PHOTOS) {
+    return `Add no more than ${MAX_PHOTOS} photos.`;
   }
   if (videoDuration > MAX_VIDEO_SECONDS) {
     return `Combined video must be ${MAX_VIDEO_SECONDS} seconds or less.`;
+  }
+  if (items.some((item) => (item.fileSizeBytes ?? 0) > MAX_VIDEO_BYTES)) {
+    return 'Each original attachment must be 20 MB or smaller.';
+  }
+  if (items.some((item) => (item.thumbnailFileSizeBytes ?? 0) > MAX_THUMBNAIL_BYTES)) {
+    return 'Each prepared thumbnail must be 300 KB or smaller.';
+  }
+  if (photos.some((photo) => (photo.displayFileSizeBytes ?? 0) > MAX_DISPLAY_IMAGE_BYTES)) {
+    return 'Each prepared photo must be 2 MB or smaller.';
   }
   return null;
 }
@@ -189,7 +435,26 @@ export function buildStoragePath(
   reportId: string,
   media: CapturedMedia,
 ): string {
-  return `${userId}/${reportId}/${media.id}.${media.extension}`;
+  return buildReportOriginalStoragePath({
+    userId,
+    reportId,
+    mediaId: media.id,
+    extension: media.extension,
+  });
+}
+
+export function buildDerivativeStoragePath(
+  userId: string,
+  reportId: string,
+  mediaId: string,
+  variant: 'display' | 'thumbnail',
+): string {
+  return buildReportDerivativeStoragePath({
+    userId,
+    reportId,
+    mediaId,
+    variant,
+  });
 }
 
 /** Upload one captured file to the private report-media bucket. */
@@ -197,42 +462,160 @@ export async function uploadReportMedia(params: {
   userId: string;
   reportId: string;
   media: CapturedMedia;
-}): Promise<{ storagePath: string | null; error: string | null }> {
+}): Promise<{
+  storagePath: string | null;
+  displayStoragePath: string | null;
+  thumbnailStoragePath: string | null;
+  error: string | null;
+  retryable: boolean;
+}> {
   const storagePath = buildStoragePath(
     params.userId,
     params.reportId,
     params.media,
   );
+  let mediaBytes: ArrayBuffer;
 
   try {
-    // RN cannot reliably fetch(file://).blob() — that surfaces as
-    // "Network request failed". Read bytes via FileSystem instead.
-    const base64 = await FileSystem.readAsStringAsync(params.media.localUri, {
-      encoding: FileSystem.EncodingType.Base64,
-    });
-
-    // upsert so retries are idempotent: if an earlier attempt uploaded the
-    // file but crashed before recording it, re-uploading the same path must
-    // succeed instead of failing forever with "resource already exists".
-    const { error } = await supabase.storage
-      .from(REPORT_BUCKET)
-      .upload(storagePath, decode(base64), {
-        contentType: params.media.mimeType,
-        upsert: true,
-      });
-
-    if (error) {
-      return { storagePath: null, error: `Upload failed: ${error.message}` };
+    const mediaFile = new File(params.media.localUri);
+    if (!mediaFile.exists || mediaFile.size <= 0) {
+      return {
+        storagePath: null,
+        displayStoragePath: null,
+        thumbnailStoragePath: null,
+        error: 'The captured media is no longer available on this device.',
+        retryable: false,
+      };
     }
 
-    return { storagePath, error: null };
-  } catch (err) {
-    const detail = err instanceof Error ? err.message : 'Unknown error';
+    // ArrayBuffer avoids the extra memory used by converting a full video to Base64.
+    mediaBytes = await mediaFile.arrayBuffer();
+  } catch (error) {
     return {
       storagePath: null,
-      error: `Could not read/upload media (${detail}).`,
+      displayStoragePath: null,
+      thumbnailStoragePath: null,
+      error: `Could not read the captured media. ${getErrorDetail(error)}`,
+      retryable: false,
     };
   }
+
+  let lastUploadError = 'Media upload failed.';
+
+  for (let attempt = 1; attempt <= MEDIA_UPLOAD_ATTEMPTS; attempt += 1) {
+    try {
+      // Upsert keeps retries idempotent if Storage received the first request
+      // but the app disconnected before receiving its response.
+      const uploadItems = [
+        {
+          path: storagePath,
+          uri: params.media.localUri,
+          contentType: params.media.mimeType,
+        },
+        ...(params.media.displayLocalUri
+          ? [{
+              path: buildDerivativeStoragePath(
+                params.userId,
+                params.reportId,
+                params.media.id,
+                'display',
+              ),
+              uri: params.media.displayLocalUri,
+              contentType: 'image/jpeg',
+            }]
+          : []),
+        ...(params.media.thumbnailLocalUri
+          ? [{
+              path: buildDerivativeStoragePath(
+                params.userId,
+                params.reportId,
+                params.media.id,
+                'thumbnail',
+              ),
+              uri: params.media.thumbnailLocalUri,
+              contentType: 'image/jpeg',
+            }]
+          : []),
+      ];
+
+      let uploadError: string | null = null;
+      for (const uploadItem of uploadItems) {
+        const uploadFile = new File(uploadItem.uri);
+        const uploadBytes = uploadItem.uri === params.media.localUri
+          ? mediaBytes
+          : await uploadFile.arrayBuffer();
+        const { error } = await supabase.storage
+          .from(REPORT_BUCKET)
+          .upload(uploadItem.path, uploadBytes, {
+            contentType: uploadItem.contentType,
+            cacheControl: '3600',
+            upsert: true,
+          });
+        if (error) {
+          uploadError = error.message;
+          break;
+        }
+      }
+
+      if (!uploadError) {
+        return {
+          storagePath,
+          displayStoragePath: params.media.displayLocalUri
+            ? buildDerivativeStoragePath(
+                params.userId,
+                params.reportId,
+                params.media.id,
+                'display',
+              )
+            : null,
+          thumbnailStoragePath: params.media.thumbnailLocalUri
+            ? buildDerivativeStoragePath(
+                params.userId,
+                params.reportId,
+                params.media.id,
+                'thumbnail',
+              )
+            : null,
+          error: null,
+          retryable: false,
+        };
+      }
+
+      lastUploadError = uploadError;
+    } catch (error) {
+      lastUploadError = getErrorDetail(error);
+    }
+
+    const retryable = isTransientMediaUploadError(lastUploadError);
+    if (!retryable || attempt === MEDIA_UPLOAD_ATTEMPTS) {
+      return {
+        storagePath: null,
+        displayStoragePath: null,
+        thumbnailStoragePath: null,
+        error: retryable
+          ? 'Media upload paused because the network connection was interrupted.'
+          : `Upload failed: ${lastUploadError}`,
+        retryable,
+      };
+    }
+
+    await waitBeforeUploadRetry();
+  }
+
+  return {
+    storagePath: null,
+    displayStoragePath: null,
+    thumbnailStoragePath: null,
+    error: lastUploadError,
+    retryable: false,
+  };
 }
 
-export { MAX_PHOTOS, MAX_VIDEO_SECONDS, randomUuid };
+export {
+  MAX_DISPLAY_IMAGE_BYTES,
+  MAX_PHOTOS,
+  MAX_THUMBNAIL_BYTES,
+  MAX_VIDEO_BYTES,
+  MAX_VIDEO_SECONDS,
+  randomUuid,
+};

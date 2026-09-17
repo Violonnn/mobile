@@ -1,5 +1,6 @@
 import { Session } from '@supabase/supabase-js';
 import { supabase } from './supabase';
+import { clearSignedMediaUrlCache } from './mediaUrlCache';
 
 /** Return the persisted Supabase session, refreshing when needed. */
 export async function getActiveSession(): Promise<Session | null> {
@@ -20,5 +21,6 @@ export async function getActiveSession(): Promise<Session | null> {
 /** End the current session and clear stored credentials. */
 export async function logout(): Promise<{ error: string | null }> {
   const { error } = await supabase.auth.signOut();
+  if (!error) clearSignedMediaUrlCache();
   return { error: error?.message ?? null };
 }
