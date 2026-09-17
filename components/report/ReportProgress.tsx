@@ -1,61 +1,43 @@
-import React, { useEffect } from 'react';
-import { TextInput, View, Text } from 'react-native';
-import Animated, {
-  useAnimatedProps,
-  useAnimatedStyle,
-  useSharedValue,
-  withTiming,
-  Easing,
-} from 'react-native-reanimated';
+import React from 'react';
+import { Text, View } from 'react-native';
 import { reportStyles as styles } from '../../styles/screens/report.styles';
 
-Animated.addWhitelistedNativeProps({ text: true });
-const AnimatedTextInput = Animated.createAnimatedComponent(TextInput);
-
 type Props = {
-  /** Target progress 0–100. Changes animate the bar fill + counting number. */
-  progress: number;
+  stepNumber: number;
   label: string;
 };
 
-/**
- * Animated progress bar with a percentage that counts up to each checkpoint.
- * The count-up is the rewarding beat, so we drive both the fill scale and the
- * number from one shared value (no per-frame React re-renders).
- */
-export default function ReportProgress({ progress, label }: Props) {
-  const value = useSharedValue(0);
-
-  useEffect(() => {
-    value.value = withTiming(progress, {
-      duration: 650,
-      easing: Easing.out(Easing.cubic),
-    });
-  }, [progress, value]);
-
-  const fillStyle = useAnimatedStyle(() => ({
-    transform: [{ scaleX: Math.max(0.0001, value.value / 100) }],
-  }));
-
-  const animatedProps = useAnimatedProps(() => {
-    const text = `${Math.round(value.value)}%`;
-    return { text, defaultValue: text } as any;
-  });
-
+export default function ReportProgress({ stepNumber, label }: Props) {
   return (
     <View style={styles.progressWrap}>
-      <View style={styles.progressTrack}>
-        <Animated.View style={[styles.progressFill, fillStyle]} />
+      <View style={styles.progressSteps}>
+        {[1, 2, 3, 4].map((number, index) => (
+          <React.Fragment key={number}>
+            {index > 0 ? (
+              <View
+                style={[
+                  styles.progressConnector,
+                  number <= stepNumber && styles.progressConnectorActive,
+                ]}
+              />
+            ) : null}
+            <View
+              style={[
+                styles.progressDot,
+                number === stepNumber && styles.progressDotCurrent,
+                number < stepNumber && styles.progressDotComplete,
+              ]}
+            >
+              {number === stepNumber ? (
+                <Text style={styles.progressDotText}>{number}</Text>
+              ) : null}
+            </View>
+          </React.Fragment>
+        ))}
       </View>
-      <View style={styles.progressRow}>
-        <Text style={styles.progressLabel}>{label}</Text>
-        <AnimatedTextInput
-          style={styles.progressPercent}
-          editable={false}
-          underlineColorAndroid="transparent"
-          animatedProps={animatedProps}
-        />
-      </View>
+      <Text style={styles.progressLabel}>
+        {stepNumber} of 4 · {label.toUpperCase()}
+      </Text>
     </View>
   );
 }

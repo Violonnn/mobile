@@ -8,23 +8,32 @@ import {
   readEdgeFunctionErrorMessage,
 } from './edgeFunctionErrors';
 import {
+  deletePersistedReportMedia,
   randomUuid,
   totalVideoSeconds,
   uploadReportMedia,
   type CapturedMedia,
 } from './reportMedia';
 import type { GpsPosition } from './location';
+import type { IncidentType } from './incidentTypes';
 
 export type OfficialReportMediaPayload = {
   id: string;
   type: 'photo' | 'video';
   storagePath: string;
+  displayStoragePath: string | null;
+  thumbnailStoragePath: string | null;
   durationSeconds: number | null;
+  fileSizeBytes: number | null;
+  width: number | null;
+  height: number | null;
 };
 
 export type CreateOfficialReportInput = {
   title?: string;
   description: string;
+  incidentType: IncidentType;
+  incidentTypeOther?: string;
   position: GpsPosition;
   addressText?: string;
   barangayId?: string | null;
@@ -35,9 +44,19 @@ export type UpdateOfficialReportInput = {
   reportId: string;
   title?: string;
   description: string;
+  incidentType?: IncidentType | null;
+  incidentTypeOther?: string | null;
   position: GpsPosition;
   addressText?: string;
   barangayId?: string | null;
+};
+
+export type CorrectOfficialReportLocationInput = {
+  reportId: string;
+  position: GpsPosition;
+  addressText?: string;
+  barangayId?: string | null;
+  note?: string;
 };
 
 const MAX_PHOTOS = 3;
@@ -69,7 +88,7 @@ async function uploadOfficialMedia(
   const uploaded: OfficialReportMediaPayload[] = [];
 
   for (const item of media) {
-    const { storagePath, error } = await uploadReportMedia({
+    const { storagePath, displayStoragePath, thumbnailStoragePath, error } = await uploadReportMedia({
       userId,
       reportId,
       media: item,
@@ -84,7 +103,12 @@ async function uploadOfficialMedia(
       id: item.id,
       type: item.type,
       storagePath,
+      displayStoragePath,
+      thumbnailStoragePath,
       durationSeconds: item.durationSeconds,
+      fileSizeBytes: item.fileSizeBytes ?? null,
+      width: item.width ?? null,
+      height: item.height ?? null,
     });
   }
 
@@ -98,6 +122,9 @@ export async function submitOfficialReport(
   const description = input.description.trim();
   if (!description) {
     return { reportId: null, error: 'Enter a description.' };
+  }
+  if (input.incidentType === 'other' && !input.incidentTypeOther?.trim()) {
+    return { reportId: null, error: 'Specify the incident type.' };
   }
   if (
     !Number.isFinite(input.position.latitude) ||
@@ -137,6 +164,11 @@ export async function submitOfficialReport(
           reportId,
           title: (input.title ?? '').trim() || undefined,
           description,
+          incidentType: input.incidentType,
+          incidentTypeOther:
+            input.incidentType === 'other'
+              ? input.incidentTypeOther?.trim()
+              : undefined,
           latitude: input.position.latitude,
           longitude: input.position.longitude,
           addressText: input.addressText?.trim() || undefined,
@@ -160,6 +192,7 @@ export async function submitOfficialReport(
         ? String((data as { reportId: unknown }).reportId)
         : reportId;
 
+    media.forEach(deletePersistedReportMedia);
     return { reportId: createdId, error: null };
   } catch (err) {
     const detail = err instanceof Error ? err.message : 'Unknown error';
@@ -195,6 +228,11 @@ export async function updateOfficialReport(
           reportId: input.reportId,
           title: (input.title ?? '').trim() || undefined,
           description,
+          incidentType: input.incidentType ?? undefined,
+          incidentTypeOther:
+            input.incidentType === 'other'
+              ? input.incidentTypeOther?.trim()
+              : undefined,
           latitude: input.position.latitude,
           longitude: input.position.longitude,
           addressText: input.addressText?.trim() || undefined,
@@ -220,6 +258,58 @@ export async function updateOfficialReport(
     return { reportId: updatedId, error: null };
   } catch (err) {
     const detail = err instanceof Error ? err.message : 'Unknown error';
+    return { reportId: null, error: detail };
+  }
+}
+
+/** Correct only the primary response point; the backend records an audit event. */
+export async function correctOfficialReportLocation(
+  input: CorrectOfficialReportLocationInput,
+): Promise<{ reportId: string | null; error: string | null }> {
+  if (
+    !Number.isFinite(input.position.latitude) ||
+    !Number.isFinite(input.position.longitude)
+  ) {
+    return { reportId: null, error: 'Enter a valid incident location.' };
+  }
+
+  const session = await getActiveSession();
+  if (!session?.user?.id) {
+    return { reportId: null, error: 'Sign in to correct this incident.' };
+  }
+
+  try {
+    const { data, error, response } = await supabase.functions.invoke(
+      'update-official-report',
+      {
+        body: {
+          correctionOnly: true,
+          correctionNote: input.note?.trim() || undefined,
+          reportId: input.reportId,
+          latitude: input.position.latitude,
+          longitude: input.position.longitude,
+          addressText: input.addressText?.trim() || undefined,
+          barangayId: input.barangayId || undefined,
+        },
+      },
+    );
+
+    if (error) {
+      const message = await readEdgeFunctionErrorMessage(
+        error,
+        response,
+        'Could not correct the incident location. Please try again.',
+      );
+      return { reportId: null, error: message };
+    }
+
+    const reportId =
+      data && typeof data === 'object' && 'reportId' in data
+        ? String((data as { reportId: unknown }).reportId)
+        : input.reportId;
+    return { reportId, error: null };
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : 'Unknown error';
     return { reportId: null, error: detail };
   }
 }

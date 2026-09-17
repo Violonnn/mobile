@@ -4,12 +4,10 @@
 // media preview) here means the map and the feed always look and behave the
 // same — there is a single source of truth for a report's detail layout.
 import { Ionicons } from '@expo/vector-icons';
-import { useVideoPlayer, VideoView } from 'expo-video';
-import * as VideoThumbnails from 'expo-video-thumbnails';
+import { setVideoCacheSizeAsync, useVideoPlayer, VideoView } from 'expo-video';
+import { Image } from 'expo-image';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-    ActivityIndicator,
-    Image,
     Modal,
     Platform,
     Pressable,
@@ -19,31 +17,32 @@ import {
     StyleSheet,
     Text,
     TouchableOpacity,
-    useWindowDimensions,
     View,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useKeyboardHeight } from '../../hooks/useKeyboardHeight';
 import { useReportDetail } from '../../hooks/useReportDetail';
 import { formatPublishedAt } from '../../lib/formatTime';
+import { formatIncidentType } from '../../lib/incidentTypes';
 import {
     formatReporterName,
     formatReportLocation,
     type MapReportMarker,
     type ReportMediaAttachment,
 } from '../../lib/reports';
-import { navMetrics } from '../../styles/components/bottomNav.styles';
 import { colors, fonts, fontSizes, radius, spacing } from '../../styles/theme';
+import ResidentBottomSheet from '../ui/ResidentBottomSheet';
+import RemoteMediaImage from '../media/RemoteMediaImage';
 import CommentsSection from './CommentsSection';
 import { useReportEngagement } from './ReportEngagementProvider';
 import { ReporterAvatar } from './ReporterAvatar';
 
 const COLLAGE_GAP = 4;
 const MAX_COLLAGE_CELLS = 4;
-const BOTTOM_NAV_CLEARANCE = navMetrics.barHeight + navMetrics.reportLift + spacing.sm;
 
-// Cache generated video thumbnails so collage cells do not re-extract frames.
-const videoThumbCache = new Map<string, string>();
+const PRIVATE_VIDEO_CACHE_BYTES = 128 * 1024 * 1024;
+if (Platform.OS !== 'web') {
+  void setVideoCacheSizeAsync(PRIVATE_VIDEO_CACHE_BYTES).catch(() => undefined);
+}
 
 export function statusLabel(status: string): string {
   if (status === 'verified') return 'Verified';
@@ -59,6 +58,12 @@ function residentStatusLabel(status: string): string {
   return 'Under review';
 }
 
+function formatLatestActivityAt(iso: string): string {
+  const activityLabel = formatPublishedAt(iso);
+  const isShortRelativeTime = /^\d+(s|m|hr)$/.test(activityLabel);
+  return `Updated ${activityLabel}${isShortRelativeTime ? ' ago' : ''}`;
+}
+
 export function statusStyle(status: string) {
   if (status === 'verified') return reportDetailStyles.statusVerified;
   if (status === 'escalated') return reportDetailStyles.statusEscalated;
@@ -67,7 +72,7 @@ export function statusStyle(status: string) {
 }
 
 function RemoteVideoPreview({ uri }: { uri: string }) {
-  const player = useVideoPlayer(uri, (p) => {
+  const player = useVideoPlayer({ uri, useCaching: true }, (p) => {
     p.loop = false;
   });
 
@@ -82,64 +87,39 @@ function RemoteVideoPreview({ uri }: { uri: string }) {
   );
 }
 
-function VideoThumbnail({ uri }: { uri: string }) {
-  const [thumbUri, setThumbUri] = useState<string | null>(
-    () => videoThumbCache.get(uri) ?? null,
-  );
-  const [failed, setFailed] = useState(false);
-  const [previousUri, setPreviousUri] = useState(uri);
-
-  if (uri !== previousUri) {
-    setPreviousUri(uri);
-    setThumbUri(videoThumbCache.get(uri) ?? null);
-    setFailed(false);
-  }
-
-  useEffect(() => {
-    let cancelled = false;
-    const cached = videoThumbCache.get(uri);
-    if (cached) return;
-
-    void (async () => {
-      try {
-        const result = await VideoThumbnails.getThumbnailAsync(uri, {
-          time: 500,
-          quality: 0.6,
-        });
-        if (cancelled) return;
-        videoThumbCache.set(uri, result.uri);
-        setThumbUri(result.uri);
-      } catch {
-        if (!cancelled) setFailed(true);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [uri]);
-
-  if (thumbUri) {
-    return <Image source={{ uri: thumbUri }} style={reportDetailStyles.collageImage} resizeMode="cover" />;
-  }
-
+function VideoPlaceholder() {
   return (
     <View style={reportDetailStyles.collageVideoPlaceholder}>
-      {failed ? (
-        <Ionicons name="videocam" size={22} color={colors.white} />
-      ) : (
-        <ActivityIndicator color={colors.white} />
-      )}
+      <Ionicons name="videocam" size={22} color={colors.white} />
     </View>
   );
 }
 
-/** Photo image or generated video frame for collage / list cells. */
+/** Stored thumbnail/poster only; this never extracts frames from remote video. */
 export function CollageCellContent({ item }: { item: ReportMediaAttachment }) {
-  if (item.type === 'photo') {
-    return <Image source={{ uri: item.url }} style={reportDetailStyles.collageImage} resizeMode="cover" />;
+  const thumbnailUrl = item.thumbnailUrl ?? (item.type === 'photo' ? item.url : null);
+  if (!thumbnailUrl) return <VideoPlaceholder />;
+
+  if (item.thumbnailStoragePath) {
+    return (
+      <RemoteMediaImage
+        bucket={item.bucket ?? 'report-media'}
+        storagePath={item.thumbnailStoragePath}
+        uri={thumbnailUrl}
+        variant="thumbnail"
+        recyclingKey={item.id}
+        style={reportDetailStyles.collageImage}
+      />
+    );
   }
-  return <VideoThumbnail uri={item.url} />;
+
+  return (
+    <Image
+      source={{ uri: thumbnailUrl }}
+      style={reportDetailStyles.collageImage}
+      contentFit="cover"
+    />
+  );
 }
 
 /**
@@ -527,13 +507,29 @@ export function ReportMediaPreviewModal({
           </TouchableOpacity>
 
           {preview?.type === 'photo' ? (
-            <Image
-              source={{ uri: preview.url }}
-              style={reportDetailStyles.previewImage}
-              resizeMode="contain"
-            />
+            preview.displayStoragePath || preview.storagePath ? (
+              <RemoteMediaImage
+                bucket={preview.bucket ?? 'report-media'}
+                storagePath={preview.displayStoragePath ?? preview.storagePath!}
+                uri={preview.url}
+                variant="detail"
+                recyclingKey={preview.id}
+                style={reportDetailStyles.previewImage}
+                contentFit="contain"
+              />
+            ) : (
+              <Image
+                source={{ uri: preview.url }}
+                style={reportDetailStyles.previewImage}
+                contentFit="contain"
+              />
+            )
           ) : preview ? (
-            <RemoteVideoPreview uri={preview.url} />
+            preview.detailUrlResolved !== false ? (
+              <RemoteVideoPreview uri={preview.url} />
+            ) : (
+              <VideoPlaceholder />
+            )
           ) : null}
         </View>
       </View>
@@ -611,6 +607,12 @@ export function ReportDetailContent({
       <EngagementActions report={report} onCommentPress={onRequestComments} />
 
       <View style={reportDetailStyles.detailCard}>
+        <View style={reportDetailStyles.incidentTypePill}>
+          <Ionicons name="warning-outline" size={14} color={colors.navigationActive} />
+          <Text style={reportDetailStyles.incidentTypeText}>
+            {formatIncidentType(report.incidentType, report.incidentTypeOther)}
+          </Text>
+        </View>
         <Text style={reportDetailStyles.detailTitle}>
           {report.title || 'Untitled report'}
         </Text>
@@ -624,7 +626,7 @@ export function ReportDetailContent({
   );
 }
 
-function ResidentFeedReportContent({
+export function ResidentFeedReportContent({
   report,
   distanceLabel,
   onRequestExpand,
@@ -644,7 +646,7 @@ function ResidentFeedReportContent({
       : report.status === 'verified'
         ? colors.primary
         : report.status === 'escalated'
-          ? '#B45309'
+          ? colors.escalated
           : '#A16207';
 
   const shareReport = async () => {
@@ -663,15 +665,21 @@ function ResidentFeedReportContent({
       <View style={residentFeedStyles.reporterRow}>
         <ReporterAvatar reporter={report.reporter} size={40} />
         <View style={residentFeedStyles.reporterDetails}>
-          <Text style={residentFeedStyles.reporterName} numberOfLines={1}>
-            {formatReporterName(report.reporter)}
-          </Text>
+          <View style={residentFeedStyles.reporterNameRow}>
+            <Text style={residentFeedStyles.reporterName} numberOfLines={1}>
+              {formatReporterName(report.reporter)}
+            </Text>
+            {report.created_at ? (
+              <Text style={residentFeedStyles.createdAtText} numberOfLines={1}>
+                · {formatPublishedAt(report.created_at)}
+              </Text>
+            ) : null}
+          </View>
           <View style={residentFeedStyles.reportMetaRow}>
             <Ionicons name="location-sharp" size={12} color={colors.textMuted} />
             <Text style={residentFeedStyles.metaText} numberOfLines={1}>
               {formatReportLocation(report)}
               {distanceLabel ? `  ·  ${distanceLabel}` : ''}
-              {report.created_at ? `  ·  ${formatPublishedAt(report.created_at)}` : ''}
             </Text>
           </View>
         </View>
@@ -691,7 +699,9 @@ function ResidentFeedReportContent({
             {residentStatusLabel(report.status)}
           </Text>
         </View>
-        <Text style={residentFeedStyles.typeText}>Community report</Text>
+        <Text style={residentFeedStyles.typeText} numberOfLines={1}>
+          {formatIncidentType(report.incidentType, report.incidentTypeOther)}
+        </Text>
       </View>
 
       {firstMedia ? (
@@ -703,6 +713,13 @@ function ResidentFeedReportContent({
             </View>
           ) : null}
         </View>
+      ) : report.mediaError ? (
+        <View style={residentFeedStyles.mediaPlaceholder}>
+          <Ionicons name="cloud-offline-outline" size={30} color={colors.textMuted} />
+          <Text style={residentFeedStyles.mediaPlaceholderText}>
+            Attachments temporarily unavailable
+          </Text>
+        </View>
       ) : (
         <View style={residentFeedStyles.mediaPlaceholder}>
           <Ionicons name="image-outline" size={30} color={colors.textMuted} />
@@ -711,7 +728,9 @@ function ResidentFeedReportContent({
       )}
 
       <View style={residentFeedStyles.copyBlock}>
-        <Text style={residentFeedStyles.reportCategory}>INCIDENT REPORT</Text>
+        <Text style={residentFeedStyles.activityText}>
+          {formatLatestActivityAt(report.latestActivityAt ?? report.created_at)}
+        </Text>
         <Text style={residentFeedStyles.reportTitle}>{report.title || 'Untitled report'}</Text>
         <Text style={residentFeedStyles.reportDescription} numberOfLines={3}>
           {report.description || 'No description provided.'}
@@ -793,17 +812,18 @@ export function ReportDetailCard({
   isLast = false,
   variant = 'default',
   distanceLabel,
+  openRequestKey,
+  onViewOnMap,
 }: {
   report: MapReportMarker;
   isLast?: boolean;
   variant?: 'default' | 'residentFeed';
   distanceLabel?: string;
+  openRequestKey?: string;
+  onViewOnMap?: (reportId: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [focusComments, setFocusComments] = useState(false);
-  const insets = useSafeAreaInsets();
-  const { height: windowHeight } = useWindowDimensions();
-  const sheetBottom = insets.bottom + BOTTOM_NAV_CLEARANCE;
   const { notifyCommentAdded } = useReportEngagement();
   const {
     report: detailReport,
@@ -824,9 +844,6 @@ export function ReportDetailCard({
   // lifts itself above the keyboard and shrinks to the remaining space.
   const keyboardHeight = useKeyboardHeight(expanded);
   const keyboardOpen = keyboardHeight > 0;
-  const sheetLift = keyboardOpen
-    ? { marginBottom: keyboardHeight + spacing.sm, maxHeight: windowHeight - keyboardHeight - insets.top - spacing.xl }
-    : { marginBottom: sheetBottom };
 
   // Once the keyboard is up the viewport shrinks — re-pin the composer so it
   // is never left hidden behind the keyboard.
@@ -850,6 +867,18 @@ export function ReportDetailCard({
     setFocusComments(false);
     setExpanded(false);
   };
+
+  useEffect(() => {
+    if (!openRequestKey) return;
+
+    // Open after navigation has mounted the destination card and bottom sheet.
+    const frameId = requestAnimationFrame(() => {
+      pendingScrollToComments.current = false;
+      setFocusComments(false);
+      setExpanded(true);
+    });
+    return () => cancelAnimationFrame(frameId);
+  }, [openRequestKey]);
 
   const jumpToComments = () => {
     pendingScrollToComments.current = true;
@@ -880,24 +909,15 @@ export function ReportDetailCard({
       </Pressable>
 
       {/* Full-post sheet: matches the map screen's report-details sheet format. */}
-      <Modal
+      <ResidentBottomSheet
         visible={expanded}
-        transparent
-        animationType="fade"
-        presentationStyle="overFullScreen"
-        statusBarTranslucent
-        onRequestClose={closeExpanded}
+        onClose={closeExpanded}
+        initialHeightRatio={0.72}
+        minimumHeight={360}
+        bottomOffset={keyboardOpen ? keyboardHeight + spacing.sm : 0}
+        sheetStyle={reportDetailStyles.postModalSheet}
+        handleAccessibilityLabel="Resize community report"
       >
-        <View style={reportDetailStyles.postModalOverlay}>
-          <Pressable
-            style={reportDetailStyles.postModalBackdrop}
-            onPress={closeExpanded}
-            accessibilityLabel="Close report"
-          />
-
-          <View style={[reportDetailStyles.postModalSheet, sheetLift]}>
-            <View style={reportDetailStyles.postModalHandle} />
-
             <View style={reportDetailStyles.postModalHeader}>
               <View style={reportDetailStyles.postModalHeaderButton} />
 
@@ -917,15 +937,7 @@ export function ReportDetailCard({
                 </View>
               </View>
 
-              <TouchableOpacity
-                style={reportDetailStyles.postModalHeaderButton}
-                onPress={closeExpanded}
-                hitSlop={8}
-                accessibilityRole="button"
-                accessibilityLabel="Close"
-              >
-                <Ionicons name="close" size={22} color={colors.textMuted} />
-              </TouchableOpacity>
+              <View style={reportDetailStyles.postModalHeaderButton} />
             </View>
 
             <ScrollView
@@ -970,6 +982,23 @@ export function ReportDetailCard({
                     </Text>
                   ) : null}
 
+                  {onViewOnMap ? (
+                    <TouchableOpacity
+                      style={reportDetailStyles.mapActionButton}
+                      onPress={() => {
+                        closeExpanded();
+                        onViewOnMap(detailReport.id);
+                      }}
+                      activeOpacity={0.84}
+                      accessibilityRole="button"
+                      accessibilityLabel="Show this report on the map"
+                    >
+                      <Ionicons name="map-outline" size={18} color={colors.white} />
+                      <Text style={reportDetailStyles.mapActionButtonText}>View on map</Text>
+                      <Ionicons name="arrow-forward" size={18} color={colors.white} />
+                    </TouchableOpacity>
+                  ) : null}
+
                   {/* Inline thread — mounted (and live) only while this modal is open. */}
                   {!detailReport.isPending ? (
                     <CommentsSection
@@ -986,9 +1015,7 @@ export function ReportDetailCard({
                 </>
               ) : null}
             </ScrollView>
-          </View>
-        </View>
-      </Modal>
+      </ResidentBottomSheet>
     </>
   );
 }
@@ -1014,9 +1041,21 @@ const residentFeedStyles = StyleSheet.create({
     justifyContent: 'center',
   },
   reporterName: {
+    flexShrink: 1,
     fontFamily: fonts.semibold,
     fontSize: fontSizes.md,
     color: colors.text,
+  },
+  reporterNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  createdAtText: {
+    flexShrink: 0,
+    fontFamily: fonts.regular,
+    fontSize: 11,
+    color: colors.textMuted,
   },
   reportMetaRow: {
     flexDirection: 'row',
@@ -1091,10 +1130,9 @@ const residentFeedStyles = StyleSheet.create({
   copyBlock: {
     gap: 3,
   },
-  reportCategory: {
+  activityText: {
     fontFamily: fonts.medium,
     fontSize: fontSizes.xs,
-    letterSpacing: 0.55,
     color: colors.textMuted,
   },
   reportTitle: {
@@ -1174,6 +1212,21 @@ export const reportDetailStyles = StyleSheet.create({
   detailCard: {
     gap: spacing.xs,
   },
+  incidentTypePill: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    borderRadius: radius.full,
+    backgroundColor: colors.primaryLight,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 5,
+  },
+  incidentTypeText: {
+    fontFamily: fonts.semibold,
+    fontSize: fontSizes.xs,
+    color: colors.navigationActive,
+  },
   detailTitle: {
     flexShrink: 1,
     fontFamily: fonts.bold,
@@ -1192,19 +1245,27 @@ export const reportDetailStyles = StyleSheet.create({
     color: colors.danger,
     textAlign: 'center',
   },
+  mapActionButton: {
+    minHeight: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.full,
+    backgroundColor: colors.navigationActive,
+  },
+  mapActionButtonText: {
+    flexShrink: 1,
+    fontFamily: fonts.semibold,
+    fontSize: fontSizes.sm,
+    color: colors.white,
+    textAlign: 'center',
+  },
   // ---- Full-post sheet (feed) --------------------------------------------
-  postModalOverlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  postModalBackdrop: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(17, 24, 39, 0.48)',
-  },
-  // Anchored to the bottom — same max height as the map detail sheet.
+  // Shared sheet chrome used by resident report and announcement details.
   postModalSheet: {
     width: '100%',
-    maxHeight: '72%',
     backgroundColor: colors.card,
     borderTopLeftRadius: radius.xl,
     borderTopRightRadius: radius.xl,
@@ -1223,22 +1284,11 @@ export const reportDetailStyles = StyleSheet.create({
       },
     }),
   },
-  postModalHandle: {
-    alignSelf: 'center',
-    width: 44,
-    height: 4,
-    borderRadius: radius.full,
-    backgroundColor: colors.border,
-    marginTop: spacing.sm,
-    marginBottom: spacing.xs,
-  },
   postModalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: spacing.sm,
-    paddingBottom: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    paddingBottom: spacing.xs,
   },
   postModalHeaderButton: {
     width: 40,
@@ -1272,7 +1322,8 @@ export const reportDetailStyles = StyleSheet.create({
     color: colors.text,
   },
   postModalScroll: {
-    flexGrow: 0,
+    flex: 1,
+    minHeight: 0,
   },
   postModalScrollContent: {
     paddingHorizontal: spacing.md,

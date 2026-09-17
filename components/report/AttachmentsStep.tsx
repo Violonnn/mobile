@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, Image } from 'react-native';
+import { View, Text, TouchableOpacity, Image, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { reportStyles as styles, reportColors } from '../../styles/screens/report.styles';
 import MediaPreview from './MediaPreview';
@@ -16,7 +16,9 @@ type Props = {
   onAddPhoto: () => void;
   onAddVideo: () => void;
   onRemove: (id: string) => void;
+  onBack?: () => void;
   onNext: () => void;
+  residentLayout?: boolean;
 };
 
 export default function AttachmentsStep({
@@ -30,13 +32,122 @@ export default function AttachmentsStep({
   onAddPhoto,
   onAddVideo,
   onRemove,
+  onBack,
   onNext,
+  residentLayout = false,
 }: Props) {
   const [preview, setPreview] = useState<CapturedMedia | null>(null);
 
   const photosFull = usedPhotoSlots >= maxPhotos;
   const videoFull = usedVideoSeconds >= maxVideoSeconds;
   const videoOver = usedVideoSeconds > maxVideoSeconds;
+
+  if (residentLayout) {
+    return (
+      <View style={styles.stepContent}>
+        <Text style={styles.residentStepTitle}>Add what you can{`\n`}safely capture</Text>
+        <Text style={styles.residentStepSubtitle}>
+          One clear photo or video is enough.
+        </Text>
+
+        <TouchableOpacity
+          style={[styles.residentPhotoAction, photosFull && styles.mediaButtonDisabled]}
+          onPress={onAddPhoto}
+          disabled={photosFull}
+          accessibilityRole="button"
+          accessibilityLabel="Take a photo"
+        >
+          <View style={styles.residentCameraCircle}>
+            <Ionicons name="camera" size={29} color={reportColors.white} />
+          </View>
+          <Text style={styles.residentCaptureLabel}>Take a photo</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.residentVideoAction, videoFull && styles.mediaButtonDisabled]}
+          onPress={onAddVideo}
+          disabled={videoFull}
+          accessibilityRole="button"
+          accessibilityLabel="Record video"
+        >
+          <Ionicons name="videocam" size={23} color={reportColors.primary} />
+          <Text style={styles.residentVideoActionText}>Record video</Text>
+        </TouchableOpacity>
+
+        <View style={styles.residentEvidenceHeader}>
+          <Text style={styles.residentEvidenceTitle}>Your evidence</Text>
+          <Text style={styles.residentEvidenceCount}>
+            {media.length} {media.length === 1 ? 'file' : 'files'} ready
+          </Text>
+        </View>
+
+        {media.length > 0 ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.residentEvidenceRow}
+          >
+            {media.map((item) => (
+              <TouchableOpacity
+                key={item.id}
+                style={styles.residentEvidenceCard}
+                onPress={() => setPreview(item)}
+                activeOpacity={0.9}
+                accessibilityRole="button"
+                accessibilityLabel={item.type === 'photo' ? 'View photo' : 'Play video'}
+              >
+                {item.type === 'photo' ? (
+                  <Image source={{ uri: item.localUri }} style={styles.residentEvidenceImage} />
+                ) : (
+                  <View style={styles.residentEvidenceVideo}>
+                    <Ionicons name="play-circle" size={46} color={reportColors.white} />
+                    <Text style={styles.residentVideoDuration}>
+                      {(item.durationSeconds ?? 0).toFixed(0)}s
+                    </Text>
+                  </View>
+                )}
+                <TouchableOpacity
+                  style={styles.residentRemoveEvidence}
+                  onPress={(event) => {
+                    event.stopPropagation();
+                    onRemove(item.id);
+                  }}
+                  hitSlop={5}
+                  accessibilityRole="button"
+                  accessibilityLabel="Remove attachment"
+                >
+                  <Ionicons name="close" size={18} color={reportColors.primary} />
+                </TouchableOpacity>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        ) : (
+          <View style={styles.residentEvidenceEmpty}>
+            <Ionicons name="images-outline" size={23} color={reportColors.textLight} />
+            <Text style={styles.residentEvidenceEmptyText}>Captured evidence appears here</Text>
+          </View>
+        )}
+
+        {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+        <TouchableOpacity
+          style={[
+            styles.primaryButton,
+            styles.residentPrimaryButton,
+            !canProceed && styles.primaryButtonDisabled,
+          ]}
+          onPress={onNext}
+          disabled={!canProceed}
+          accessibilityRole="button"
+          accessibilityLabel="Continue to report details"
+        >
+          <Text style={styles.primaryButtonText}>Continue</Text>
+        </TouchableOpacity>
+
+        <MediaPreview media={preview} onClose={() => setPreview(null)} />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.stepContent}>
@@ -123,6 +234,16 @@ export default function AttachmentsStep({
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
       <View style={styles.footerRow}>
+        {onBack ? (
+          <TouchableOpacity
+            style={styles.secondaryButton}
+            onPress={onBack}
+            accessibilityRole="button"
+            accessibilityLabel="Back to location"
+          >
+            <Text style={styles.secondaryButtonText}>Back</Text>
+          </TouchableOpacity>
+        ) : null}
         <TouchableOpacity
           style={[styles.primaryButton, !canProceed && styles.primaryButtonDisabled]}
           onPress={onNext}
@@ -130,7 +251,7 @@ export default function AttachmentsStep({
           accessibilityRole="button"
           accessibilityLabel="Continue to report details"
         >
-          <Text style={styles.primaryButtonText}>Next</Text>
+          <Text style={styles.primaryButtonText}>Continue</Text>
         </TouchableOpacity>
       </View>
 

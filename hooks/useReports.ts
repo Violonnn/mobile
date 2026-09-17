@@ -17,16 +17,31 @@ type UseReportsOptions = {
   barangayId?: string | null;
   /** Resident maps may show their local upload queue; official maps must not. */
   includePending?: boolean;
+  /** Load every authorized page for a virtualized list instead of the map cap. */
+  loadAll?: boolean;
+  /** Load only the activity timestamps used by the resident community feed. */
+  includeLatestActivity?: boolean;
+  /** Fetch and sign stored thumbnails for list cards. Maps leave this false. */
+  includeMediaSummaries?: boolean;
+  /** Maximum server rows for this screen. */
+  limit?: number;
 };
 
 export function useReports({
   realtime = true,
   barangayId = null,
   includePending = true,
+  loadAll = false,
+  includeLatestActivity = false,
+  includeMediaSummaries = false,
+  limit,
 }: UseReportsOptions = {}) {
   const [reports, setReports] = useState<MapReportMarker[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<number | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
 
   // Unique channel name per hook instance so the map and feed subscriptions
   // (which can be mounted at the same time) never collide.
@@ -43,6 +58,10 @@ export function useReports({
     const { reports: fetched, error: fetchError } = await fetchMapReports({
       barangayId,
       includePending,
+      loadAll,
+      includeLatestActivity,
+      includeMediaSummaries,
+      limit,
     });
     setLoading(false);
     if (fetchError) {
@@ -51,7 +70,34 @@ export function useReports({
     }
     setError(null);
     setReports(fetched);
-  }, [barangayId, includePending]);
+    setHasMore(Boolean(limit && fetched.filter((report) => !report.isPending).length >= limit));
+    setLastUpdatedAt(Date.now());
+  }, [barangayId, includeLatestActivity, includeMediaSummaries, includePending, limit, loadAll]);
+
+  const loadMore = useCallback(async () => {
+    if (!limit || loadAll || loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    const serverReportCount = reportsRef.current.filter((report) => !report.isPending).length;
+    const result = await fetchMapReports({
+      barangayId,
+      includePending: false,
+      includeLatestActivity,
+      includeMediaSummaries,
+      limit,
+      offset: serverReportCount,
+    });
+    setLoadingMore(false);
+    if (result.error) {
+      setError(result.error);
+      return;
+    }
+    setHasMore(result.reports.length >= limit);
+    setReports((current) => {
+      const byId = new Map(current.map((report) => [report.id, report]));
+      result.reports.forEach((report) => byId.set(report.id, report));
+      return [...byId.values()];
+    });
+  }, [barangayId, hasMore, includeLatestActivity, includeMediaSummaries, limit, loadAll, loadingMore]);
 
   // Decide how to react to a live `reports` change. Inserts, deletes, and edits
   // to pin-relevant fields (title/description/status) trigger a full reload
@@ -148,5 +194,14 @@ export function useReports({
     };
   }, [realtime, channelName, handleRealtimeChange, barangayId]);
 
-  return { reports, error, loading, reload: load };
+  return {
+    reports,
+    error,
+    loading,
+    loadingMore,
+    hasMore,
+    lastUpdatedAt,
+    reload: load,
+    loadMore,
+  };
 }

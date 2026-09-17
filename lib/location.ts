@@ -1,6 +1,12 @@
 import * as Location from 'expo-location';
 import { supabase } from './supabase';
 import { promptOpenSettings } from './permissions';
+export {
+  distanceBetweenCoordinates,
+  getReportLocationAdjustmentLimit,
+  REPORT_LOCATION_BASE_ADJUSTMENT_METERS,
+  REPORT_LOCATION_MAX_ADJUSTMENT_METERS,
+} from './reportLocation';
 
 /** Max horizontal accuracy (meters) before the resident must confirm the pin. */
 export const REPORT_LOCATION_MAX_ACCURACY_METERS = 100;
@@ -200,20 +206,24 @@ function withTimeout<T>(
   });
 }
 
+/** Fresh GPS position with a bounded wait for location-dependent screens. */
+export function getCurrentGpsWithTimeout(timeoutMs = 20_000): Promise<{
+  position: GpsPosition | null;
+  error: string | null;
+}> {
+  return withTimeout(getCurrentGps(), timeoutMs, {
+    position: null,
+    error: 'Getting your location took too long. Try again.',
+  });
+}
+
 /** GPS + suggested barangay/municipality for the report modal. */
 export async function getCurrentGpsWithAddress(timeoutMs = 20000): Promise<{
   position: GpsPosition | null;
   address: ReadableAddress | null;
   error: string | null;
 }> {
-  const { position, error: gpsError } = await withTimeout(
-    getCurrentGps(),
-    timeoutMs,
-    {
-      position: null,
-      error: 'Getting your location took too long. Try again.',
-    },
-  );
+  const { position, error: gpsError } = await getCurrentGpsWithTimeout(timeoutMs);
   if (!position) {
     return { position: null, address: null, error: gpsError };
   }

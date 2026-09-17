@@ -3,6 +3,8 @@ export type Coordinate = {
   longitude: number;
 };
 
+export const NEARBY_REPORT_RADIUS_METERS = 5_000;
+
 export function normalizeSearchText(value: string): string {
   return value.trim().toLocaleLowerCase();
 }

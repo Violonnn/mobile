@@ -5,6 +5,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { GENERIC_SERVER_ERROR, jsonResponse } from "../_shared/http.ts";
 import { rejectExtraKeys, trimText } from "../_shared/validation.ts";
+import { verifyPrivateMedia } from "../_shared/private-media.ts";
 
 /** Rough Minglanilla / metro Cebu bounding box for GPS sanity checks. */
 const LAT_MIN = 10.15;
@@ -15,18 +16,27 @@ const LNG_MAX = 123.90;
 const MAX_TITLE = 120;
 const MAX_DESCRIPTION = 2000;
 const MAX_ADDRESS = 300;
+const MAX_INCIDENT_TYPE_OTHER = 80;
+const INCIDENT_TYPES = ["fire", "flood", "road_crash", "medical", "other"];
 
 type MediaItem = {
   id?: string;
   type?: string;
   storagePath?: string;
   durationSeconds?: number | null;
+  displayStoragePath?: string | null;
+  thumbnailStoragePath?: string | null;
+  fileSizeBytes?: number | null;
+  width?: number | null;
+  height?: number | null;
 };
 
 type CreateOfficialReportPayload = {
   reportId?: string;
   title?: string;
   description?: string;
+  incidentType?: string;
+  incidentTypeOther?: string;
   latitude?: number;
   longitude?: number;
   addressText?: string;
@@ -72,6 +82,21 @@ function validateOptionalMedia(media: MediaItem[]): string | null {
     if (!item || typeof item !== "object") {
       return "Invalid media item.";
     }
+    if (
+      rejectExtraKeys(item as Record<string, unknown>, [
+        "id",
+        "type",
+        "storagePath",
+        "displayStoragePath",
+        "thumbnailStoragePath",
+        "durationSeconds",
+        "fileSizeBytes",
+        "width",
+        "height",
+      ])
+    ) {
+      return "Invalid media fields.";
+    }
     const id = trimText(item.id);
     const type = trimText(item.type);
     const storagePath = trimText(item.storagePath);
@@ -95,6 +120,20 @@ function validateOptionalMedia(media: MediaItem[]): string | null {
       }
       videoDuration += duration;
     }
+    if (
+      item.width != null &&
+      (!Number.isFinite(Number(item.width)) || Number(item.width) <= 0 ||
+        Number(item.width) > 20000)
+    ) {
+      return "Invalid media width.";
+    }
+    if (
+      item.height != null &&
+      (!Number.isFinite(Number(item.height)) || Number(item.height) <= 0 ||
+        Number(item.height) > 20000)
+    ) {
+      return "Invalid media height.";
+    }
   }
 
   if (photos > 3) {
@@ -112,7 +151,16 @@ function toMediaJson(media: MediaItem[]) {
     id: trimText(item.id),
     type: trimText(item.type),
     storagePath: trimText(item.storagePath),
-    durationSeconds: item.type === "video" ? Number(item.durationSeconds) : null,
+    durationSeconds: item.type === "video"
+      ? Number(item.durationSeconds)
+      : null,
+    displayStoragePath: trimText(item.displayStoragePath) || null,
+    thumbnailStoragePath: trimText(item.thumbnailStoragePath) || null,
+    fileSizeBytes: item.fileSizeBytes == null
+      ? null
+      : Number(item.fileSizeBytes),
+    width: item.width == null ? null : Number(item.width),
+    height: item.height == null ? null : Number(item.height),
   }));
 }
 
@@ -124,6 +172,8 @@ async function insertOfficialReportDirect(
     reportId: string | null;
     title: string;
     description: string;
+    incidentType: string;
+    incidentTypeOther: string;
     latitude: number;
     longitude: number;
     addressText: string;
@@ -132,14 +182,17 @@ async function insertOfficialReportDirect(
   },
 ): Promise<{ reportId: string | null; error: string | null }> {
   const reportId = params.reportId || crypto.randomUUID();
-  const locationWkt =
-    `SRID=4326;POINT(${params.longitude} ${params.latitude})`;
+  const locationWkt = `SRID=4326;POINT(${params.longitude} ${params.latitude})`;
 
   const { error: insertError } = await adminClient.from("reports").insert({
     id: reportId,
     reporter_id: params.reporterId,
     title: params.title,
     description: params.description,
+    incident_type: params.incidentType || null,
+    incident_type_other: params.incidentType === "other"
+      ? params.incidentTypeOther
+      : null,
     location: locationWkt,
     address_text: params.addressText || null,
     barangay_id: params.barangayId,
@@ -156,8 +209,16 @@ async function insertOfficialReportDirect(
       report_id: reportId,
       type: trimText(item.type),
       storage_path: trimText(item.storagePath),
-      duration_seconds:
-        item.type === "video" ? Number(item.durationSeconds) : null,
+      duration_seconds: item.type === "video"
+        ? Number(item.durationSeconds)
+        : null,
+      thumbnail_storage_path: trimText(item.thumbnailStoragePath) || null,
+      display_storage_path: trimText(item.displayStoragePath) || null,
+      file_size_bytes: item.fileSizeBytes == null
+        ? null
+        : Number(item.fileSizeBytes),
+      width: item.width == null ? null : Number(item.width),
+      height: item.height == null ? null : Number(item.height),
       position: index,
     }));
 
@@ -214,22 +275,29 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: "Invalid request body." }, 400);
   }
 
-  const extraFieldsError = rejectExtraKeys(rawPayload as Record<string, unknown>, [
-    "reportId",
-    "title",
-    "description",
-    "latitude",
-    "longitude",
-    "addressText",
-    "barangayId",
-    "media",
-  ]);
+  const extraFieldsError = rejectExtraKeys(
+    rawPayload as Record<string, unknown>,
+    [
+      "reportId",
+      "title",
+      "description",
+      "incidentType",
+      "incidentTypeOther",
+      "latitude",
+      "longitude",
+      "addressText",
+      "barangayId",
+      "media",
+    ],
+  );
   if (extraFieldsError) {
     return jsonResponse({ error: "Invalid request fields." }, 400);
   }
 
   const title = trimText(rawPayload.title);
   const description = trimText(rawPayload.description);
+  const incidentType = trimText(rawPayload.incidentType);
+  const incidentTypeOther = trimText(rawPayload.incidentTypeOther);
   const addressText = trimText(rawPayload.addressText);
   const barangayIdRaw = trimText(rawPayload.barangayId);
   const latitude = Number(rawPayload.latitude);
@@ -239,10 +307,25 @@ Deno.serve(async (req) => {
 
   // Title is optional for officials; description and GPS remain required.
   if (title.length > MAX_TITLE) {
-    return jsonResponse({ error: "Title must be 120 characters or fewer." }, 400);
+    return jsonResponse(
+      { error: "Title must be 120 characters or fewer." },
+      400,
+    );
   }
   if (!description || description.length > MAX_DESCRIPTION) {
-    return jsonResponse({ error: "Enter a description (max 2000 characters)." }, 400);
+    return jsonResponse(
+      { error: "Enter a description (max 2000 characters)." },
+      400,
+    );
+  }
+  if (incidentType && !INCIDENT_TYPES.includes(incidentType)) {
+    return jsonResponse({ error: "Select a valid incident type." }, 400);
+  }
+  if (incidentType === "other" && !incidentTypeOther) {
+    return jsonResponse({ error: "Specify the incident type." }, 400);
+  }
+  if (incidentTypeOther.length > MAX_INCIDENT_TYPE_OTHER) {
+    return jsonResponse({ error: "Incident type is too long." }, 400);
   }
   if (addressText.length > MAX_ADDRESS) {
     return jsonResponse({ error: "Address is too long." }, 400);
@@ -273,7 +356,7 @@ Deno.serve(async (req) => {
 
   for (const item of media) {
     const path = trimText(item.storagePath);
-    if (!path.startsWith(`${reporterId}/`)) {
+    if (!path.startsWith(`${reporterId}/${reportId}/`)) {
       return jsonResponse({ error: "Invalid media storage path." }, 400);
     }
   }
@@ -281,6 +364,23 @@ Deno.serve(async (req) => {
   const adminClient = createClient(supabaseUrl, serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
+
+  const mediaVerification = await verifyPrivateMedia({
+    admin: adminClient,
+    bucket: "report-media",
+    userId: reporterId,
+    parentId: reportId,
+    media,
+    allowLegacyPath: true,
+  });
+  if (mediaVerification.error) {
+    return jsonResponse({ error: mediaVerification.error }, 400);
+  }
+  for (const item of media) {
+    item.fileSizeBytes = mediaVerification.verified.find(
+      (verified) => verified.id === trimText(item.id),
+    )?.fileSizeBytes ?? null;
+  }
 
   const { data: profile, error: profileError } = await adminClient
     .from("app_profiles")
@@ -297,7 +397,8 @@ Deno.serve(async (req) => {
   // Mayor and residents cannot use this privileged create path.
   if (officer.role !== "officer" || officer.status !== "active") {
     return jsonResponse({
-      error: "Only active BDRRMO or MDRRMO officers can log verified incidents.",
+      error:
+        "Only active BDRRMO or MDRRMO officers can log verified incidents.",
     }, 403);
   }
 
@@ -353,6 +454,10 @@ Deno.serve(async (req) => {
       p_report_id: reportId || null,
       p_title: title,
       p_description: description,
+      p_incident_type: incidentType || null,
+      p_incident_type_other: incidentType === "other"
+        ? incidentTypeOther
+        : null,
       p_latitude: latitude,
       p_longitude: longitude,
       p_address_text: addressText || null,
@@ -381,6 +486,8 @@ Deno.serve(async (req) => {
     reportId: reportId || null,
     title,
     description,
+    incidentType,
+    incidentTypeOther,
     latitude,
     longitude,
     addressText,

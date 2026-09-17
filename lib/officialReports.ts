@@ -6,6 +6,7 @@ import { Linking } from 'react-native';
 import { supabase } from './supabase';
 import { getActiveSession } from './auth';
 import {
+  fetchLatestReportActivity,
   formatReporterName,
   reporterInitial,
   type MapReportReporter,
@@ -13,6 +14,18 @@ import {
 } from './reports';
 import type { OfficialAccessScope } from './officialRegistration';
 import { formatInviteKind } from './invites';
+import { isIncidentType, type IncidentType } from './incidentTypes';
+import { isProfilePhotoSchemaMissing } from './schemaCompatibility';
+import { resolveSignedMediaUrls } from './mediaUrlCache';
+
+const OFFICIAL_REPORT_QUEUE_LEGACY_SELECT =
+  'id, title, description, incident_type, incident_type_other, status, barangay_id, address_text, created_at, latitude, longitude, reporter_id, reporter_first_name, reporter_last_name, reporter_middle_name, upvote_count, comment_count';
+const OFFICIAL_REPORT_QUEUE_SELECT =
+  `${OFFICIAL_REPORT_QUEUE_LEGACY_SELECT}, reporter_avatar_path`;
+const REPORT_MAP_IDENTITY_LEGACY_SELECT =
+  'latitude, longitude, reporter_id, reporter_first_name, reporter_last_name, reporter_middle_name';
+const REPORT_MAP_IDENTITY_SELECT =
+  `${REPORT_MAP_IDENTITY_LEGACY_SELECT}, reporter_avatar_path`;
 
 export type ReportStatus =
   | 'unverified'
@@ -34,12 +47,20 @@ export type OfficialReportQueueItem = {
   id: string;
   title: string;
   description: string;
+  incidentType: IncidentType | null;
+  incidentTypeOther: string | null;
   status: ReportStatus;
   barangayId: string | null;
   barangayName: string | null;
   addressText: string | null;
   createdAt: string;
+  latestActivityAt: string;
+  verifiedAt: string | null;
+  verifiedByName: string | null;
   escalatedAt: string | null;
+  escalatedByName: string | null;
+  escalationNote: string | null;
+  resolvedAt: string | null;
   reporterName: string;
   reporterInitial: string;
   reporter: MapReportReporter;
@@ -74,11 +95,17 @@ export type OfficialReportDetail = {
   id: string;
   title: string;
   description: string;
+  incidentType: IncidentType | null;
+  incidentTypeOther: string | null;
   status: ReportStatus;
   barangayId: string | null;
   addressText: string | null;
   latitude: number;
   longitude: number;
+  deviceLatitude: number | null;
+  deviceLongitude: number | null;
+  gpsAccuracyMeters: number | null;
+  locationAdjustmentMeters: number | null;
   createdAt: string;
   reporter: MapReportReporter;
   reporterName: string;
@@ -97,6 +124,8 @@ export type OfficialReportDetail = {
   maskedPhone: string | null;
   /** Author-only content correction is available to the submitting officer. */
   canEditContent: boolean;
+  /** Scoped response officers may correct the primary incident point. */
+  canCorrectLocation: boolean;
   allowedTransitions: ReportStatus[];
 };
 
@@ -174,6 +203,7 @@ function profileDisplayName(row: {
       firstName: String(row.first_name ?? ''),
       lastName: String(row.last_name ?? ''),
       middleName: row.middle_name ? String(row.middle_name) : null,
+      avatarPath: null,
     }) || null
   );
 }
@@ -267,63 +297,72 @@ async function fetchProfileNamesById(
 /** Load the scoped official queue plus status counts. */
 export async function fetchOfficialReportQueue(
   scope: OfficialAccessScope,
+  options?: { limit?: number; offset?: number },
 ): Promise<{
   reports: OfficialReportQueueItem[];
   counts: OfficialStatusCounts;
   error: string | null;
 }> {
   const kind = officialKindFromScope(scope);
+  const limit = Math.max(1, Math.min(options?.limit ?? 20, 50));
+  const offset = Math.max(0, options?.offset ?? 0);
 
-  // reports_map already includes reporter names without PII.
-  let query = supabase
-    .from('reports_map')
-    .select(
-      'id, title, description, status, barangay_id, address_text, created_at, latitude, longitude, reporter_first_name, reporter_last_name, reporter_middle_name, upvote_count, comment_count',
-    )
-    .order('created_at', { ascending: false })
-    .limit(100);
-
-  // BDRRMO only sees their barangay; MDRRMO and Mayor are municipality-wide.
-  if (kind === 'BDRRMO') {
-    if (!scope.barangay_id) {
-      return {
-        reports: [],
-        counts: emptyCounts(),
-        error: 'Barangay scope is missing for this BDRRMO account.',
-      };
-    }
-    query = query.eq('barangay_id', scope.barangay_id);
+  if (kind === 'BDRRMO' && !scope.barangay_id) {
+    return {
+      reports: [],
+      counts: emptyCounts(),
+      error: 'Barangay scope is missing for this BDRRMO account.',
+    };
   }
 
-  const { data, error } = await query;
+  // reports_map already includes reporter names without PII.
+  const buildQueueQuery = (selectFields: string) => {
+    let queueQuery = supabase
+      .from('reports_map')
+      .select(selectFields)
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    // BDRRMO only sees its barangay; MDRRMO and Mayor are municipality-wide.
+    if (kind === 'BDRRMO' && scope.barangay_id) {
+      queueQuery = queueQuery.eq('barangay_id', scope.barangay_id);
+    }
+    return queueQuery;
+  };
+
+  let queueResult = await buildQueueQuery(OFFICIAL_REPORT_QUEUE_SELECT);
+  if (queueResult.error && isProfilePhotoSchemaMissing(queueResult.error.message)) {
+    queueResult = await buildQueueQuery(OFFICIAL_REPORT_QUEUE_LEGACY_SELECT);
+  }
+  const { data, error } = queueResult;
   if (error) {
     return { reports: [], counts: emptyCounts(), error: error.message };
   }
 
-  const reportRows = data ?? [];
+  const reportRows = (data ?? []) as unknown as Record<string, unknown>[];
   const reportIds = reportRows.map((row) => String(row.id));
-  const [firstPhotosByReportId, mediaCountsByReportId, escalationMetaByReportId, mediaByReportId] =
+  const [
+    firstMediaByReportId,
+    mediaCountsByReportId,
+    escalationMetaByReportId,
+    activityResult,
+  ] =
     await Promise.all([
-      signFirstQueuePhotos(reportIds),
+      signFirstQueueThumbnails(reportIds),
       countQueueMedia(reportIds),
       fetchQueueEscalationMeta(reportIds),
-      Promise.all(reportIds.map(async (id) => [id, await signReportMedia(id)] as const)),
+      fetchLatestReportActivity(reportIds),
     ]);
-  const signedMediaByReportId = new Map(
-    mediaByReportId.map(([id, result]) => [id, result.media]),
-  );
-  const mediaErrorByReportId = new Map(
-    mediaByReportId.map(([id, result]) => [id, result.error]),
-  );
 
   const reports: OfficialReportQueueItem[] = reportRows.map((row) => {
     const reporter = {
-      id: '',
+      id: String(row.reporter_id ?? ''),
       firstName: String(row.reporter_first_name ?? ''),
       lastName: String(row.reporter_last_name ?? ''),
       middleName: row.reporter_middle_name
         ? String(row.reporter_middle_name)
         : null,
+      avatarPath: row.reporter_avatar_path ? String(row.reporter_avatar_path) : null,
     };
     const latitude = Number(row.latitude);
     const longitude = Number(row.longitude);
@@ -334,43 +373,77 @@ export async function fetchOfficialReportQueue(
       id: reportId,
       title: String(row.title ?? ''),
       description: String(row.description ?? ''),
+      incidentType: isIncidentType(row.incident_type) ? row.incident_type : null,
+      incidentTypeOther: row.incident_type_other
+        ? String(row.incident_type_other)
+        : null,
       status: asReportStatus(row.status),
       barangayId: row.barangay_id ? String(row.barangay_id) : null,
       barangayName: meta?.barangayName ?? null,
       addressText: row.address_text ? String(row.address_text) : null,
       createdAt: String(row.created_at ?? ''),
+      latestActivityAt:
+        activityResult.latestActivityByReport.get(reportId) ?? String(row.created_at ?? ''),
+      verifiedAt: meta?.verifiedAt ?? null,
+      verifiedByName: meta?.verifiedByName ?? null,
       escalatedAt: meta?.escalatedAt ?? null,
+      escalatedByName: meta?.escalatedByName ?? null,
+      escalationNote: meta?.escalationNote ?? null,
+      resolvedAt: meta?.resolvedAt ?? null,
       reporterName: formatReporterName(reporter) || 'Resident',
       reporterInitial: reporterInitial(reporter),
       reporter,
       latitude: Number.isFinite(latitude) ? latitude : null,
       longitude: Number.isFinite(longitude) ? longitude : null,
-      firstPhotoUrl: firstPhotosByReportId.get(reportId) ?? null,
+      firstPhotoUrl:
+        firstMediaByReportId.get(reportId)?.type === 'photo'
+          ? firstMediaByReportId.get(reportId)?.thumbnailUrl ?? null
+          : null,
       mediaCount: mediaCountsByReportId.get(reportId) ?? 0,
-      media: signedMediaByReportId.get(reportId) ?? [],
-      mediaError: mediaErrorByReportId.get(reportId) ?? null,
+      media: firstMediaByReportId.has(reportId)
+        ? [firstMediaByReportId.get(reportId)!]
+        : [],
+      mediaError: null,
       upvoteCount: Number(row.upvote_count ?? 0),
       commentCount: Number(row.comment_count ?? 0),
     };
   });
 
+  let statusQuery = supabase.from('reports_map').select('status');
+  if (kind === 'BDRRMO' && scope.barangay_id) {
+    statusQuery = statusQuery.eq('barangay_id', scope.barangay_id);
+  }
+  const statusResult = await statusQuery;
+  const allStatusRows = (statusResult.data ?? []).map((row) => ({
+    status: asReportStatus(row.status),
+  }));
+
   return {
     reports,
-    counts: countStatuses(reports),
+    counts: statusResult.error ? countStatuses(reports) : countStatuses(allStatusRows),
     error: null,
   };
 }
 
-/** Sign only each report's first photo for compact dashboard cards. */
-async function signFirstQueuePhotos(reportIds: string[]): Promise<Map<string, string>> {
+/** Sign only each report's first stored thumbnail/poster for queue cards. */
+async function signFirstQueueThumbnails(
+  reportIds: string[],
+): Promise<Map<string, ReportMediaAttachment>> {
   if (reportIds.length === 0) return new Map();
 
-  const { data: mediaRows } = await supabase
+  let result = await supabase
     .from('report_media')
-    .select('report_id, storage_path, position')
+    .select('id, report_id, type, storage_path, thumbnail_storage_path, display_storage_path, duration_seconds, width, height, position')
     .in('report_id', reportIds)
-    .eq('type', 'photo')
     .order('position', { ascending: true });
+  if (result.error && /thumbnail_storage_path|display_storage_path|width|height/i.test(result.error.message)) {
+    result = await supabase
+      .from('report_media')
+      .select('id, report_id, type, storage_path, duration_seconds, position')
+      .in('report_id', reportIds)
+      .order('position', { ascending: true }) as unknown as typeof result;
+  }
+  const mediaRows = result.data;
 
   const seenReportIds = new Set<string>();
   const firstRows = (mediaRows ?? []).filter((row) => {
@@ -381,19 +454,38 @@ async function signFirstQueuePhotos(reportIds: string[]): Promise<Map<string, st
   });
   if (firstRows.length === 0) return new Map();
 
-  const paths = firstRows.map((row) => String(row.storage_path));
-  const { data: signedRows } = await supabase.storage
-    .from(REPORT_MEDIA_BUCKET)
-    .createSignedUrls(paths, 3600);
-
-  const photosByReportId = new Map<string, string>();
-  firstRows.forEach((row, index) => {
-    const signedUrl = signedRows?.[index]?.signedUrl;
-    if (signedUrl) {
-      photosByReportId.set(String(row.report_id), signedUrl);
-    }
+  const paths = firstRows
+    .map((row) => String(row.thumbnail_storage_path ?? ''))
+    .filter(Boolean);
+  const signedResult = await resolveSignedMediaUrls({
+    bucket: REPORT_MEDIA_BUCKET,
+    storagePaths: paths,
+    variant: 'thumbnail',
   });
-  return photosByReportId;
+
+  const mediaByReportId = new Map<string, ReportMediaAttachment>();
+  firstRows.forEach((row) => {
+    const thumbnailStoragePath = row.thumbnail_storage_path
+      ? String(row.thumbnail_storage_path)
+      : null;
+    const thumbnailUrl = thumbnailStoragePath
+      ? signedResult.urls.get(thumbnailStoragePath) ?? null
+      : null;
+    mediaByReportId.set(String(row.report_id), {
+      id: String(row.id),
+      type: row.type === 'video' ? 'video' : 'photo',
+      url: thumbnailUrl ?? '',
+      thumbnailUrl,
+      storagePath: String(row.storage_path),
+      thumbnailStoragePath,
+      displayStoragePath: row.display_storage_path ? String(row.display_storage_path) : null,
+      durationSeconds: row.duration_seconds == null ? null : Number(row.duration_seconds),
+      width: row.width == null ? null : Number(row.width),
+      height: row.height == null ? null : Number(row.height),
+      detailUrlResolved: false,
+    });
+  });
+  return mediaByReportId;
 }
 
 /** Count photo + video attachments per report for escalation card badges. */
@@ -413,16 +505,50 @@ async function countQueueMedia(reportIds: string[]): Promise<Map<string, number>
   return counts;
 }
 
-/** Load escalated_at + barangay name for MDRRMO escalation card labels. */
+type QueueEscalationMeta = {
+  verifiedAt: string | null;
+  verifiedByName: string | null;
+  escalatedAt: string | null;
+  escalatedByName: string | null;
+  escalationNote: string | null;
+  resolvedAt: string | null;
+  barangayName: string | null;
+};
+
+/** Load attribution and barangay context for MDRRMO escalation cards. */
 async function fetchQueueEscalationMeta(
   reportIds: string[],
-): Promise<Map<string, { escalatedAt: string | null; barangayName: string | null }>> {
+): Promise<Map<string, QueueEscalationMeta>> {
   if (reportIds.length === 0) return new Map();
 
-  const { data: reportRows } = await supabase
-    .from('reports')
-    .select('id, escalated_at, barangay_id')
-    .in('id', reportIds);
+  const [reportResult, escalationHistoryResult] = await Promise.all([
+    supabase
+      .from('reports')
+      .select('id, verified_by, verified_at, escalated_by, escalated_at, resolved_at, barangay_id')
+      .in('id', reportIds),
+    supabase
+      .from('report_status_history')
+      .select('report_id, note, created_at')
+      .in('report_id', reportIds)
+      .eq('to_status', 'escalated')
+      .order('created_at', { ascending: false }),
+  ]);
+  const reportRows = reportResult.data;
+  const attributionNames = await fetchProfileNamesById(
+    (reportRows ?? []).flatMap((row) => [
+      row.verified_by ? String(row.verified_by) : '',
+      row.escalated_by ? String(row.escalated_by) : '',
+    ]),
+  );
+
+  const escalationNotesByReportId = new Map<string, string>();
+  for (const historyRow of escalationHistoryResult.data ?? []) {
+    const reportId = String(historyRow.report_id);
+    const note = historyRow.note ? String(historyRow.note).trim() : '';
+    if (note && !escalationNotesByReportId.has(reportId)) {
+      escalationNotesByReportId.set(reportId, note);
+    }
+  }
 
   const barangayIds = Array.from(
     new Set(
@@ -443,11 +569,20 @@ async function fetchQueueEscalationMeta(
     }
   }
 
-  const meta = new Map<string, { escalatedAt: string | null; barangayName: string | null }>();
+  const meta = new Map<string, QueueEscalationMeta>();
   for (const row of reportRows ?? []) {
     const barangayId = row.barangay_id ? String(row.barangay_id) : null;
     meta.set(String(row.id), {
+      verifiedAt: row.verified_at ? String(row.verified_at) : null,
+      verifiedByName: row.verified_by
+        ? attributionNames.get(String(row.verified_by)) ?? null
+        : null,
       escalatedAt: row.escalated_at ? String(row.escalated_at) : null,
+      escalatedByName: row.escalated_by
+        ? attributionNames.get(String(row.escalated_by)) ?? null
+        : null,
+      escalationNote: escalationNotesByReportId.get(String(row.id)) ?? null,
+      resolvedAt: row.resolved_at ? String(row.resolved_at) : null,
       barangayName: barangayId ? barangayNames.get(barangayId) ?? null : null,
     });
   }
@@ -457,11 +592,19 @@ async function fetchQueueEscalationMeta(
 async function signReportMedia(
   reportId: string,
 ): Promise<{ media: ReportMediaAttachment[]; error: string | null }> {
-  const { data: mediaRows, error: mediaQueryError } = await supabase
+  let mediaResult = await supabase
     .from('report_media')
-    .select('id, report_id, type, storage_path, duration_seconds, position')
+    .select('id, report_id, type, storage_path, thumbnail_storage_path, display_storage_path, duration_seconds, width, height, position')
     .eq('report_id', reportId)
     .order('position', { ascending: true });
+  if (mediaResult.error && /thumbnail_storage_path|display_storage_path|width|height/i.test(mediaResult.error.message)) {
+    mediaResult = await supabase
+      .from('report_media')
+      .select('id, report_id, type, storage_path, duration_seconds, position')
+      .eq('report_id', reportId)
+      .order('position', { ascending: true }) as unknown as typeof mediaResult;
+  }
+  const { data: mediaRows, error: mediaQueryError } = mediaResult;
 
   if (mediaQueryError) {
     return {
@@ -473,35 +616,45 @@ async function signReportMedia(
     return { media: [], error: null };
   }
 
-  const paths = mediaRows.map((row) => String(row.storage_path));
-  const { data: signedRows, error: signedUrlError } = await supabase.storage
-    .from(REPORT_MEDIA_BUCKET)
-    .createSignedUrls(paths, 3600);
+  const detailPaths = mediaRows.map((row) => row.type === 'video'
+    ? String(row.storage_path)
+    : String(row.display_storage_path ?? row.storage_path));
+  const thumbnailPaths = mediaRows
+    .map((row) => String(row.thumbnail_storage_path ?? ''))
+    .filter(Boolean);
+  const [detailResult, thumbnailResult] = await Promise.all([
+    resolveSignedMediaUrls({ bucket: REPORT_MEDIA_BUCKET, storagePaths: detailPaths, variant: 'detail' }),
+    resolveSignedMediaUrls({ bucket: REPORT_MEDIA_BUCKET, storagePaths: thumbnailPaths, variant: 'thumbnail' }),
+  ]);
 
-  if (signedUrlError) {
+  if (detailResult.error) {
     return {
       media: [],
-      error: `Could not open report attachments: ${signedUrlError.message}`,
+      error: `Could not open report attachments: ${detailResult.error}`,
     };
   }
 
-  const signedUrlByPath = new Map<string, string>();
-  (signedRows ?? []).forEach((row, index) => {
-    if (row.signedUrl) {
-      signedUrlByPath.set(paths[index], row.signedUrl);
-    }
-  });
-
   const media: ReportMediaAttachment[] = [];
   for (const row of mediaRows) {
-    const url = signedUrlByPath.get(String(row.storage_path));
+    const storagePath = String(row.storage_path);
+    const thumbnailStoragePath = row.thumbnail_storage_path ? String(row.thumbnail_storage_path) : null;
+    const displayStoragePath = row.display_storage_path ? String(row.display_storage_path) : null;
+    const detailPath = row.type === 'video' ? storagePath : displayStoragePath ?? storagePath;
+    const url = detailResult.urls.get(detailPath);
     if (!url) continue;
     media.push({
       id: String(row.id),
       type: row.type === 'video' ? 'video' : 'photo',
       url,
+      thumbnailUrl: thumbnailStoragePath ? thumbnailResult.urls.get(thumbnailStoragePath) ?? null : null,
+      storagePath,
+      thumbnailStoragePath,
+      displayStoragePath,
       durationSeconds:
         row.duration_seconds == null ? null : Number(row.duration_seconds),
+      width: row.width == null ? null : Number(row.width),
+      height: row.height == null ? null : Number(row.height),
+      detailUrlResolved: true,
     });
   }
   return { media, error: null };
@@ -526,6 +679,8 @@ export async function fetchOfficialReportDetail(
       id,
       title,
       description,
+      incident_type,
+      incident_type_other,
       status,
       barangay_id,
       address_text,
@@ -558,19 +713,31 @@ export async function fetchOfficialReportDetail(
     return { detail: null, error: 'Report not found in your scope.' };
   }
 
+  const fetchMapIdentity = async () => {
+    let identityResult = await supabase
+      .from('reports_map')
+      .select(REPORT_MAP_IDENTITY_SELECT)
+      .eq('id', id)
+      .maybeSingle();
+
+    if (identityResult.error && isProfilePhotoSchemaMissing(identityResult.error.message)) {
+      identityResult = await supabase
+        .from('reports_map')
+        .select(REPORT_MAP_IDENTITY_LEGACY_SELECT)
+        .eq('id', id)
+        .maybeSingle();
+    }
+    return identityResult;
+  };
+
   const [
     mapResult,
     mediaResult,
     historyResult,
     contactPreview,
+    locationVerificationResult,
   ] = await Promise.all([
-    supabase
-      .from('reports_map')
-      .select(
-        'latitude, longitude, reporter_id, reporter_first_name, reporter_last_name, reporter_middle_name',
-      )
-      .eq('id', id)
-      .maybeSingle(),
+    fetchMapIdentity(),
     signReportMedia(id),
     supabase
       .from('report_status_history')
@@ -582,9 +749,12 @@ export async function fetchOfficialReportDetail(
     supabase.rpc('preview_reporter_contact', {
       p_report_id: id,
     }),
+    supabase.rpc('get_report_location_verification', {
+      p_report_id: id,
+    }),
   ]);
 
-  const mapRow = mapResult.data;
+  const mapRow = mapResult.data as unknown as Record<string, unknown> | null;
   const latitude = Number(mapRow?.latitude ?? NaN);
   const longitude = Number(mapRow?.longitude ?? NaN);
 
@@ -606,6 +776,9 @@ export async function fetchOfficialReportDetail(
     middleName: mapRow?.reporter_middle_name
       ? String(mapRow.reporter_middle_name)
       : null,
+    avatarPath: mapRow?.reporter_avatar_path
+      ? String(mapRow.reporter_avatar_path)
+      : null,
   };
 
   const timeline: OfficialReportTimelineEvent[] = (
@@ -625,6 +798,9 @@ export async function fetchOfficialReportDetail(
   const previewRow = Array.isArray(contactPreview.data)
     ? contactPreview.data[0]
     : contactPreview.data;
+  const verificationRow = Array.isArray(locationVerificationResult.data)
+    ? locationVerificationResult.data[0]
+    : locationVerificationResult.data;
 
   const escalatedAt = row.escalated_at ? String(row.escalated_at) : null;
   const reverifiedAt = row.reverified_at ? String(row.reverified_at) : null;
@@ -636,11 +812,31 @@ export async function fetchOfficialReportDetail(
     id: String(row.id),
     title: String(row.title ?? ''),
     description: String(row.description ?? ''),
+    incidentType: isIncidentType(row.incident_type) ? row.incident_type : null,
+    incidentTypeOther: row.incident_type_other
+      ? String(row.incident_type_other)
+      : null,
     status,
     barangayId,
     addressText: row.address_text ? String(row.address_text) : null,
     latitude: Number.isFinite(latitude) ? latitude : 0,
     longitude: Number.isFinite(longitude) ? longitude : 0,
+    deviceLatitude:
+      verificationRow?.device_latitude == null
+        ? null
+        : Number(verificationRow.device_latitude),
+    deviceLongitude:
+      verificationRow?.device_longitude == null
+        ? null
+        : Number(verificationRow.device_longitude),
+    gpsAccuracyMeters:
+      verificationRow?.gps_accuracy_meters == null
+        ? null
+        : Number(verificationRow.gps_accuracy_meters),
+    locationAdjustmentMeters:
+      verificationRow?.location_adjustment_meters == null
+        ? null
+        : Number(verificationRow.location_adjustment_meters),
     createdAt: String(row.created_at ?? ''),
     reporter,
     reporterName: formatReporterName(reporter) || 'Resident',
@@ -679,6 +875,7 @@ export async function fetchOfficialReportDetail(
       : null,
     canEditContent:
       kind !== 'Mayor' && String(row.reporter_id) === session?.user?.id,
+    canCorrectLocation: kind === 'BDRRMO' || kind === 'MDRRMO',
     allowedTransitions: allowedTransitionsForReport(scope, {
       status,
       barangayId,

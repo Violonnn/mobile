@@ -1,7 +1,7 @@
 // hooks/useReportDetail.ts — local state for one opened report.
 // Pull-to-refresh uses the focused reports_map row only, so refreshing a detail
 // never re-fetches the full feed or all map markers.
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   fetchMapReportById,
   type MapReportMarker,
@@ -40,6 +40,14 @@ export function useReportDetail(sourceReport: MapReportMarker | null) {
     // report's currently visible comment/reply pages.
     setRefreshVersion((current) => current + 1);
   }, [sourceReport]);
+
+  useEffect(() => {
+    if (!sourceReport || sourceReport.isPending || sourceReport.mediaDetailLoaded) {
+      return;
+    }
+    const timer = setTimeout(() => void refresh(), 0);
+    return () => clearTimeout(timer);
+  }, [refresh, sourceReport]);
 
   // Show a newly opened/switched source immediately instead of waiting one
   // effect cycle (which would briefly render an empty or previous detail).

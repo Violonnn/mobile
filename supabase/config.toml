@@ -34,6 +34,18 @@ verify_jwt = true
 import_map = "./functions/create-report/deno.json"
 entrypoint = "./functions/create-report/index.ts"
 
+[functions.create-official-report]
+enabled = true
+verify_jwt = true
+import_map = "./functions/create-official-report/deno.json"
+entrypoint = "./functions/create-official-report/index.ts"
+
+[functions.update-official-report]
+enabled = true
+verify_jwt = true
+import_map = "./functions/update-official-report/deno.json"
+entrypoint = "./functions/update-official-report/index.ts"
+
 [functions.official-invite-registration]
 enabled = true
 verify_jwt = false

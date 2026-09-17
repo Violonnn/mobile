@@ -1,7 +1,7 @@
 // hooks/useOfficialReports.ts
 // Official queue + detail loading with pull-to-refresh and Realtime updates.
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
 import type { OfficialAccessScope } from '../lib/officialRegistration';
 import {
@@ -26,16 +26,26 @@ function emptyCounts(): OfficialStatusCounts {
 
 /** Scoped report queue for the official overview screen. */
 export function useOfficialReportQueue(scope: OfficialAccessScope | null) {
+  const pageSize = 20;
   const [reports, setReports] = useState<OfficialReportQueueItem[]>([]);
   const [counts, setCounts] = useState<OfficialStatusCounts>(emptyCounts());
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+  const reportsRef = useRef<OfficialReportQueueItem[]>([]);
+  const hasLoadedRef = useRef(false);
+
+  useEffect(() => {
+    reportsRef.current = reports;
+  }, [reports]);
 
   const channelName = useRealtimeChannelName('official-queue');
 
   const load = useCallback(async () => {
     if (!scope) {
+      hasLoadedRef.current = false;
       setReports([]);
       setCounts(emptyCounts());
       setError(null);
@@ -43,12 +53,35 @@ export function useOfficialReportQueue(scope: OfficialAccessScope | null) {
       return;
     }
 
-    const result = await fetchOfficialReportQueue(scope);
+    const result = await fetchOfficialReportQueue(scope, { limit: pageSize });
     setReports(result.reports);
     setCounts(result.counts);
     setError(result.error);
+    setHasMore(result.reports.length >= pageSize);
+    hasLoadedRef.current = true;
     setLoading(false);
   }, [scope]);
+
+  const loadMore = useCallback(async () => {
+    if (!scope || loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    const result = await fetchOfficialReportQueue(scope, {
+      limit: pageSize,
+      offset: reportsRef.current.length,
+    });
+    setLoadingMore(false);
+    if (result.error) {
+      setError(result.error);
+      return;
+    }
+    setCounts(result.counts);
+    setHasMore(result.reports.length >= pageSize);
+    setReports((current) => {
+      const byId = new Map(current.map((report) => [report.id, report]));
+      result.reports.forEach((report) => byId.set(report.id, report));
+      return [...byId.values()];
+    });
+  }, [hasMore, loadingMore, scope]);
 
   const refresh = useCallback(async () => {
     setRefreshing(true);
@@ -58,7 +91,8 @@ export function useOfficialReportQueue(scope: OfficialAccessScope | null) {
 
   useFocusEffect(
     useCallback(() => {
-      setLoading(true);
+      // Keep existing cards and maps mounted while fresh data loads in the background.
+      if (!hasLoadedRef.current) setLoading(true);
       void load();
     }, [load]),
   );
@@ -99,7 +133,10 @@ export function useOfficialReportQueue(scope: OfficialAccessScope | null) {
     error,
     loading,
     refreshing,
+    loadingMore,
+    hasMore,
     reload: load,
+    loadMore,
     refresh,
   };
 }

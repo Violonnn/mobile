@@ -1,6 +1,6 @@
 // supabase/functions/update-official-report/index.ts
-// Authoring officer may correct title, description, location, address, and
-// barangay. Status / audit fields are never writable here. Mayor cannot edit.
+// Authoring officers may edit report content. Scoped BDRRMO/MDRRMO officers
+// may correct the response location through the audited correction RPC.
 
 import { createClient } from "@supabase/supabase-js";
 import { GENERIC_SERVER_ERROR, jsonResponse } from "../_shared/http.ts";
@@ -15,11 +15,17 @@ const LNG_MAX = 123.90;
 const MAX_TITLE = 120;
 const MAX_DESCRIPTION = 2000;
 const MAX_ADDRESS = 300;
+const MAX_INCIDENT_TYPE_OTHER = 80;
+const INCIDENT_TYPES = ["fire", "flood", "road_crash", "medical", "other"];
 
 type UpdateOfficialReportPayload = {
+  correctionOnly?: boolean;
+  correctionNote?: string;
   reportId?: string;
   title?: string;
   description?: string;
+  incidentType?: string;
+  incidentTypeOther?: string;
   latitude?: number;
   longitude?: number;
   addressText?: string;
@@ -36,16 +42,6 @@ type OfficerProfile = {
 function isUuid(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
     .test(value);
-}
-
-function isMissingRpcError(message: string): boolean {
-  const lower = message.toLowerCase();
-  return (
-    lower.includes("could not find the function") ||
-    lower.includes("function public.update_official_report_fields") ||
-    lower.includes("schema cache") ||
-    lower.includes("pgrst202")
-  );
 }
 
 Deno.serve(async (req) => {
@@ -88,8 +84,12 @@ Deno.serve(async (req) => {
 
   const extraFieldsError = rejectExtraKeys(rawPayload as Record<string, unknown>, [
     "reportId",
+    "correctionOnly",
+    "correctionNote",
     "title",
     "description",
+    "incidentType",
+    "incidentTypeOther",
     "latitude",
     "longitude",
     "addressText",
@@ -100,8 +100,12 @@ Deno.serve(async (req) => {
   }
 
   const reportId = trimText(rawPayload.reportId);
+  const correctionOnly = rawPayload.correctionOnly === true;
+  const correctionNote = trimText(rawPayload.correctionNote);
   const title = trimText(rawPayload.title);
   const description = trimText(rawPayload.description);
+  const incidentType = trimText(rawPayload.incidentType);
+  const incidentTypeOther = trimText(rawPayload.incidentTypeOther);
   const addressText = trimText(rawPayload.addressText);
   const barangayIdRaw = trimText(rawPayload.barangayId);
   const latitude = Number(rawPayload.latitude);
@@ -110,14 +114,26 @@ Deno.serve(async (req) => {
   if (!reportId || !isUuid(reportId)) {
     return jsonResponse({ error: "Invalid report id." }, 400);
   }
-  if (title.length > MAX_TITLE) {
+  if (!correctionOnly && title.length > MAX_TITLE) {
     return jsonResponse({ error: "Title must be 120 characters or fewer." }, 400);
   }
-  if (!description || description.length > MAX_DESCRIPTION) {
+  if (!correctionOnly && (!description || description.length > MAX_DESCRIPTION)) {
     return jsonResponse({ error: "Enter a description (max 2000 characters)." }, 400);
+  }
+  if (!correctionOnly && incidentType && !INCIDENT_TYPES.includes(incidentType)) {
+    return jsonResponse({ error: "Select a valid incident type." }, 400);
+  }
+  if (!correctionOnly && incidentType === "other" && !incidentTypeOther) {
+    return jsonResponse({ error: "Specify the incident type." }, 400);
+  }
+  if (!correctionOnly && incidentTypeOther.length > MAX_INCIDENT_TYPE_OTHER) {
+    return jsonResponse({ error: "Incident type is too long." }, 400);
   }
   if (addressText.length > MAX_ADDRESS) {
     return jsonResponse({ error: "Address is too long." }, 400);
+  }
+  if (correctionNote.length > 500) {
+    return jsonResponse({ error: "Correction note must be 500 characters or fewer." }, 400);
   }
   if (barangayIdRaw && !isUuid(barangayIdRaw)) {
     return jsonResponse({ error: "Invalid barangay id." }, 400);
@@ -196,7 +212,34 @@ Deno.serve(async (req) => {
     validatedBarangayId = resolvedId ? String(resolvedId) : null;
   }
 
-  // Prefer the migration RPC when present.
+  if (correctionOnly) {
+    const { data: correctedId, error: correctionError } = await adminClient.rpc(
+      "correct_report_incident_location",
+      {
+        p_actor_id: callerId,
+        p_report_id: reportId,
+        p_latitude: latitude,
+        p_longitude: longitude,
+        p_address_text: addressText || null,
+        p_barangay_id: validatedBarangayId,
+        p_note: correctionNote || null,
+      },
+    );
+
+    if (correctionError) {
+      console.error("update-official-report correction:", correctionError.message);
+      return jsonResponse({
+        error: correctionError.message.includes("barangay") ||
+            correctionError.message.includes("location") ||
+            correctionError.message.includes("Report")
+          ? correctionError.message
+          : "Could not correct this incident location.",
+      }, 400);
+    }
+
+    return jsonResponse({ reportId: correctedId ?? reportId }, 200);
+  }
+
   const { data: rpcRow, error: rpcError } = await adminClient.rpc(
     "update_official_report_fields",
     {
@@ -206,6 +249,9 @@ Deno.serve(async (req) => {
       p_actor_id: callerId,
       p_title: title,
       p_description: description,
+      p_incident_type: incidentType || null,
+      p_incident_type_other:
+        incidentType === "other" ? incidentTypeOther : null,
       p_latitude: latitude,
       p_longitude: longitude,
       p_address_text: addressText || null,
@@ -217,52 +263,15 @@ Deno.serve(async (req) => {
     return jsonResponse({ reportId: rpcRow ?? reportId }, 200);
   }
 
-  if (!isMissingRpcError(rpcError.message)) {
-    console.error("update-official-report rpc:", rpcError.message);
-    return jsonResponse({
-      error: rpcError.message.includes("author")
-        ? rpcError.message
-        : "Could not update this incident.",
-    }, 400);
-  }
-
-  // Fallback: only the authoring official may update content fields.
-  const { data: existing, error: existingError } = await adminClient
-    .from("reports")
-    .select("id, reporter_id")
-    .eq("id", reportId)
-    .maybeSingle();
-
-  if (existingError) {
-    console.error("update-official-report load:", existingError.message);
-    return jsonResponse({ error: GENERIC_SERVER_ERROR }, 500);
-  }
-  if (!existing) {
-    return jsonResponse({ error: "Report not found." }, 404);
-  }
-  if (String(existing.reporter_id) !== callerId) {
-    return jsonResponse({
-      error: "Only the authoring official can edit this incident.",
-    }, 403);
-  }
-
-  const locationWkt = `SRID=4326;POINT(${longitude} ${latitude})`;
-  const { error: updateError } = await adminClient
-    .from("reports")
-    .update({
-      title,
-      description,
-      location: locationWkt,
-      address_text: addressText || null,
-      barangay_id: validatedBarangayId,
-    })
-    .eq("id", reportId)
-    .eq("reporter_id", callerId);
-
-  if (updateError) {
-    console.error("update-official-report update:", updateError.message);
-    return jsonResponse({ error: "Could not update this incident." }, 400);
-  }
-
-  return jsonResponse({ reportId }, 200);
+  // Never fall back to a direct location update: that could bypass the
+  // migration's immutable-origin guarantees and location audit trail.
+  console.error("update-official-report rpc:", rpcError.message);
+  const safeError =
+    rpcError.message.includes("author") ||
+    rpcError.message.includes("barangay") ||
+    rpcError.message.includes("location") ||
+    rpcError.message.includes("Report")
+      ? rpcError.message
+      : "Could not update this incident.";
+  return jsonResponse({ error: safeError }, 400);
 });

@@ -10,6 +10,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { reportStyles as styles, reportColors } from '../../styles/screens/report.styles';
 import type { ReadableAddress } from '../../lib/location';
 import type { BarangayOption } from '../../lib/barangays';
+import {
+  INCIDENT_TYPE_OPTIONS,
+  type IncidentType,
+} from '../../lib/incidentTypes';
 
 type Props = {
   title: string;
@@ -18,6 +22,10 @@ type Props = {
   onChangeDescription: (v: string) => void;
   locationNote: string;
   onChangeLocationNote: (v: string) => void;
+  incidentType: IncidentType | null;
+  onChangeIncidentType: (value: IncidentType) => void;
+  incidentTypeOther: string;
+  onChangeIncidentTypeOther: (value: string) => void;
   address: ReadableAddress | null;
   barangays: BarangayOption[];
   barangaysLoading: boolean;
@@ -33,6 +41,8 @@ type Props = {
   submitting: boolean;
   onBack: () => void;
   onSubmit: () => void;
+  submitLabel?: string;
+  residentLayout?: boolean;
 };
 
 export default function DetailsStep({
@@ -42,6 +52,10 @@ export default function DetailsStep({
   onChangeDescription,
   locationNote,
   onChangeLocationNote,
+  incidentType,
+  onChangeIncidentType,
+  incidentTypeOther,
+  onChangeIncidentTypeOther,
   address,
   barangays,
   barangaysLoading,
@@ -56,7 +70,148 @@ export default function DetailsStep({
   submitting,
   onBack,
   onSubmit,
+  submitLabel = 'Review report',
+  residentLayout = false,
 }: Props) {
+  if (residentLayout) {
+    return (
+      <View style={styles.stepContent}>
+        <Text style={styles.residentStepTitle}>Tell responders what{`\n`}happened</Text>
+        <Text style={styles.residentStepSubtitle}>
+          Short, clear details are easier to act on.
+        </Text>
+
+        <Text style={styles.residentFieldLabel}>Incident type</Text>
+        <View style={styles.residentIncidentTypeGrid}>
+          {INCIDENT_TYPE_OPTIONS.map((option) => {
+            const selected = incidentType === option.value;
+            return (
+              <TouchableOpacity
+                key={option.value}
+                style={[
+                  styles.residentIncidentTypeOption,
+                  selected && styles.residentIncidentTypeOptionSelected,
+                ]}
+                onPress={() => onChangeIncidentType(option.value)}
+                disabled={submitting}
+                accessibilityRole="button"
+                accessibilityState={{ selected, disabled: submitting }}
+                accessibilityLabel={`Incident type ${option.label}`}
+              >
+                <Ionicons
+                  name={option.icon}
+                  size={21}
+                  color={selected ? reportColors.white : reportColors.primary}
+                />
+                <Text
+                  style={[
+                    styles.residentIncidentTypeText,
+                    selected && styles.residentIncidentTypeTextSelected,
+                  ]}
+                  numberOfLines={2}
+                >
+                  {option.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        {incidentType === 'other' ? (
+          <>
+            <Text style={styles.residentFieldLabel}>Specify incident type</Text>
+            <TextInput
+              style={styles.residentInput}
+              value={incidentTypeOther}
+              onChangeText={onChangeIncidentTypeOther}
+              placeholder="e.g. fallen electrical post"
+              placeholderTextColor={reportColors.textLight}
+              maxLength={80}
+              editable={!submitting}
+            />
+          </>
+        ) : null}
+
+        <Text style={styles.residentFieldLabel}>Short title</Text>
+        <TextInput
+          style={styles.residentInput}
+          value={title}
+          onChangeText={onChangeTitle}
+          placeholder="What happened?"
+          placeholderTextColor={reportColors.textLight}
+          maxLength={120}
+          editable={!submitting}
+        />
+
+        <Text style={styles.residentFieldLabel}>Description</Text>
+        <TextInput
+          style={[styles.residentInput, styles.residentTextArea]}
+          value={description}
+          onChangeText={onChangeDescription}
+          placeholder="Describe what responders should know"
+          placeholderTextColor={reportColors.textLight}
+          maxLength={2000}
+          multiline
+          textAlignVertical="top"
+          editable={!submitting}
+        />
+
+        <Text style={styles.residentFieldLabel}>
+          Nearby landmark <Text style={styles.residentOptionalText}>· optional</Text>
+        </Text>
+        <TextInput
+          style={styles.residentInput}
+          value={locationNote}
+          onChangeText={onChangeLocationNote}
+          placeholder="e.g. Shell Mobility, National Highway"
+          placeholderTextColor={reportColors.textLight}
+          maxLength={160}
+          editable={!submitting}
+        />
+
+        {!selectedBarangayId || barangaysLoading || barangaysError ? (
+          <View style={styles.residentBarangayState}>
+            {barangaysLoading ? (
+              <ActivityIndicator size="small" color={reportColors.primary} />
+            ) : (
+              <Ionicons name="alert-circle-outline" size={18} color={reportColors.accent} />
+            )}
+            <Text style={styles.residentBarangayStateText}>
+              {barangaysLoading
+                ? 'Confirming the response area…'
+                : barangaysError ?? 'A response area could not be confirmed.'}
+            </Text>
+            {!barangaysLoading ? (
+              <TouchableOpacity onPress={onRetryBarangays} accessibilityRole="button">
+                <Text style={styles.residentRetryText}>Retry</Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
+        ) : null}
+
+        {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+        <TouchableOpacity
+          style={[
+            styles.primaryButton,
+            styles.residentPrimaryButton,
+            submitting && styles.primaryButtonDisabled,
+          ]}
+          onPress={onSubmit}
+          disabled={submitting}
+          accessibilityRole="button"
+          accessibilityLabel={submitLabel}
+        >
+          {submitting ? (
+            <ActivityIndicator color={reportColors.white} />
+          ) : (
+            <Text style={styles.primaryButtonText}>{submitLabel}</Text>
+          )}
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.stepContent}>
       <View style={styles.stepTitleRow}>
@@ -65,6 +220,57 @@ export default function DetailsStep({
       <Text style={styles.stepSubtitle}>
         Tell responders what is happening at this location.
       </Text>
+
+      <Text style={styles.label}>Incident type</Text>
+      <View style={styles.incidentTypeGrid}>
+        {INCIDENT_TYPE_OPTIONS.map((option) => {
+          const selected = incidentType === option.value;
+          return (
+            <TouchableOpacity
+              key={option.value}
+              style={[
+                styles.incidentTypeOption,
+                selected && styles.incidentTypeOptionSelected,
+              ]}
+              onPress={() => onChangeIncidentType(option.value)}
+              disabled={submitting}
+              accessibilityRole="button"
+              accessibilityState={{ selected, disabled: submitting }}
+              accessibilityLabel={`Incident type ${option.label}`}
+            >
+              <Ionicons
+                name={option.icon}
+                size={22}
+                color={selected ? reportColors.white : reportColors.primary}
+              />
+              <Text
+                style={[
+                  styles.incidentTypeOptionText,
+                  selected && styles.incidentTypeOptionTextSelected,
+                ]}
+                numberOfLines={2}
+              >
+                {option.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      {incidentType === 'other' ? (
+        <>
+          <Text style={styles.label}>Specify incident type</Text>
+          <TextInput
+            style={styles.input}
+            value={incidentTypeOther}
+            onChangeText={onChangeIncidentTypeOther}
+            placeholder="e.g. fallen electrical post"
+            placeholderTextColor={reportColors.textLight}
+            maxLength={80}
+            editable={!submitting}
+          />
+        </>
+      ) : null}
 
       <View style={styles.gpsRow}>
         <Ionicons name="location-sharp" size={18} color={reportColors.primary} />
@@ -201,12 +407,12 @@ export default function DetailsStep({
           onPress={onSubmit}
           disabled={submitting}
           accessibilityRole="button"
-          accessibilityLabel="Submit report"
+          accessibilityLabel={submitLabel}
         >
           {submitting ? (
             <ActivityIndicator color={reportColors.white} />
           ) : (
-            <Text style={styles.primaryButtonText}>Submit report</Text>
+            <Text style={styles.primaryButtonText}>{submitLabel}</Text>
           )}
         </TouchableOpacity>
       </View>

@@ -1,11 +1,12 @@
 // components/report/ReporterAvatar.tsx
-// Initial-based avatar for a report/comment author (no profile photos yet).
+// Shared profile-photo avatar for a report/comment author.
 // Lives in its own file so both the report detail card and the comments
 // section can use it without importing each other.
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import { colors, fonts, fontSizes, radius } from '../../styles/theme';
-import { reporterInitial, type MapReportReporter } from '../../lib/reports';
+import { StyleSheet } from 'react-native';
+import { colors } from '../../styles/theme';
+import { type MapReportReporter } from '../../lib/reports';
+import ProfileAvatar from '../profile/ProfileAvatar';
 
 export function ReporterAvatar({
   reporter,
@@ -15,31 +16,21 @@ export function ReporterAvatar({
   size?: number;
 }) {
   return (
-    <View style={[styles.avatar, { width: size, height: size, borderRadius: size / 2 }]}>
-      <Text style={[styles.avatarText, size < 40 && styles.avatarTextSmall]}>
-        {reporterInitial(reporter)}
-      </Text>
-    </View>
+    <ProfileAvatar
+      avatarPath={reporter.avatarPath}
+      firstName={reporter.firstName}
+      lastName={reporter.lastName}
+      size={size}
+      style={styles.avatar}
+      accessibilityLabel={`${reporter.firstName} ${reporter.lastName} profile picture`}
+    />
   );
 }
 
 const styles = StyleSheet.create({
   avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.full,
     backgroundColor: colors.white,
     borderWidth: 2,
     borderColor: colors.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarText: {
-    fontFamily: fonts.bold,
-    fontSize: fontSizes.lg,
-    color: colors.primary,
-  },
-  avatarTextSmall: {
-    fontSize: fontSizes.md,
   },
 });

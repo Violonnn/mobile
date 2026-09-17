@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
+import { ActivityIndicator, View, Text, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, {
   useAnimatedStyle,
@@ -15,6 +15,7 @@ type Props = {
   position: GpsPosition | null;
   syncStatus: SyncStatus;
   syncError: string | null;
+  canRetry: boolean;
   onRetry: () => void;
   onDone: () => void;
 };
@@ -24,6 +25,7 @@ export default function SuccessStep({
   position,
   syncStatus,
   syncError,
+  canRetry,
   onRetry,
   onDone,
 }: Props) {
@@ -46,48 +48,79 @@ export default function SuccessStep({
 
   const synced = syncStatus === 'synced';
   const failed = syncStatus === 'failed';
+  const delayed = syncStatus === 'delayed';
+  const statusTitle = synced
+    ? 'Sent to responders'
+    : failed
+      ? 'Report not sent yet'
+      : delayed
+        ? 'Still sending report'
+        : 'Sending report...';
+  const statusMessage = synced
+    ? 'Your complete report has been received.'
+    : failed
+      ? syncError ?? 'We could not send your report. Please try again.'
+      : delayed
+        ? 'This is taking longer than expected. You can continue using the app while we try again automatically.'
+        : 'Please keep this screen open while we send your report.';
 
   return (
     <View style={styles.stepContent}>
       <View style={styles.successCenter}>
-        <Animated.View style={[styles.checkCircle, checkStyle]}>
-          <Ionicons name="checkmark" size={40} color={reportColors.white} />
-        </Animated.View>
+        {synced ? (
+          <Animated.View style={[styles.checkCircle, checkStyle]}>
+            <Ionicons name="checkmark" size={40} color={reportColors.white} />
+          </Animated.View>
+        ) : (
+          <View
+            style={[
+              styles.checkCircle,
+              styles.deliveryCircle,
+              (failed || delayed) && styles.deliveryCircleNotSent,
+            ]}
+          >
+            {failed || delayed ? (
+              <Ionicons name="cloud-offline-outline" size={34} color={reportColors.white} />
+            ) : (
+              <ActivityIndicator size="large" color={reportColors.white} />
+            )}
+          </View>
+        )}
 
-        <Text style={styles.successTitle}>Report Submitted</Text>
+        <Text style={styles.successTitle}>{statusTitle}</Text>
         <Text style={styles.successAddress}>{locationText}</Text>
-
-        <View style={[styles.syncChip, synced && styles.syncChipSynced]}>
-          <Ionicons
-            name={synced ? 'cloud-done-outline' : failed ? 'cloud-offline-outline' : 'sync-outline'}
-            size={14}
-            color={synced ? reportColors.success : reportColors.primary}
-          />
-          <Text style={[styles.syncChipText, synced && styles.syncChipTextSynced]}>
-            {synced ? 'Sent to responders' : 'Saved on device · uploading…'}
-          </Text>
-        </View>
-        {failed && syncError ? <Text style={styles.errorText}>{syncError}</Text> : null}
-        {failed ? (
+        <Text style={styles.deliveryStatusMessage}>{statusMessage}</Text>
+        {failed && canRetry ? (
           <TouchableOpacity
-            style={styles.primaryButton}
+            style={[styles.primaryButton, styles.residentPrimaryButton]}
             onPress={onRetry}
             accessibilityRole="button"
-            accessibilityLabel="Retry report upload"
+            accessibilityLabel="Retry sending report"
           >
-            <Text style={styles.primaryButtonText}>Retry upload</Text>
+            <Text style={styles.primaryButtonText}>Try sending again</Text>
           </TouchableOpacity>
         ) : null}
       </View>
 
-      <TouchableOpacity
-        style={styles.primaryButton}
-        onPress={onDone}
-        accessibilityRole="button"
-        accessibilityLabel="Done"
-      >
-        <Text style={styles.primaryButtonText}>Done</Text>
-      </TouchableOpacity>
+      {synced ? (
+        <TouchableOpacity
+          style={[styles.primaryButton, styles.residentPrimaryButton]}
+          onPress={onDone}
+          accessibilityRole="button"
+          accessibilityLabel="Done"
+        >
+          <Text style={styles.primaryButtonText}>Done</Text>
+        </TouchableOpacity>
+      ) : failed || delayed ? (
+        <TouchableOpacity
+          style={styles.secondaryButton}
+          onPress={onDone}
+          accessibilityRole="button"
+          accessibilityLabel="Continue using the app"
+        >
+          <Text style={styles.secondaryButtonText}>Continue in app</Text>
+        </TouchableOpacity>
+      ) : null}
     </View>
   );
 }
