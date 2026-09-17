@@ -22,6 +22,7 @@ import { useEvacuationCenters } from '../../hooks/useEvacuationCenters';
 import { fetchBarangays, type BarangayOption } from '../../lib/barangays';
 import {
   evacuationStatusLabel,
+  fetchPublicProfileNames,
   facilityTypeLabel,
   hotlineCategoryLabel,
   isReviewOverdue,
@@ -38,6 +39,7 @@ import HotlineFormSheet from '../../components/official/HotlineFormSheet';
 import FacilityFormSheet from '../../components/official/FacilityFormSheet';
 import EvacuationCenterFormSheet from '../../components/official/EvacuationCenterFormSheet';
 import ResourceDetailSheet, {
+  ResourceAuditRow,
   ResourceDetailRow,
 } from '../../components/official/ResourceDetailSheet';
 import ResourceTypePickerSheet, {
@@ -62,6 +64,12 @@ function formatCenterUpdate(value: string | null): string {
   if (!value) return 'Not updated yet';
   const date = new Date(value);
   return Number.isFinite(date.getTime()) ? date.toLocaleString() : 'Not updated yet';
+}
+
+function formatAuditDateTime(value: string | null): string {
+  if (!value) return 'Date unavailable';
+  const date = new Date(value);
+  return Number.isFinite(date.getTime()) ? date.toLocaleString() : 'Date unavailable';
 }
 
 function matchesSearch(values: (string | null)[], search: string): boolean {
@@ -167,6 +175,11 @@ function DirectoryRecord({
           <View style={[styles.resourceDirectoryStatusDot, { backgroundColor: active ? '#16A34A' : '#64748B' }]} />
           <Text style={styles.resourceDirectoryStatusText}>{status}</Text>
         </View>
+        {onMap ? (
+          <TouchableOpacity style={styles.resourceDirectoryIconButton} onPress={onMap} accessibilityLabel={`View ${title} on map`}>
+            <Ionicons name="map-outline" size={23} color="#62708A" />
+          </TouchableOpacity>
+        ) : null}
         {onCall ? (
           <TouchableOpacity style={styles.resourceDirectoryIconButton} onPress={onCall} accessibilityLabel={`Call ${title}`}>
             <Ionicons name="call-outline" size={24} color={colors.primary} />
@@ -177,11 +190,6 @@ function DirectoryRecord({
         </TouchableOpacity>
       </View>
       {lines.map((line) => <Text key={line} style={styles.resourceDirectoryRecordMeta}>{line}</Text>)}
-      {onMap ? (
-        <TouchableOpacity style={styles.resourceDirectoryMapLink} onPress={onMap} accessibilityLabel={`View ${title} on map`}>
-          <Ionicons name="map-outline" size={23} color="#62708A" />
-        </TouchableOpacity>
-      ) : null}
       {menuOpen ? (
         <View style={styles.resourceDirectoryMenu}>
           {actions.map((action) => (
@@ -252,6 +260,7 @@ export function ResourceManagementContent({ header }: { header?: ReactNode }) {
   const [editingFacility, setEditingFacility] = useState<FacilityRecord | null>(null);
   const [editingCenter, setEditingCenter] = useState<EvacuationCenterRecord | null>(null);
   const [detail, setDetail] = useState<ResourceDetail>(null);
+  const [profileNameById, setProfileNameById] = useState<Record<string, string>>({});
   const [savingIds, setSavingIds] = useState<Set<string>>(new Set());
   const [barangays, setBarangays] = useState<BarangayOption[]>([]);
   const [barangaysError, setBarangaysError] = useState<string | null>(null);
@@ -309,6 +318,18 @@ export function ResourceManagementContent({ header }: { header?: ReactNode }) {
     });
   }, [isMdrrmo]);
 
+  useEffect(() => {
+    if (!detail) return;
+
+    const profileIds = detail.kind === 'center'
+      ? [detail.record.managedBy, detail.record.lastUpdatedBy]
+      : [detail.record.createdBy, detail.record.lastVerifiedBy];
+
+    void fetchPublicProfileNames(profileIds).then((names) => {
+      setProfileNameById((currentNames) => ({ ...currentNames, ...names }));
+    });
+  }, [detail]);
+
   const facilityById = useMemo(
     () => new Map(facilities.map((facility) => [facility.id, facility])),
     [facilities],
@@ -320,6 +341,12 @@ export function ResourceManagementContent({ header }: { header?: ReactNode }) {
     }
     return names;
   }, [barangays, isBdrrmo, scopeBarangayId, scopeBarangayName]);
+
+  function profileName(profileId: string | null): string {
+    if (!profileId) return 'Unavailable official';
+    return profileNameById[profileId] ?? 'Unavailable official';
+  }
+
   const visibleHotlines = useMemo(
     () => hotlines.filter((item) => {
       if (statusFilter === 'active' && !item.isActive) return false;
@@ -332,7 +359,7 @@ export function ResourceManagementContent({ header }: { header?: ReactNode }) {
     () => facilities.filter((item) => {
       if (statusFilter === 'active' && !item.isActive) return false;
       if (statusFilter === 'inactive' && item.isActive) return false;
-      return matchesSearch([item.name, item.address, item.contact, facilityTypeLabel(item.type)], search);
+      return matchesSearch([item.name, item.address, facilityTypeLabel(item.type)], search);
     }),
     [facilities, search, statusFilter],
   );
@@ -476,7 +503,18 @@ export function ResourceManagementContent({ header }: { header?: ReactNode }) {
       >
         {header ?? (isMdrrmo ? (
           <View style={styles.resourceDirectoryHeader}>
-            <TouchableOpacity style={styles.resourceDirectoryBack} onPress={() => router.back()} accessibilityLabel="Back to Command">
+            <TouchableOpacity
+              style={styles.resourceDirectoryBack}
+              onPress={() => {
+                if (router.canGoBack()) {
+                  router.back();
+                  return;
+                }
+                router.replace('/official' as Href);
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Back to Command"
+            >
               <Ionicons name="arrow-back" size={24} color={colors.text} />
             </TouchableOpacity>
             <View style={styles.headerTextGroup}>
@@ -484,9 +522,8 @@ export function ResourceManagementContent({ header }: { header?: ReactNode }) {
               <Text style={styles.screenTitle}>Resource directory</Text>
               <Text style={styles.screenSubtitle}>Manage resident-facing emergency information</Text>
             </View>
-            <TouchableOpacity style={styles.resourceDirectoryAdd} onPress={() => setPickerVisible(true)}>
-              <Text style={styles.resourceDirectoryAddText}>Add</Text>
-              <Ionicons name="add" size={25} color={colors.primary} />
+            <TouchableOpacity style={styles.resourceDirectoryAdd} onPress={() => setPickerVisible(true)} accessibilityLabel="Add resource">
+              <Ionicons name="add" size={32} color={colors.navigationActive} />
             </TouchableOpacity>
           </View>
         ) : (
@@ -516,7 +553,7 @@ export function ResourceManagementContent({ header }: { header?: ReactNode }) {
               <TextInput style={styles.resourceSearchInput} value={search} onChangeText={setSearch} placeholder="Search resources" placeholderTextColor={colors.textMuted} />
             </View>
             <TouchableOpacity style={styles.resourceFilterButton} onPress={() => setFilterOpen((open) => !open)} accessibilityLabel="Filter resources">
-              <Ionicons name="options-outline" size={25} color={statusFilter === 'all' ? colors.text : colors.primary} />
+              <Ionicons name="options-outline" size={25} color={colors.navigationActive} />
             </TouchableOpacity>
           </View>
           {filterOpen ? <View style={styles.resourceFilterRow}>{(['all', 'active', 'inactive'] as const).map((filter) => <TouchableOpacity key={filter} style={[styles.resourceFilterChip, statusFilter === filter && styles.resourceFilterChipActive]} onPress={() => setStatusFilter(filter)}><Text style={[styles.resourceFilterChipText, statusFilter === filter && styles.resourceFilterChipTextActive]}>{filter === 'all' ? 'All' : filter === 'active' ? (tab === 'centers' ? 'Open' : 'Active') : (tab === 'centers' ? 'Not open' : 'Inactive')}</Text></TouchableOpacity>)}</View> : null}
@@ -526,9 +563,9 @@ export function ResourceManagementContent({ header }: { header?: ReactNode }) {
         {!currentLoading && currentError ? <View style={styles.stateBox}><Text style={styles.stateTitle}>Could not load {tab}</Text><Text style={styles.stateBody}>{currentError}</Text><TouchableOpacity style={styles.retryButton} onPress={() => tab === 'centers' ? void reloadCenters() : void reloadResources()}><Text style={styles.retryButtonText}>Try again</Text></TouchableOpacity></View> : null}
 
         {!currentLoading && !currentError && tab === 'hotlines' && !isMayor ? (
-          <View style={styles.section}>
+          <View style={[styles.section, isMdrrmo && styles.resourceDirectorySection]}>
             {!isMdrrmo ? <ResourceSectionHeader title="Hotlines" count={hotlines.length} canAdd={canManageDirectory} onAdd={() => openHotlineEditor(null)} /> : null}
-            {visibleHotlines.length === 0 ? <View style={styles.stateBox}><Text style={styles.stateTitle}>{hotlines.length === 0 ? 'No hotlines yet' : 'No matching hotlines'}</Text><Text style={styles.stateBody}>{hotlines.length === 0 ? 'Use the add button to create the first directory number.' : 'Try a different search term.'}</Text></View> : visibleHotlines.map((hotline) => {
+            {visibleHotlines.length === 0 ? <View style={isMdrrmo && hotlines.length > 0 ? styles.stateBoxBorderless : styles.stateBox}><Text style={styles.stateTitle}>{hotlines.length === 0 ? 'No hotlines yet' : 'No matching hotlines'}</Text><Text style={styles.stateBody}>{hotlines.length === 0 ? 'Use the add button to create the first directory number.' : 'Try a different search term.'}</Text></View> : visibleHotlines.map((hotline) => {
               const linkedFacility = hotline.facilityId ? facilityById.get(hotline.facilityId) : null;
               const editable = canEditDirectoryRecord(hotline.barangayId) && (hotline.category !== 'national_emergency' || isMdrrmo);
               if (isMdrrmo) {
@@ -572,7 +609,7 @@ export function ResourceManagementContent({ header }: { header?: ReactNode }) {
         ) : null}
 
         {!currentLoading && !currentError && tab === 'facilities' && !isMayor ? (
-          <View style={styles.section}>
+          <View style={[styles.section, isMdrrmo && styles.resourceDirectorySection]}>
             {!isMdrrmo ? <ResourceSectionHeader title="Facilities" count={facilities.length} canAdd={canManageDirectory} onAdd={() => openFacilityEditor(null)} /> : null}
             {visibleFacilities.length === 0 ? <View style={styles.stateBox}><Text style={styles.stateTitle}>{facilities.length === 0 ? 'No facilities yet' : 'No matching facilities'}</Text><Text style={styles.stateBody}>{facilities.length === 0 ? 'Use the add button to create the first facility.' : 'Try a different search term.'}</Text></View> : visibleFacilities.map((facility) => {
               const linkedHotlines = hotlines.filter((hotline) => hotline.facilityId === facility.id);
@@ -596,7 +633,7 @@ export function ResourceManagementContent({ header }: { header?: ReactNode }) {
                   active={facility.isActive}
                   lines={[
                     `${facilityTypeLabel(facility.type)}${facility.address ? ` · ${facility.address}` : ''}`,
-                    facility.contact ? `Contact: ${facility.contact}` : 'No contact number',
+                    ...linkedHotlines.map((hotline) => hotline.number),
                     `${linkedHotlines.length} linked hotline${linkedHotlines.length === 1 ? '' : 's'} · ${isReviewOverdue(facility.lastVerifiedAt) ? 'Review overdue' : `Verified ${formatVerificationDate(facility.lastVerifiedAt)}`}`,
                   ]}
                   onMap={() => openMap(facility.id)}
@@ -606,8 +643,8 @@ export function ResourceManagementContent({ header }: { header?: ReactNode }) {
               return <View key={facility.id} style={styles.resourceCard}>
                 <View style={styles.queueCardHeader}><Text style={styles.queueTitle}>{facility.name}</Text><View style={[styles.resourceStatusChip, facility.isActive ? styles.resourceStatusActive : styles.resourceStatusInactive]}><Text style={styles.resourceStatusChipText}>{facility.isActive ? 'Active' : 'Inactive'}</Text></View></View>
                 <Text style={styles.queueMeta}>{facilityTypeLabel(facility.type)}{facility.address ? ` · ${facility.address}` : ''}</Text>
-                {facility.contact ? <Text style={styles.queueMeta}>Contact: {facility.contact}</Text> : null}
-                <Text style={styles.queueMeta}>{linkedHotlines.length ? `${linkedHotlines.length} linked hotline${linkedHotlines.length === 1 ? '' : 's'}` : 'No linked hotlines'} · {isReviewOverdue(facility.lastVerifiedAt) ? 'Review overdue' : `Verified ${formatVerificationDate(facility.lastVerifiedAt)}`}</Text>
+                {linkedHotlines.map((hotline) => <Text key={hotline.id} style={styles.queueMeta}>{hotline.number}</Text>)}
+                <Text style={styles.queueMeta}>{isReviewOverdue(facility.lastVerifiedAt) ? 'Review overdue' : `Verified ${formatVerificationDate(facility.lastVerifiedAt)}`}</Text>
                 <CardActions>
                   <CardAction label="View on map" onPress={() => openMap(facility.id)} />
                   <CardAction label="Details" onPress={() => setDetail({ kind: 'facility', record: facility })} />
@@ -620,7 +657,7 @@ export function ResourceManagementContent({ header }: { header?: ReactNode }) {
         ) : null}
 
         {!currentLoading && !currentError && (tab === 'centers' || isMayor) ? (
-          <View style={styles.section}>
+          <View style={[styles.section, isMdrrmo && styles.resourceDirectorySection]}>
             {!isMdrrmo ? <ResourceSectionHeader title={isMayor ? 'Priority centers' : 'Evacuation centers'} count={centers.length} canAdd={isMdrrmo} onAdd={() => openCenterEditor(null)} /> : null}
             {barangaysError && isMdrrmo ? <Text style={styles.stateBody}>Barangays could not load: {barangaysError}</Text> : null}
             {visibleCenters.length === 0 ? <View style={styles.stateBox}><Text style={styles.stateTitle}>{centers.length === 0 ? 'No centers yet' : 'No matching centers'}</Text><Text style={styles.stateBody}>{centers.length === 0 ? 'MDRRMO can add a center and assign its responsible barangay.' : 'Try a different search term.'}</Text></View> : visibleCenters.map((center) => {
@@ -670,9 +707,9 @@ export function ResourceManagementContent({ header }: { header?: ReactNode }) {
       <EvacuationCenterFormSheet visible={editor === 'center'} center={editingCenter} barangays={barangays} onSaved={() => { closeEditor(); void reloadCenters(); }} onClose={closeEditor} />
 
       <ResourceDetailSheet visible={detail !== null} title={detail?.record.name ?? ''} onClose={() => setDetail(null)}>
-        {detail?.kind === 'hotline' ? <><ResourceDetailRow label="Number" value={detail.record.number} /><ResourceDetailRow label="Category" value={hotlineCategoryLabel(detail.record.category)} /><ResourceDetailRow label="Linked facility" value={detail.record.facilityId ? facilityById.get(detail.record.facilityId)?.name || 'Unavailable facility' : 'Standalone number'} /><ResourceDetailRow label="Last verified" value={formatVerificationDate(detail.record.lastVerifiedAt)} /></> : null}
-        {detail?.kind === 'facility' ? <><ResourceDetailRow label="Type" value={facilityTypeLabel(detail.record.type)} /><ResourceDetailRow label="Address or landmark" value={detail.record.address || 'Not provided'} /><ResourceDetailRow label="Contact" value={detail.record.contact || 'Not provided'} /><ResourceDetailRow label="Coordinates" value={`${detail.record.latitude.toFixed(5)}, ${detail.record.longitude.toFixed(5)}`} /><ResourceDetailRow label="Last verified" value={formatVerificationDate(detail.record.lastVerifiedAt)} /></> : null}
-        {detail?.kind === 'center' ? <><ResourceDetailRow label="Barangay" value={barangayNameById.get(detail.record.barangayId ?? '') || 'Not available'} /><ResourceDetailRow label="Status" value={evacuationStatusLabel(detail.record.status)} /><ResourceDetailRow label="Declared capacity" value={detail.record.capacity == null ? 'Not declared' : String(detail.record.capacity)} /><ResourceDetailRow label="Priority" value={detail.record.isPriority ? 'Priority center' : 'Standard priority'} /><ResourceDetailRow label="Last update" value={formatCenterUpdate(detail.record.lastUpdatedAt)} /><ResourceDetailRow label="Coordinates" value={`${detail.record.latitude.toFixed(5)}, ${detail.record.longitude.toFixed(5)}`} /></> : null}
+        {detail?.kind === 'hotline' ? <><ResourceDetailRow label="Number" value={detail.record.number} /><ResourceDetailRow label="Category" value={hotlineCategoryLabel(detail.record.category)} /><ResourceDetailRow label="Linked facility" value={detail.record.facilityId ? facilityById.get(detail.record.facilityId)?.name || 'Unavailable facility' : 'Standalone number'} /><ResourceDetailRow label="Last verified" value={formatVerificationDate(detail.record.lastVerifiedAt)} /><ResourceAuditRow label="Created by" name={profileName(detail.record.createdBy)} dateTime={formatAuditDateTime(detail.record.createdAt)} /><ResourceAuditRow label="Updated by" name={profileName(detail.record.lastVerifiedBy ?? detail.record.createdBy)} dateTime={formatAuditDateTime(detail.record.lastVerifiedAt ?? detail.record.updatedAt)} /></> : null}
+        {detail?.kind === 'facility' ? <><ResourceDetailRow label="Type" value={facilityTypeLabel(detail.record.type)} /><ResourceDetailRow label="Address or landmark" value={detail.record.address || 'Not provided'} /><ResourceDetailRow label="Hotlines" value={hotlines.filter((hotline) => hotline.facilityId === detail.record.id).map((hotline) => hotline.number).join('\n') || 'No linked hotlines'} /><ResourceDetailRow label="Coordinates" value={`${detail.record.latitude.toFixed(5)}, ${detail.record.longitude.toFixed(5)}`} /><ResourceDetailRow label="Last verified" value={formatVerificationDate(detail.record.lastVerifiedAt)} /><ResourceAuditRow label="Created by" name={profileName(detail.record.createdBy)} dateTime={formatAuditDateTime(detail.record.createdAt)} /><ResourceAuditRow label="Updated by" name={profileName(detail.record.lastVerifiedBy ?? detail.record.createdBy)} dateTime={formatAuditDateTime(detail.record.lastVerifiedAt ?? detail.record.updatedAt)} /></> : null}
+        {detail?.kind === 'center' ? <><ResourceDetailRow label="Barangay" value={barangayNameById.get(detail.record.barangayId ?? '') || 'Not available'} /><ResourceDetailRow label="Status" value={evacuationStatusLabel(detail.record.status)} /><ResourceDetailRow label="Declared capacity" value={detail.record.capacity == null ? 'Not declared' : String(detail.record.capacity)} /><ResourceDetailRow label="Priority" value={detail.record.isPriority ? 'Priority center' : 'Standard priority'} /><ResourceDetailRow label="Last update" value={formatCenterUpdate(detail.record.lastUpdatedAt)} /><ResourceDetailRow label="Coordinates" value={`${detail.record.latitude.toFixed(5)}, ${detail.record.longitude.toFixed(5)}`} /><ResourceAuditRow label="Created by" name={profileName(detail.record.managedBy)} dateTime={formatAuditDateTime(detail.record.createdAt)} /><ResourceAuditRow label="Updated by" name={profileName(detail.record.lastUpdatedBy ?? detail.record.managedBy)} dateTime={formatAuditDateTime(detail.record.lastUpdatedAt ?? detail.record.updatedAt)} /></> : null}
       </ResourceDetailSheet>
       <ResourceTypePickerSheet visible={pickerVisible} onClose={() => setPickerVisible(false)} onSelect={chooseResourceType} />
     </>

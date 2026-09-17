@@ -66,7 +66,6 @@ export default function ResourceFormSheet({
             style={[localStyles.sheet, { paddingBottom: Math.max(insets.bottom, spacing.md) }]}
             onPress={() => {}}
           >
-            <View style={localStyles.handle} />
             <View style={localStyles.header}>
               <Text style={localStyles.title}>{title}</Text>
               <TouchableOpacity
@@ -95,10 +94,9 @@ export default function ResourceFormSheet({
 const localStyles = StyleSheet.create({
   overlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(17, 24, 39, 0.42)' },
   keyboardAvoider: { width: '100%', maxHeight: '94%' },
-  sheet: { maxHeight: '100%', borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, backgroundColor: colors.white, overflow: 'hidden' },
-  handle: { alignSelf: 'center', width: 42, height: 4, marginTop: spacing.sm, marginBottom: spacing.sm, borderRadius: radius.full, backgroundColor: colors.border },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.lg, paddingBottom: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border },
+  sheet: { maxHeight: '100%', borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, backgroundColor: colors.white, overflow: 'hidden', paddingTop: spacing.md },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.lg, paddingBottom: spacing.sm },
   title: { flex: 1, fontFamily: fonts.bold, fontSize: fontSizes.lg, color: colors.text },
   closeButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-  content: { padding: spacing.lg, gap: spacing.md },
+  content: { paddingHorizontal: spacing.lg, paddingTop: spacing.sm, paddingBottom: spacing.lg, gap: spacing.sm },
 });

@@ -218,7 +218,7 @@ export default function HotlineFormSheet({
           <Text style={localStyles.label}>Directory status</Text>
           <Text style={localStyles.helpText}>{isActive ? 'Visible to residents' : 'Hidden from the public directory'}</Text>
         </View>
-        <Switch value={isActive} onValueChange={setIsActive} disabled={saving} trackColor={{ true: colors.themeSoft }} />
+        <Switch value={isActive} onValueChange={setIsActive} disabled={saving} trackColor={{ true: colors.navigationActive }} />
       </View>
 
       {error ? <Text style={localStyles.error}>{error}</Text> : null}
@@ -238,14 +238,14 @@ const localStyles = StyleSheet.create({
   input: { minHeight: 46, borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, paddingHorizontal: spacing.md, fontFamily: fonts.regular, fontSize: fontSizes.md, color: colors.text },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   chip: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.full, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, backgroundColor: colors.white },
-  chipActive: { backgroundColor: 'rgba(170, 192, 220, 0.25)', borderColor: colors.themeSoft },
-  chipText: { fontFamily: fonts.medium, fontSize: fontSizes.xs, color: colors.textMuted },
-  chipTextActive: { fontFamily: fonts.semibold, color: colors.themeSoft },
+  chipActive: { backgroundColor: colors.navigationActive, borderColor: colors.navigationActive },
+  chipText: { fontFamily: fonts.semibold, fontSize: fontSizes.xs, color: colors.textMuted },
+  chipTextActive: { color: colors.white },
   switchRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md, paddingVertical: spacing.sm },
   switchCopy: { flex: 1, gap: 3 },
   helpText: { fontFamily: fonts.regular, fontSize: fontSizes.xs, color: colors.textMuted, lineHeight: 18 },
   error: { fontFamily: fonts.regular, fontSize: fontSizes.sm, color: '#B42318', lineHeight: 20 },
-  saveButton: { minHeight: 48, alignItems: 'center', justifyContent: 'center', borderRadius: radius.lg, backgroundColor: colors.text, paddingHorizontal: spacing.lg },
+  saveButton: { minHeight: 48, alignItems: 'center', justifyContent: 'center', borderRadius: radius.lg, backgroundColor: colors.navigationActive, paddingHorizontal: spacing.lg },
   saveButtonText: { fontFamily: fonts.semibold, fontSize: fontSizes.md, color: colors.white },
   disabled: { opacity: 0.55 },
 });

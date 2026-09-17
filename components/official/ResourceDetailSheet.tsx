@@ -16,7 +16,6 @@ export default function ResourceDetailSheet({ visible, title, children, onClose 
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <Pressable style={localStyles.overlay} onPress={onClose}>
         <Pressable style={localStyles.sheet} onPress={() => {}}>
-          <View style={localStyles.handle} />
           <View style={localStyles.header}>
             <Text style={localStyles.title}>{title}</Text>
             <TouchableOpacity onPress={onClose} accessibilityRole="button" accessibilityLabel="Close details">
@@ -41,14 +40,35 @@ export function ResourceDetailRow({ label, value }: { label: string; value: stri
   );
 }
 
+export function ResourceAuditRow({
+  label,
+  name,
+  dateTime,
+}: {
+  label: string;
+  name: string;
+  dateTime: string;
+}) {
+  return (
+    <View style={localStyles.row}>
+      <Text style={localStyles.label}>{label}</Text>
+      <View style={localStyles.auditValueRow}>
+        <Text style={localStyles.value}>{name}</Text>
+        <Text style={localStyles.auditDate}>· {dateTime}</Text>
+      </View>
+    </View>
+  );
+}
+
 const localStyles = StyleSheet.create({
   overlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(17, 24, 39, 0.42)' },
-  sheet: { maxHeight: '76%', borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, backgroundColor: colors.white, paddingHorizontal: spacing.lg, paddingBottom: spacing.xl },
-  handle: { alignSelf: 'center', width: 42, height: 4, marginVertical: spacing.sm, borderRadius: radius.full, backgroundColor: colors.border },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm, paddingBottom: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border },
+  sheet: { maxHeight: '76%', borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, backgroundColor: colors.white, paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: spacing.xl },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm, paddingBottom: spacing.sm },
   title: { flex: 1, fontFamily: fonts.bold, fontSize: fontSizes.lg, color: colors.text },
-  content: { paddingTop: spacing.md, gap: spacing.md },
+  content: { paddingTop: spacing.sm, gap: spacing.md },
   row: { gap: spacing.xs },
   label: { fontFamily: fonts.semibold, fontSize: fontSizes.xs, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.3 },
   value: { fontFamily: fonts.regular, fontSize: fontSizes.md, color: colors.text, lineHeight: 22 },
+  auditValueRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', columnGap: spacing.xs },
+  auditDate: { fontFamily: fonts.regular, fontSize: fontSizes.sm, color: colors.textMuted },
 });

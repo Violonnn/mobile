@@ -29,7 +29,6 @@ export default function ResourceTypePickerSheet({ visible, onClose, onSelect }: 
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <Pressable style={styles.backdrop} onPress={onClose}>
         <Pressable style={styles.sheet} onPress={(event) => event.stopPropagation()}>
-          <View style={styles.sheetHandle} />
           <Text style={styles.sheetOverline}>NEW PUBLIC RESOURCE</Text>
           <Text style={styles.sheetTitle}>What are you adding?</Text>
           <Text style={styles.sheetSubtitle}>Choose the information residents should see during an emergency.</Text>

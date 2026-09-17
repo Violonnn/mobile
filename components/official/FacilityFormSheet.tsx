@@ -61,7 +61,6 @@ export default function FacilityFormSheet({
     recordCoordinate(facility),
   );
   const [address, setAddress] = useState(facility?.address ?? '');
-  const [contact, setContact] = useState(facility?.contact ?? '');
   const [isActive, setIsActive] = useState(facility?.isActive ?? true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -76,7 +75,6 @@ export default function FacilityFormSheet({
       setType(facility?.type ?? 'other');
       setCoordinate(recordCoordinate(facility));
       setAddress(facility?.address ?? '');
-      setContact(facility?.contact ?? '');
       setIsActive(facility?.isActive ?? true);
       setError(null);
     }
@@ -85,7 +83,7 @@ export default function FacilityFormSheet({
   const hasUnsavedChanges = useMemo(() => {
     const original = recordCoordinate(facility);
     if (!facility) {
-      return Boolean(name.trim() || type !== 'other' || coordinate || address.trim() || contact.trim() || !isActive);
+      return Boolean(name.trim() || type !== 'other' || coordinate || address.trim() || !isActive);
     }
     return (
       name !== facility.name ||
@@ -93,10 +91,9 @@ export default function FacilityFormSheet({
       coordinate?.latitude !== original?.latitude ||
       coordinate?.longitude !== original?.longitude ||
       address !== (facility.address ?? '') ||
-      contact !== (facility.contact ?? '') ||
       isActive !== facility.isActive
     );
-  }, [address, contact, coordinate, facility, isActive, name, type]);
+  }, [address, coordinate, facility, isActive, name, type]);
 
   async function saveFacility() {
     if (saving) return;
@@ -117,7 +114,6 @@ export default function FacilityFormSheet({
           latitude: coordinate.latitude,
           longitude: coordinate.longitude,
           address,
-          contact,
           isActive,
         })
       : await createFacility({
@@ -126,7 +122,6 @@ export default function FacilityFormSheet({
           latitude: coordinate.latitude,
           longitude: coordinate.longitude,
           address,
-          contact,
           barangayId,
           isActive,
         });
@@ -161,23 +156,21 @@ export default function FacilityFormSheet({
       <ResourceLocationField
         coordinate={coordinate}
         title="Place facility pin"
-        hint="Place the pin at the facility entrance or main building. Tap to place it, or drag the pin to adjust."
+        hint="Move the map until the fixed pin is over the facility entrance or main building."
         disabled={saving}
+        showCoordinateSummary={false}
         onChange={setCoordinate}
       />
 
       <Text style={localStyles.label}>Address or landmark (optional)</Text>
       <TextInput style={localStyles.input} value={address} onChangeText={setAddress} placeholder="Street, landmark, or building name" placeholderTextColor={colors.textMuted} maxLength={300} editable={!saving} />
 
-      <Text style={localStyles.label}>Contact (optional)</Text>
-      <TextInput style={localStyles.input} value={contact} onChangeText={setContact} placeholder="Public contact number" placeholderTextColor={colors.textMuted} maxLength={64} keyboardType="phone-pad" editable={!saving} />
-
       <View style={localStyles.switchRow}>
         <View style={localStyles.switchCopy}>
           <Text style={localStyles.label}>Directory status</Text>
           <Text style={localStyles.helpText}>{isActive ? 'Visible to residents' : 'Hidden from the public directory'}</Text>
         </View>
-        <Switch value={isActive} onValueChange={setIsActive} disabled={saving} trackColor={{ true: colors.themeSoft }} />
+        <Switch value={isActive} onValueChange={setIsActive} disabled={saving} trackColor={{ true: colors.navigationActive }} />
       </View>
 
       {error ? <Text style={localStyles.error}>{error}</Text> : null}
@@ -193,14 +186,14 @@ const localStyles = StyleSheet.create({
   input: { minHeight: 46, borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, paddingHorizontal: spacing.md, fontFamily: fonts.regular, fontSize: fontSizes.md, color: colors.text },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   chip: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.full, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, backgroundColor: colors.white },
-  chipActive: { backgroundColor: 'rgba(170, 192, 220, 0.25)', borderColor: colors.themeSoft },
-  chipText: { fontFamily: fonts.medium, fontSize: fontSizes.xs, color: colors.textMuted },
-  chipTextActive: { fontFamily: fonts.semibold, color: colors.themeSoft },
+  chipActive: { backgroundColor: colors.navigationActive, borderColor: colors.navigationActive },
+  chipText: { fontFamily: fonts.semibold, fontSize: fontSizes.xs, color: colors.textMuted },
+  chipTextActive: { color: colors.white },
   switchRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md, paddingVertical: spacing.sm },
   switchCopy: { flex: 1, gap: 3 },
   helpText: { fontFamily: fonts.regular, fontSize: fontSizes.xs, color: colors.textMuted, lineHeight: 18 },
   error: { fontFamily: fonts.regular, fontSize: fontSizes.sm, color: '#B42318', lineHeight: 20 },
-  saveButton: { minHeight: 48, alignItems: 'center', justifyContent: 'center', borderRadius: radius.lg, backgroundColor: colors.text, paddingHorizontal: spacing.lg },
+  saveButton: { minHeight: 48, alignItems: 'center', justifyContent: 'center', borderRadius: radius.lg, backgroundColor: colors.navigationActive, paddingHorizontal: spacing.lg },
   saveButtonText: { fontFamily: fonts.semibold, fontSize: fontSizes.md, color: colors.white },
   disabled: { opacity: 0.55 },
 });

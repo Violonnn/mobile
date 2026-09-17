@@ -19,6 +19,7 @@ type ResourceLocationFieldProps = {
   title: string;
   hint: string;
   disabled?: boolean;
+  showCoordinateSummary?: boolean;
   onChange: (coordinate: MapPickerCoordinate) => void;
 };
 
@@ -36,6 +37,7 @@ export default function ResourceLocationField({
   title,
   hint,
   disabled = false,
+  showCoordinateSummary = true,
   onChange,
 }: ResourceLocationFieldProps) {
   const [pickerVisible, setPickerVisible] = useState(false);
@@ -89,19 +91,21 @@ export default function ResourceLocationField({
         accessibilityRole="button"
         accessibilityLabel={selected ? 'Change map location' : 'Choose map location'}
       >
-        <Ionicons name="location-outline" size={20} color={colors.themeSoft} />
+        <Ionicons name="location-outline" size={20} color={colors.navigationActive} />
         <View style={localStyles.locationCopy}>
           <Text style={localStyles.locationTitle}>
             {selected ? 'Location selected' : 'Choose on map'}
           </Text>
-          <Text style={localStyles.locationSummary} numberOfLines={1}>
-            {selected
-              ? `${selected.latitude.toFixed(5)}, ${selected.longitude.toFixed(5)}`
-              : 'Tap to place a pin'}
-          </Text>
+          {showCoordinateSummary ? (
+            <Text style={localStyles.locationSummary} numberOfLines={1}>
+              {selected
+                ? `${selected.latitude.toFixed(5)}, ${selected.longitude.toFixed(5)}`
+                : 'Tap to place a pin'}
+            </Text>
+          ) : null}
         </View>
         {requestingLocation ? (
-          <ActivityIndicator color={colors.themeSoft} />
+          <ActivityIndicator color={colors.navigationActive} />
         ) : (
           <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
         )}
