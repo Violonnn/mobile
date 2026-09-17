@@ -38,8 +38,12 @@ import {
   type ReportStatus,
 } from '../../lib/officialReports';
 import type { ReportMediaAttachment } from '../../lib/reports';
-import { updateOfficialReport } from '../../lib/officialReportSubmit';
+import {
+  correctOfficialReportLocation,
+  updateOfficialReport,
+} from '../../lib/officialReportSubmit';
 import CommentsSection from '../../components/report/CommentsSection';
+import IncidentTypeBadge from '../../components/report/IncidentTypeBadge';
 
 function routeFocus(value: string | string[] | undefined): string | null {
   if (typeof value === 'string') return value;
@@ -72,6 +76,12 @@ function timelineLabel(event: {
   if (event.eventType === 'barangay_change') {
     return 'Barangay updated';
   }
+  if (event.eventType === 'location_change') {
+    return 'Incident location corrected';
+  }
+  if (event.eventType === 'incident_type_change') {
+    return 'Incident type updated';
+  }
   if (event.toStatus && event.fromStatus) {
     return `${statusLabel(event.fromStatus)} → ${statusLabel(event.toStatus)}`;
   }
@@ -103,6 +113,7 @@ export default function OfficialReportDetailScreen() {
   const [editAddress, setEditAddress] = useState('');
   const [editLatitude, setEditLatitude] = useState('');
   const [editLongitude, setEditLongitude] = useState('');
+  const [editCorrectionNote, setEditCorrectionNote] = useState('');
   const [editBusy, setEditBusy] = useState(false);
   // Verification / Timeline start collapsed; tap a header to reveal its content.
   const [verificationOpen, setVerificationOpen] = useState(false);
@@ -127,7 +138,7 @@ export default function OfficialReportDetailScreen() {
       }
     }, Platform.OS === 'ios' ? 250 : 80);
     return () => clearTimeout(timer);
-  }, [focusComments, loading, detail?.id]);
+  }, [detail, focusComments, loading]);
 
   function confirmTransition(target: ReportStatus) {
     if (!detail || !kind || actionBusy) return;
@@ -223,24 +234,34 @@ export default function OfficialReportDetailScreen() {
     setEditAddress(detail.addressText ?? '');
     setEditLatitude(String(detail.latitude));
     setEditLongitude(String(detail.longitude));
+    setEditCorrectionNote('');
     setEditing(true);
   }
 
   async function saveEdit() {
     if (!detail || editBusy) return;
     setEditBusy(true);
-    const result = await updateOfficialReport({
-      reportId: detail.id,
-      title: editTitle,
-      description: editDescription,
-      position: {
-        latitude: Number(editLatitude),
-        longitude: Number(editLongitude),
-        accuracyMeters: null,
-      },
-      addressText: editAddress,
-      barangayId: detail.barangayId,
-    });
+    const correctedPosition = {
+      latitude: Number(editLatitude),
+      longitude: Number(editLongitude),
+      accuracyMeters: null,
+    };
+    const result = detail.canEditContent
+      ? await updateOfficialReport({
+          reportId: detail.id,
+          title: editTitle,
+          description: editDescription,
+          position: correctedPosition,
+          addressText: editAddress,
+          barangayId: detail.barangayId,
+        })
+      : await correctOfficialReportLocation({
+          reportId: detail.id,
+          position: correctedPosition,
+          addressText: editAddress,
+          barangayId: detail.barangayId,
+          note: editCorrectionNote,
+        });
     setEditBusy(false);
     if (result.error) {
       Alert.alert('Could not update incident', result.error);
@@ -364,6 +385,11 @@ export default function OfficialReportDetailScreen() {
                   {detail.description.trim() || 'No description provided.'}
                 </Text>
 
+                <IncidentTypeBadge
+                  incidentType={detail.incidentType}
+                  incidentTypeOther={detail.incidentTypeOther}
+                />
+
                 <View style={styles.metaRow}>
                   <Text style={styles.metaLabel}>Reporter</Text>
                   <Text style={styles.metaValue}>{detail.reporterName}</Text>
@@ -455,10 +481,14 @@ export default function OfficialReportDetailScreen() {
                 ) : null}
               </View>
 
-              {detail.canEditContent ? (
+              {detail.canEditContent || detail.canCorrectLocation ? (
                 <View style={styles.detailCard}>
                   <View style={styles.queueCardHeader}>
-                    <Text style={styles.sectionTitle}>Correct incident details</Text>
+                    <Text style={styles.sectionTitle}>
+                      {detail.canEditContent
+                        ? 'Correct incident details'
+                        : 'Correct incident location'}
+                    </Text>
                     {!editing ? (
                       <TouchableOpacity
                         style={styles.retryButton}
@@ -472,23 +502,27 @@ export default function OfficialReportDetailScreen() {
                   </View>
                   {editing ? (
                     <>
-                      <Text style={styles.formLabel}>Title (optional)</Text>
-                      <TextInput
-                        style={styles.formInput}
-                        value={editTitle}
-                        onChangeText={setEditTitle}
-                        maxLength={120}
-                        editable={!editBusy}
-                      />
-                      <Text style={styles.formLabel}>Description</Text>
-                      <TextInput
-                        style={[styles.formInput, styles.formTextArea]}
-                        value={editDescription}
-                        onChangeText={setEditDescription}
-                        multiline
-                        maxLength={2000}
-                        editable={!editBusy}
-                      />
+                      {detail.canEditContent ? (
+                        <>
+                          <Text style={styles.formLabel}>Title (optional)</Text>
+                          <TextInput
+                            style={styles.formInput}
+                            value={editTitle}
+                            onChangeText={setEditTitle}
+                            maxLength={120}
+                            editable={!editBusy}
+                          />
+                          <Text style={styles.formLabel}>Description</Text>
+                          <TextInput
+                            style={[styles.formInput, styles.formTextArea]}
+                            value={editDescription}
+                            onChangeText={setEditDescription}
+                            multiline
+                            maxLength={2000}
+                            editable={!editBusy}
+                          />
+                        </>
+                      ) : null}
                       <Text style={styles.formLabel}>Address</Text>
                       <TextInput
                         style={styles.formInput}
@@ -497,6 +531,21 @@ export default function OfficialReportDetailScreen() {
                         maxLength={300}
                         editable={!editBusy}
                       />
+                      {!detail.canEditContent ? (
+                        <>
+                          <Text style={styles.formLabel}>Correction note (optional)</Text>
+                          <TextInput
+                            style={[styles.formInput, styles.formTextArea]}
+                            value={editCorrectionNote}
+                            onChangeText={setEditCorrectionNote}
+                            placeholder="Why is the response location being corrected?"
+                            placeholderTextColor={colors.textMuted}
+                            multiline
+                            maxLength={500}
+                            editable={!editBusy}
+                          />
+                        </>
+                      ) : null}
                       <Text style={styles.formLabel}>Coordinates</Text>
                       <TextInput
                         style={styles.formInput}
@@ -535,7 +584,9 @@ export default function OfficialReportDetailScreen() {
                     </>
                   ) : (
                     <Text style={styles.queueMeta}>
-                      Only the submitting officer can correct content and location.
+                      {detail.canEditContent
+                        ? 'The submitting officer may correct content and location. Every location change is audited.'
+                        : 'Authorized responders may correct the response point. The original device location remains unchanged.'}
                     </Text>
                   )}
                 </View>
@@ -562,6 +613,30 @@ export default function OfficialReportDetailScreen() {
                   </TouchableOpacity>
                   {verificationOpen ? (
                     <View style={styles.collapsibleBody}>
+                      <View style={styles.metaRow}>
+                        <Text style={styles.metaLabel}>Device GPS</Text>
+                        <Text style={styles.metaValue}>
+                          {detail.deviceLatitude == null || detail.deviceLongitude == null
+                            ? 'Not available for this legacy report'
+                            : `${detail.deviceLatitude.toFixed(5)}, ${detail.deviceLongitude.toFixed(5)}`}
+                        </Text>
+                      </View>
+                      <View style={styles.metaRow}>
+                        <Text style={styles.metaLabel}>GPS accuracy</Text>
+                        <Text style={styles.metaValue}>
+                          {detail.gpsAccuracyMeters == null
+                            ? 'Not recorded'
+                            : `±${Math.round(detail.gpsAccuracyMeters)} m`}
+                        </Text>
+                      </View>
+                      <View style={styles.metaRow}>
+                        <Text style={styles.metaLabel}>Pin adjustment</Text>
+                        <Text style={styles.metaValue}>
+                          {detail.locationAdjustmentMeters == null
+                            ? 'Not recorded'
+                            : `${Math.round(detail.locationAdjustmentMeters)} m`}
+                        </Text>
+                      </View>
                       <View style={styles.metaRow}>
                         <Text style={styles.metaLabel}>Verified by</Text>
                         <Text style={styles.metaValue}>
@@ -689,7 +764,7 @@ export default function OfficialReportDetailScreen() {
                         >
                           {actionBusy ? (
                             <ActivityIndicator
-                              color={isEscalate ? colors.danger : colors.white}
+                    color={isEscalate ? colors.escalated : colors.white}
                             />
                           ) : (
                             <Text

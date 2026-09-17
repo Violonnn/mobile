@@ -24,7 +24,7 @@ export const officialNavColors = {
   iconActive: colors.navigationActive,
   labelInactive: '#20252C',
   labelActive: colors.navigationActive,
-  incident: '#F0524A',
+  incident: colors.navigationActive,
   incidentIcon: '#FFFFFF',
   carve: '#EAF3FC',
 };
@@ -147,7 +147,7 @@ export const officialBottomNavStyles = StyleSheet.create({
     height: officialNavMetrics.incidentSize,
     borderRadius: officialNavMetrics.incidentSize / 2,
     borderWidth: 1.5,
-    borderColor: 'rgba(240, 82, 74, 0.68)',
+    borderColor: 'rgba(15, 32, 68, 0.68)',
   },
   incidentButton: {
     width: officialNavMetrics.incidentSize,

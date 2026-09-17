@@ -7,6 +7,7 @@ import { ActivityIndicator, View } from 'react-native';
 import { useRouter, type Href } from 'expo-router';
 import { Tabs } from 'expo-router/js-tabs';
 import OfficialBottomNav from '../../components/navigation/OfficialBottomNav';
+import NewNotificationOverlay from '../../components/notifications/NewNotificationOverlay';
 import { OfficialPortalProvider } from '../../context/OfficialPortalContext';
 import {
   requireActiveOfficialPortal,
@@ -16,30 +17,33 @@ import { colors } from '../../styles/theme';
 
 function OfficialTabs() {
   return (
-    <Tabs
-      screenOptions={{
-        headerShown: false,
-        animation: 'none',
-        sceneStyle: { backgroundColor: colors.background },
-      }}
-      tabBar={(props) => <OfficialBottomNav {...props} />}
-    >
-      <Tabs.Screen name="index" options={{ title: 'Command' }} />
-      <Tabs.Screen name="incidents" options={{ title: 'Incidents' }} />
-      <Tabs.Screen name="community" options={{ title: 'Community' }} />
-      <Tabs.Screen name="map" options={{ title: 'Map' }} />
-      <Tabs.Screen name="resources" options={{ title: 'Resources' }} />
-      <Tabs.Screen name="settings" options={{ title: 'Settings' }} />
-      {/* Detail + log-incident stay reachable but off the tab bar. */}
-      <Tabs.Screen
-        name="[id]"
-        options={{ href: null, title: 'Report detail' }}
-      />
-      <Tabs.Screen
-        name="log-incident"
-        options={{ href: null, title: 'Log incident' }}
-      />
-    </Tabs>
+    <View style={{ flex: 1 }}>
+      <Tabs
+        screenOptions={{
+          headerShown: false,
+          animation: 'none',
+          sceneStyle: { backgroundColor: colors.background },
+        }}
+        tabBar={(props) => <OfficialBottomNav {...props} />}
+      >
+        <Tabs.Screen name="index" options={{ title: 'Command' }} />
+        <Tabs.Screen name="incidents" options={{ title: 'Incidents' }} />
+        <Tabs.Screen name="community" options={{ title: 'Community' }} />
+        <Tabs.Screen name="map" options={{ title: 'Map' }} />
+        <Tabs.Screen name="resources" options={{ title: 'Resources' }} />
+        <Tabs.Screen name="settings" options={{ title: 'Settings' }} />
+        {/* Detail + log-incident stay reachable but off the tab bar. */}
+        <Tabs.Screen
+          name="[id]"
+          options={{ href: null, title: 'Report detail' }}
+        />
+        <Tabs.Screen
+          name="log-incident"
+          options={{ href: null, title: 'Log incident' }}
+        />
+      </Tabs>
+      <NewNotificationOverlay />
+    </View>
   );
 }
 

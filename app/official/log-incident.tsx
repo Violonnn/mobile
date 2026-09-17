@@ -35,11 +35,13 @@ import {
   MAX_VIDEO_SECONDS,
   captureReportPhoto,
   captureReportVideo,
+  deletePersistedReportMedia,
   totalVideoSeconds,
   type CapturedMedia,
 } from '../../lib/reportMedia';
 import { fetchBarangays, type BarangayOption } from '../../lib/barangays';
 import { submitOfficialReport } from '../../lib/officialReportSubmit';
+import type { IncidentType } from '../../lib/incidentTypes';
 
 type Step = 'location' | 'attachments' | 'details' | 'done';
 
@@ -72,6 +74,8 @@ export function OfficialReportForm({
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [locationNote, setLocationNote] = useState('');
+  const [incidentType, setIncidentType] = useState<IncidentType | null>(null);
+  const [incidentTypeOther, setIncidentTypeOther] = useState('');
   const [media, setMedia] = useState<CapturedMedia[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -92,6 +96,8 @@ export function OfficialReportForm({
   }
 
   const closeForm = () => {
+    if (submitting) return;
+    media.forEach(deletePersistedReportMedia);
     if (onClose) {
       onClose();
       return;
@@ -216,6 +222,14 @@ export function OfficialReportForm({
       setError('Enter a description.');
       return;
     }
+    if (!incidentType) {
+      setError('Select an incident type.');
+      return;
+    }
+    if (incidentType === 'other' && !incidentTypeOther.trim()) {
+      setError('Specify the incident type.');
+      return;
+    }
     if (isBdrrmo && !scope?.barangay_id) {
       setError('Your assigned barangay is unavailable. Please sign in again.');
       return;
@@ -233,6 +247,9 @@ export function OfficialReportForm({
       title,
       description,
       position,
+      incidentType,
+      incidentTypeOther:
+        incidentType === 'other' ? incidentTypeOther : undefined,
       addressText: addressText || undefined,
       // The Edge Function repeats this authorization check before saving.
       barangayId: isBdrrmo ? scope?.barangay_id : selectedBarangayId,
@@ -316,10 +333,12 @@ export function OfficialReportForm({
           showsVerticalScrollIndicator={false}
         >
           {step === 'location' ? (
-            <LocationStep
-              loading={locationLoading}
-              error={locationError}
-              needsConfirmation={needsConfirmation}
+              <LocationStep
+                loading={locationLoading}
+                error={locationError}
+                position={position}
+                address={address}
+                needsConfirmation={needsConfirmation}
               accuracyMeters={position?.accuracyMeters ?? null}
               onRetry={() => void fetchLocation()}
               onConfirmOnMap={() => setPickerVisible(true)}
@@ -338,9 +357,13 @@ export function OfficialReportForm({
                 error={error}
                 onAddPhoto={() => void handleAddPhoto()}
                 onAddVideo={() => void handleAddVideo()}
-                onRemove={(id) =>
-                  setMedia((current) => current.filter((item) => item.id !== id))
-                }
+                onRemove={(id) => {
+                  const removedMedia = media.find((item) => item.id === id);
+                  if (removedMedia) deletePersistedReportMedia(removedMedia);
+                  setMedia((current) =>
+                    current.filter((item) => item.id !== id),
+                  );
+                }}
                 onNext={() => {
                   setError(null);
                   setStep('details');
@@ -367,6 +390,13 @@ export function OfficialReportForm({
               onChangeDescription={setDescription}
               locationNote={locationNote}
               onChangeLocationNote={setLocationNote}
+              incidentType={incidentType}
+              onChangeIncidentType={(value) => {
+                setIncidentType(value);
+                if (value !== 'other') setIncidentTypeOther('');
+              }}
+              incidentTypeOther={incidentTypeOther}
+              onChangeIncidentTypeOther={setIncidentTypeOther}
               address={address}
               barangays={barangays}
               barangaysLoading={barangaysLoading}
@@ -388,6 +418,7 @@ export function OfficialReportForm({
               submitting={submitting}
               onBack={() => setStep('attachments')}
               onSubmit={() => void handleSubmit()}
+              submitLabel="Log incident"
             />
           ) : null}
 
@@ -430,7 +461,7 @@ export function OfficialReportForm({
       {position ? (
         <ReportLocationPicker
           visible={pickerVisible}
-          initialPosition={position}
+          incidentPosition={position}
           onConfirm={(next) => void handleConfirmPicker(next)}
           onClose={() => setPickerVisible(false)}
         />

@@ -25,7 +25,7 @@ import { scopeLabelFromAccess } from '../../lib/officialRegistration';
 import { useOfficialPortal } from '../../context/OfficialPortalContext';
 import { useOfficialReportQueue } from '../../hooks/useOfficialReports';
 import { useEvacuationCenters } from '../../hooks/useEvacuationCenters';
-import { NotificationsPlaceholder } from '../../components/navigation/AppHeader';
+import NotificationsModal from '../../components/notifications/NotificationsModal';
 import MdrrmoHeader from '../../components/official/MdrrmoHeader';
 import EvacuationSummarySection from '../../components/official/EvacuationSummarySection';
 import MayorDashboard from '../../components/official/MayorDashboard';
@@ -36,6 +36,8 @@ import {
 } from '../../lib/profile';
 import { formatPublishedAt } from '../../lib/formatTime';
 import type { OfficialReportQueueItem, ReportStatus } from '../../lib/officialReports';
+import IncidentTypeBadge from '../../components/report/IncidentTypeBadge';
+import ProfileAvatar from '../../components/profile/ProfileAvatar';
 
 function officialDisplayName(profile: OfficialPublicProfile | null): string | null {
   if (!profile) return null;
@@ -81,9 +83,16 @@ function StatusReporterAvatars({
   return (
     <View style={styles.statusAvatarGroup} accessibilityLabel={`${reporters.length} recent reporters`}>
       {reporters.map((report, index) => (
-        <View key={`${report.id}-${index}`} style={[styles.statusAvatar, { marginLeft: index === 0 ? 0 : -10 }]}>
-          <Text style={styles.statusAvatarText}>{report.reporterInitial}</Text>
-        </View>
+        <ProfileAvatar
+          key={`${report.id}-${index}`}
+          avatarPath={report.reporter.avatarPath}
+          firstName={report.reporter.firstName}
+          lastName={report.reporter.lastName}
+          fallback={report.reporterInitial}
+          size={34}
+          style={[styles.statusAvatar, { marginLeft: index === 0 ? 0 : -10 }]}
+          textStyle={styles.statusAvatarText}
+        />
       ))}
     </View>
   );
@@ -99,10 +108,19 @@ export default function OfficialCommandScreen() {
   const [profileError, setProfileError] = useState<string | null>(null);
   const [profileLoading, setProfileLoading] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [notificationUnreadCount, setNotificationUnreadCount] = useState(0);
 
   // Mayor totals come from the compact all-time analytics view. Do not load
   // the 100-report operational queue or its media work for the Mayor Brief.
-  const { reports, counts, error, loading, refreshing, refresh, reload } =
+  const {
+    reports,
+    counts,
+    error,
+    loading,
+    refreshing,
+    refresh,
+    reload,
+  } =
     useOfficialReportQueue(officialKind === 'Mayor' ? null : scope);
 
   const centersBarangayId =
@@ -203,15 +221,11 @@ export default function OfficialCommandScreen() {
     return (
       <MdrrmoCommandDashboard
         reports={reports}
-        counts={counts}
         reportsError={error}
         reportsLoading={loading}
         reportsRefreshing={refreshing}
         reloadReports={reload}
         refreshReports={refresh}
-        centers={centers}
-        centersError={centersError}
-        refreshCenters={refreshCenters}
       />
     );
   }
@@ -267,18 +281,30 @@ export default function OfficialCommandScreen() {
                   accessibilityLabel="Notifications"
                 >
                   <Ionicons name="notifications-outline" size={21} color={colors.text} />
+                  {notificationUnreadCount > 0 ? (
+                    <View style={styles.headerNotificationDot} />
+                  ) : null}
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={profileName ? styles.commandAvatar : styles.commandRoleBadge}
+                  style={!profileName ? styles.commandRoleBadge : undefined}
                   onPress={() => router.push('/official/settings' as Href)}
                   accessibilityRole="button"
                   accessibilityLabel="Open settings"
                 >
                   {profileLoading ? (
                     <ActivityIndicator color={colors.primary} />
+                  ) : profileName ? (
+                    <ProfileAvatar
+                      avatarPath={profile?.avatar_path}
+                      firstName={profile?.first_name}
+                      lastName={profile?.last_name}
+                      size={44}
+                      style={styles.commandAvatar}
+                      textStyle={styles.commandAvatarText}
+                    />
                   ) : (
-                    <Text style={profileName ? styles.commandAvatarText : styles.commandRoleBadgeText}>
-                      {profileName?.charAt(0).toUpperCase() || 'MDRRMO'}
+                    <Text style={styles.commandRoleBadgeText}>
+                      MDRRMO
                     </Text>
                   )}
                 </TouchableOpacity>
@@ -364,7 +390,7 @@ export default function OfficialCommandScreen() {
                             color={
                               report.status === 'unverified'
                                 ? colors.unverified
-                                : colors.danger
+                                : colors.escalated
                             }
                           />
                           <Text
@@ -401,6 +427,10 @@ export default function OfficialCommandScreen() {
                           >
                             {report.title.trim() || 'Untitled report'}
                           </Text>
+                          <IncidentTypeBadge
+                            incidentType={report.incidentType}
+                            incidentTypeOther={report.incidentTypeOther}
+                          />
                           <Text
                             style={styles.escalationDescription}
                             numberOfLines={3}
@@ -464,15 +494,19 @@ export default function OfficialCommandScreen() {
             officialKind={officialKind}
           />
         </ScrollView>
-        <NotificationsPlaceholder visible={notificationsOpen} onClose={() => setNotificationsOpen(false)} />
+        <NotificationsModal
+          visible={notificationsOpen}
+          onClose={() => setNotificationsOpen(false)}
+          onUnreadCountChange={setNotificationUnreadCount}
+        />
       </SafeAreaView>
     );
   }
 
   if (officialKind === 'Mayor') {
     return (
-      <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-        <StatusBar style="dark" />
+      <SafeAreaView style={styles.container} edges={['bottom']}>
+        <StatusBar style="light" />
         <MayorDashboard
           centers={centers}
           centersError={centersError}
@@ -581,6 +615,10 @@ export default function OfficialCommandScreen() {
                 <Text style={styles.priorityCardTitle} numberOfLines={2}>
                   {report.title.trim() || 'Untitled report'}
                 </Text>
+                <IncidentTypeBadge
+                  incidentType={report.incidentType}
+                  incidentTypeOther={report.incidentTypeOther}
+                />
                 <Text style={styles.priorityCardBody} numberOfLines={2}>
                   {report.description.trim() || 'No description provided.'}
                 </Text>

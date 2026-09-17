@@ -18,8 +18,8 @@ import InteractiveMap, {
   type MapResourceMarker,
   type MapFocusTarget,
 } from '../../components/map/InteractiveMap';
+import HighlightedReportCallout from '../../components/map/HighlightedReportCallout';
 import ReportMapDetailSheet from '../../components/map/ReportMapDetailSheet';
-import ResourceMapDetailSheet from '../../components/map/ResourceMapDetailSheet';
 import EscalatedReportsPanel from '../../components/map/EscalatedReportsPanel';
 import MayorMapPanel from '../../components/map/MayorMapPanel';
 import { ReportEngagementProvider } from '../../components/report/ReportEngagementProvider';
@@ -50,6 +50,7 @@ export default function OfficialMapScreen() {
     reportId?: string | string[];
     resourceId?: string | string[];
   }>();
+  const requestedResourceId = Array.isArray(resourceId) ? resourceId[0] : resourceId;
   const { officialKind, scope } = useOfficialPortal();
   const scopeBarangayId = scope?.barangay_id ?? null;
   const barangayFilter =
@@ -67,9 +68,11 @@ export default function OfficialMapScreen() {
   const { centers } = useEvacuationCenters({ barangayId: barangayFilter });
 
   const [selectedReportIds, setSelectedReportIds] = useState<string[]>([]);
-  const [selectedResource, setSelectedResource] =
-    useState<MapResourceMarker | null>(null);
+  const [highlightedReportId, setHighlightedReportId] = useState<string | null>(null);
   const [focusTarget, setFocusTarget] = useState<MapFocusTarget | null>(null);
+  const [highlightedResourceId, setHighlightedResourceId] = useState<string | null>(
+    requestedResourceId ?? null,
+  );
   const [focusError, setFocusError] = useState<string | null>(null);
   const [layers, setLayers] = useState<MapLayerVisibility>({
     reports: true,
@@ -78,6 +81,7 @@ export default function OfficialMapScreen() {
   });
   const [escalatedPanelCollapsed, setEscalatedPanelCollapsed] = useState(false);
   const [escalatedPanelTranslateY] = useState(() => new Animated.Value(0));
+  const [highlightedReportTranslateY] = useState(() => new Animated.Value(0));
   const [panelDragStartOffset] = useState(() => createMutableNumber());
 
   const scopedMarkers = useMemo(() => {
@@ -92,7 +96,8 @@ export default function OfficialMapScreen() {
   const facilityMarkers = useMemo<MapResourceMarker[]>(
     () =>
       facilities
-        .filter((f) => f.isActive)
+        // Keep inactive facilities off the regular map, but show one when its map action was requested.
+        .filter((f) => f.isActive || f.id === requestedResourceId)
         .filter(
           (f) =>
             Number.isFinite(f.latitude) &&
@@ -107,7 +112,7 @@ export default function OfficialMapScreen() {
           longitude: f.longitude,
           subtitle: facilityTypeLabel(f.type),
         })),
-    [facilities],
+    [facilities, requestedResourceId],
   );
 
   const centerMarkers = useMemo<MapResourceMarker[]>(
@@ -141,6 +146,11 @@ export default function OfficialMapScreen() {
       .filter((marker): marker is MapReportMarker => marker != null);
   }, [scopedMarkers, selectedReportIds]);
 
+  const highlightedReport = useMemo(
+    () => scopedMarkers.find((marker) => marker.id === highlightedReportId) ?? null,
+    [highlightedReportId, scopedMarkers],
+  );
+
   const escalatedReports = useMemo(
     () =>
       scopedMarkers
@@ -154,8 +164,9 @@ export default function OfficialMapScreen() {
 
   const openEscalatedReport = (report: MapReportMarker) => {
     setLayers((current) => ({ ...current, reports: true }));
-    setSelectedResource(null);
-    setSelectedReportIds([report.id]);
+    setSelectedReportIds([]);
+    setHighlightedReportId(report.id);
+    setHighlightedResourceId(null);
     setFocusTarget({
       reportId: report.id,
       latitude: report.latitude,
@@ -168,6 +179,10 @@ export default function OfficialMapScreen() {
     ? Math.max(240, Math.min(windowHeight * 0.7, 430))
     : Math.max(300, Math.min(windowHeight * 0.46, 520));
   const escalatedPanelBottomInset = officialNavMetrics.barHeight + insets.bottom + spacing.lg;
+  const escalatedPanelHiddenOffset = Math.max(
+    0,
+    escalatedPanelHeight - officialNavMetrics.barHeight - insets.bottom,
+  );
   const collapsedPanelOffset = Math.max(
     0,
     escalatedPanelHeight -
@@ -190,11 +205,62 @@ export default function OfficialMapScreen() {
     [collapsedPanelOffset, escalatedPanelTranslateY],
   );
 
+  const handleLayerVisibilityChange = useCallback((nextLayers: MapLayerVisibility) => {
+    setLayers(nextLayers);
+    if (nextLayers.reports) return;
+
+    setHighlightedReportId(null);
+    setSelectedReportIds([]);
+  }, []);
+
+  const handleMapReportSelection = useCallback(
+    (reportIds: string[]) => {
+      setHighlightedResourceId(null);
+
+      if (reportIds.length === 1) {
+        const report = scopedMarkers.find((marker) => marker.id === reportIds[0]);
+        if (!report) return;
+
+        setSelectedReportIds([]);
+        setHighlightedReportId(report.id);
+        return;
+      }
+
+      setHighlightedReportId(null);
+      setSelectedReportIds(reportIds);
+    },
+    [scopedMarkers],
+  );
+
+  const openHighlightedReportDetails = useCallback(() => {
+    if (!highlightedReport) return;
+    setSelectedReportIds([highlightedReport.id]);
+  }, [highlightedReport]);
+
   useEffect(() => {
     escalatedPanelTranslateY.setValue(
       escalatedPanelCollapsed ? collapsedPanelOffset : 0,
     );
   }, [collapsedPanelOffset, escalatedPanelCollapsed, escalatedPanelTranslateY]);
+
+  useEffect(() => {
+    const currentPanelOffset = escalatedPanelCollapsed ? collapsedPanelOffset : 0;
+    Animated.spring(highlightedReportTranslateY, {
+      toValue: highlightedReportId
+        ? Math.max(0, escalatedPanelHiddenOffset - currentPanelOffset)
+        : 0,
+      damping: 22,
+      stiffness: 230,
+      mass: 0.85,
+      useNativeDriver: true,
+    }).start();
+  }, [
+    collapsedPanelOffset,
+    escalatedPanelCollapsed,
+    escalatedPanelHiddenOffset,
+    highlightedReportId,
+    highlightedReportTranslateY,
+  ]);
 
   const escalatedPanelPanResponder = useMemo(
     () =>
@@ -271,8 +337,9 @@ export default function OfficialMapScreen() {
       }
 
       setFocusError(null);
-      setSelectedResource(null);
-      setSelectedReportIds([targetReport.id]);
+      setSelectedReportIds([]);
+      setHighlightedReportId(targetReport.id);
+      setHighlightedResourceId(null);
       setFocusTarget({
         reportId: targetReport.id,
         latitude: targetReport.latitude,
@@ -293,15 +360,18 @@ export default function OfficialMapScreen() {
 
       setFocusError(null);
       setSelectedReportIds([]);
-      setSelectedResource(resource);
-      setFocusTarget({
-        resourceId: resource.id,
-        latitude: resource.latitude,
-        longitude: resource.longitude,
-      });
+      setHighlightedReportId(null);
+      setHighlightedResourceId(resource.id);
+      setLayers((current) => (
+        resource.kind === 'facility'
+          ? { ...current, facilities: true }
+          : { ...current, evacuationCenters: true }
+      ));
+      // Resource navigation should leave the response queue out of the way.
+      settleEscalatedPanel(true);
     }, 0);
     return () => clearTimeout(routeSyncTimer);
-  }, [centerMarkers, facilityMarkers, resourceId]);
+  }, [centerMarkers, facilityMarkers, resourceId, settleEscalatedPanel]);
 
   if (officialKind === 'Mayor') {
     return (
@@ -315,18 +385,28 @@ export default function OfficialMapScreen() {
               evacuationCenters={centerMarkers}
               layerVisibility={layers}
               showLayerFilters
-              layerFiltersTopInset={insets.top + (error || focusError ? 70 : 24)}
+              collapsibleLayerFilters
+              showReportStatusFilters
+              showSearchBar
+              compactLayerFilters
+              searchBarTopInset={insets.top + 12}
+              layerFiltersTopInset={insets.top + (error || focusError ? 126 : 76)}
               showZoomControls={false}
-              onLayerVisibilityChange={setLayers}
-              onReportSelection={(ids) => {
-                setSelectedResource(null);
-                setSelectedReportIds(ids);
-              }}
+              onLayerVisibilityChange={handleLayerVisibilityChange}
+              onReportSelection={handleMapReportSelection}
               onResourceSelection={(resource) => {
                 setSelectedReportIds([]);
-                setSelectedResource(resource);
+                setHighlightedReportId(null);
+                setHighlightedResourceId(resource.id);
+                setFocusTarget({
+                  resourceId: resource.id,
+                  latitude: resource.latitude,
+                  longitude: resource.longitude,
+                });
               }}
               focusTarget={focusTarget}
+              highlightedReportId={highlightedReportId}
+              highlightedResourceId={highlightedResourceId}
             />
             {error || focusError ? (
               <View style={[residentMapStyles.errorBanner, { top: insets.top + spacing.sm }]} pointerEvents="none">
@@ -340,7 +420,14 @@ export default function OfficialMapScreen() {
               residentMapStyles.contributionSheet,
               {
                 height: escalatedPanelHeight,
-                transform: [{ translateY: escalatedPanelTranslateY }],
+                transform: [
+                  {
+                    translateY: Animated.add(
+                      escalatedPanelTranslateY,
+                      highlightedReportTranslateY,
+                    ),
+                  },
+                ],
               },
             ]}
           >
@@ -358,16 +445,19 @@ export default function OfficialMapScreen() {
             />
           </Animated.View>
 
+          {highlightedReport ? (
+            <HighlightedReportCallout
+              report={highlightedReport}
+              bottomOffset={officialNavMetrics.barHeight + insets.bottom + spacing.md}
+              onClose={() => setHighlightedReportId(null)}
+              onOpenDetails={openHighlightedReportDetails}
+            />
+          ) : null}
+
           <ReportMapDetailSheet
             visible={selectedReports.length > 0}
             reports={selectedReports}
-            bottomNavClearance={officialNavMetrics.barHeight + spacing.sm}
             onClose={() => setSelectedReportIds([])}
-          />
-          <ResourceMapDetailSheet
-            visible={selectedResource != null}
-            resource={selectedResource}
-            onClose={() => setSelectedResource(null)}
           />
         </View>
       </ReportEngagementProvider>
@@ -386,18 +476,28 @@ export default function OfficialMapScreen() {
               evacuationCenters={centerMarkers}
               layerVisibility={layers}
               showLayerFilters
-              layerFiltersTopInset={insets.top + (error || focusError ? 70 : 24)}
+              collapsibleLayerFilters
+              showReportStatusFilters
+              showSearchBar
+              compactLayerFilters
+              searchBarTopInset={insets.top + 12}
+              layerFiltersTopInset={insets.top + (error || focusError ? 126 : 76)}
               showZoomControls={false}
-              onLayerVisibilityChange={setLayers}
-              onReportSelection={(ids) => {
-                setSelectedResource(null);
-                setSelectedReportIds(ids);
-              }}
+              onLayerVisibilityChange={handleLayerVisibilityChange}
+              onReportSelection={handleMapReportSelection}
               onResourceSelection={(resource) => {
                 setSelectedReportIds([]);
-                setSelectedResource(resource);
+                setHighlightedReportId(null);
+                setHighlightedResourceId(resource.id);
+                setFocusTarget({
+                  resourceId: resource.id,
+                  latitude: resource.latitude,
+                  longitude: resource.longitude,
+                });
               }}
               focusTarget={focusTarget}
+              highlightedReportId={highlightedReportId}
+              highlightedResourceId={highlightedResourceId}
             />
             {error || focusError ? (
               <View
@@ -416,7 +516,14 @@ export default function OfficialMapScreen() {
               residentMapStyles.contributionSheet,
               {
                 height: escalatedPanelHeight,
-                transform: [{ translateY: escalatedPanelTranslateY }],
+                transform: [
+                  {
+                    translateY: Animated.add(
+                      escalatedPanelTranslateY,
+                      highlightedReportTranslateY,
+                    ),
+                  },
+                ],
               },
             ]}
           >
@@ -438,16 +545,19 @@ export default function OfficialMapScreen() {
             />
           </Animated.View>
 
+          {highlightedReport ? (
+            <HighlightedReportCallout
+              report={highlightedReport}
+              bottomOffset={officialNavMetrics.barHeight + insets.bottom + spacing.md}
+              onClose={() => setHighlightedReportId(null)}
+              onOpenDetails={openHighlightedReportDetails}
+            />
+          ) : null}
+
           <ReportMapDetailSheet
             visible={selectedReports.length > 0}
             reports={selectedReports}
-            bottomNavClearance={officialNavMetrics.barHeight + spacing.sm}
             onClose={() => setSelectedReportIds([])}
-          />
-          <ResourceMapDetailSheet
-            visible={selectedResource != null}
-            resource={selectedResource}
-            onClose={() => setSelectedResource(null)}
           />
         </View>
       </ReportEngagementProvider>
@@ -470,16 +580,27 @@ export default function OfficialMapScreen() {
             evacuationCenters={centerMarkers}
             layerVisibility={layers}
             showLayerFilters
-            onLayerVisibilityChange={setLayers}
-            onReportSelection={(ids) => {
-              setSelectedResource(null);
-              setSelectedReportIds(ids);
-            }}
+            collapsibleLayerFilters
+            showReportStatusFilters
+            showSearchBar
+            compactLayerFilters
+            searchBarTopInset={spacing.md}
+            layerFiltersTopInset={error || focusError ? 120 : 76}
+            onLayerVisibilityChange={handleLayerVisibilityChange}
+            onReportSelection={handleMapReportSelection}
             onResourceSelection={(resource) => {
               setSelectedReportIds([]);
-              setSelectedResource(resource);
+              setHighlightedReportId(null);
+              setHighlightedResourceId(resource.id);
+              setFocusTarget({
+                resourceId: resource.id,
+                latitude: resource.latitude,
+                longitude: resource.longitude,
+              });
             }}
             focusTarget={focusTarget}
+            highlightedReportId={highlightedReportId}
+            highlightedResourceId={highlightedResourceId}
           />
           {error || focusError ? (
             <View style={localStyles.banner} pointerEvents="none">
@@ -488,16 +609,19 @@ export default function OfficialMapScreen() {
           ) : null}
         </View>
 
+        {highlightedReport ? (
+          <HighlightedReportCallout
+            report={highlightedReport}
+            bottomOffset={officialNavMetrics.barHeight + insets.bottom + spacing.md}
+            onClose={() => setHighlightedReportId(null)}
+            onOpenDetails={openHighlightedReportDetails}
+          />
+        ) : null}
+
         <ReportMapDetailSheet
           visible={selectedReports.length > 0}
           reports={selectedReports}
-          bottomNavClearance={officialNavMetrics.barHeight + spacing.sm}
           onClose={() => setSelectedReportIds([])}
-        />
-        <ResourceMapDetailSheet
-          visible={selectedResource != null}
-          resource={selectedResource}
-          onClose={() => setSelectedResource(null)}
         />
       </SafeAreaView>
     </ReportEngagementProvider>

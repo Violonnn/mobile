@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -9,10 +9,9 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  useWindowDimensions,
   View,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { FontAwesome6, Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter, type Href } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -21,10 +20,9 @@ import MdrrmoHeader from './MdrrmoHeader';
 import OfficialReportModal from './OfficialReportModal';
 import { statusLabel } from '../report/ReportDetailCard';
 import { formatPublishedAt } from '../../lib/formatTime';
-import { fetchMyOfficialPublicProfile, type OfficialPublicProfile } from '../../lib/profile';
+import { formatIncidentType } from '../../lib/incidentTypes';
 import type {
   OfficialReportQueueItem,
-  OfficialStatusCounts,
   ReportStatus,
 } from '../../lib/officialReports';
 import { mdrrmoReportsStyles as styles } from '../../styles/screens/mdrrmoReports.styles';
@@ -35,11 +33,11 @@ type QueueSort = 'recent' | 'relevance' | 'oldest';
 
 type Props = {
   reports: OfficialReportQueueItem[];
-  counts: OfficialStatusCounts;
   error: string | null;
   loading: boolean;
   refreshing: boolean;
-  initialStatus: ReportStatus | null;
+  initialStatus: StatusFilter | null;
+  showCommandBack: boolean;
   onRefresh: () => Promise<void>;
   onReload: () => Promise<void>;
 };
@@ -47,7 +45,7 @@ type Props = {
 const STATUS_STEPS: { status: ReportStatus; label: string; color: string }[] = [
   { status: 'unverified', label: 'Unverified', color: '#D92D20' },
   { status: 'verified', label: 'Verified', color: '#169B55' },
-  { status: 'escalated', label: 'Escalated', color: '#F04424' },
+  { status: 'escalated', label: 'Escalated', color: colors.escalated },
   { status: 'resolved', label: 'Resolved', color: '#64748B' },
 ];
 
@@ -68,46 +66,31 @@ function filterLabel(filter: StatusFilter): string {
 
 export default function MdrrmoReportsWorkspace({
   reports,
-  counts,
   error,
   loading,
   refreshing,
   initialStatus,
+  showCommandBack,
   onRefresh,
   onReload,
 }: Props) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { width: windowWidth } = useWindowDimensions();
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(initialStatus ?? 'escalated');
   const [sort, setSort] = useState<QueueSort>('recent');
+  const [draftStatusFilter, setDraftStatusFilter] = useState<StatusFilter>(initialStatus ?? 'escalated');
+  const [draftSort, setDraftSort] = useState<QueueSort>('recent');
   const [searchVisible, setSearchVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterVisible, setFilterVisible] = useState(false);
   const [reportModalVisible, setReportModalVisible] = useState(false);
-  const [officialProfile, setOfficialProfile] = useState<OfficialPublicProfile | null>(null);
+  const [addMenuVisible, setAddMenuVisible] = useState(false);
   const [previousInitialStatus, setPreviousInitialStatus] = useState(initialStatus);
-
-  const compactHeader = windowWidth < 360;
-  const profileInitials = [officialProfile?.first_name, officialProfile?.last_name]
-    .filter((part) => part?.trim())
-    .map((part) => part!.trim().charAt(0).toUpperCase())
-    .join('') || 'M';
 
   if (initialStatus !== previousInitialStatus) {
     setPreviousInitialStatus(initialStatus);
     setStatusFilter(initialStatus ?? 'escalated');
   }
-
-  useEffect(() => {
-    let cancelled = false;
-    void fetchMyOfficialPublicProfile().then((result) => {
-      if (!cancelled) setOfficialProfile(result.profile);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   const filteredReports = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLocaleLowerCase();
@@ -143,6 +126,24 @@ export default function MdrrmoReportsWorkspace({
     router.push(`/official/${reportId}` as Href);
   };
 
+  function openFilters() {
+    // Keep filter changes temporary until the user explicitly applies them.
+    setDraftStatusFilter(statusFilter);
+    setDraftSort(sort);
+    setAddMenuVisible(false);
+    setFilterVisible(true);
+  }
+
+  function closeFilters() {
+    setFilterVisible(false);
+  }
+
+  function applyFilters() {
+    setStatusFilter(draftStatusFilter);
+    setSort(draftSort);
+    setFilterVisible(false);
+  }
+
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <StatusBar style="dark" />
@@ -151,14 +152,19 @@ export default function MdrrmoReportsWorkspace({
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
+        onScrollBeginDrag={() => setAddMenuVisible(false)}
       >
         <MdrrmoHeader
           title="Reports"
+          showCommandBack={showCommandBack}
           right={
             <>
               <TouchableOpacity
                 style={styles.headerAction}
-                onPress={() => setSearchVisible((current) => !current)}
+                onPress={() => {
+                  setAddMenuVisible(false);
+                  setSearchVisible((current) => !current);
+                }}
                 accessibilityRole="button"
                 accessibilityLabel={searchVisible ? 'Close report search' : 'Search reports'}
               >
@@ -166,22 +172,40 @@ export default function MdrrmoReportsWorkspace({
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.headerAction}
-                onPress={() => setFilterVisible(true)}
+                onPress={openFilters}
                 accessibilityRole="button"
                 accessibilityLabel="Filter reports"
               >
-                <Ionicons name="options-outline" size={25} color={colors.text} />
+                <Ionicons name="options-outline" size={25} color={colors.navigationActive} />
               </TouchableOpacity>
-              {!compactHeader ? (
+              <View style={styles.addReportMenuAnchor}>
                 <TouchableOpacity
-                  style={styles.avatar}
-                  onPress={() => router.push('/official/settings' as Href)}
+                  style={styles.headerAction}
+                  onPress={() => setAddMenuVisible((current) => !current)}
                   accessibilityRole="button"
-                  accessibilityLabel="Open settings"
+                  accessibilityLabel="Open report actions"
+                  accessibilityState={{ expanded: addMenuVisible }}
                 >
-                  <Text style={styles.avatarText}>{profileInitials}</Text>
+                  <FontAwesome6 name="plus" size={25} color={colors.navigationActive} />
                 </TouchableOpacity>
-              ) : null}
+
+                {addMenuVisible ? (
+                  <View style={styles.addReportMenu}>
+                    <TouchableOpacity
+                      style={styles.addReportMenuItem}
+                      onPress={() => {
+                        setAddMenuVisible(false);
+                        setReportModalVisible(true);
+                      }}
+                      accessibilityRole="button"
+                      accessibilityLabel="Add a report"
+                    >
+                      <Ionicons name="document-text-outline" size={20} color={colors.navigationActive} />
+                      <Text style={styles.addReportMenuText}>Add a report</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : null}
+              </View>
             </>
           }
         />
@@ -208,80 +232,19 @@ export default function MdrrmoReportsWorkspace({
           </View>
         ) : null}
 
-        <View style={styles.createStrip}>
-          <View style={styles.createCopy}>
-            <Text style={styles.eyebrow}>CREATE</Text>
-            <Text style={styles.createTitle}>Log a verified municipal incident</Text>
-          </View>
-          <TouchableOpacity
-            style={styles.createAction}
-            onPress={() => setReportModalVisible(true)}
-            accessibilityRole="button"
-            accessibilityLabel="Create official report"
-          >
-            <Text style={styles.createActionText}>{compactHeader ? 'New' : 'New report'}</Text>
-            <Ionicons name="add" size={20} color={colors.primary} />
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.pipelineSection}>
-          <View style={styles.sectionHeader}>
-            <View style={styles.sectionTitleGroup}>
-              <Text style={styles.sectionLabel}>REPORT PIPELINE</Text>
-              <Text style={styles.sectionSubtitle}>{counts.total} reports in the municipal workspace</Text>
-            </View>
-            <TouchableOpacity onPress={() => setStatusFilter('all')} accessibilityRole="button">
-              <Text style={styles.linkText}>View all</Text>
-            </TouchableOpacity>
-          </View>
-          <View style={styles.pipelineRow}>
-            {STATUS_STEPS.map((step, index) => {
-              const selected = statusFilter === step.status;
-              return (
-                <TouchableOpacity
-                  key={step.status}
-                  style={styles.pipelineStep}
-                  onPress={() => setStatusFilter(step.status)}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected }}
-                  accessibilityLabel={`Show ${step.label.toLowerCase()} reports`}
-                >
-                  <View style={[styles.pipelineDot, { backgroundColor: step.color }]} />
-                  <Text style={[styles.pipelineValue, { color: step.color }]}>{counts[step.status]}</Text>
-                  <Text
-                    style={[styles.pipelineLabel, selected && styles.pipelineSelected]}
-                    numberOfLines={1}
-                    adjustsFontSizeToFit
-                    minimumFontScale={0.78}
-                  >
-                    {step.label}
-                  </Text>
-                  {index < STATUS_STEPS.length - 1 ? <View style={styles.pipelineStepDivider} /> : null}
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </View>
-
         <View style={styles.queueSection}>
-          <View style={styles.sectionHeader}>
+          <View style={[styles.sectionHeader, styles.queueHeader]}>
             <View style={styles.sectionTitleGroup}>
               <Text style={styles.sectionLabel}>{filterLabel(statusFilter).toUpperCase()}</Text>
               <Text style={styles.sectionSubtitle}>
                 {filteredReports.length} {filteredReports.length === 1 ? 'result' : 'results'} · tap a report to manage it
               </Text>
             </View>
-            <TouchableOpacity style={styles.queueHeaderRight} onPress={() => setFilterVisible(true)}>
-              <Text style={styles.linkText}>
-                {SORT_OPTIONS.find((option) => option.value === sort)?.label ?? 'Newest first'}
-              </Text>
-              <Ionicons name="chevron-down" size={17} color={colors.primary} />
-            </TouchableOpacity>
           </View>
 
           {loading ? (
             <View style={styles.stateBox}>
-              <ActivityIndicator color={colors.primary} />
+              <ActivityIndicator color={colors.navigationActive} />
               <Text style={styles.stateBody}>Loading municipal reports…</Text>
             </View>
           ) : null}
@@ -304,77 +267,64 @@ export default function MdrrmoReportsWorkspace({
             </View>
           ) : null}
 
-          {!loading && !error ? filteredReports.map((report) => {
+          {!loading && !error ? filteredReports.map((report, index) => {
             const accentColor = statusColor(report.status);
             return (
               <TouchableOpacity
                 key={report.id}
-                style={styles.queueCard}
+                style={[
+                  styles.queueCard,
+                  index === 0 && styles.queueCardFirst,
+                  index % 2 === 0 && styles.queueCardOdd,
+                ]}
                 onPress={() => openReport(report.id)}
                 activeOpacity={0.82}
                 accessibilityRole="button"
                 accessibilityLabel={`Open report ${report.title || 'untitled'}`}
               >
-                <View style={styles.queueCardTop}>
+                <View style={styles.mediaFrame}>
+                  {report.firstPhotoUrl ? (
+                    <Image source={{ uri: report.firstPhotoUrl }} style={styles.media} resizeMode="cover" />
+                  ) : (
+                    <View style={styles.mediaPlaceholder}>
+                      <Ionicons name="document-text-outline" size={24} color={colors.textMuted} />
+                      <Text style={styles.mediaPlaceholderText}>No photo</Text>
+                    </View>
+                  )}
+                </View>
+
+                <View style={styles.reportCopy}>
                   <View style={styles.statusRow}>
                     <View style={[styles.statusDot, { backgroundColor: accentColor }]} />
-                    <Text style={[styles.statusText, { color: accentColor }]}>{statusLabel(report.status).toUpperCase()}</Text>
-                  </View>
-                  <Text style={styles.timeText}>{formatPublishedAt(report.createdAt)}</Text>
-                </View>
-
-                <View style={styles.reportMainRow}>
-                  <View style={styles.mediaFrame}>
-                    {report.firstPhotoUrl ? (
-                      <Image source={{ uri: report.firstPhotoUrl }} style={styles.media} resizeMode="cover" />
-                    ) : (
-                      <View style={styles.mediaPlaceholder}>
-                        <Ionicons name="document-text-outline" size={26} color={colors.textMuted} />
-                        <Text style={styles.mediaPlaceholderText}>No photo</Text>
-                      </View>
-                    )}
-                    {report.mediaCount > 0 ? (
-                      <View style={styles.mediaCount}>
-                        <Ionicons name="images-outline" size={12} color={colors.white} />
-                        <Text style={styles.mediaCountText}>{report.mediaCount}</Text>
-                      </View>
-                    ) : null}
+                    <Text style={[styles.statusText, { color: accentColor }]}>
+                      {statusLabel(report.status).toUpperCase()}
+                    </Text>
+                    <Text style={styles.statusSeparator}>·</Text>
+                    <Text style={styles.timeText}>{formatPublishedAt(report.createdAt)}</Text>
                   </View>
 
-                  <View style={styles.reportCopy}>
-                    <Text style={styles.reportTitle} numberOfLines={2}>
-                      {report.title.trim() || 'Untitled report'}
-                    </Text>
-                    <Text style={styles.reportDescription} numberOfLines={2}>
-                      {report.description.trim() || 'No description provided.'}
-                    </Text>
-                    <View style={styles.metaRow}>
-                      <Ionicons name="location-outline" size={16} color={colors.primary} />
-                      <Text style={styles.metaText} numberOfLines={2}>
-                        {report.addressText || report.barangayName || 'Location unavailable'}
+                  <Text style={styles.reportTitle} numberOfLines={2}>
+                    {report.title.trim() || 'Untitled report'}
+                  </Text>
+                  <Text style={styles.reportLocation} numberOfLines={1}>
+                    {report.addressText || report.barangayName || 'Location unavailable'}
+                  </Text>
+
+                  <View style={styles.cardFooter}>
+                    <View style={styles.attachmentMeta}>
+                      <View style={styles.attachmentCount}>
+                        <Ionicons name="images-outline" size={16} color={colors.navigationActive} />
+                        <Text style={styles.attachmentCountText}>{report.mediaCount}</Text>
+                      </View>
+                      <View style={styles.attachmentDivider} />
+                      <Text style={styles.incidentTypeText} numberOfLines={1}>
+                        {formatIncidentType(report.incidentType, report.incidentTypeOther)}
                       </Text>
                     </View>
-                    <View style={styles.metaRow}>
-                      <Ionicons name="person-outline" size={16} color={colors.textMuted} />
-                      <Text style={styles.metaText} numberOfLines={1}>{report.reporterName}</Text>
+                    <View style={styles.reviewAction}>
+                      <Text style={styles.reviewActionText}>View</Text>
+                      <Ionicons name="chevron-forward" size={21} color={colors.navigationActive} />
                     </View>
-                  </View>
-                </View>
-
-                <View style={styles.cardFooter}>
-                  <View style={styles.engagementGroup}>
-                    <View style={styles.engagementItem}>
-                      <Ionicons name="arrow-up-outline" size={17} color={colors.textMuted} />
-                      <Text style={styles.engagementText}>{report.upvoteCount}</Text>
-                    </View>
-                    <View style={styles.engagementItem}>
-                      <Ionicons name="chatbubble-outline" size={16} color={colors.textMuted} />
-                      <Text style={styles.engagementText}>{report.commentCount}</Text>
-                    </View>
-                  </View>
-                  <View style={styles.reviewAction}>
-                    <Text style={styles.reviewActionText}>Review report</Text>
-                    <Ionicons name="arrow-forward" size={18} color={colors.primary} />
                   </View>
                 </View>
               </TouchableOpacity>
@@ -383,14 +333,19 @@ export default function MdrrmoReportsWorkspace({
         </View>
       </ScrollView>
 
-      <Modal visible={filterVisible} transparent animationType="slide" onRequestClose={() => setFilterVisible(false)}>
+      <Modal
+        visible={filterVisible}
+        transparent
+        animationType="fade"
+        hardwareAccelerated
+        onRequestClose={closeFilters}
+      >
         <View style={styles.modalOverlay}>
-          <Pressable style={styles.modalBackdrop} onPress={() => setFilterVisible(false)} />
+          <Pressable style={styles.modalBackdrop} onPress={closeFilters} />
           <View style={[styles.filterSheet, { paddingBottom: Math.max(insets.bottom, 24) }]}>
-            <View style={styles.sheetHandle} />
             <View style={styles.sheetHeader}>
               <Text style={styles.sheetTitle}>Report filters</Text>
-              <TouchableOpacity onPress={() => setFilterVisible(false)} accessibilityLabel="Close filters">
+              <TouchableOpacity onPress={closeFilters} accessibilityLabel="Close filters">
                 <Ionicons name="close" size={24} color={colors.text} />
               </TouchableOpacity>
             </View>
@@ -400,10 +355,12 @@ export default function MdrrmoReportsWorkspace({
                 {([{ value: 'all', label: 'All' }, ...STATUS_STEPS.map((step) => ({ value: step.status, label: step.label }))] as { value: StatusFilter; label: string }[]).map((option) => (
                   <TouchableOpacity
                     key={option.value}
-                    style={[styles.filterChoice, statusFilter === option.value && styles.filterChoiceActive]}
-                    onPress={() => setStatusFilter(option.value)}
+                    style={[styles.filterChoice, draftStatusFilter === option.value && styles.filterChoiceActive]}
+                    onPress={() => setDraftStatusFilter(option.value)}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: draftStatusFilter === option.value }}
                   >
-                    <Text style={[styles.filterChoiceText, statusFilter === option.value && styles.filterChoiceTextActive]}>{option.label}</Text>
+                    <Text style={[styles.filterChoiceText, draftStatusFilter === option.value && styles.filterChoiceTextActive]}>{option.label}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -414,15 +371,17 @@ export default function MdrrmoReportsWorkspace({
                 {SORT_OPTIONS.map((option) => (
                   <TouchableOpacity
                     key={option.value}
-                    style={[styles.filterChoice, sort === option.value && styles.filterChoiceActive]}
-                    onPress={() => setSort(option.value)}
+                    style={[styles.filterChoice, draftSort === option.value && styles.filterChoiceActive]}
+                    onPress={() => setDraftSort(option.value)}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: draftSort === option.value }}
                   >
-                    <Text style={[styles.filterChoiceText, sort === option.value && styles.filterChoiceTextActive]}>{option.label}</Text>
+                    <Text style={[styles.filterChoiceText, draftSort === option.value && styles.filterChoiceTextActive]}>{option.label}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
             </View>
-            <TouchableOpacity style={styles.applyButton} onPress={() => setFilterVisible(false)}>
+            <TouchableOpacity style={styles.applyButton} onPress={applyFilters}>
               <Text style={styles.applyButtonText}>Apply filters</Text>
             </TouchableOpacity>
           </View>

@@ -206,7 +206,7 @@ export const officialStyles = StyleSheet.create({
   },
   filterChipStatusEscalated: {
     backgroundColor: '#FFEDD5',
-    borderColor: colors.danger,
+    borderColor: colors.escalated,
   },
   filterChipStatusResolved: {
     backgroundColor: '#E5E7EB',
@@ -314,6 +314,73 @@ export const officialStyles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: spacing.md,
   },
+  mayorHeroHeader: {
+    minHeight: 72,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  mayorHeroIdentity: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  mayorHeroSeal: {
+    width: 64,
+    height: 64,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    borderRadius: 32,
+    backgroundColor: 'rgba(255, 255, 255, 0.94)',
+  },
+  mayorHeroSealImage: {
+    width: 64,
+    height: 64,
+  },
+  mayorHeroCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  mayorHeroGreeting: {
+    fontFamily: fonts.regular,
+    fontSize: 13,
+    lineHeight: 17,
+    color: 'rgba(255, 255, 255, 0.84)',
+  },
+  mayorHeroName: {
+    fontFamily: fonts.extrabold,
+    fontSize: 26,
+    lineHeight: 31,
+    letterSpacing: -0.8,
+    color: colors.white,
+  },
+  mayorHeroLocation: {
+    marginTop: 3,
+    fontFamily: fonts.medium,
+    fontSize: 8,
+    letterSpacing: 1.75,
+    color: 'rgba(255, 255, 255, 0.68)',
+  },
+  mayorHeroNotification: {
+    position: 'relative',
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mayorHeroNotificationDot: {
+    position: 'absolute',
+    top: 4,
+    right: 3,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#E14348',
+  },
   headerIdentity: {
     flex: 1,
     flexDirection: 'row',
@@ -352,6 +419,15 @@ export const officialStyles = StyleSheet.create({
     fontSize: fontSizes.sm,
     color: colors.textMuted,
   },
+  screenTitleOverlay: {
+    color: colors.white,
+    textShadowColor: 'rgba(0, 0, 0, 0.24)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+  screenSubtitleOverlay: {
+    color: 'rgba(255, 255, 255, 0.78)',
+  },
   headerLogoutButton: {
     minHeight: 44,
     minWidth: 44,
@@ -365,11 +441,24 @@ export const officialStyles = StyleSheet.create({
     justifyContent: 'center',
   },
   headerNotificationButton: {
+    position: 'relative',
     minHeight: 44,
     minWidth: 44,
     borderRadius: radius.full,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  headerNotificationDot: {
+    position: 'absolute',
+    top: 5,
+    right: 4,
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+    backgroundColor: '#E14348',
+  },
+  headerControlOverlay: {
+    backgroundColor: 'rgba(7, 24, 39, 0.24)',
   },
   headerLogoutText: {
     fontFamily: fonts.semibold,
@@ -473,6 +562,10 @@ export const officialStyles = StyleSheet.create({
     fontSize: fontSizes.md,
     color: colors.primary,
   },
+  commandAvatarOverlay: {
+    borderColor: 'rgba(255, 255, 255, 0.48)',
+    backgroundColor: 'rgba(7, 24, 39, 0.38)',
+  },
   commandRoleBadge: {
     minWidth: 52,
     height: 44,
@@ -488,6 +581,13 @@ export const officialStyles = StyleSheet.create({
     fontFamily: fonts.bold,
     fontSize: 9,
     color: colors.themeSoft,
+  },
+  commandRoleBadgeOverlay: {
+    borderColor: 'rgba(255, 255, 255, 0.48)',
+    backgroundColor: 'rgba(7, 24, 39, 0.38)',
+  },
+  commandControlTextOverlay: {
+    color: colors.white,
   },
   inlineErrorRow: {
     flexDirection: 'row',
@@ -571,7 +671,7 @@ export const officialStyles = StyleSheet.create({
     flexShrink: 1,
     fontFamily: fonts.semibold,
     fontSize: fontSizes.xs,
-    color: colors.danger,
+    color: colors.escalated,
   },
   // Extra attachment count — large, bottom-right of the media.
   escalationAttachmentBadge: {
@@ -705,7 +805,7 @@ export const officialStyles = StyleSheet.create({
     color: '#16A34A',
   },
   statusTextEscalated: {
-    color: colors.danger,
+    color: colors.escalated,
   },
   statusTextResolved: {
     color: '#4B5563',
@@ -1219,20 +1319,20 @@ export const officialStyles = StyleSheet.create({
     color: '#526078',
   },
   resourceDirectoryAdd: {
-    flexDirection: 'row',
+    width: 44,
     alignItems: 'center',
-    gap: spacing.xs,
     minHeight: 44,
-  },
-  resourceDirectoryAddText: {
-    fontFamily: fonts.medium,
-    fontSize: fontSizes.md,
-    color: colors.primary,
+    justifyContent: 'center',
   },
   resourceDirectoryTabs: {
+    marginTop: -spacing.md,
     gap: 0,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: '#CBD5E1',
+  },
+  resourceDirectorySection: {
+    marginTop: -spacing.lg,
+    gap: 0,
   },
   resourceDirectoryTab: {
     flex: 1,
@@ -1300,8 +1400,8 @@ export const officialStyles = StyleSheet.create({
     backgroundColor: colors.white,
   },
   resourceFilterChipActive: {
-    borderColor: colors.primary,
-    backgroundColor: colors.primaryLight,
+    borderColor: colors.navigationActive,
+    backgroundColor: colors.navigationActive,
   },
   resourceFilterChipText: {
     fontFamily: fonts.medium,
@@ -1309,16 +1409,16 @@ export const officialStyles = StyleSheet.create({
     color: colors.textMuted,
   },
   resourceFilterChipTextActive: {
-    color: colors.primary,
+    color: colors.white,
   },
   resourceDirectoryRecord: {
     position: 'relative',
-    minHeight: 150,
-    paddingVertical: spacing.lg,
+    paddingTop: spacing.xs,
+    paddingBottom: spacing.sm,
     paddingHorizontal: spacing.xs,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: '#CBD5E1',
-    gap: spacing.sm,
+    gap: 2,
     backgroundColor: colors.white,
     zIndex: 1,
   },
@@ -1335,7 +1435,7 @@ export const officialStyles = StyleSheet.create({
     minWidth: 0,
     fontFamily: fonts.bold,
     fontSize: fontSizes.md,
-    lineHeight: 22,
+    lineHeight: 20,
     color: colors.text,
   },
   resourceDirectoryStatus: {
@@ -1363,14 +1463,8 @@ export const officialStyles = StyleSheet.create({
     paddingRight: spacing.xl,
     fontFamily: fonts.regular,
     fontSize: fontSizes.sm,
-    lineHeight: 20,
+    lineHeight: 18,
     color: '#62708A',
-  },
-  resourceDirectoryMapLink: {
-    width: 40,
-    height: 36,
-    alignItems: 'flex-start',
-    justifyContent: 'center',
   },
   resourceDirectoryMenu: {
     position: 'absolute',

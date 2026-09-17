@@ -25,6 +25,8 @@ import { changeOfficialPassword } from '../../lib/officialPassword';
 import type { OfficialPublicProfile } from '../../lib/profile';
 import { mdrrmoSettingsStyles as styles } from '../../styles/screens/mdrrmoSettings.styles';
 import { colors } from '../../styles/theme';
+import ProfileAvatar from '../profile/ProfileAvatar';
+import ProfilePhotoModal from '../profile/ProfilePhotoModal';
 
 type LegalDocument = 'privacy' | 'terms' | null;
 type IoniconName = keyof typeof Ionicons.glyphMap;
@@ -34,6 +36,7 @@ type Props = {
   profileError: string | null;
   profileLoading: boolean;
   onRetryProfile: () => void;
+  onAvatarChanged: (avatarPath: string | null) => void;
   roleVariant?: 'mdrrmo' | 'mayor';
 };
 
@@ -131,6 +134,7 @@ export default function MdrrmoSettingsWorkspace({
   profileError,
   profileLoading,
   onRetryProfile,
+  onAvatarChanged,
   roleVariant = 'mdrrmo',
 }: Props) {
   const router = useRouter();
@@ -140,6 +144,7 @@ export default function MdrrmoSettingsWorkspace({
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [legalDocument, setLegalDocument] = useState<LegalDocument>(null);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [profilePhotoVisible, setProfilePhotoVisible] = useState(false);
   const compactHero = windowWidth < 380;
 
   const version = Constants.expoConfig?.version || 'Unavailable';
@@ -222,9 +227,21 @@ export default function MdrrmoSettingsWorkspace({
           <View style={styles.hero}>
             <View style={styles.contourOne} pointerEvents="none" />
             <View style={styles.contourTwo} pointerEvents="none" />
-            <View style={styles.heroAvatar}>
-              <Text style={styles.heroAvatarText}>{initials(profile)}</Text>
-            </View>
+            <TouchableOpacity
+              onPress={() => setProfilePhotoVisible(true)}
+              accessibilityRole="button"
+              accessibilityLabel="View profile picture"
+            >
+              <ProfileAvatar
+                avatarPath={profile?.avatar_path}
+                firstName={profile?.first_name}
+                lastName={profile?.last_name}
+                fallback={initials(profile)}
+                size={72}
+                style={styles.heroAvatar}
+                textStyle={styles.heroAvatarText}
+              />
+            </TouchableOpacity>
             <View style={styles.heroCopy}>
               <Text style={styles.heroName} numberOfLines={2}>{name}</Text>
               <Text style={styles.heroRole}>
@@ -261,6 +278,12 @@ export default function MdrrmoSettingsWorkspace({
 
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>{isMayor ? 'EXECUTIVE WORKSPACE' : 'WORKSPACE'}</Text>
+          <SettingsRow
+            icon="person-circle-outline"
+            title="Profile picture"
+            subtitle="View, change, or remove your photo"
+            onPress={() => setProfilePhotoVisible(true)}
+          />
           <SettingsRow icon="location-outline" title="Default area" subtitle="Minglanilla" />
           <SettingsRow
             icon="locate-outline"
@@ -353,6 +376,16 @@ export default function MdrrmoSettingsWorkspace({
         onAccept={() => setLegalDocument(null)}
         onClose={() => setLegalDocument(null)}
       />
+      {profile ? (
+        <ProfilePhotoModal
+          visible={profilePhotoVisible}
+          firstName={profile.first_name}
+          lastName={profile.last_name}
+          avatarPath={profile.avatar_path}
+          onClose={() => setProfilePhotoVisible(false)}
+          onChanged={onAvatarChanged}
+        />
+      ) : null}
     </SafeAreaView>
   );
 }

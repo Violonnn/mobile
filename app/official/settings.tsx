@@ -25,6 +25,8 @@ import LegalModal, {
 } from '../../components/register/LegalModal';
 import MdrrmoHeader from '../../components/official/MdrrmoHeader';
 import MdrrmoSettingsWorkspace from '../../components/official/MdrrmoSettingsWorkspace';
+import ProfileAvatar from '../../components/profile/ProfileAvatar';
+import ProfilePhotoModal from '../../components/profile/ProfilePhotoModal';
 import { officialStyles as styles } from '../../styles/screens/official.styles';
 import { colors } from '../../styles/theme';
 
@@ -58,6 +60,7 @@ export default function OfficialSettingsScreen() {
   const [profileLoading, setProfileLoading] = useState(true);
   const [loggingOut, setLoggingOut] = useState(false);
   const [legalDocument, setLegalDocument] = useState<LegalDocument>(null);
+  const [profilePhotoVisible, setProfilePhotoVisible] = useState(false);
 
   const loadProfile = useCallback(async () => {
     setProfileLoading(true);
@@ -154,6 +157,11 @@ export default function OfficialSettingsScreen() {
         profileError={profileError}
         profileLoading={profileLoading}
         onRetryProfile={() => void loadProfile()}
+        onAvatarChanged={(avatarPath) => {
+          setProfile((currentProfile) =>
+            currentProfile ? { ...currentProfile, avatar_path: avatarPath } : currentProfile,
+          );
+        }}
         roleVariant={officialKind === 'Mayor' ? 'mayor' : 'mdrrmo'}
       />
     );
@@ -186,9 +194,21 @@ export default function OfficialSettingsScreen() {
 
         <View style={styles.card}>
           <View style={styles.settingsIdentityRow}>
-            <View style={styles.initialAvatar}>
-              <Text style={styles.initialAvatarText}>{initialsFromName(name)}</Text>
-            </View>
+            <TouchableOpacity
+              onPress={() => setProfilePhotoVisible(true)}
+              accessibilityRole="button"
+              accessibilityLabel="View profile picture"
+            >
+              <ProfileAvatar
+                avatarPath={profile?.avatar_path}
+                firstName={profile?.first_name}
+                lastName={profile?.last_name}
+                fallback={initialsFromName(name)}
+                size={52}
+                style={styles.initialAvatar}
+                textStyle={styles.initialAvatarText}
+              />
+            </TouchableOpacity>
             <View style={{ flex: 1 }}>
               <Text style={styles.scopeValue}>
                 {name || `${officialKind} account`}
@@ -212,6 +232,28 @@ export default function OfficialSettingsScreen() {
             </View>
           ) : null}
         </View>
+
+        {profile ? (
+          <View style={styles.settingsSection}>
+            <Text style={styles.sectionTitle}>Account</Text>
+            <View style={styles.card}>
+              <TouchableOpacity
+                style={styles.settingsAction}
+                onPress={() => setProfilePhotoVisible(true)}
+                accessibilityRole="button"
+                accessibilityLabel="View profile picture"
+              >
+                <View style={styles.settingsActionCopy}>
+                  <Text style={styles.settingsActionTitle}>Profile picture</Text>
+                  <Text style={styles.settingsActionMeta}>
+                    View, change, or remove your photo
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : null}
 
         <View style={styles.settingsSection}>
           <Text style={styles.sectionTitle}>Help and legal</Text>
@@ -297,6 +339,18 @@ export default function OfficialSettingsScreen() {
         onAccept={() => setLegalDocument(null)}
         onClose={() => setLegalDocument(null)}
       />
+      {profile ? (
+        <ProfilePhotoModal
+          visible={profilePhotoVisible}
+          firstName={profile.first_name}
+          lastName={profile.last_name}
+          avatarPath={profile.avatar_path}
+          onClose={() => setProfilePhotoVisible(false)}
+          onChanged={(avatarPath) => {
+            setProfile({ ...profile, avatar_path: avatarPath });
+          }}
+        />
+      ) : null}
     </SafeAreaView>
   );
 }

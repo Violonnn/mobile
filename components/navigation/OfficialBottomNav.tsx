@@ -1,6 +1,7 @@
 // components/navigation/OfficialBottomNav.tsx
 // Role-aware official portal bottom bar.
-// BDRRMO/MDRRMO: Command, Community, centered Reports, Map, Settings
+// BDRRMO: Command, Community, centered Reports, Map, Settings
+// MDRRMO: Command, Community, Map, Settings
 // Mayor: Brief, Situations, Community, Map, Settings
 
 import React, { useCallback, memo, useMemo, useState } from 'react';
@@ -60,15 +61,17 @@ function tabsForRole(isMayor: boolean): TabConfig[] {
   ];
 }
 
-const MDRRMO_LEFT_TABS: TabConfig[] = [
+const OPERATIONAL_LEFT_TABS: TabConfig[] = [
   { name: 'index', label: 'Command', activeIcon: 'grid', inactiveIcon: 'grid-outline' },
   { name: 'community', label: 'Community', activeIcon: 'people', inactiveIcon: 'people-outline' },
 ];
 
-const MDRRMO_RIGHT_TABS: TabConfig[] = [
+const OPERATIONAL_RIGHT_TABS: TabConfig[] = [
   { name: 'map', label: 'Map', activeIcon: 'map', inactiveIcon: 'map-outline' },
   { name: 'settings', label: 'Settings', activeIcon: 'settings', inactiveIcon: 'settings-outline' },
 ];
+
+const MDRRMO_TABS = [...OPERATIONAL_LEFT_TABS, ...OPERATIONAL_RIGHT_TABS];
 
 function triggerHaptic() {
   Haptics.selectionAsync().catch(() => {});
@@ -221,7 +224,7 @@ export default function OfficialBottomNav({
       >
         <View style={[styles.bar, { height: officialNavMetrics.barHeight + insets.bottom }]}>
           <View style={styles.row}>
-            {MDRRMO_LEFT_TABS.map((tab) => (
+            {(isMdrrmo ? MDRRMO_TABS : OPERATIONAL_LEFT_TABS).map((tab) => (
               <NavItem
                 key={tab.name}
                 config={tab}
@@ -232,17 +235,21 @@ export default function OfficialBottomNav({
                 onPress={() => navigateTo(tab.name)}
               />
             ))}
-            <View style={styles.centerSlot} />
-            {MDRRMO_RIGHT_TABS.map((tab) => (
-              <NavItem
-                key={tab.name}
-                config={tab}
-                focused={currentRouteName === tab.name}
-                onPress={() => navigateTo(tab.name)}
-              />
-            ))}
+            {isBdrrmo ? <View style={styles.centerSlot} /> : null}
+            {isBdrrmo
+              ? OPERATIONAL_RIGHT_TABS.map((tab) => (
+                  <NavItem
+                    key={tab.name}
+                    config={tab}
+                    focused={currentRouteName === tab.name}
+                    onPress={() => navigateTo(tab.name)}
+                  />
+                ))
+              : null}
           </View>
-          <IncidentCenterButton onPress={() => navigateTo('incidents')} label="Report" />
+          {isBdrrmo ? (
+            <IncidentCenterButton onPress={() => navigateTo('incidents')} label="Report" />
+          ) : null}
         </View>
       </View>
     );

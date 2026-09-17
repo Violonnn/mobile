@@ -22,6 +22,7 @@ import { useOfficialPortal } from '../../context/OfficialPortalContext';
 import { useOfficialReportQueue } from '../../hooks/useOfficialReports';
 import MdrrmoHeader from '../../components/official/MdrrmoHeader';
 import { statusLabel } from '../../components/report/ReportDetailCard';
+import IncidentTypeBadge from '../../components/report/IncidentTypeBadge';
 import { formatPublishedAt } from '../../lib/formatTime';
 import type { ReportStatus } from '../../lib/officialReports';
 import MayorSituations from '../../components/official/MayorSituations';
@@ -36,9 +37,10 @@ function defaultFilter(kind: string | null): StatusFilter {
   return 'all';
 }
 
-function routeStatus(value: string | string[] | undefined): ReportStatus | null {
+function routeStatus(value: string | string[] | undefined): StatusFilter | null {
   const candidate = Array.isArray(value) ? value[0] : value;
   if (
+    candidate === 'all' ||
     candidate === 'unverified' ||
     candidate === 'verified' ||
     candidate === 'escalated' ||
@@ -89,11 +91,15 @@ const FILTERS: { key: StatusFilter; label: string }[] = [
 
 export default function OfficialIncidentsScreen() {
   const router = useRouter();
-  const { status } = useLocalSearchParams<{ status?: string | string[] }>();
+  const { status, from } = useLocalSearchParams<{
+    status?: string | string[];
+    from?: string | string[];
+  }>();
   const { scope, officialKind, loading: scopeLoading, error: scopeError } =
     useOfficialPortal();
 
   const requestedStatus = routeStatus(status);
+  const openedFromCommand = (Array.isArray(from) ? from[0] : from) === 'command';
   const [statusFilter, setStatusFilter] = useState<StatusFilter | null>(requestedStatus);
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState<OfficialReportSort>('recent');
@@ -109,7 +115,7 @@ export default function OfficialIncidentsScreen() {
   }
 
   const activeFilter = statusFilter ?? defaultFilter(officialKind);
-  const { reports, counts, error, loading, refreshing, refresh, reload } =
+  const { reports, error, loading, refreshing, refresh, reload } =
     useOfficialReportQueue(officialKind === 'Mayor' ? null : scope);
 
   const filtered = useMemo(() => {
@@ -179,11 +185,11 @@ export default function OfficialIncidentsScreen() {
     return (
       <MdrrmoReportsWorkspace
         reports={reports}
-        counts={counts}
         error={error}
         loading={loading}
         refreshing={refreshing}
         initialStatus={routeStatus(status)}
+        showCommandBack={openedFromCommand}
         onRefresh={refresh}
         onReload={reload}
       />
@@ -412,6 +418,10 @@ export default function OfficialIncidentsScreen() {
                   </Text>
                 </View>
               </View>
+              <IncidentTypeBadge
+                incidentType={report.incidentType}
+                incidentTypeOther={report.incidentTypeOther}
+              />
               <Text style={styles.queueMeta} numberOfLines={2}>
                 {report.description.trim() || 'No description provided.'}
               </Text>
