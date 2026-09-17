@@ -1,6 +1,6 @@
 begin;
 
-select plan(35);
+select plan(43);
 
 -- Isolated identity, barangay, and content fixtures for RLS verification.
 insert into auth.users (
@@ -220,6 +220,84 @@ select throws_ok(
   '42501',
   'A reverified report cannot be escalated again.',
   'BDRRMO cannot escalate a reverified report again'
+);
+
+-- Private evidence buckets enforce the same outer limits as trusted functions.
+select is(
+  (select file_size_limit from storage.buckets where id = 'report-media'),
+  20971520::bigint,
+  'report media rejects objects larger than 20 MB'
+);
+select is(
+  (select public from storage.buckets where id = 'report-media'),
+  false,
+  'report evidence remains private'
+);
+select ok(
+  (select allowed_mime_types @> array['image/jpeg', 'video/mp4', 'video/quicktime']::text[]
+   from storage.buckets where id = 'announcement-media'),
+  'announcement media deliberately allows optimized images and supported videos'
+);
+select is(
+  (select public from storage.buckets where id = 'announcement-media'),
+  false,
+  'announcement evidence remains private'
+);
+
+-- Report creation must commit feed-ready media metadata together with the report.
+reset role;
+select lives_ok(
+  $$select public.create_report_with_media(
+    'e1000000-0000-4000-8000-000000000007',
+    'e3000000-0000-4000-8000-000000000003',
+    'Resident metadata test',
+    'Resident media metadata is written atomically.',
+    10.25,
+    123.80,
+    'Permission test location',
+    '[{"id":"e8000000-0000-4000-8000-000000000001","type":"photo","storagePath":"e1000000-0000-4000-8000-000000000007/e3000000-0000-4000-8000-000000000003/e8000000-0000-4000-8000-000000000001/original.jpg","thumbnailStoragePath":"e1000000-0000-4000-8000-000000000007/e3000000-0000-4000-8000-000000000003/e8000000-0000-4000-8000-000000000001/thumbnail.jpg","displayStoragePath":"e1000000-0000-4000-8000-000000000007/e3000000-0000-4000-8000-000000000003/e8000000-0000-4000-8000-000000000001/display.jpg","fileSizeBytes":524288,"width":1280,"height":720}]'::jsonb,
+    'e2000000-0000-4000-8000-000000000001',
+    'fire',
+    null,
+    10.25,
+    123.80,
+    10.0
+  )$$,
+  'resident report creation accepts verified derivative metadata'
+);
+select is(
+  (
+    select concat_ws('|', thumbnail_storage_path, display_storage_path, file_size_bytes, width, height)
+    from public.report_media
+    where id = 'e8000000-0000-4000-8000-000000000001'
+  ),
+  'e1000000-0000-4000-8000-000000000007/e3000000-0000-4000-8000-000000000003/e8000000-0000-4000-8000-000000000001/thumbnail.jpg|e1000000-0000-4000-8000-000000000007/e3000000-0000-4000-8000-000000000003/e8000000-0000-4000-8000-000000000001/display.jpg|524288|1280|720',
+  'resident media row is immediately feed-ready when the RPC returns'
+);
+select lives_ok(
+  $$select public.create_official_report_with_media(
+    'e1000000-0000-4000-8000-000000000004',
+    'e3000000-0000-4000-8000-000000000004',
+    'Official metadata test',
+    'Official media metadata is written atomically.',
+    10.25,
+    123.80,
+    'Permission test location',
+    '[{"id":"e8000000-0000-4000-8000-000000000002","type":"video","storagePath":"e1000000-0000-4000-8000-000000000004/e3000000-0000-4000-8000-000000000004/e8000000-0000-4000-8000-000000000002/original.mp4","thumbnailStoragePath":"e1000000-0000-4000-8000-000000000004/e3000000-0000-4000-8000-000000000004/e8000000-0000-4000-8000-000000000002/thumbnail.jpg","durationSeconds":8,"fileSizeBytes":2097152,"width":1920,"height":1080}]'::jsonb,
+    null,
+    'fire',
+    null
+  )$$,
+  'official report creation accepts verified derivative metadata'
+);
+select is(
+  (
+    select concat_ws('|', thumbnail_storage_path, file_size_bytes, width, height)
+    from public.report_media
+    where id = 'e8000000-0000-4000-8000-000000000002'
+  ),
+  'e1000000-0000-4000-8000-000000000004/e3000000-0000-4000-8000-000000000004/e8000000-0000-4000-8000-000000000002/thumbnail.jpg|2097152|1920|1080',
+  'official video poster is immediately feed-ready when the RPC returns'
 );
 
 select * from finish();
