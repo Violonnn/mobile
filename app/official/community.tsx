@@ -29,13 +29,18 @@ import MdrrmoHeader from '../../components/official/MdrrmoHeader';
 import { createOfficialAnnouncement } from '../../lib/announcements';
 import { ResourceManagementContent } from './resources';
 import AnnouncementComposerModal from '../../components/official/AnnouncementComposerModal';
-import type { AnnouncementDraftMedia } from '../../lib/announcementMedia';
+import {
+  pickAnnouncementMedia,
+  validateAnnouncementMedia,
+  type AnnouncementDraftMedia,
+} from '../../lib/announcementMedia';
 import { fetchMyOfficialPublicProfile, type OfficialPublicProfile } from '../../lib/profile';
 import OfficialAnnouncementPostCard from '../../components/official/OfficialAnnouncementPostCard';
 import OfficialReportPostCard from '../../components/official/OfficialReportPostCard';
 import MdrrmoCommunityFeed from '../../components/official/MdrrmoCommunityFeed';
 import { AnnouncementEngagementProvider } from '../../components/official/AnnouncementEngagementProvider';
 import { ReportEngagementProvider } from '../../components/report/ReportEngagementProvider';
+import ProfileAvatar from '../../components/profile/ProfileAvatar';
 
 const PAGE_SIZE = 5;
 // How close to the bottom (px) before we reveal the next batch of reports.
@@ -59,27 +64,41 @@ function BdrrmoCommunitySectionSwitch({ showingResources, onSelect }: {
 
 export default function OfficialCommunityScreen() {
   const router = useRouter();
-  const { section, compose } = useLocalSearchParams<{
+  const { section, compose, feed, from } = useLocalSearchParams<{
     section?: string | string[];
     compose?: string | string[];
+    feed?: string | string[];
+    from?: string | string[];
   }>();
   const { scope, officialKind, loading: scopeLoading, error: scopeError } =
     useOfficialPortal();
-  const { announcements, error, loading, refreshing, refresh, reload } =
-    useAnnouncements({ limit: 40 });
+  const {
+    announcements,
+    error,
+    loading,
+    loadingMore: announcementsLoadingMore,
+    hasMore: hasMoreAnnouncements,
+    refreshing,
+    refresh,
+    reload,
+    loadMore: loadMoreAnnouncements,
+  } = useAnnouncements({ limit: 20 });
   const {
     reports,
     error: reportsError,
     loading: reportsLoading,
+    hasMore: hasMoreServerReports,
     refresh: refreshReports,
     reload: reloadReports,
+    loadMore: loadMoreServerReports,
   } = useOfficialReportQueue(scope);
 
   const [composerVisible, setComposerVisible] = useState(false);
   const [announcementDescription, setAnnouncementDescription] = useState('');
   const [announcementMedia, setAnnouncementMedia] = useState<AnnouncementDraftMedia[]>([]);
-  const [announcementIsPinned, setAnnouncementIsPinned] = useState(false);
   const [announcementSubmitting, setAnnouncementSubmitting] = useState(false);
+  const [announcementMediaSelecting, setAnnouncementMediaSelecting] =
+    useState<'photo' | 'video' | null>(null);
   const [announcementError, setAnnouncementError] = useState<string | null>(null);
   const [officialProfile, setOfficialProfile] = useState<OfficialPublicProfile | null>(null);
   const composeRequestHandledRef = useRef(false);
@@ -101,9 +120,12 @@ export default function OfficialCommunityScreen() {
     [reports],
   );
   const communityReports = sortedReports.slice(0, visibleReportCount);
-  const hasMoreReports = visibleReportCount < sortedReports.length;
+  const hasMoreReports =
+    visibleReportCount < sortedReports.length || hasMoreServerReports;
   const requestedCompose = Array.isArray(compose) ? compose[0] : compose;
   const requestedSection = Array.isArray(section) ? section[0] : section;
+  const requestedFeed = Array.isArray(feed) ? feed[0] : feed;
+  const openedFromCommand = (Array.isArray(from) ? from[0] : from) === 'command';
   const showingBdrrmoResources = officialKind === 'BDRRMO' && requestedSection === 'resources';
 
   useEffect(() => {
@@ -112,18 +134,19 @@ export default function OfficialCommunityScreen() {
   }, [canPublish]);
 
   useEffect(() => {
-    // Dashboard compose links are Mayor-only. The ref prevents a close action
+    // Dashboard compose links open the shared composer for publishing officials.
+    // The ref prevents a close action
     // from immediately reopening the composer while the route stays focused.
     if (
       composeRequestHandledRef.current ||
       requestedCompose !== '1' ||
-      officialKind !== 'Mayor'
+      !canPublish
     ) {
       return;
     }
     composeRequestHandledRef.current = true;
     setComposerVisible(true);
-  }, [officialKind, requestedCompose]);
+  }, [canPublish, requestedCompose]);
 
   useEffect(() => {
     loadLockRef.current = false;
@@ -132,9 +155,11 @@ export default function OfficialCommunityScreen() {
   function loadMoreReports() {
     if (loadLockRef.current || !hasMoreReports) return;
     loadLockRef.current = true;
-    setVisibleReportCount((current) =>
-      Math.min(current + PAGE_SIZE, sortedReports.length),
-    );
+    const nextCount = visibleReportCount + PAGE_SIZE;
+    setVisibleReportCount(nextCount);
+    if (nextCount >= sortedReports.length && hasMoreServerReports) {
+      void loadMoreServerReports();
+    }
   }
 
   function selectBdrrmoSection(resources: boolean) {
@@ -142,18 +167,28 @@ export default function OfficialCommunityScreen() {
   }
 
   function handleScroll(event: NativeSyntheticEvent<NativeScrollEvent>) {
-    if (!hasMoreReports) return;
+    if (!hasMoreReports && !hasMoreAnnouncements) return;
     const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
     const distanceFromBottom =
       contentSize.height - (contentOffset.y + layoutMeasurement.height);
     if (distanceFromBottom < LOAD_MORE_THRESHOLD) {
-      loadMoreReports();
+      if (hasMoreReports) loadMoreReports();
+      if (hasMoreAnnouncements) void loadMoreAnnouncements();
     }
   }
 
   async function handleRefresh() {
     await Promise.all([refresh(), refreshReports()]);
     setVisibleReportCount(PAGE_SIZE);
+  }
+
+  function closeAnnouncementComposer() {
+    setAnnouncementDescription('');
+    setAnnouncementMedia([]);
+    setAnnouncementError(null);
+    setComposerVisible(false);
+    composeRequestHandledRef.current = false;
+    router.setParams({ compose: '' });
   }
 
   async function handleOfficialAnnouncement() {
@@ -163,19 +198,43 @@ export default function OfficialCommunityScreen() {
     const result = await createOfficialAnnouncement({
       description: announcementDescription,
       media: announcementMedia,
-      isPinned: announcementIsPinned,
     });
     setAnnouncementSubmitting(false);
     if (result.error) {
       setAnnouncementError(result.error);
       return;
     }
-    setAnnouncementDescription('');
-    setAnnouncementMedia([]);
-    setAnnouncementIsPinned(false);
-    setComposerVisible(false);
+    closeAnnouncementComposer();
     Alert.alert('Published', 'Announcement is now visible to residents.');
     void reload();
+  }
+
+  async function handleComposeWithMedia(type: 'photo' | 'video') {
+    if (announcementMediaSelecting || announcementSubmitting) return;
+
+    setAnnouncementMediaSelecting(type);
+    try {
+      const result = await pickAnnouncementMedia(type);
+      if (result.error) {
+        Alert.alert('Attachment unavailable', result.error);
+        return;
+      }
+      if (result.media.length === 0) return;
+
+      const nextMedia = [...announcementMedia, ...result.media];
+      const validationError = validateAnnouncementMedia(nextMedia);
+      if (validationError) {
+        Alert.alert('Attachment limit', validationError);
+        return;
+      }
+
+      setAnnouncementMedia(nextMedia);
+      setComposerVisible(true);
+    } catch {
+      Alert.alert('Attachment unavailable', 'Could not prepare this attachment.');
+    } finally {
+      setAnnouncementMediaSelecting(null);
+    }
   }
 
   if (scopeLoading || (!scope && !scopeError)) {
@@ -226,33 +285,41 @@ export default function OfficialCommunityScreen() {
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
-          }
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-          onScroll={handleScroll}
-          scrollEventThrottle={16}
-        >
-          {officialKind === 'MDRRMO' || officialKind === 'Mayor' ? (
+        {officialKind === 'MDRRMO' || officialKind === 'Mayor' ? (
             <MdrrmoCommunityFeed
               announcements={announcements}
               announcementError={error}
               announcementsLoading={loading}
+              announcementsLoadingMore={announcementsLoadingMore}
               reports={reports}
               reportsError={reportsError}
               reportsLoading={reportsLoading}
               officialProfile={officialProfile}
               visibleReportCount={visibleReportCount}
               onCompose={() => setComposerVisible(true)}
-              onLoadMoreReports={loadMoreReports}
+              onComposeWithMedia={(type) => void handleComposeWithMedia(type)}
+              mediaSelectionType={announcementMediaSelecting}
               onRetryAnnouncements={() => void reload()}
               onRetryReports={() => void reloadReports()}
+              refreshing={refreshing}
+              onRefresh={() => void handleRefresh()}
+              onScroll={handleScroll}
+              contentContainerStyle={styles.scrollContent}
               roleVariant={officialKind === 'Mayor' ? 'mayor' : 'mdrrmo'}
+              showCommandBack={openedFromCommand && officialKind === 'MDRRMO'}
+              initialTab={requestedFeed === 'official' ? 'official' : 'community'}
             />
           ) : (
+            <ScrollView
+              contentContainerStyle={styles.scrollContent}
+              refreshControl={
+                <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+              }
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+              onScroll={handleScroll}
+              scrollEventThrottle={16}
+            >
             <>
               <MdrrmoHeader
                 title="Community"
@@ -273,12 +340,15 @@ export default function OfficialCommunityScreen() {
                 accessibilityLabel="Create announcement"
               >
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                  <View style={styles.initialAvatar}>
-                    <Text style={styles.initialAvatarText}>
-                      {officialProfile?.first_name?.slice(0, 1).toUpperCase() || officialKind.charAt(0)}
-                      {officialProfile?.last_name?.slice(0, 1).toUpperCase() || ''}
-                    </Text>
-                  </View>
+                  <ProfileAvatar
+                    avatarPath={officialProfile?.avatar_path}
+                    firstName={officialProfile?.first_name}
+                    lastName={officialProfile?.last_name}
+                    fallback={`${officialProfile?.first_name?.slice(0, 1).toUpperCase() || officialKind.charAt(0)}${officialProfile?.last_name?.slice(0, 1).toUpperCase() || ''}`}
+                    size={52}
+                    style={styles.initialAvatar}
+                    textStyle={styles.initialAvatarText}
+                  />
                   <Text style={[styles.formInput, { flex: 1, paddingVertical: 12 }]}>
                     What would be your announcement?
                   </Text>
@@ -360,6 +430,8 @@ export default function OfficialCommunityScreen() {
                     id: report.id,
                     title: report.title,
                     description: report.description,
+                    incidentType: report.incidentType,
+                    incidentTypeOther: report.incidentTypeOther,
                     status: report.status,
                     latitude: report.latitude ?? 0,
                     longitude: report.longitude ?? 0,
@@ -402,10 +474,10 @@ export default function OfficialCommunityScreen() {
                 )}
               </>
             ) : null}
-          </View>
+            </View>
             </>
+            </ScrollView>
           )}
-        </ScrollView>
       </KeyboardAvoidingView>
       {canPublish ? (
         <AnnouncementComposerModal
@@ -427,14 +499,9 @@ export default function OfficialCommunityScreen() {
                 .charAt(0) || officialKind.charAt(0)
             ).toUpperCase()
           }
+          avatarPath={officialProfile?.avatar_path}
           description={announcementDescription}
           media={announcementMedia}
-          isPinned={announcementIsPinned}
-          pinLabel={
-            officialKind === 'BDRRMO'
-              ? 'Pin in my barangay'
-              : 'Pin municipality-wide'
-          }
           audienceLabel={
             officialKind === 'Mayor'
               ? 'Municipality-wide — visible to residents and authorized officials.'
@@ -444,15 +511,8 @@ export default function OfficialCommunityScreen() {
           error={announcementError}
           onChangeDescription={setAnnouncementDescription}
           onChangeMedia={setAnnouncementMedia}
-          onChangePinned={setAnnouncementIsPinned}
           onSubmit={() => void handleOfficialAnnouncement()}
-          onClose={() => {
-            setAnnouncementDescription('');
-            setAnnouncementMedia([]);
-            setAnnouncementIsPinned(false);
-            setAnnouncementError(null);
-            setComposerVisible(false);
-          }}
+          onClose={closeAnnouncementComposer}
         />
       ) : null}
     </SafeAreaView>

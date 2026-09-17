@@ -3,6 +3,21 @@ import { StyleSheet } from 'react-native';
 import { colors, fonts, fontSizes, radius, spacing } from '../theme';
 
 export const mdrrmoCommunityStyles = StyleSheet.create({
+  screen: {
+    flex: 1,
+  },
+  fixedHeaderArea: {
+    gap: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    backgroundColor: colors.background,
+  },
+  mdrrmoFixedHeaderArea: {
+    gap: spacing.xs,
+  },
+  feedScroll: {
+    flex: 1,
+  },
   headerAction: {
     width: 40,
     height: 40,
@@ -12,15 +27,17 @@ export const mdrrmoCommunityStyles = StyleSheet.create({
   avatar: {
     width: 42,
     height: 42,
-    borderRadius: 21,
+    borderRadius: radius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.primary,
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: '#D8E3FF',
   },
   avatarText: {
     fontFamily: fonts.bold,
     fontSize: fontSizes.md,
-    color: colors.white,
+    color: colors.primary,
   },
   searchBox: {
     minHeight: 48,
@@ -31,7 +48,7 @@ export const mdrrmoCommunityStyles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radius.lg,
-    backgroundColor: colors.white,
+    backgroundColor: '#F8FAFC',
   },
   searchInput: {
     flex: 1,
@@ -41,66 +58,29 @@ export const mdrrmoCommunityStyles = StyleSheet.create({
     fontSize: fontSizes.md,
     color: colors.text,
   },
-  publishPanel: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.md,
-    paddingVertical: spacing.md,
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: colors.border,
-  },
-  publishCopy: {
-    flex: 1,
-    minWidth: 0,
-    gap: spacing.xs,
-  },
-  eyebrow: {
-    fontFamily: fonts.semibold,
-    fontSize: fontSizes.sm,
-    letterSpacing: 0.5,
-    color: colors.primary,
-  },
-  publishTitle: {
-    fontFamily: fonts.medium,
-    fontSize: fontSizes.md,
-    color: colors.text,
-  },
-  publishAction: {
-    minHeight: 42,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.sm,
-  },
-  publishActionText: {
-    fontFamily: fonts.semibold,
-    fontSize: fontSizes.md,
-    color: colors.primary,
-  },
-  scopeTabs: {
+  tabs: {
     flexDirection: 'row',
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
-  scopeTab: {
+  tabButton: {
     flex: 1,
-    minHeight: 52,
+    minHeight: 48,
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
   },
-  scopeTabText: {
+  tabText: {
     fontFamily: fonts.medium,
     fontSize: fontSizes.md,
     color: colors.textMuted,
+    textAlign: 'center',
   },
-  scopeTabTextActive: {
-    fontFamily: fonts.semibold,
-    color: colors.primary,
+  tabTextActive: {
+    fontFamily: fonts.bold,
+    color: colors.text,
   },
-  scopeTabIndicator: {
+  tabIndicator: {
     position: 'absolute',
     left: 0,
     right: 0,
@@ -109,10 +89,20 @@ export const mdrrmoCommunityStyles = StyleSheet.create({
     borderRadius: radius.full,
     backgroundColor: colors.primary,
   },
-  section: {
+  feedContent: {
     gap: spacing.md,
   },
-  sectionHeader: {
+  communityFeedContent: {
+    // Cancel scroll padding; report cards provide their own top padding.
+    marginTop: -spacing.md,
+    gap: 0,
+  },
+  officialFeedContent: {
+    marginTop: -spacing.sm,
+    // Announcement cards already add top padding, so no extra layout gap is needed.
+    gap: 0,
+  },
+  reportSectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -121,77 +111,138 @@ export const mdrrmoCommunityStyles = StyleSheet.create({
   sectionTitleGroup: {
     flex: 1,
     minWidth: 0,
-    gap: spacing.xs,
   },
-  sectionTitle: {
-    fontFamily: fonts.semibold,
-    fontSize: fontSizes.md,
-    letterSpacing: 0.35,
+  reportSectionTitle: {
+    fontFamily: fonts.bold,
+    fontSize: fontSizes.lg,
     color: colors.text,
   },
   sectionSubtitle: {
+    marginTop: 3,
     fontFamily: fonts.regular,
     fontSize: fontSizes.sm,
     lineHeight: 18,
     color: colors.textMuted,
   },
-  pinnedTitleRow: {
+  scopeButton: {
+    minHeight: 38,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-  },
-  sortLabel: {
-    fontFamily: fonts.medium,
-    fontSize: fontSizes.sm,
-    color: colors.primary,
-  },
-  countPill: {
-    minHeight: 30,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
+    gap: spacing.xs,
     paddingHorizontal: spacing.sm,
     borderRadius: radius.full,
     backgroundColor: colors.primaryLight,
   },
-  countPillText: {
-    fontFamily: fonts.medium,
+  scopeButtonText: {
+    fontFamily: fonts.semibold,
     fontSize: fontSizes.sm,
     color: colors.primary,
   },
-  card: {
-    paddingVertical: 0,
-    paddingBottom: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  stateBox: {
+  composerRow: {
+    minHeight: 52,
+    flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    paddingVertical: spacing.xl,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    backgroundColor: colors.white,
+  },
+  composerPrompt: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 38,
+    alignItems: 'stretch',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.full,
+    backgroundColor: '#F8FAFC',
+  },
+  composerPlaceholder: {
+    width: '100%',
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.md,
+    lineHeight: 20,
+    color: colors.textMuted,
+    textAlign: 'left',
+    textAlignVertical: 'center',
+    includeFontPadding: false,
+  },
+  composerMediaActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingLeft: spacing.xs,
+  },
+  composerMediaButton: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stateBox: {
+    minHeight: 220,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    padding: spacing.xl,
+  },
+  emptyState: {
+    minHeight: 220,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    padding: spacing.xl,
+    borderRadius: radius.lg,
+    backgroundColor: '#F8FAFC',
+  },
+  communityEmptyState: {
+    backgroundColor: colors.background,
   },
   stateTitle: {
     fontFamily: fonts.semibold,
-    fontSize: fontSizes.md,
+    fontSize: fontSizes.lg,
     color: colors.text,
     textAlign: 'center',
   },
   stateBody: {
     maxWidth: 320,
     fontFamily: fonts.regular,
-    fontSize: fontSizes.sm,
-    lineHeight: 19,
+    fontSize: fontSizes.md,
+    lineHeight: 21,
     color: colors.textMuted,
     textAlign: 'center',
+  },
+  retryButton: {
+    minHeight: 42,
+    marginTop: spacing.xs,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.full,
+    backgroundColor: colors.primaryLight,
   },
   retryText: {
     fontFamily: fonts.semibold,
     fontSize: fontSizes.md,
     color: colors.primary,
   },
-  divider: {
-    height: 1,
-    backgroundColor: colors.border,
+  feedPostLast: {
+    borderBottomWidth: 0,
+  },
+  loadingMore: {
+    paddingVertical: spacing.lg,
+  },
+  filterSheet: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
+    gap: 0,
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
+    backgroundColor: colors.white,
   },
   modalOverlay: {
     flex: 1,
@@ -201,36 +252,25 @@ export const mdrrmoCommunityStyles = StyleSheet.create({
   modalBackdrop: {
     ...StyleSheet.absoluteFill,
   },
-  filterSheet: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.xl,
-    gap: spacing.lg,
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
-    backgroundColor: colors.white,
-  },
-  sheetHandle: {
-    width: 44,
-    height: 5,
-    alignSelf: 'center',
-    borderRadius: radius.full,
-    backgroundColor: colors.border,
-  },
   sheetHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    marginBottom: spacing.lg,
   },
   sheetTitle: {
     fontFamily: fonts.bold,
     fontSize: fontSizes.xl,
     color: colors.text,
   },
-  filterGroup: {
-    gap: spacing.sm,
+  sheetCloseButton: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   filterLabel: {
+    marginBottom: spacing.sm,
     fontFamily: fonts.semibold,
     fontSize: fontSizes.sm,
     color: colors.text,
@@ -239,18 +279,21 @@ export const mdrrmoCommunityStyles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.sm,
+    marginBottom: spacing.lg,
   },
   filterChoice: {
     minHeight: 40,
+    alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.md,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radius.full,
+    backgroundColor: colors.white,
   },
   filterChoiceActive: {
-    borderColor: colors.primary,
-    backgroundColor: colors.primaryLight,
+    borderColor: colors.navigationActive,
+    backgroundColor: colors.navigationActive,
   },
   filterChoiceText: {
     fontFamily: fonts.medium,
@@ -258,16 +301,74 @@ export const mdrrmoCommunityStyles = StyleSheet.create({
     color: colors.textMuted,
   },
   filterChoiceTextActive: {
-    color: colors.primary,
+    color: colors.white,
   },
-  doneButton: {
+  filterError: {
+    gap: spacing.sm,
+    marginBottom: spacing.lg,
+    alignItems: 'center',
+  },
+  barangaySelect: {
+    minHeight: 42,
+    marginBottom: spacing.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    backgroundColor: colors.white,
+  },
+  barangaySelectText: {
+    flex: 1,
+    minWidth: 0,
+    fontFamily: fonts.medium,
+    fontSize: fontSizes.sm,
+    color: colors.text,
+  },
+  barangayPickerSheet: {
+    maxHeight: '72%',
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
+    gap: spacing.sm,
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
+    backgroundColor: colors.white,
+  },
+  barangayPickerOption: {
+    minHeight: 46,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  barangayPickerOptionText: {
+    flex: 1,
+    minWidth: 0,
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.md,
+    color: colors.text,
+  },
+  barangayPickerOptionTextSelected: {
+    fontFamily: fonts.semibold,
+    color: colors.navigationActive,
+  },
+  filterFooter: {
+    flexShrink: 0,
+    backgroundColor: colors.white,
+  },
+  applyButton: {
     minHeight: 48,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.lg,
-    backgroundColor: colors.primary,
+    backgroundColor: colors.navigationActive,
   },
-  doneButtonText: {
+  applyButtonText: {
     fontFamily: fonts.semibold,
     fontSize: fontSizes.md,
     color: colors.white,

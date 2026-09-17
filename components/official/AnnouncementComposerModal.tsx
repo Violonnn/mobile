@@ -1,25 +1,24 @@
 // Shared official bottom-sheet composer. Closing never publishes a draft.
 import React, { useState } from 'react';
-import { Alert, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, ActivityIndicator, Switch } from 'react-native';
+import { Alert, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, fonts, fontSizes, radius, spacing } from '../../styles/theme';
 import { MAX_ANNOUNCEMENT_PHOTOS, pickAnnouncementMedia, validateAnnouncementMedia, type AnnouncementDraftMedia } from '../../lib/announcementMedia';
+import ProfileAvatar from '../profile/ProfileAvatar';
 
 type Props = {
   visible: boolean;
   displayName: string;
   initials: string;
+  avatarPath?: string | null;
   description: string;
   media: AnnouncementDraftMedia[];
-  isPinned: boolean;
-  pinLabel: string | null;
   audienceLabel?: string | null;
   submitting: boolean;
   error: string | null;
   onChangeDescription: (value: string) => void;
   onChangeMedia: (media: AnnouncementDraftMedia[]) => void;
-  onChangePinned: (value: boolean) => void;
   onSubmit: () => void;
   onClose: () => void;
 };
@@ -44,7 +43,7 @@ export default function AnnouncementComposerModal(props: Props) {
   };
 
   const requestClose = () => {
-    if (!props.description.trim() && props.media.length === 0 && !props.isPinned) {
+    if (!props.description.trim() && props.media.length === 0) {
       props.onClose();
       return;
     }
@@ -69,9 +68,13 @@ export default function AnnouncementComposerModal(props: Props) {
           </View>
           <ScrollView style={localStyles.body} contentContainerStyle={localStyles.content} keyboardShouldPersistTaps="handled">
             <View style={localStyles.authorRow}>
-              <View style={localStyles.avatar}>
-                <Text style={localStyles.avatarText}>{props.initials}</Text>
-              </View>
+              <ProfileAvatar
+                avatarPath={props.avatarPath}
+                fallback={props.initials}
+                size={42}
+                style={localStyles.avatar}
+                textStyle={localStyles.avatarText}
+              />
               <Text style={localStyles.authorName} numberOfLines={2}>
                 {props.displayName}
               </Text>
@@ -109,21 +112,6 @@ export default function AnnouncementComposerModal(props: Props) {
               </Pressable>
             )}
             {props.media.length > 0 ? <View style={localStyles.previewRow}>{props.media.map((item) => <View key={item.id} style={localStyles.preview}>{item.type === 'photo' ? <Image source={{ uri: item.localUri }} style={localStyles.previewImage} /> : <View style={localStyles.videoPreview}><Ionicons name="videocam" size={28} color={colors.white} /><Text style={localStyles.videoPreviewText}>Video</Text></View>}<TouchableOpacity style={localStyles.remove} onPress={() => props.onChangeMedia(props.media.filter((media) => media.id !== item.id))} accessibilityLabel="Remove attachment"><Ionicons name="close" size={14} color={colors.white} /></TouchableOpacity>{item.type === 'video' ? <View style={localStyles.videoBadge}><Ionicons name="play" size={12} color={colors.white} /></View> : null}</View>)}</View> : null}
-            {props.pinLabel ? (
-              <View style={localStyles.pinRow}>
-                <View style={localStyles.pinTextGroup}>
-                  <Text style={localStyles.pinLabel}>{props.pinLabel}</Text>
-                  <Text style={localStyles.pinHint}>Pinned posts appear before newer posts in the feed.</Text>
-                </View>
-                <Switch
-                  value={props.isPinned}
-                  onValueChange={props.onChangePinned}
-                  disabled={props.submitting}
-                  trackColor={{ true: colors.themeSoft }}
-                  accessibilityLabel={props.pinLabel}
-                />
-              </View>
-            ) : null}
             {props.error ? <Text style={localStyles.error}>{props.error}</Text> : null}
           </ScrollView>
           <View style={[localStyles.footer, { paddingBottom: Math.max(insets.bottom, spacing.sm) }]}>
@@ -281,18 +269,6 @@ const localStyles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: 'rgba(17,24,39,0.72)',
   },
-  pinRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
-    paddingVertical: spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  pinTextGroup: { flex: 1, gap: 2 },
-  pinLabel: { fontFamily: fonts.semibold, color: colors.text, fontSize: fontSizes.sm },
-  pinHint: { fontFamily: fonts.regular, color: colors.textMuted, fontSize: fontSizes.xs },
   error: { color: colors.danger, fontFamily: fonts.regular, fontSize: fontSizes.sm },
   footer: {
     borderTopWidth: 1,
