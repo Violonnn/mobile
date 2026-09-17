@@ -1,10 +1,10 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Modal,
-  Pressable,
+  Alert,
   RefreshControl,
-  ScrollView,
+  SectionList,
+  FlatList,
   Text,
   TextInput,
   TouchableOpacity,
@@ -12,46 +12,41 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AnnouncementEngagementProvider } from '../../components/official/AnnouncementEngagementProvider';
 import OfficialAnnouncementPostCard from '../../components/official/OfficialAnnouncementPostCard';
 import { ReportDetailCard } from '../../components/report/ReportDetailCard';
 import { ReportEngagementProvider } from '../../components/report/ReportEngagementProvider';
+import ResidentBottomSheet from '../../components/ui/ResidentBottomSheet';
 import { useAnnouncements } from '../../hooks/useAnnouncements';
 import { useReports } from '../../hooks/useReports';
-import type { AnnouncementRecord } from '../../lib/announcements';
+import {
+  formatAnnouncementOfficeLabel,
+  type AnnouncementRecord,
+} from '../../lib/announcements';
 import { fetchBarangays } from '../../lib/barangays';
+import {
+  buildCommunityReportSections,
+  type CommunityReportScope,
+  type CommunityReportSort,
+  type CommunityReportStatusFilter,
+} from '../../lib/communityReportFeed';
 import { fetchMyProfile } from '../../lib/profile';
 import {
-  distanceInMeters,
   formatDistance,
   normalizeSearchText,
   type Coordinate,
 } from '../../lib/reportProximity';
-import type { MapReportMarker } from '../../lib/reports';
 import { feedStyles as styles } from '../../styles/screens/feed.styles';
 import { colors } from '../../styles/theme';
 
 type FeedTab = 'official' | 'community';
 type FeedOrder = 'latest' | 'oldest';
 type OfficialFilter = 'all' | 'municipal' | 'barangay';
-type ReportStatusFilter = 'all' | 'active' | 'verified' | 'resolved';
 
-const NEARBY_RADIUS_METERS = 5_000;
-
-type NearbyReport = {
-  report: MapReportMarker;
-  distance: number | null;
-};
-
-function matchesReportSearch(report: MapReportMarker, searchQuery: string): boolean {
-  if (!searchQuery) return true;
-  return normalizeSearchText(
-    `${report.title} ${report.description} ${report.addressText ?? ''}`,
-  ).includes(searchQuery);
-}
+const COMMUNITY_PAGE_SIZE = 6;
 
 function matchesAnnouncementSearch(
   announcement: AnnouncementRecord,
@@ -63,27 +58,57 @@ function matchesAnnouncementSearch(
   ).includes(searchQuery);
 }
 
-function getAnnouncementOfficeLabel(
-  announcement: AnnouncementRecord,
-  municipality: string,
+function getCommunitySectionCopy(
+  scope: CommunityReportScope,
   barangay: string,
-): string {
-  if (announcement.author.roleLabel === 'MDRRMO') return `MDRRMO ${municipality}`;
-  if (announcement.author.roleLabel === 'BDRRMO') return `BDRRMO ${barangay}`;
-  return announcement.author.roleLabel;
+  municipality: string,
+): { title: string; subtitle: string } {
+  if (scope === 'barangay') {
+    return {
+      title: barangay === 'your area' ? 'Your barangay' : barangay,
+      subtitle: 'Reports routed to your barangay response team',
+    };
+  }
+
+  return {
+    title: `Across ${municipality}`,
+    subtitle: `Reports from every barangay in ${municipality}`,
+  };
 }
 
 export default function FeedScreen() {
+  const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { reports, error: reportsError, loading: reportsLoading, reload } = useReports({
+  const { reportId, openRequest } = useLocalSearchParams<{
+    reportId?: string | string[];
+    openRequest?: string | string[];
+  }>();
+  const requestedReportId = Array.isArray(reportId) ? reportId[0] : reportId;
+  const requestedOpenKey = Array.isArray(openRequest) ? openRequest[0] : openRequest;
+  const handledRequestedScopeKey = useRef<string | undefined>(undefined);
+  const {
+    reports,
+    error: reportsError,
+    loading: reportsLoading,
+    loadingMore: reportsLoadingMore,
+    hasMore: hasMoreServerReports,
+    reload,
+    loadMore: loadMoreReports,
+  } = useReports({
     realtime: false,
+    limit: 15,
+    includeMediaSummaries: true,
+    includeLatestActivity: true,
   });
   const {
     announcements,
     error: announcementsError,
     loading: announcementsLoading,
+    loadingMore: announcementsLoadingMore,
+    hasMore: hasMoreAnnouncements,
+    loadMore: loadMoreAnnouncements,
     refresh: refreshAnnouncements,
-  } = useAnnouncements({ limit: 50, realtime: false });
+  } = useAnnouncements({ limit: 15, realtime: false });
 
   const [activeTab, setActiveTab] = useState<FeedTab>('community');
   const [municipality, setMunicipality] = useState('Minglanilla');
@@ -94,11 +119,21 @@ export default function FeedScreen() {
   const [searchVisible, setSearchVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterVisible, setFilterVisible] = useState(false);
-  const [communityOrder, setCommunityOrder] = useState<FeedOrder>('latest');
-  const [statusFilter, setStatusFilter] = useState<ReportStatusFilter>('all');
+  const [communityScope, setCommunityScope] = useState<CommunityReportScope>('barangay');
+  const [communityOrder, setCommunityOrder] = useState<CommunityReportSort>('activity');
+  const [statusFilter, setStatusFilter] = useState<CommunityReportStatusFilter>('all');
+  const [visibleCommunityLimit, setVisibleCommunityLimit] = useState(COMMUNITY_PAGE_SIZE);
   const [officialFilter, setOfficialFilter] = useState<OfficialFilter>('all');
   const [officialOrder, setOfficialOrder] = useState<FeedOrder>('latest');
   const [refreshing, setRefreshing] = useState(false);
+
+  useEffect(() => {
+    if (!requestedReportId) return;
+
+    // Wait for the tab route to finish focusing before opening its requested post.
+    const frameId = requestAnimationFrame(() => setActiveTab('community'));
+    return () => cancelAnimationFrame(frameId);
+  }, [requestedReportId, requestedOpenKey]);
 
   useFocusEffect(
     useCallback(() => {
@@ -142,40 +177,69 @@ export default function FeedScreen() {
     }, []),
   );
 
-  const normalizedQuery = normalizeSearchText(searchQuery);
+  const normalizedQuery = searchQuery.trim().toLocaleLowerCase();
 
-  const nearbyReports = useMemo<NearbyReport[]>(() => {
-    const normalizedBarangay = normalizeSearchText(barangay);
-    const scopedReports = reports.filter((report) => {
-      if (barangayCenter) {
-        return distanceInMeters(barangayCenter, report) <= NEARBY_RADIUS_METERS;
-      }
-      if (barangayId) return report.barangay_id === barangayId;
-      return Boolean(
-        normalizedBarangay &&
-          normalizeSearchText(report.addressText ?? '').includes(normalizedBarangay),
-      );
+  useEffect(() => {
+    if (!requestedReportId || !barangayId) return;
+    const requestedScopeKey = requestedOpenKey ?? requestedReportId;
+    if (handledRequestedScopeKey.current === requestedScopeKey) return;
+
+    const requestedReport = reports.find((report) => report.id === requestedReportId);
+    if (!requestedReport) return;
+    if (requestedReport.barangay_id === barangayId) {
+      handledRequestedScopeKey.current = requestedScopeKey;
+      return;
+    }
+
+    // Reports opened from a map or notification must remain reachable even
+    // when they belong to another barangay.
+    const frameId = requestAnimationFrame(() => {
+      handledRequestedScopeKey.current = requestedScopeKey;
+      setCommunityScope('municipality');
+      setVisibleCommunityLimit(COMMUNITY_PAGE_SIZE);
     });
+    return () => cancelAnimationFrame(frameId);
+  }, [barangayId, reports, requestedReportId, requestedOpenKey]);
 
-    const filteredReports = scopedReports.filter((report) => {
-      if (!matchesReportSearch(report, normalizedQuery)) return false;
-      if (statusFilter === 'active') return report.status !== 'resolved';
-      if (statusFilter === 'verified') return report.status === 'verified';
-      if (statusFilter === 'resolved') return report.status === 'resolved';
-      return true;
-    });
+  const communitySections = useMemo(
+    () =>
+      buildCommunityReportSections(reports, {
+        barangayCenter,
+        barangayId,
+        requestedReportId,
+        searchQuery: normalizedQuery,
+        scope: communityScope,
+        sort: communityOrder,
+        statusFilter,
+      }),
+    [
+      barangayCenter,
+      barangayId,
+      communityOrder,
+      communityScope,
+      normalizedQuery,
+      reports,
+      requestedReportId,
+      statusFilter,
+    ],
+  );
 
-    const withDistance = filteredReports.map((report) => ({
-      report,
-      distance: barangayCenter ? distanceInMeters(barangayCenter, report) : null,
-    }));
-
-    return withDistance.sort((first, second) => {
-      const firstTime = new Date(first.report.created_at).getTime();
-      const secondTime = new Date(second.report.created_at).getTime();
-      return communityOrder === 'latest' ? secondTime - firstTime : firstTime - secondTime;
-    });
-  }, [barangay, barangayCenter, barangayId, communityOrder, normalizedQuery, reports, statusFilter]);
+  const communityReportCount = communitySections[0]?.data.length ?? 0;
+  const displayedCommunitySections = useMemo(
+    () =>
+      communitySections.map((section) => ({
+        ...section,
+        data: section.data.slice(0, visibleCommunityLimit),
+      })),
+    [communitySections, visibleCommunityLimit],
+  );
+  const hasMoreCommunityReports =
+    visibleCommunityLimit < communityReportCount || hasMoreServerReports;
+  const communitySectionCopy = getCommunitySectionCopy(
+    communityScope,
+    barangay,
+    municipality,
+  );
 
   const filteredAnnouncements = useMemo(() => {
     return announcements
@@ -196,6 +260,44 @@ export default function FeedScreen() {
     setRefreshing(true);
     await Promise.all([reload(), refreshAnnouncements()]);
     setRefreshing(false);
+  };
+
+  const openReportOnMap = useCallback(
+    (targetReportId: string) => {
+      router.navigate({
+        pathname: '/(main)/map',
+        params: { reportId: targetReportId },
+      });
+    },
+    [router],
+  );
+
+  const confirmCommunityScopeChange = () => {
+    const switchingToMunicipality = communityScope === 'barangay';
+    const destination = switchingToMunicipality
+      ? `Across ${municipality}`
+      : barangay === 'your area'
+        ? 'your barangay'
+        : barangay;
+
+    Alert.alert(
+      `Switch to ${destination}?`,
+      switchingToMunicipality
+        ? `Your feed will show community reports from all barangays in ${municipality}.`
+        : `Your feed will show only reports from ${destination}.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Switch feed',
+          onPress: () => {
+            setCommunityScope(
+              switchingToMunicipality ? 'municipality' : 'barangay',
+            );
+            setVisibleCommunityLimit(COMMUNITY_PAGE_SIZE);
+          },
+        },
+      ],
+    );
   };
 
   const initialLoading =
@@ -246,14 +348,22 @@ export default function FeedScreen() {
                 <TextInput
                   style={styles.searchInput}
                   value={searchQuery}
-                  onChangeText={setSearchQuery}
+                  onChangeText={(value) => {
+                    setSearchQuery(value);
+                    setVisibleCommunityLimit(COMMUNITY_PAGE_SIZE);
+                  }}
                   placeholder="Search updates and reports"
                   placeholderTextColor={colors.textMuted}
                   autoFocus
                   returnKeyType="search"
                 />
                 {searchQuery ? (
-                  <TouchableOpacity onPress={() => setSearchQuery('')}>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setSearchQuery('');
+                      setVisibleCommunityLimit(COMMUNITY_PAGE_SIZE);
+                    }}
+                  >
                     <Ionicons name="close-circle" size={20} color={colors.textMuted} />
                   </TouchableOpacity>
                 ) : null}
@@ -286,61 +396,176 @@ export default function FeedScreen() {
             </View>
           </View>
 
-          <ScrollView
-            style={styles.scrollView}
-            contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 118 }]}
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-            refreshControl={
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={handleRefresh}
-                tintColor={colors.primary}
-                colors={[colors.primary]}
-              />
-            }
-          >
-            {initialLoading ? (
-              <View style={styles.stateBlock}>
-                <ActivityIndicator color={colors.primary} />
-                <Text style={styles.stateText}>Loading your feed…</Text>
-              </View>
-            ) : activeError ? (
-              <View style={styles.stateBlock}>
-                <Ionicons name="cloud-offline-outline" size={28} color={colors.textMuted} />
-                <Text style={styles.stateTitle}>Feed unavailable</Text>
-                <Text style={styles.stateText}>{activeError}</Text>
-                <TouchableOpacity style={styles.retryButton} onPress={handleRefresh}>
-                  <Text style={styles.retryText}>Try again</Text>
-                </TouchableOpacity>
-              </View>
-            ) : activeTab === 'community' ? (
-              <View style={styles.contentInner}>
-                {nearbyReports.length === 0 ? (
+          {activeTab === 'community' ? (
+            <SectionList
+              style={styles.scrollView}
+              contentContainerStyle={[
+                styles.communityListContent,
+                { paddingBottom: insets.bottom + 118 },
+              ]}
+              sections={initialLoading || activeError ? [] : displayedCommunitySections}
+              keyExtractor={(item) => item.report.id}
+              stickySectionHeadersEnabled={false}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              initialNumToRender={5}
+              maxToRenderPerBatch={5}
+              windowSize={7}
+              refreshControl={
+                <RefreshControl
+                  refreshing={refreshing}
+                  onRefresh={handleRefresh}
+                  tintColor={colors.primary}
+                  colors={[colors.primary]}
+                />
+              }
+              ListHeaderComponent={
+                !initialLoading && !activeError ? (
+                  <View style={styles.reportSectionHeader}>
+                    <View style={styles.reportSectionTitleRow}>
+                      <Text style={styles.reportSectionTitle}>
+                        {communitySectionCopy.title}
+                      </Text>
+                      <TouchableOpacity
+                        style={styles.feedScopeSwitch}
+                        onPress={confirmCommunityScopeChange}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Switch feed to ${
+                          communityScope === 'barangay'
+                            ? `Across ${municipality}`
+                            : barangay
+                        }`}
+                      >
+                        <Ionicons name="swap-horizontal" size={18} color={colors.primary} />
+                      </TouchableOpacity>
+                    </View>
+                    <Text style={styles.reportSectionSubtitle}>
+                      {communitySectionCopy.subtitle}
+                    </Text>
+                  </View>
+                ) : null
+              }
+              ListFooterComponent={
+                hasMoreCommunityReports ? (
+                  <TouchableOpacity
+                    style={styles.seeMoreButton}
+                    onPress={() => {
+                      const nextLimit = visibleCommunityLimit + COMMUNITY_PAGE_SIZE;
+                      setVisibleCommunityLimit(nextLimit);
+                      if (nextLimit >= communityReportCount && hasMoreServerReports) {
+                        void loadMoreReports();
+                      }
+                    }}
+                    disabled={reportsLoadingMore}
+                    accessibilityRole="button"
+                    accessibilityLabel="See more community reports"
+                  >
+                    {reportsLoadingMore ? (
+                      <ActivityIndicator color={colors.primary} />
+                    ) : (
+                      <Ionicons name="add" size={21} color={colors.text} />
+                    )}
+                  </TouchableOpacity>
+                ) : null
+              }
+              ListEmptyComponent={
+                initialLoading ? (
+                  <View style={styles.stateBlock}>
+                    <ActivityIndicator color={colors.primary} />
+                    <Text style={styles.stateText}>Loading your feed…</Text>
+                  </View>
+                ) : activeError ? (
+                  <View style={styles.stateBlock}>
+                    <Ionicons name="cloud-offline-outline" size={28} color={colors.textMuted} />
+                    <Text style={styles.stateTitle}>Feed unavailable</Text>
+                    <Text style={styles.stateText}>{activeError}</Text>
+                    <TouchableOpacity style={styles.retryButton} onPress={handleRefresh}>
+                      <Text style={styles.retryText}>Try again</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
                   <View style={styles.stateBlockCompact}>
-                    <Ionicons name="location-outline" size={27} color={colors.textMuted} />
-                    <Text style={styles.stateTitle}>No nearby reports found</Text>
+                    <Ionicons name="documents-outline" size={27} color={colors.textMuted} />
+                    <Text style={styles.stateTitle}>No community reports found</Text>
                     <Text style={styles.stateText}>
                       Pull down to refresh or adjust the feed filters.
                     </Text>
                   </View>
-                ) : (
-                  <View style={styles.reportList}>
-                    {nearbyReports.map(({ report, distance }, reportIndex) => (
-                      <ReportDetailCard
-                        key={report.id}
-                        report={report}
-                        isLast={reportIndex === nearbyReports.length - 1}
-                        variant="residentFeed"
-                        distanceLabel={distance == null ? undefined : formatDistance(distance)}
-                      />
-                    ))}
+                )
+              }
+              renderItem={({ item, index, section }) => (
+                <ReportDetailCard
+                  report={item.report}
+                  isLast={index === section.data.length - 1}
+                  variant="residentFeed"
+                  distanceLabel={
+                    item.distance == null ? undefined : formatDistance(item.distance)
+                  }
+                  openRequestKey={
+                    item.report.id === requestedReportId
+                      ? requestedOpenKey ?? requestedReportId
+                      : undefined
+                  }
+                  onViewOnMap={openReportOnMap}
+                />
+              )}
+            />
+          ) : (
+            <FlatList
+              style={styles.scrollView}
+              contentContainerStyle={[
+                styles.scrollContent,
+                styles.contentInner,
+                styles.officialContentInner,
+                { paddingBottom: insets.bottom + 118 },
+              ]}
+              data={initialLoading || activeError ? [] : filteredAnnouncements}
+              keyExtractor={(announcement) => announcement.id}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              initialNumToRender={5}
+              maxToRenderPerBatch={5}
+              windowSize={7}
+              onEndReached={() => {
+                if (hasMoreAnnouncements) void loadMoreAnnouncements();
+              }}
+              onEndReachedThreshold={0.4}
+              refreshControl={
+                <RefreshControl
+                  refreshing={refreshing}
+                  onRefresh={handleRefresh}
+                  tintColor={colors.primary}
+                  colors={[colors.primary]}
+                />
+              }
+              renderItem={({ item: announcement, index }) => (
+                <OfficialAnnouncementPostCard
+                  announcement={announcement}
+                  variant="residentFeedPost"
+                  officeLabel={formatAnnouncementOfficeLabel(announcement, municipality)}
+                  cardStyle={
+                    index === filteredAnnouncements.length - 1
+                      ? styles.feedPostLast
+                      : undefined
+                  }
+                />
+              )}
+              ListEmptyComponent={
+                initialLoading ? (
+                  <View style={styles.stateBlock}>
+                    <ActivityIndicator color={colors.primary} />
+                    <Text style={styles.stateText}>Loading your feed…</Text>
                   </View>
-                )}
-              </View>
-            ) : (
-              <View style={[styles.contentInner, styles.officialContentInner]}>
-                {filteredAnnouncements.length === 0 ? (
+                ) : activeError ? (
+                  <View style={styles.stateBlock}>
+                    <Ionicons name="cloud-offline-outline" size={28} color={colors.textMuted} />
+                    <Text style={styles.stateTitle}>Feed unavailable</Text>
+                    <Text style={styles.stateText}>{activeError}</Text>
+                    <TouchableOpacity style={styles.retryButton} onPress={handleRefresh}>
+                      <Text style={styles.retryText}>Try again</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
                   <View style={styles.stateBlockCompact}>
                     <Ionicons name="megaphone-outline" size={27} color={colors.textMuted} />
                     <Text style={styles.stateTitle}>No official updates found</Text>
@@ -348,43 +573,24 @@ export default function FeedScreen() {
                       Pull down to refresh or adjust the feed filters.
                     </Text>
                   </View>
-                ) : (
-                  <View style={styles.officialPostList}>
-                    {filteredAnnouncements.map((announcement, announcementIndex) => (
-                      <OfficialAnnouncementPostCard
-                        key={announcement.id}
-                        announcement={announcement}
-                        variant="residentFeedPost"
-                        officeLabel={getAnnouncementOfficeLabel(
-                          announcement,
-                          municipality,
-                          barangay,
-                        )}
-                        cardStyle={
-                          announcementIndex === filteredAnnouncements.length - 1
-                            ? styles.feedPostLast
-                            : undefined
-                        }
-                      />
-                    ))}
-                  </View>
-                )}
-              </View>
-            )}
-          </ScrollView>
+                )
+              }
+              ListFooterComponent={
+                announcementsLoadingMore ? (
+                  <ActivityIndicator color={colors.primary} />
+                ) : null
+              }
+            />
+          )}
 
-          <Modal
+          <ResidentBottomSheet
             visible={filterVisible}
-            transparent
-            animationType="fade"
-            presentationStyle="overFullScreen"
-            statusBarTranslucent
-            onRequestClose={() => setFilterVisible(false)}
+            onClose={() => setFilterVisible(false)}
+            initialHeightRatio={0.55}
+            minimumHeight={420}
+            sheetStyle={styles.filterSheet}
+            handleAccessibilityLabel="Resize feed filters"
           >
-            <View style={styles.modalOverlay}>
-              <Pressable style={styles.modalBackdrop} onPress={() => setFilterVisible(false)} />
-              <View style={[styles.filterSheet, { paddingBottom: insets.bottom + 20 }]}>
-                <View style={styles.sheetHandle} />
                 <View style={styles.sheetHeader}>
                   <View>
                     <Text style={styles.sheetTitle}>Feed filters</Text>
@@ -392,37 +598,58 @@ export default function FeedScreen() {
                       {activeTab === 'community' ? 'Community reports' : 'Official updates'}
                     </Text>
                   </View>
-                  <TouchableOpacity style={styles.sheetClose} onPress={() => setFilterVisible(false)}>
-                    <Ionicons name="close" size={22} color={colors.text} />
-                  </TouchableOpacity>
                 </View>
 
                 {activeTab === 'community' ? (
                   <>
                     <Text style={styles.filterLabel}>Sort by</Text>
                     <View style={styles.optionRow}>
-                      {(['latest', 'oldest'] as FeedOrder[]).map((option) => (
+                      {(
+                        [
+                          ['activity', 'Latest Activity'],
+                          ['newest', 'Newest'],
+                          ['oldest', 'Oldest'],
+                        ] as const
+                      ).map(([option, label]) => (
                         <TouchableOpacity
                           key={option}
                           style={[styles.optionChip, communityOrder === option && styles.optionChipActive]}
-                          onPress={() => setCommunityOrder(option)}
+                          onPress={() => {
+                            setCommunityOrder(option);
+                            setVisibleCommunityLimit(COMMUNITY_PAGE_SIZE);
+                          }}
                         >
                           <Text style={[styles.optionText, communityOrder === option && styles.optionTextActive]}>
-                            {`${option[0].toUpperCase()}${option.slice(1)}`}
+                            {label}
                           </Text>
                         </TouchableOpacity>
                       ))}
                     </View>
                     <Text style={styles.filterLabel}>Status</Text>
                     <View style={styles.optionRow}>
-                      {(['all', 'active', 'verified', 'resolved'] as ReportStatusFilter[]).map((option) => (
+                      {(
+                        [
+                          ['all', 'All'],
+                          ['active', 'Active'],
+                          ['unverified', 'Under review'],
+                          ['verified', 'Verified'],
+                          ['escalated', 'Escalated'],
+                          ['resolved', 'Resolved'],
+                        ] as const satisfies readonly (readonly [
+                          CommunityReportStatusFilter,
+                          string,
+                        ])[]
+                      ).map(([option, label]) => (
                         <TouchableOpacity
                           key={option}
                           style={[styles.optionChip, statusFilter === option && styles.optionChipActive]}
-                          onPress={() => setStatusFilter(option)}
+                          onPress={() => {
+                            setStatusFilter(option);
+                            setVisibleCommunityLimit(COMMUNITY_PAGE_SIZE);
+                          }}
                         >
                           <Text style={[styles.optionText, statusFilter === option && styles.optionTextActive]}>
-                            {`${option[0].toUpperCase()}${option.slice(1)}`}
+                            {label}
                           </Text>
                         </TouchableOpacity>
                       ))}
@@ -464,9 +691,7 @@ export default function FeedScreen() {
                 <TouchableOpacity style={styles.applyButton} onPress={() => setFilterVisible(false)}>
                   <Text style={styles.applyButtonText}>Show results</Text>
                 </TouchableOpacity>
-              </View>
-            </View>
-          </Modal>
+          </ResidentBottomSheet>
 
         </View>
       </AnnouncementEngagementProvider>

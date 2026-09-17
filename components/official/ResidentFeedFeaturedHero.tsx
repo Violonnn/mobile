@@ -3,13 +3,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Share, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import type { SharedValue } from 'react-native-reanimated';
-import Animated, {
-  Easing,
-  useAnimatedStyle,
-  useSharedValue,
-  withTiming,
-} from 'react-native-reanimated';
 
 import type {
   AnnouncementMediaAttachment,
@@ -30,18 +23,20 @@ type HeroSlide = {
   media: ReportMediaAttachment | null;
 };
 
-type FadingSlideProps = {
-  activeImageIndex: SharedValue<number>;
-  imageIndex: number;
-  children: React.ReactNode;
-};
-
 function toReportMedia(item: AnnouncementMediaAttachment): ReportMediaAttachment {
   return {
     id: item.id,
     type: item.type,
     url: item.url,
     durationSeconds: item.durationSeconds,
+    thumbnailUrl: item.thumbnailUrl,
+    storagePath: item.storagePath,
+    thumbnailStoragePath: item.thumbnailStoragePath,
+    displayStoragePath: item.displayStoragePath,
+    width: item.width,
+    height: item.height,
+    bucket: 'announcement-media',
+    detailUrlResolved: item.detailUrlResolved,
   };
 }
 
@@ -71,21 +66,6 @@ function buildHeroSlides(announcements: AnnouncementRecord[]): HeroSlide[] {
   }));
 }
 
-function FadingSlide({ activeImageIndex, imageIndex, children }: FadingSlideProps) {
-  const fadeStyle = useAnimatedStyle(() => ({
-    opacity: withTiming(activeImageIndex.get() === imageIndex ? 1 : 0, {
-      duration: 900,
-      easing: Easing.inOut(Easing.cubic),
-    }),
-  }));
-
-  return (
-    <Animated.View style={[styles.slideFill, fadeStyle]} pointerEvents="none">
-      {children}
-    </Animated.View>
-  );
-}
-
 export default function ResidentFeedFeaturedHero({
   announcements,
   paused = false,
@@ -99,7 +79,6 @@ export default function ResidentFeedFeaturedHero({
 }) {
   const slides = useMemo(() => buildHeroSlides(announcements), [announcements]);
   const [activeSlideIndex, setActiveSlideIndex] = useState(0);
-  const visibleImageIndex = useSharedValue(0);
   const { getState, toggleUpvote } = useAnnouncementEngagement();
 
   const slideKey = slides.map((slide) => slide.key).join(',');
@@ -111,20 +90,15 @@ export default function ResidentFeedFeaturedHero({
   }
 
   useEffect(() => {
-    visibleImageIndex.set(0);
-  }, [slideKey, visibleImageIndex]);
-
-  useEffect(() => {
     if (paused || slides.length < 2) return;
 
     const fadeTimer = setTimeout(() => {
       const nextIndex = (activeSlideIndex + 1) % slides.length;
-      visibleImageIndex.set(nextIndex);
       setActiveSlideIndex(nextIndex);
     }, SLIDE_INTERVAL_MS);
 
     return () => clearTimeout(fadeTimer);
-  }, [activeSlideIndex, paused, slides.length, visibleImageIndex]);
+  }, [activeSlideIndex, paused, slides.length]);
 
   const safeIndex = slides.length === 0 ? 0 : Math.min(activeSlideIndex, slides.length - 1);
   const currentSlide = slides[safeIndex] ?? null;
@@ -161,16 +135,11 @@ export default function ResidentFeedFeaturedHero({
   return (
     <View style={styles.content}>
       <View style={styles.heroWrapper}>
-        {slides.map((slide, imageIndex) => (
-          <FadingSlide
-            key={slide.key}
-            imageIndex={imageIndex}
-            activeImageIndex={visibleImageIndex}
-          >
-            {slide.media ? (
+        <View style={styles.slideFill} pointerEvents="none">
+            {currentSlide?.media ? (
               <>
-                <CollageCellContent item={slide.media} />
-                {slide.media.type === 'video' ? (
+                <CollageCellContent item={currentSlide.media} />
+                {currentSlide.media.type === 'video' ? (
                   <View style={styles.videoBadge}>
                     <Ionicons name="play" size={12} color={colors.white} />
                   </View>
@@ -181,8 +150,7 @@ export default function ResidentFeedFeaturedHero({
                 <Ionicons name="megaphone-outline" size={36} color="rgba(255,255,255,0.72)" />
               </View>
             )}
-          </FadingSlide>
-        ))}
+        </View>
 
         <LinearGradient
           colors={[

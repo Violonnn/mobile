@@ -4,6 +4,7 @@
 import { supabase } from './supabase';
 import { getActiveSession } from './auth';
 import type { MapReportReporter } from './reports';
+import { isProfilePhotoSchemaMissing } from './schemaCompatibility';
 
 export type ReportComment = {
   id: string;
@@ -13,6 +14,7 @@ export type ReportComment = {
   createdAt: string;
   replyCount: number;
   isHidden: boolean;
+  authorRole: 'resident' | 'officer' | 'mayor' | 'admin';
   author: MapReportReporter;
 };
 
@@ -33,6 +35,12 @@ function mapCommentRow(row: Record<string, unknown>): ReportComment {
     createdAt: String(row.created_at ?? ''),
     replyCount: Number(row.reply_count ?? 0),
     isHidden: Boolean(row.is_hidden),
+    authorRole:
+      row.author_role === 'officer' ||
+      row.author_role === 'mayor' ||
+      row.author_role === 'admin'
+        ? row.author_role
+        : 'resident',
     author: {
       id: String(row.user_id ?? ''),
       firstName: String(row.author_first_name ?? ''),
@@ -40,12 +48,89 @@ function mapCommentRow(row: Record<string, unknown>): ReportComment {
       middleName: row.author_middle_name
         ? String(row.author_middle_name)
         : null,
+      avatarPath: row.author_avatar_path ? String(row.author_avatar_path) : null,
     },
   };
 }
 
-const COMMENT_SELECT =
+const LEGACY_COMMENT_SELECT =
   'id, report_id, user_id, body, parent_comment_id, is_hidden, created_at, reply_count, author_first_name, author_last_name, author_middle_name';
+const COMMENT_SELECT = `${LEGACY_COMMENT_SELECT}, author_role, author_avatar_path`;
+
+const PRIORITIZED_COMMENT_COUNT = 3;
+
+function isMissingCommentProjectionField(errorMessage: string | undefined): boolean {
+  const normalizedMessage = (errorMessage ?? '').toLocaleLowerCase();
+  return (
+    normalizedMessage.includes('author_role') ||
+    isProfilePhotoSchemaMissing(normalizedMessage)
+  );
+}
+
+/**
+ * Return three map-safe comment highlights: newest official responses first,
+ * then the latest resident comments to fill the remaining positions.
+ */
+export async function fetchPrioritizedReportComments(
+  reportId: string,
+): Promise<{ comments: ReportComment[]; error: string | null }> {
+  const baseQuery = () =>
+    supabase
+      .from('report_comments')
+      .select(COMMENT_SELECT)
+      .eq('report_id', reportId)
+      .eq('is_hidden', false)
+      .order('created_at', { ascending: false })
+      .limit(PRIORITIZED_COMMENT_COUNT);
+
+  const [officialResult, latestResult] = await Promise.all([
+    baseQuery().in('author_role', ['officer', 'mayor', 'admin']),
+    baseQuery(),
+  ]);
+
+  if (officialResult.error || latestResult.error) {
+    const roleColumnMissing =
+      isMissingCommentProjectionField(officialResult.error?.message) ||
+      isMissingCommentProjectionField(latestResult.error?.message);
+    if (roleColumnMissing) {
+      // During a rolling migration, load the legacy view immediately instead
+      // of breaking every comment thread. Roles default safely to resident.
+      const legacyResult = await supabase
+        .from('report_comments')
+        .select(LEGACY_COMMENT_SELECT)
+        .eq('report_id', reportId)
+        .eq('is_hidden', false)
+        .order('created_at', { ascending: false })
+        .limit(PRIORITIZED_COMMENT_COUNT);
+      return {
+        comments: (legacyResult.data ?? []).map((row) =>
+          mapCommentRow(row as Record<string, unknown>),
+        ),
+        error: legacyResult.error?.message ?? null,
+      };
+    }
+    return {
+      comments: [],
+      error: officialResult.error?.message ?? latestResult.error?.message ?? 'Could not load comments.',
+    };
+  }
+
+  const officialComments = (officialResult.data ?? []).map((row) =>
+    mapCommentRow(row as Record<string, unknown>),
+  );
+  const officialIds = new Set(officialComments.map((comment) => comment.id));
+  const latestResidentComments = (latestResult.data ?? [])
+    .map((row) => mapCommentRow(row as Record<string, unknown>))
+    .filter((comment) => !officialIds.has(comment.id));
+
+  return {
+    comments: [...officialComments, ...latestResidentComments].slice(
+      0,
+      PRIORITIZED_COMMENT_COUNT,
+    ),
+    error: null,
+  };
+}
 
 /**
  * Fetch only the requested top-level page. Supabase's exact count lets the UI
@@ -65,6 +150,25 @@ export async function fetchTopLevelComments(
     .range(0, Math.max(0, limit - 1));
   if (!includeHidden) query = query.eq('is_hidden', false);
   const { data, error, count } = await query;
+
+  if (error && isMissingCommentProjectionField(error.message)) {
+    let legacyQuery = supabase
+      .from('report_comments')
+      .select(LEGACY_COMMENT_SELECT, { count: 'exact' })
+      .eq('report_id', reportId)
+      .is('parent_comment_id', null)
+      .order('created_at', { ascending: false })
+      .range(0, Math.max(0, limit - 1));
+    if (!includeHidden) legacyQuery = legacyQuery.eq('is_hidden', false);
+    const legacyResult = await legacyQuery;
+    return {
+      comments: (legacyResult.data ?? []).map((row) =>
+        mapCommentRow(row as Record<string, unknown>),
+      ),
+      total: legacyResult.count ?? 0,
+      error: legacyResult.error?.message ?? null,
+    };
+  }
 
   if (error) return { comments: [], total: 0, error: error.message };
   return {
@@ -95,6 +199,25 @@ export async function fetchCommentReplies(
     .range(0, Math.max(0, limit - 1));
   if (!includeHidden) query = query.eq('is_hidden', false);
   const { data, error, count } = await query;
+
+  if (error && isMissingCommentProjectionField(error.message)) {
+    let legacyQuery = supabase
+      .from('report_comments')
+      .select(LEGACY_COMMENT_SELECT, { count: 'exact' })
+      .eq('report_id', reportId)
+      .eq('parent_comment_id', parentCommentId)
+      .order('created_at', { ascending: true })
+      .range(0, Math.max(0, limit - 1));
+    if (!includeHidden) legacyQuery = legacyQuery.eq('is_hidden', false);
+    const legacyResult = await legacyQuery;
+    return {
+      comments: (legacyResult.data ?? []).map((row) =>
+        mapCommentRow(row as Record<string, unknown>),
+      ),
+      total: legacyResult.count ?? 0,
+      error: legacyResult.error?.message ?? null,
+    };
+  }
 
   if (error) return { comments: [], total: 0, error: error.message };
   return {

@@ -9,6 +9,7 @@ export const colors = {
   secondary: "#60A5FA",      // lighter blue — highlights
   danger: "#F97316",         // orange — warning badges
   unverified: "#DC2626",     // red — report verification is still needed
+  escalated: "#B75D32",      // muted orange — report escalated to municipal response
   success: "#22C55E",        // green — verified badges
   purple: "#7C3AED",         // purple — weather alert icon
   white: "#FFFFFF",

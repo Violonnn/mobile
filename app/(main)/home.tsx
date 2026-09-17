@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  AppState,
+  type AppStateStatus,
   ImageBackground,
   RefreshControl,
   ScrollView,
@@ -20,7 +22,8 @@ import QuickAccessModal, {
   type QuickAccessType,
 } from '../../components/home/QuickAccessModal';
 import HomeUpdateCard from '../../components/home/HomeUpdateCard';
-import { NotificationsPlaceholder } from '../../components/navigation/AppHeader';
+import NotificationsModal from '../../components/notifications/NotificationsModal';
+import ProfileAvatar from '../../components/profile/ProfileAvatar';
 import ReportModal from '../../components/ui/ReportModal';
 import WelcomeModal from '../../components/ui/WelcomeModal';
 import { useAnnouncements } from '../../hooks/useAnnouncements';
@@ -30,40 +33,67 @@ import { useResources } from '../../hooks/useResources';
 import type { AnnouncementRecord } from '../../lib/announcements';
 import { getActiveSession } from '../../lib/auth';
 import { fetchBarangays } from '../../lib/barangays';
+import { getCurrentGpsWithTimeout, type GpsPosition } from '../../lib/location';
 import { getResidentMapTheme, type ResidentMapTheme } from '../../lib/mapPreferences';
 import { fetchMyProfile } from '../../lib/profile';
 import {
   distanceInMeters,
+  NEARBY_REPORT_RADIUS_METERS,
   normalizeSearchText,
-  type Coordinate,
 } from '../../lib/reportProximity';
 import type { MapReportMarker } from '../../lib/reports';
 import { homeColors, homeStyles as styles } from '../../styles/screens/home.styles';
 import { colors, spacing } from '../../styles/theme';
 
-type BarangayCenter = Coordinate;
-
 type HomeSearchResult =
   | { kind: 'announcement'; item: AnnouncementRecord }
   | { kind: 'report'; item: MapReportMarker };
+
+function formatLastUpdateAge(updatedAt: number, now: number): string {
+  const elapsedSeconds = Math.max(0, Math.floor((now - updatedAt) / 1_000));
+  if (elapsedSeconds < 60) return 'less than a minute';
+
+  const elapsedMinutes = Math.floor(elapsedSeconds / 60);
+  if (elapsedMinutes < 60) {
+    return `${elapsedMinutes} ${elapsedMinutes === 1 ? 'minute' : 'minutes'}`;
+  }
+
+  const elapsedHours = Math.floor(elapsedMinutes / 60);
+  if (elapsedHours < 24) {
+    return `${elapsedHours} ${elapsedHours === 1 ? 'hour' : 'hours'}`;
+  }
+
+  const elapsedDays = Math.floor(elapsedHours / 24);
+  return `${elapsedDays} ${elapsedDays === 1 ? 'day' : 'days'}`;
+}
 
 export default function HomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { welcome } = useLocalSearchParams<{ welcome?: string }>();
   const searchInputRef = useRef<TextInput>(null);
+  const homeScrollRef = useRef<ScrollView>(null);
+  const locationRequestIdRef = useRef(0);
+  const appStateRef = useRef<AppStateStatus>(AppState.currentState);
 
   const [loading, setLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [avatarPath, setAvatarPath] = useState<string | null>(null);
   const [barangay, setBarangay] = useState('');
   const [residentBarangayId, setResidentBarangayId] = useState<string | null>(null);
-  const [barangayCenter, setBarangayCenter] = useState<BarangayCenter | null>(null);
+  const [currentLocation, setCurrentLocation] = useState<GpsPosition | null>(null);
+  const [nearbyLocationLoading, setNearbyLocationLoading] = useState(true);
+  const [nearbyLocationError, setNearbyLocationError] = useState<string | null>(null);
+  const [relativeTimeNow, setRelativeTimeNow] = useState<number | null>(null);
   const [showWelcome, setShowWelcome] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [notificationUnreadCount, setNotificationUnreadCount] = useState(0);
   const [quickAccessType, setQuickAccessType] = useState<QuickAccessType | null>(null);
   const [focusedNearbyReportId, setFocusedNearbyReportId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [isHeaderCollapsed, setIsHeaderCollapsed] = useState(false);
@@ -81,13 +111,18 @@ export default function HomeScreen() {
     loading: announcementsLoading,
     error: announcementsError,
     refresh: refreshAnnouncements,
-  } = useAnnouncements({ limit: 20, realtime: false });
+  } = useAnnouncements({ limit: 6, realtime: false });
   const {
     reports,
     loading: reportsLoading,
     error: reportsError,
+    lastUpdatedAt: reportsLastUpdatedAt,
     reload: reloadReports,
-  } = useReports({ realtime: true });
+  } = useReports({
+    realtime: false,
+    limit: 12,
+    includeMediaSummaries: true,
+  });
   const {
     hotlines,
     facilities,
@@ -110,9 +145,10 @@ export default function HomeScreen() {
       if (!session) {
         setIsAuthenticated(false);
         setFirstName('');
+        setLastName('');
+        setAvatarPath(null);
         setBarangay('');
         setResidentBarangayId(null);
-        setBarangayCenter(null);
         return;
       }
 
@@ -124,6 +160,9 @@ export default function HomeScreen() {
       const profile = profileResult.profile;
       if (!profile) return;
 
+      setLastName(profile.last_name);
+      setAvatarPath(profile.avatar_path);
+
       setFirstName(profile.first_name);
       setBarangay(profile.barangay);
 
@@ -132,17 +171,33 @@ export default function HomeScreen() {
         (option) => normalizeSearchText(option.name) === normalizedProfileBarangay,
       );
       setResidentBarangayId(matchingBarangay?.id ?? null);
-      if (matchingBarangay?.latitude != null && matchingBarangay.longitude != null) {
-        setBarangayCenter({
-          latitude: matchingBarangay.latitude,
-          longitude: matchingBarangay.longitude,
-        });
-      } else {
-        setBarangayCenter(null);
-      }
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  const loadCurrentLocation = useCallback(async () => {
+    const requestId = locationRequestIdRef.current + 1;
+    locationRequestIdRef.current = requestId;
+    setNearbyLocationLoading(true);
+    setNearbyLocationError(null);
+
+    const { position, error } = await getCurrentGpsWithTimeout();
+    if (requestId !== locationRequestIdRef.current) return;
+
+    setNearbyLocationLoading(false);
+    if (!position) {
+      setCurrentLocation(null);
+      setNearbyLocationError(
+        error === 'Location permission is required to submit a report.'
+          ? 'Location permission is required to find reports near you.'
+          : error ?? 'Could not get your current location.',
+      );
+      return;
+    }
+
+    setCurrentLocation(position);
+    setNearbyLocationError(null);
   }, []);
 
   // Reload identity and barangay whenever Settings sends the resident back here.
@@ -150,6 +205,14 @@ export default function HomeScreen() {
     useCallback(() => {
       void loadSession();
     }, [loadSession]),
+  );
+
+  // Nearby reports always start with a fresh device position when Home opens.
+  useFocusEffect(
+    useCallback(() => {
+      if (!isAuthenticated) return;
+      void loadCurrentLocation();
+    }, [isAuthenticated, loadCurrentLocation]),
   );
 
   // Keep the Home preview synchronized with the resident's saved Map preference.
@@ -171,30 +234,57 @@ export default function HomeScreen() {
     if (!loading && !isAuthenticated) router.replace('/');
   }, [loading, isAuthenticated, router]);
 
-  const normalizedBarangay = normalizeSearchText(barangay);
-  const reportsInBarangay = useMemo(() => {
-    const scopedReports = reports.filter((report) => {
-      if (residentBarangayId) return report.barangay_id === residentBarangayId;
-      if (!normalizedBarangay) return false;
-      return normalizeSearchText(report.addressText ?? '').includes(normalizedBarangay);
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      const previousState = appStateRef.current;
+      appStateRef.current = nextState;
+      const returnedToForeground =
+        nextState === 'active' &&
+        (previousState === 'background' || previousState === 'inactive');
+      if (!returnedToForeground || !isAuthenticated) return;
+
+      // Reports and GPS must refresh together because proximity needs both.
+      void Promise.all([reloadReports(), loadCurrentLocation()]);
     });
 
-    if (!barangayCenter) return scopedReports;
-    return [...scopedReports].sort(
-      (first, second) =>
-        distanceInMeters(barangayCenter, first) -
-        distanceInMeters(barangayCenter, second),
-    );
-  }, [barangayCenter, normalizedBarangay, reports, residentBarangayId]);
+    return () => subscription.remove();
+  }, [isAuthenticated, loadCurrentLocation, reloadReports]);
 
-  const nearbyReports = reportsInBarangay;
+  useEffect(() => {
+    const timer = setInterval(() => setRelativeTimeNow(Date.now()), 30_000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const normalizedBarangay = normalizeSearchText(barangay);
+  const activeReports = useMemo(
+    () => reports.filter((report) => report.status.trim().toLocaleLowerCase() !== 'resolved'),
+    [reports],
+  );
+  const activeReportsInBarangay = useMemo(
+    () =>
+      activeReports.filter((report) => {
+        if (residentBarangayId) return report.barangay_id === residentBarangayId;
+        if (!normalizedBarangay) return false;
+        return normalizeSearchText(report.addressText ?? '').includes(normalizedBarangay);
+      }),
+    [activeReports, normalizedBarangay, residentBarangayId],
+  );
+  const nearbyReports = useMemo(() => {
+    if (!currentLocation) return [];
+
+    return activeReports
+      .map((report) => ({
+        report,
+        distance: distanceInMeters(currentLocation, report),
+      }))
+      .filter(({ distance }) => distance <= NEARBY_REPORT_RADIUS_METERS)
+      .sort((first, second) => first.distance - second.distance)
+      .map(({ report }) => report);
+  }, [activeReports, currentLocation]);
   const focusedNearbyReport =
     nearbyReports.find((report) => report.id === focusedNearbyReportId) ??
     nearbyReports[0] ??
     null;
-  const activeReportsInBarangay = reportsInBarangay.filter(
-    (report) => report.status !== 'resolved',
-  );
   const municipalAnnouncement = announcements.find(
     (announcement) => announcement.scope === 'municipal',
   );
@@ -250,12 +340,15 @@ export default function HomeScreen() {
           }`
         : 'No active alerts';
   const areaStatusSupportingText = reportsLoading
-    ? 'Loading nearby reports…'
+    ? 'Updating reports now'
     : areaStatusUnavailable
       ? 'Pull down to try again'
-      : `${reportsInBarangay.length} ${
-          reportsInBarangay.length === 1 ? 'report' : 'reports'
-        } nearby`;
+      : reportsLastUpdatedAt
+        ? `Last update ${formatLastUpdateAge(
+            reportsLastUpdatedAt,
+            relativeTimeNow ?? reportsLastUpdatedAt,
+          )} ago`
+        : 'Last update unavailable';
   const goToFeed = () => router.push('/(main)/feed');
   const openReportInMap = (reportId: string) => {
     router.push({ pathname: '/(main)/map', params: { reportId } });
@@ -289,13 +382,25 @@ export default function HomeScreen() {
   };
   const handleRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([
-      refreshAnnouncements(),
-      reloadReports(),
-      refreshResources(),
-      refreshCenters(),
-    ]);
-    setRefreshing(false);
+    try {
+      await Promise.all([
+        refreshAnnouncements(),
+        reloadReports(),
+        loadCurrentLocation(),
+        refreshResources(),
+        refreshCenters(),
+      ]);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const revealSearch = () => {
+    setIsHeaderCollapsed(false);
+    homeScrollRef.current?.scrollTo({ y: 0, animated: true });
+
+    // Wait for the expanded header to commit before focusing its input.
+    requestAnimationFrame(() => searchInputRef.current?.focus());
   };
 
   const areaStatusContent = (
@@ -333,28 +438,6 @@ export default function HomeScreen() {
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <StatusBar style="dark" />
-      <ScrollView
-        contentContainerStyle={[styles.scrollContent, { paddingTop: spacing.xs }]}
-        showsVerticalScrollIndicator={false}
-        stickyHeaderIndices={[0]}
-        scrollEventThrottle={16}
-        onScroll={({ nativeEvent }) => {
-          const shouldCollapseHeader = nativeEvent.contentOffset.y > 72;
-          setIsHeaderCollapsed((currentValue) =>
-            currentValue === shouldCollapseHeader ? currentValue : shouldCollapseHeader,
-          );
-        }}
-        keyboardDismissMode="on-drag"
-        keyboardShouldPersistTaps="handled"
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-            tintColor={colors.primary}
-            colors={[colors.primary]}
-          />
-        }
-      >
         <View style={styles.residentStickyHeader}>
           <View style={styles.residentHeaderContent}>
             {isHeaderCollapsed ? (
@@ -364,7 +447,7 @@ export default function HomeScreen() {
                   <TouchableOpacity
                     style={styles.compactHeaderButton}
                     activeOpacity={0.75}
-                    onPress={() => searchInputRef.current?.focus()}
+                    onPress={revealSearch}
                     accessibilityRole="button"
                     accessibilityLabel="Focus search"
                   >
@@ -378,7 +461,9 @@ export default function HomeScreen() {
                     accessibilityLabel="Notifications"
                   >
                     <Ionicons name="notifications-outline" size={28} color={homeColors.ink} />
-                    <View style={styles.notificationDot} />
+                    {notificationUnreadCount > 0 ? (
+                      <View style={styles.notificationDot} />
+                    ) : null}
                   </TouchableOpacity>
                 </View>
               </View>
@@ -405,7 +490,9 @@ export default function HomeScreen() {
                     accessibilityLabel="Notifications"
                   >
                     <Ionicons name="notifications-outline" size={28} color={homeColors.ink} />
-                    <View style={styles.notificationDot} />
+                    {notificationUnreadCount > 0 ? (
+                      <View style={styles.notificationDot} />
+                    ) : null}
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.avatar}
@@ -414,47 +501,83 @@ export default function HomeScreen() {
                     accessibilityRole="button"
                     accessibilityLabel="Open profile"
                   >
-                    <Text style={styles.avatarText}>
-                      {firstName.trim().charAt(0).toLocaleUpperCase() || 'R'}
-                    </Text>
+                    <ProfileAvatar
+                      avatarPath={avatarPath}
+                      firstName={firstName}
+                      lastName={lastName}
+                      size={46}
+                      style={styles.avatar}
+                      textStyle={styles.avatarText}
+                      accessibilityLabel="Your profile picture"
+                    />
                   </TouchableOpacity>
                 </View>
               </View>
             )}
+            {!isHeaderCollapsed ? (
+              <View style={styles.searchBar}>
+                <Ionicons name="search-outline" size={23} color={homeColors.ink} />
+                <TextInput
+                  ref={searchInputRef}
+                  style={styles.searchInput}
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  onFocus={() => setIsSearchFocused(true)}
+                  onBlur={() => setIsSearchFocused(false)}
+                  placeholder="Search DisasterLink"
+                  placeholderTextColor={colors.textMuted}
+                  returnKeyType="search"
+                  autoCapitalize="none"
+                  accessibilityLabel="Search announcements and reports"
+                />
+                {searchQuery ? (
+                  <TouchableOpacity
+                    onPress={() => setSearchQuery('')}
+                    accessibilityRole="button"
+                    accessibilityLabel="Clear search"
+                  >
+                    <Ionicons name="close-circle" size={20} color={colors.textMuted} />
+                  </TouchableOpacity>
+                ) : (
+                  <>
+                    <View style={styles.searchDivider} />
+                    <Ionicons name="options-outline" size={21} color={homeColors.ink} />
+                  </>
+                )}
+              </View>
+            ) : null}
           </View>
         </View>
 
+      <ScrollView
+        ref={homeScrollRef}
+        style={styles.homeScrollView}
+        contentContainerStyle={[styles.scrollContent, { paddingTop: spacing.xs }]}
+        showsVerticalScrollIndicator={false}
+        scrollEventThrottle={16}
+        onScroll={({ nativeEvent }) => {
+          const shouldCollapseHeader =
+            nativeEvent.contentOffset.y > 72 &&
+            !isSearchFocused &&
+            searchQuery.trim().length === 0;
+          setIsHeaderCollapsed((currentValue) =>
+            currentValue === shouldCollapseHeader ? currentValue : shouldCollapseHeader,
+          );
+        }}
+        keyboardDismissMode="on-drag"
+        keyboardShouldPersistTaps="handled"
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={colors.primary}
+            colors={[colors.primary]}
+          />
+        }
+      >
+
         <View style={styles.headerBody}>
           <View style={styles.heroSection}>
-            <View style={styles.searchBar}>
-              <Ionicons name="search-outline" size={23} color={homeColors.ink} />
-              <TextInput
-                ref={searchInputRef}
-                style={styles.searchInput}
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-                placeholder="Search DisasterLink"
-                placeholderTextColor={colors.textMuted}
-                returnKeyType="search"
-                autoCapitalize="none"
-                accessibilityLabel="Search announcements and reports"
-              />
-              {searchQuery ? (
-                <TouchableOpacity
-                  onPress={() => setSearchQuery('')}
-                  accessibilityRole="button"
-                  accessibilityLabel="Clear search"
-                >
-                  <Ionicons name="close-circle" size={20} color={colors.textMuted} />
-                </TouchableOpacity>
-              ) : (
-                <>
-                  <View style={styles.searchDivider} />
-                  <Ionicons name="options-outline" size={21} color={homeColors.ink} />
-                </>
-              )}
-            </View>
-
             {searchQuery.trim() ? (
               <View style={styles.searchResultsCard}>
                 {searchResults.length === 0 ? (
@@ -620,8 +743,8 @@ export default function HomeScreen() {
                   reports={nearbyReports}
                   focusedReport={focusedNearbyReport}
                   tone={mapTheme}
-                  loading={reportsLoading}
-                  error={reportsError}
+                  loading={reportsLoading || nearbyLocationLoading}
+                  error={reportsError ?? nearbyLocationError}
                   onFocusReport={setFocusedNearbyReportId}
                   onOpenReport={openReportInMap}
                 />
@@ -652,9 +775,10 @@ export default function HomeScreen() {
         onSubmitted={openReportInMap}
       />
 
-      <NotificationsPlaceholder
+      <NotificationsModal
         visible={notificationsOpen}
         onClose={() => setNotificationsOpen(false)}
+        onUnreadCountChange={setNotificationUnreadCount}
       />
       <WelcomeModal
         visible={showWelcome}

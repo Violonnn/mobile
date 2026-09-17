@@ -10,7 +10,7 @@ export const headerColors = {
   ink: '#1C2B4B',
   muted: 'rgba(255, 255, 255, 0.85)',
   pill: 'rgba(255, 255, 255, 0.35)',
-  dot: '#F97316',
+  dot: '#E14348',
 };
 
 export const headerStyles = StyleSheet.create({
@@ -82,7 +82,17 @@ export const headerStyles = StyleSheet.create({
     gap: spacing.sm,
   },
   plainBellButton: {
+    position: 'relative',
     padding: spacing.xs,
+  },
+  plainBellDot: {
+    position: 'absolute',
+    top: 4,
+    right: 3,
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+    backgroundColor: headerColors.dot,
   },
   // User avatar next to the bell — same initial-in-circle format used
   // across the app (no profile pictures yet).
@@ -104,59 +114,6 @@ export const headerStyles = StyleSheet.create({
     color: colors.primary,
   },
 
-  // ---- Notifications placeholder sheet -----------------------------------
-  notifOverlay: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.xl,
-  },
-  notifBackdrop: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(17, 24, 39, 0.45)',
-  },
-  notifCard: {
-    width: '100%',
-    maxWidth: 340,
-    backgroundColor: colors.card,
-    borderRadius: radius.xl,
-    paddingVertical: spacing.xl,
-    paddingHorizontal: spacing.lg,
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  notifIconCircle: {
-    width: 56,
-    height: 56,
-    borderRadius: radius.full,
-    backgroundColor: 'rgba(170, 192, 220, 0.25)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.xs,
-  },
-  notifTitle: {
-    fontFamily: fonts.bold,
-    fontSize: fontSizes.lg,
-    color: colors.text,
-  },
-  notifSubtitle: {
-    fontFamily: fonts.regular,
-    fontSize: fontSizes.sm,
-    color: colors.textMuted,
-    textAlign: 'center',
-  },
-  notifCloseButton: {
-    marginTop: spacing.sm,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.xl,
-    borderRadius: radius.full,
-    backgroundColor: colors.themeSoft,
-  },
-  notifCloseText: {
-    fontFamily: fonts.semibold,
-    fontSize: fontSizes.md,
-    color: colors.white,
-  },
   brandTitle: {
     flex: 1,
     marginRight: spacing.md,
@@ -195,14 +152,12 @@ export const headerStyles = StyleSheet.create({
   },
   bellDot: {
     position: 'absolute',
-    top: 9,
-    right: 10,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    top: 8,
+    right: 9,
+    width: 9,
+    height: 9,
+    borderRadius: 5,
     backgroundColor: headerColors.dot,
-    borderWidth: 1.5,
-    borderColor: headerColors.header,
   },
   avatar: {
     width: 42,

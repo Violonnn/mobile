@@ -121,11 +121,60 @@ export const feedStyles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: spacing.md,
   },
+  communityListContent: {
+    width: '100%',
+    maxWidth: 760,
+    alignSelf: 'center',
+    paddingHorizontal: 20,
+    paddingTop: spacing.md,
+  },
   officialContentInner: {
     paddingTop: spacing.md,
   },
   reportList: {
     gap: 0,
+  },
+  reportSectionHeader: {
+    marginBottom: spacing.md,
+  },
+  reportSectionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  reportSectionTitle: {
+    flexShrink: 1,
+    fontFamily: fonts.bold,
+    fontSize: fontSizes.lg,
+    color: colors.text,
+  },
+  feedScopeSwitch: {
+    width: 34,
+    height: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.full,
+    backgroundColor: colors.primaryLight,
+  },
+  reportSectionSubtitle: {
+    marginTop: 3,
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.sm,
+    lineHeight: 18,
+    color: colors.textMuted,
+  },
+  seeMoreButton: {
+    width: 38,
+    height: 38,
+    marginTop: spacing.xxl,
+    marginBottom: spacing.xxl,
+    alignSelf: 'center',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: colors.text,
+    borderRadius: radius.full,
+    backgroundColor: 'transparent',
   },
   officialPostList: {
     gap: 0,
@@ -177,27 +226,9 @@ export const feedStyles = StyleSheet.create({
     fontSize: fontSizes.md,
     color: colors.white,
   },
-  modalOverlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  modalBackdrop: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(17, 24, 39, 0.34)',
-  },
   filterSheet: {
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
     paddingHorizontal: 20,
-    paddingTop: spacing.sm,
     backgroundColor: colors.white,
-  },
-  sheetHandle: {
-    width: 44,
-    height: 5,
-    alignSelf: 'center',
-    borderRadius: radius.full,
-    backgroundColor: colors.border,
   },
   sheetHeader: {
     flexDirection: 'row',
@@ -216,14 +247,6 @@ export const feedStyles = StyleSheet.create({
     fontFamily: fonts.regular,
     fontSize: fontSizes.md,
     color: colors.textMuted,
-  },
-  sheetClose: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#F3F4F6',
   },
   filterLabel: {
     marginBottom: spacing.sm,

@@ -146,6 +146,10 @@ export const bottomNavStyles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 8,
   },
+  reportButtonNotSent: {
+    backgroundColor: '#D15A3A',
+    shadowColor: '#D15A3A',
+  },
   reportLabel: {
     position: 'absolute',
     top: REPORT_LABEL_TOP,
@@ -156,5 +160,8 @@ export const bottomNavStyles = StyleSheet.create({
     fontSize: 11,
     lineHeight: navMetrics.labelLineHeight,
     color: navColors.labelActive,
+  },
+  reportLabelNotSent: {
+    color: '#B4432A',
   },
 });

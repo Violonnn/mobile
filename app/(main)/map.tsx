@@ -3,11 +3,13 @@ import {
   Animated,
   PanResponder,
   Text,
+  TouchableOpacity,
   useWindowDimensions,
   View,
 } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import InteractiveMap, {
@@ -15,10 +17,12 @@ import InteractiveMap, {
   type MapLayerVisibility,
   type MapResourceMarker,
 } from '../../components/map/InteractiveMap';
+import HighlightedReportCallout from '../../components/map/HighlightedReportCallout';
 import ReportMapDetailSheet from '../../components/map/ReportMapDetailSheet';
-import ResidentReportPreviewSheet from '../../components/map/ResidentReportPreviewSheet';
 import ResourceMapDetailSheet from '../../components/map/ResourceMapDetailSheet';
-import YourContributionsPanel from '../../components/map/YourContributionsPanel';
+import YourContributionsPanel, {
+  type ContributionPanelState,
+} from '../../components/map/YourContributionsPanel';
 import { ReportEngagementProvider } from '../../components/report/ReportEngagementProvider';
 import { useEvacuationCenters } from '../../hooks/useEvacuationCenters';
 import { useReports } from '../../hooks/useReports';
@@ -31,18 +35,28 @@ import type { MapReportMarker } from '../../lib/reports';
 import { evacuationStatusLabel, facilityTypeLabel } from '../../lib/resources';
 import { navMetrics } from '../../styles/components/bottomNav.styles';
 import { residentMapStyles as styles } from '../../styles/screens/residentMap.styles';
+import { colors, spacing } from '../../styles/theme';
 
 const COLLAPSED_HEADER_HEIGHT = 88;
+const CONTRIBUTION_PANEL_STATES: ContributionPanelState[] = [
+  'collapsed',
+  'medium',
+  'expanded',
+];
 
 export default function MapScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
-  const { reportId, resourceId, resourceKind } = useLocalSearchParams<{
+  const { reportId, resourceId, resourceKind, fromNotification } = useLocalSearchParams<{
     reportId?: string | string[];
     resourceId?: string | string[];
     resourceKind?: string | string[];
+    fromNotification?: string | string[];
   }>();
+  const openedFromNotification = Array.isArray(fromNotification)
+    ? fromNotification[0] === '1'
+    : fromNotification === '1';
   const {
     reports: markers,
     error,
@@ -58,10 +72,14 @@ export default function MapScreen() {
   const [mapTheme, setMapTheme] = useState<ResidentMapTheme>('light');
   const [selectedReportIds, setSelectedReportIds] = useState<string[]>([]);
   const [fullReportVisible, setFullReportVisible] = useState(false);
+  const [highlightedReportId, setHighlightedReportId] = useState<string | null>(null);
   const [selectedResource, setSelectedResource] = useState<MapResourceMarker | null>(null);
   const [focusTarget, setFocusTarget] = useState<MapFocusTarget | null>(null);
-  const [contributionsCollapsed, setContributionsCollapsed] = useState(false);
+  const [contributionPanelState, setContributionPanelState] =
+    useState<ContributionPanelState>('medium');
+  const [contributionPanelStateIndex] = useState(() => createMutableNumber(1));
   const [contributionTranslateY] = useState(() => new Animated.Value(0));
+  const [highlightedReportTranslateY] = useState(() => new Animated.Value(0));
   const [dragStartOffset] = useState(() => createMutableNumber());
   const [layers, setLayers] = useState<MapLayerVisibility>({
     reports: true,
@@ -121,9 +139,11 @@ export default function MapScreen() {
       if (!requestedReport) return;
 
       handledRouteReportIdRef.current = requestedReportId;
+      setLayers((current) => ({ ...current, reports: true }));
       setSelectedResource(null);
       setFullReportVisible(false);
-      setSelectedReportIds([requestedReport.id]);
+      setSelectedReportIds([]);
+      setHighlightedReportId(requestedReport.id);
       setFocusTarget({
         reportId: requestedReport.id,
         latitude: requestedReport.latitude,
@@ -194,6 +214,7 @@ export default function MapScreen() {
       if (!requestedResource) return;
 
       handledRouteResourceIdRef.current = requestedResourceId;
+      setHighlightedReportId(null);
       setSelectedReportIds([]);
       setFullReportVisible(false);
       setSelectedResource(requestedResource);
@@ -227,6 +248,11 @@ export default function MapScreen() {
       .filter((marker): marker is MapReportMarker => marker != null);
   }, [markers, selectedReportIds]);
 
+  const highlightedReport = useMemo(
+    () => markers.find((marker) => marker.id === highlightedReportId) ?? null,
+    [highlightedReportId, markers],
+  );
+
   const contributions = useMemo(() => {
     if (!currentUserId) return [];
     return markers
@@ -237,11 +263,20 @@ export default function MapScreen() {
       );
   }, [currentUserId, markers]);
 
-  const openContribution = (report: MapReportMarker) => {
-    setLayers((current) => ({ ...current, reports: true }));
+  const openContribution = () => {
     setSelectedResource(null);
     setFullReportVisible(false);
-    setSelectedReportIds([report.id]);
+    setSelectedReportIds([]);
+    setHighlightedReportId(null);
+    settleContributions('expanded');
+  };
+
+  const showContributionOnMap = (report: MapReportMarker) => {
+    setLayers((current) => ({ ...current, reports: true }));
+    setSelectedResource(null);
+    setSelectedReportIds([]);
+    setFullReportVisible(false);
+    setHighlightedReportId(report.id);
     setFocusTarget({
       reportId: report.id,
       latitude: report.latitude,
@@ -250,37 +285,115 @@ export default function MapScreen() {
   };
 
   const landscape = windowWidth > windowHeight;
-  const contributionSheetHeight = landscape
+  const contributionMediumHeight = landscape
     ? Math.max(240, Math.min(windowHeight * 0.7, 430))
     : Math.max(300, Math.min(windowHeight * 0.46, 520));
+  const contributionFullHeight = Math.max(300, windowHeight - insets.top);
   const contributionBottomInset = navMetrics.barHeight + insets.bottom + 24;
-  const collapsedOffset = Math.max(
+  const contributionHiddenOffset = Math.max(
     0,
-    contributionSheetHeight -
-      navMetrics.barHeight -
-      insets.bottom -
-      COLLAPSED_HEADER_HEIGHT,
+    contributionFullHeight - navMetrics.barHeight - insets.bottom,
+  );
+  const contributionOffsets = useMemo(
+    () => ({
+      expanded: 0,
+      medium: Math.max(0, contributionFullHeight - contributionMediumHeight),
+      collapsed: Math.max(
+        0,
+        contributionFullHeight -
+          navMetrics.barHeight -
+          insets.bottom -
+          COLLAPSED_HEADER_HEIGHT,
+      ),
+    }),
+    [contributionFullHeight, contributionMediumHeight, insets.bottom],
   );
 
   const settleContributions = useCallback(
-    (collapse: boolean) => {
-      setContributionsCollapsed(collapse);
+    (nextState: ContributionPanelState) => {
+      contributionPanelStateIndex.write(CONTRIBUTION_PANEL_STATES.indexOf(nextState));
+      setContributionPanelState(nextState);
       Animated.spring(contributionTranslateY, {
-        toValue: collapse ? collapsedOffset : 0,
+        toValue: contributionOffsets[nextState],
         damping: 22,
         stiffness: 230,
         mass: 0.85,
         useNativeDriver: true,
       }).start();
     },
-    [collapsedOffset, contributionTranslateY],
+    [contributionOffsets, contributionPanelStateIndex, contributionTranslateY],
   );
 
   useEffect(() => {
-    contributionTranslateY.setValue(
-      contributionsCollapsed ? collapsedOffset : 0,
-    );
-  }, [collapsedOffset, contributionTranslateY, contributionsCollapsed]);
+    const currentState = CONTRIBUTION_PANEL_STATES[contributionPanelStateIndex.read()];
+    contributionTranslateY.setValue(contributionOffsets[currentState]);
+  }, [contributionOffsets, contributionPanelStateIndex, contributionTranslateY]);
+
+  useEffect(() => {
+    // Temporarily move the contribution sheet behind the bottom navigation so
+    // the highlighted report can replace it without losing the panel's state.
+    const currentOffset = contributionOffsets[contributionPanelState];
+    Animated.spring(highlightedReportTranslateY, {
+      toValue: highlightedReportId
+        ? Math.max(0, contributionHiddenOffset - currentOffset)
+        : 0,
+      damping: 22,
+      stiffness: 230,
+      mass: 0.85,
+      useNativeDriver: true,
+    }).start();
+  }, [
+    contributionHiddenOffset,
+    contributionOffsets,
+    contributionPanelState,
+    highlightedReportId,
+    highlightedReportTranslateY,
+  ]);
+
+  const handleReportSelection = useCallback(
+    (reportIds: string[]) => {
+      setSelectedResource(null);
+      setFullReportVisible(false);
+
+      if (reportIds.length === 1) {
+        const report = markers.find((marker) => marker.id === reportIds[0]);
+        if (!report) return;
+
+        setSelectedReportIds([]);
+        setHighlightedReportId(report.id);
+        return;
+      }
+
+      setHighlightedReportId(null);
+      setSelectedReportIds(reportIds);
+    },
+    [markers],
+  );
+
+  const openHighlightedReportDetails = useCallback(() => {
+    if (!highlightedReport) return;
+    setSelectedReportIds([highlightedReport.id]);
+    setFullReportVisible(true);
+  }, [highlightedReport]);
+
+  const clearReportHighlight = useCallback(() => {
+    setHighlightedReportId(null);
+  }, []);
+
+  const openReportInCommunity = useCallback(
+    (targetReportId: string) => {
+      setFullReportVisible(false);
+      setSelectedReportIds([]);
+      router.navigate({
+        pathname: '/(main)/feed',
+        params: {
+          reportId: targetReportId,
+          openRequest: `${targetReportId}-${Date.now()}`,
+        },
+      });
+    },
+    [router],
+  );
 
   const contributionPanResponder = useMemo(
     () =>
@@ -295,7 +408,7 @@ export default function MapScreen() {
         onPanResponderMove: (_, gesture) => {
           const nextOffset = Math.max(
             0,
-            Math.min(collapsedOffset, dragStartOffset.read() + gesture.dy),
+            Math.min(contributionOffsets.collapsed, dragStartOffset.read() + gesture.dy),
           );
           contributionTranslateY.setValue(nextOffset);
         },
@@ -303,21 +416,42 @@ export default function MapScreen() {
           contributionTranslateY.stopAnimation((currentOffset) => {
             const draggedDown = gesture.vy > 0.35 || gesture.dy > 54;
             const draggedUp = gesture.vy < -0.35 || gesture.dy < -54;
-            const collapse = draggedDown
-              ? true
-              : draggedUp
-                ? false
-                : currentOffset > collapsedOffset / 2;
-            settleContributions(collapse);
+
+            if (draggedDown) {
+              settleContributions(
+                contributionPanelState === 'expanded' ? 'medium' : 'collapsed',
+              );
+              return;
+            }
+
+            if (draggedUp) {
+              settleContributions(
+                contributionPanelState === 'collapsed' ? 'medium' : 'expanded',
+              );
+              return;
+            }
+
+            const closestState = (
+              Object.keys(contributionOffsets) as ContributionPanelState[]
+            ).reduce((closest, candidate) => {
+              const closestDistance = Math.abs(currentOffset - contributionOffsets[closest]);
+              const candidateDistance = Math.abs(currentOffset - contributionOffsets[candidate]);
+              return candidateDistance < closestDistance ? candidate : closest;
+            }, contributionPanelState);
+            settleContributions(closestState);
           });
         },
         onPanResponderTerminate: () => {
-          contributionTranslateY.stopAnimation((currentOffset) => {
-            settleContributions(currentOffset > collapsedOffset / 2);
-          });
+          settleContributions(contributionPanelState);
         },
       }),
-    [collapsedOffset, contributionTranslateY, dragStartOffset, settleContributions],
+    [
+      contributionOffsets,
+      contributionPanelState,
+      contributionTranslateY,
+      dragStartOffset,
+      settleContributions,
+    ],
   );
 
   return (
@@ -332,40 +466,83 @@ export default function MapScreen() {
             evacuationCenters={centerMarkers}
             layerVisibility={layers}
             showLayerFilters
+            collapsibleLayerFilters
+            showReportStatusFilters
             showSearchBar
             compactLayerFilters
-            searchBarTopInset={insets.top + 12}
-            layerFiltersTopInset={insets.top + (error ? 126 : 76)}
+            searchBarTopInset={insets.top + (openedFromNotification ? 62 : 12)}
+            layerFiltersTopInset={
+              insets.top + (error ? 126 : 76) + (openedFromNotification ? 50 : 0)
+            }
             userLocation={userLocation}
             showZoomControls={false}
             showMapDetails={false}
             tone={mapTheme}
-            onLayerVisibilityChange={setLayers}
-            focusTarget={focusTarget}
-            onReportSelection={(ids) => {
-              setSelectedResource(null);
-              setFullReportVisible(false);
-              setSelectedReportIds(ids);
+            onLayerVisibilityChange={(nextLayers) => {
+              setLayers(nextLayers);
+              if (!nextLayers.reports) {
+                setHighlightedReportId(null);
+                setSelectedReportIds([]);
+                setFullReportVisible(false);
+              }
             }}
+            focusTarget={focusTarget}
+            highlightedReportId={highlightedReportId}
+            onReportSelection={handleReportSelection}
             onResourceSelection={(resource) => {
               setSelectedReportIds([]);
               setFullReportVisible(false);
+              setHighlightedReportId(null);
               setSelectedResource(resource);
             }}
           />
+          {openedFromNotification ? (
+            <TouchableOpacity
+              style={[styles.notificationBackButton, { top: insets.top + 8 }]}
+              onPress={() => router.back()}
+              activeOpacity={0.82}
+              accessibilityRole="button"
+              accessibilityLabel="Back to notifications"
+            >
+              <Ionicons name="chevron-back" size={22} color={colors.text} />
+              <Text style={styles.notificationBackText}>Back</Text>
+            </TouchableOpacity>
+          ) : null}
           {error ? (
-            <View style={[styles.errorBanner, { top: insets.top + 70 }]} pointerEvents="none">
+            <View
+              style={[
+                styles.errorBanner,
+                { top: insets.top + 70 + (openedFromNotification ? 50 : 0) },
+              ]}
+              pointerEvents="none"
+            >
               <Text style={styles.errorText}>Map data could not fully refresh.</Text>
             </View>
           ) : null}
         </View>
 
+        {highlightedReport ? (
+          <HighlightedReportCallout
+            report={highlightedReport}
+            bottomOffset={navMetrics.barHeight + insets.bottom + spacing.md}
+            onClose={clearReportHighlight}
+            onOpenDetails={openHighlightedReportDetails}
+          />
+        ) : null}
+
         <Animated.View
           style={[
             styles.contributionSheet,
             {
-              height: contributionSheetHeight,
-              transform: [{ translateY: contributionTranslateY }],
+              height: contributionFullHeight,
+              transform: [
+                {
+                  translateY: Animated.add(
+                    contributionTranslateY,
+                    highlightedReportTranslateY,
+                  ),
+                },
+              ],
             },
           ]}
         >
@@ -375,26 +552,28 @@ export default function MapScreen() {
             error={error}
             bottomInset={contributionBottomInset}
             onReportPress={openContribution}
+            onShowReportOnMap={showContributionOnMap}
             onRetry={() => void reload()}
-            collapsed={contributionsCollapsed}
-            onToggleCollapsed={() => settleContributions(!contributionsCollapsed)}
+            onBackFromReport={() => settleContributions('medium')}
+            panelState={contributionPanelState}
+            onToggleExpanded={() =>
+              settleContributions(
+                contributionPanelState === 'collapsed'
+                  ? 'medium'
+                  : contributionPanelState === 'medium'
+                    ? 'expanded'
+                    : 'medium',
+              )
+            }
             dragHandlePanHandlers={contributionPanResponder.panHandlers}
           />
         </Animated.View>
 
-        <ResidentReportPreviewSheet
-          visible={selectedReports.length === 1 && !fullReportVisible}
-          report={selectedReports[0] ?? null}
-          onClose={() => {
-            setFullReportVisible(false);
-            setSelectedReportIds([]);
-          }}
-          onViewActivity={() => setFullReportVisible(true)}
-          onOpenFullReport={() => setFullReportVisible(true)}
-        />
         <ReportMapDetailSheet
           visible={selectedReports.length > 1 || fullReportVisible}
           reports={selectedReports}
+          commentMode="prioritizedReadOnly"
+          onOpenCommunityReport={openReportInCommunity}
           onClose={() => {
             setFullReportVisible(false);
             setSelectedReportIds([]);

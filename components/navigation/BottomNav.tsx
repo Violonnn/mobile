@@ -7,8 +7,8 @@
 //  - The center Report control is a large blue location action above the bar.
 // No animations — static highlight for best performance on low-end devices.
 
-import React, { useCallback, useState, memo } from 'react';
-import { Animated, View, Text, Pressable } from 'react-native';
+import React, { useCallback, useEffect, useState, memo } from 'react';
+import { ActivityIndicator, Animated, View, Text, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -18,9 +18,15 @@ import {
   navColors,
   navMetrics,
 } from '../../styles/components/bottomNav.styles';
+import { getPendingReports } from '../../lib/reportQueue';
+import {
+  flushReportQueue,
+  onReportQueueChange,
+} from '../../lib/reportQueueFlush';
 import ReportModal from '../ui/ReportModal';
 
 type IoniconName = keyof typeof Ionicons.glyphMap;
+type ReportDeliveryState = 'idle' | 'sending' | 'not-sent';
 
 type TabConfig = {
   name: string;
@@ -79,7 +85,13 @@ const NavItem = memo(function NavItem({
 });
 
 /** Center Report action button — carved, borderless, soft red. Not a tab. */
-const ReportButton = memo(function ReportButton({ onPress }: { onPress: () => void }) {
+const ReportButton = memo(function ReportButton({
+  onPress,
+  deliveryState,
+}: {
+  onPress: () => void;
+  deliveryState: ReportDeliveryState;
+}) {
   const [buttonScale] = useState(() => new Animated.Value(1));
   const [waveScale] = useState(() => new Animated.Value(0.85));
   const [waveOpacity] = useState(() => new Animated.Value(0));
@@ -123,6 +135,17 @@ const ReportButton = memo(function ReportButton({ onPress }: { onPress: () => vo
     onPress();
   }, [buttonScale, onPress, waveOpacity, waveScale]);
 
+  const reportLabel = deliveryState === 'sending'
+    ? 'Sending'
+    : deliveryState === 'not-sent'
+      ? 'Not sent'
+      : 'Report';
+  const accessibilityLabel = deliveryState === 'sending'
+    ? 'Report an emergency. A report is sending.'
+    : deliveryState === 'not-sent'
+      ? 'Report an emergency. A previous report has not been sent.'
+      : 'Report an emergency';
+
   return (
     <View style={styles.reportButtonWrap} pointerEvents="box-none">
       <View style={styles.reportButtonStage}>
@@ -139,26 +162,36 @@ const ReportButton = memo(function ReportButton({ onPress }: { onPress: () => vo
         />
         <Animated.View style={{ transform: [{ scale: buttonScale }] }}>
           <Pressable
-            style={styles.reportButton}
+            style={[
+              styles.reportButton,
+              deliveryState === 'not-sent' && styles.reportButtonNotSent,
+            ]}
             onPress={handlePress}
             hitSlop={8}
             accessibilityRole="button"
-            accessibilityLabel="Report an emergency"
+            accessibilityLabel={accessibilityLabel}
           >
-            <Ionicons
-              name="location"
-              size={navMetrics.reportIconSize}
-              color={navColors.reportIcon}
-            />
+            {deliveryState === 'sending' ? (
+              <ActivityIndicator size="small" color={navColors.reportIcon} />
+            ) : (
+              <Ionicons
+                name={deliveryState === 'not-sent' ? 'cloud-offline' : 'location'}
+                size={navMetrics.reportIconSize}
+                color={navColors.reportIcon}
+              />
+            )}
           </Pressable>
         </Animated.View>
       </View>
       <Text
-        style={styles.reportLabel}
+        style={[
+          styles.reportLabel,
+          deliveryState === 'not-sent' && styles.reportLabelNotSent,
+        ]}
         numberOfLines={1}
         pointerEvents="none"
       >
-        Report
+        {reportLabel}
       </Text>
     </View>
   );
@@ -168,6 +201,38 @@ export default function BottomNav({ state, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const currentRouteName = state.routes[state.index]?.name;
   const [reportOpen, setReportOpen] = useState(false);
+  const [reportDeliveryState, setReportDeliveryState] =
+    useState<ReportDeliveryState>('idle');
+
+  useEffect(() => {
+    let active = true;
+
+    const refreshDeliveryState = async () => {
+      const pendingReports = await getPendingReports();
+      if (!active) return;
+
+      const hasUnsentReport = pendingReports.some(
+        (report) => Boolean(report.lastError || report.deliveryDelayedAt),
+      );
+      setReportDeliveryState(
+        hasUnsentReport
+          ? 'not-sent'
+          : pendingReports.length > 0
+            ? 'sending'
+            : 'idle',
+      );
+    };
+
+    void refreshDeliveryState();
+    const unsubscribe = onReportQueueChange(() => {
+      void refreshDeliveryState();
+    });
+
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, []);
 
   const navigateTo = useCallback(
     (routeName: string) => {
@@ -191,8 +256,11 @@ export default function BottomNav({ state, navigation }: BottomTabBarProps) {
   const handleReportPress = useCallback(() => {
     triggerHaptic();
     if (reportOpen) return;
+    if (reportDeliveryState !== 'idle') {
+      void flushReportQueue();
+    }
     setReportOpen(true);
-  }, [reportOpen]);
+  }, [reportDeliveryState, reportOpen]);
 
   const handleReportClose = useCallback(() => {
     setReportOpen(false);
@@ -247,7 +315,10 @@ export default function BottomNav({ state, navigation }: BottomTabBarProps) {
             ))}
           </View>
 
-          <ReportButton onPress={handleReportPress} />
+          <ReportButton
+            onPress={handleReportPress}
+            deliveryState={reportDeliveryState}
+          />
         </View>
       </View>
 

@@ -5,16 +5,15 @@
 //  - title set          -> legacy layout: "DisasterLink" brand, centered
 //    title, bell + avatar (still used by the profile tab — do not restyle).
 //  - neither            -> no top row; only the search bar renders (map).
-//
-// The bell opens a minimalist placeholder sheet until notifications exist.
 import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, Modal, Pressable } from 'react-native';
+import { Text, TouchableOpacity, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { headerStyles as styles, headerColors } from '../../styles/components/header.styles';
 import { colors, spacing } from '../../styles/theme';
 import { fetchMyProfile } from '../../lib/profile';
+import NotificationsModal from '../notifications/NotificationsModal';
 
 type AppHeaderProps = {
   /** Legacy centered screen label (kept for the profile tab). */
@@ -42,47 +41,6 @@ type AppHeaderProps = {
   children?: React.ReactNode;
 };
 
-/** Minimalist placeholder shown when notifications are tapped (no data yet). */
-export function NotificationsPlaceholder({
-  visible,
-  onClose,
-}: {
-  visible: boolean;
-  onClose: () => void;
-}) {
-  return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      statusBarTranslucent
-      onRequestClose={onClose}
-    >
-      <View style={styles.notifOverlay}>
-        <Pressable style={styles.notifBackdrop} onPress={onClose} />
-        <View style={styles.notifCard}>
-          <View style={styles.notifIconCircle}>
-            <Ionicons name="notifications-outline" size={26} color={colors.themeSoft} />
-          </View>
-          <Text style={styles.notifTitle}>Notifications</Text>
-          <Text style={styles.notifSubtitle}>
-            You&apos;re all caught up. Nothing here yet.
-          </Text>
-          <TouchableOpacity
-            style={styles.notifCloseButton}
-            onPress={onClose}
-            activeOpacity={0.85}
-            accessibilityRole="button"
-            accessibilityLabel="Close notifications"
-          >
-            <Text style={styles.notifCloseText}>Close</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    </Modal>
-  );
-}
-
 export default function AppHeader({
   title,
   greetingName,
@@ -106,6 +64,7 @@ export default function AppHeader({
 
   const [resolvedInitial, setResolvedInitial] = useState(avatarInitial ?? 'U');
   const [notifOpen, setNotifOpen] = useState(false);
+  const [notificationUnreadCount, setNotificationUnreadCount] = useState(0);
 
   // Only self-fetch the avatar initial when the legacy variant needs it.
   useEffect(() => {
@@ -184,6 +143,7 @@ export default function AppHeader({
                 size={24}
                 color={usesLightTone ? colors.text : colors.white}
               />
+              {notificationUnreadCount > 0 ? <View style={styles.plainBellDot} /> : null}
             </TouchableOpacity>
             <TouchableOpacity
               style={[
@@ -219,7 +179,9 @@ export default function AppHeader({
               accessibilityLabel="Notifications"
             >
               <Ionicons name="notifications-outline" size={20} color={headerColors.ink} />
-              {showNotificationDot && <View style={styles.bellDot} />}
+              {showNotificationDot && notificationUnreadCount > 0 ? (
+                <View style={styles.bellDot} />
+              ) : null}
             </TouchableOpacity>
 
             {showProfile && (
@@ -252,7 +214,11 @@ export default function AppHeader({
 
       {children}
 
-      <NotificationsPlaceholder visible={notifOpen} onClose={() => setNotifOpen(false)} />
+      <NotificationsModal
+        visible={notifOpen}
+        onClose={() => setNotifOpen(false)}
+        onUnreadCountChange={setNotificationUnreadCount}
+      />
     </View>
   );
 }

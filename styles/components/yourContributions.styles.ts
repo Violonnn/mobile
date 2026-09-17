@@ -24,8 +24,8 @@ export const contributionStyles = StyleSheet.create({
     borderTopRightRadius: 24,
   },
   handleButton: {
-    width: 52,
-    height: 28,
+    width: '100%',
+    height: 36,
     alignSelf: 'center',
     marginTop: spacing.xs,
     alignItems: 'center',
@@ -50,6 +50,14 @@ export const contributionStyles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
     gap: spacing.xs,
+  },
+  backButton: {
+    width: 48,
+    height: 48,
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.full,
   },
   eyebrow: {
     fontFamily: fonts.semibold,
@@ -81,6 +89,10 @@ export const contributionStyles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: 20,
+  },
+  detailContent: {
+    flex: 1,
+    minHeight: 0,
   },
   stateBlock: {
     minHeight: 175,

@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   type GestureResponderHandlers,
@@ -13,12 +13,16 @@ import { formatReportLocation, type MapReportMarker } from '../../lib/reports';
 import { contributionStyles as styles } from '../../styles/components/yourContributions.styles';
 import { colors } from '../../styles/theme';
 import { CollageCellContent } from '../report/ReportDetailCard';
+import IncidentTypeBadge from '../report/IncidentTypeBadge';
+import { ResidentReportPreviewContent } from './ResidentReportPreviewSheet';
 
 type ContributionDateGroup = {
   key: string;
   label: string;
   reports: MapReportMarker[];
 };
+
+export type ContributionPanelState = 'collapsed' | 'medium' | 'expanded';
 
 function formatContributionTime(isoDate: string): string {
   const parsedDate = new Date(isoDate);
@@ -105,7 +109,7 @@ function contributionStatus(report: MapReportMarker): {
     return { label: 'Resolved', icon: 'checkmark-circle-outline', color: colors.success };
   }
   if (report.status === 'escalated') {
-    return { label: 'Escalated', icon: 'warning-outline', color: colors.danger };
+    return { label: 'Escalated', icon: 'warning-outline', color: colors.escalated };
   }
   if (report.status === 'verified') {
     return { label: 'Received', icon: 'shield-checkmark-outline', color: colors.primary };
@@ -141,55 +145,119 @@ export default function YourContributionsPanel({
   error,
   bottomInset,
   onReportPress,
+  onShowReportOnMap,
   onRetry,
-  collapsed,
-  onToggleCollapsed,
+  panelState,
+  onToggleExpanded,
+  onBackFromReport,
   dragHandlePanHandlers,
 }: {
   reports: MapReportMarker[];
   loading: boolean;
   error: string | null;
   bottomInset: number;
-  onReportPress: (report: MapReportMarker) => void;
+  onReportPress: () => void;
+  onShowReportOnMap: (report: MapReportMarker) => void;
   onRetry: () => void;
-  collapsed: boolean;
-  onToggleCollapsed: () => void;
+  panelState: ContributionPanelState;
+  onToggleExpanded: () => void;
+  onBackFromReport: () => void;
   dragHandlePanHandlers: GestureResponderHandlers;
 }) {
+  const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
   const resolvedCount = reports.filter((report) => report.status === 'resolved').length;
+  const selectedReport = reports.find((report) => report.id === selectedReportId) ?? null;
   const contributionGroups = useMemo(
     () => groupContributionsByDate(reports, new Date()),
     [reports],
   );
+
+  const openContribution = (report: MapReportMarker) => {
+    setSelectedReportId(report.id);
+    onReportPress();
+  };
+
+  const returnToContributions = () => {
+    setSelectedReportId(null);
+    onBackFromReport();
+  };
 
   return (
     <View style={styles.panel}>
       <View style={styles.dragHandleArea} {...dragHandlePanHandlers}>
         <TouchableOpacity
           style={styles.handleButton}
-          onPress={onToggleCollapsed}
+          onPress={onToggleExpanded}
           activeOpacity={0.75}
           accessibilityRole="button"
-          accessibilityLabel={collapsed ? 'Show your contributions' : 'Maximize the map'}
-          accessibilityHint={collapsed ? 'You can also drag upward' : 'You can also drag downward'}
-          accessibilityState={{ expanded: !collapsed }}
+          accessibilityLabel={
+            panelState === 'expanded' ? 'Collapse your contributions' : 'Expand your contributions'
+          }
+          accessibilityHint="You can also drag the handle up or down"
+          accessibilityState={{ expanded: panelState === 'expanded' }}
         >
           <View style={styles.dragIndicator} />
         </TouchableOpacity>
 
-        <View style={styles.headerRow}>
+        {selectedReport ? (
+          <View style={styles.headerRow}>
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={returnToContributions}
+              accessibilityRole="button"
+              accessibilityLabel="Back to your contributions"
+            >
+              <Ionicons name="chevron-back" size={22} color={colors.text} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.headerCopy}
+              onPress={onToggleExpanded}
+              activeOpacity={0.75}
+              accessibilityRole="button"
+              accessibilityLabel="Resize report details"
+            >
+              <Text style={styles.eyebrow}>REPORT DETAILS</Text>
+              <Text style={styles.headerSubtitle} numberOfLines={1}>
+                {formatContributionTitle(selectedReport.title)}
+              </Text>
+            </TouchableOpacity>
+            <View style={styles.backButton} />
+          </View>
+        ) : (
+        <TouchableOpacity
+          style={styles.headerRow}
+          onPress={onToggleExpanded}
+          activeOpacity={0.75}
+          accessibilityRole="button"
+          accessibilityLabel="Resize your contributions"
+        >
           <View style={styles.headerCopy}>
             <Text style={styles.eyebrow}>YOUR CONTRIBUTIONS</Text>
             <Text style={styles.headerSubtitle}>
-              {collapsed ? 'Drag up to view your reports' : 'Drag down to maximize the map'}
+              {panelState === 'collapsed'
+                ? 'Drag up to view your reports'
+                : panelState === 'expanded'
+                  ? 'Full screen · drag down to return to the map'
+                  : 'Drag up for full screen or down to maximize the map'}
             </Text>
           </View>
           <View style={styles.countPill}>
             <Text style={styles.countText}>{reports.length}</Text>
           </View>
-        </View>
+        </TouchableOpacity>
+        )}
       </View>
 
+      {selectedReport ? (
+        <View style={[styles.detailContent, { paddingBottom: bottomInset }]}>
+          <ResidentReportPreviewContent
+            report={selectedReport}
+            onClose={returnToContributions}
+            onOpenFullReport={() => onShowReportOnMap(selectedReport)}
+            primaryActionLabel="Show on map"
+          />
+        </View>
+      ) : (
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomInset }]}
@@ -232,7 +300,7 @@ export default function YourContributionsPanel({
                     <TouchableOpacity
                       key={report.id}
                       style={[styles.reportCard, isLatest && styles.latestReportCard]}
-                      onPress={() => onReportPress(report)}
+                      onPress={() => openContribution(report)}
                       activeOpacity={0.82}
                       accessibilityRole="button"
                       accessibilityLabel={
@@ -258,6 +326,10 @@ export default function YourContributionsPanel({
                           <Text style={[styles.reportTitle, isLatest && styles.latestReportTitle]}>
                             {formatContributionTitle(report.title)}
                           </Text>
+                          <IncidentTypeBadge
+                            incidentType={report.incidentType}
+                            incidentTypeOther={report.incidentTypeOther}
+                          />
                           <View style={styles.metadataRow}>
                             <Ionicons name="location-outline" size={15} color={colors.textMuted} />
                             <Text style={styles.metadataText} numberOfLines={1}>
@@ -302,6 +374,7 @@ export default function YourContributionsPanel({
           </>
         )}
       </ScrollView>
+      )}
     </View>
   );
 }

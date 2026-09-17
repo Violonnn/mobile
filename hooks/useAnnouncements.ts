@@ -1,6 +1,6 @@
 // hooks/useAnnouncements.ts — ranked announcements with Realtime refresh.
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
 import {
   fetchRankedAnnouncements,
@@ -16,15 +16,45 @@ export function useAnnouncements(options?: { limit?: number; realtime?: boolean 
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+  const announcementsRef = useRef<AnnouncementRecord[]>([]);
+  const hasLoadedRef = useRef(false);
+
+  useEffect(() => {
+    announcementsRef.current = announcements;
+  }, [announcements]);
 
   const channelName = useRealtimeChannelName('announcements');
 
   const load = useCallback(async () => {
     const result = await fetchRankedAnnouncements({ limit });
     setAnnouncements(result.announcements);
+    setHasMore(result.announcements.length >= limit);
     setError(result.error);
+    hasLoadedRef.current = true;
     setLoading(false);
   }, [limit]);
+
+  const loadMore = useCallback(async () => {
+    if (loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    const result = await fetchRankedAnnouncements({
+      limit,
+      offset: announcementsRef.current.length,
+    });
+    setLoadingMore(false);
+    if (result.error) {
+      setError(result.error);
+      return;
+    }
+    setHasMore(result.announcements.length >= limit);
+    setAnnouncements((current) => {
+      const byId = new Map(current.map((announcement) => [announcement.id, announcement]));
+      result.announcements.forEach((announcement) => byId.set(announcement.id, announcement));
+      return [...byId.values()];
+    });
+  }, [hasMore, limit, loadingMore]);
 
   const refresh = useCallback(async () => {
     setRefreshing(true);
@@ -34,7 +64,8 @@ export function useAnnouncements(options?: { limit?: number; realtime?: boolean 
 
   useFocusEffect(
     useCallback(() => {
-      setLoading(true);
+      // Preserve the current feed while checking for newer announcements.
+      if (!hasLoadedRef.current) setLoading(true);
       void load();
     }, [load]),
   );
@@ -63,7 +94,10 @@ export function useAnnouncements(options?: { limit?: number; realtime?: boolean 
     error,
     loading,
     refreshing,
+    loadingMore,
+    hasMore,
     reload: load,
+    loadMore,
     refresh,
   };
 }

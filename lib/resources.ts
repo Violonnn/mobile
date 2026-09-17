@@ -38,6 +38,7 @@ export type HotlineRecord = {
   isActive: boolean;
   lastVerifiedAt: string | null;
   lastVerifiedBy: string | null;
+  createdBy: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -54,6 +55,7 @@ export type FacilityRecord = {
   isActive: boolean;
   lastVerifiedAt: string | null;
   lastVerifiedBy: string | null;
+  createdBy: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -153,6 +155,7 @@ function mapHotline(row: Record<string, unknown>): HotlineRecord {
     isActive: row.is_active !== false,
     lastVerifiedAt: row.last_verified_at ? String(row.last_verified_at) : null,
     lastVerifiedBy: row.last_verified_by ? String(row.last_verified_by) : null,
+    createdBy: row.created_by ? String(row.created_by) : null,
     createdAt: String(row.created_at ?? ''),
     updatedAt: String(row.updated_at ?? ''),
   };
@@ -179,6 +182,7 @@ function mapFacility(row: Record<string, unknown>): FacilityRecord {
     isActive: row.is_active !== false,
     lastVerifiedAt: row.last_verified_at ? String(row.last_verified_at) : null,
     lastVerifiedBy: row.last_verified_by ? String(row.last_verified_by) : null,
+    createdBy: row.created_by ? String(row.created_by) : null,
     createdAt: String(row.created_at ?? ''),
     updatedAt: String(row.updated_at ?? ''),
   };
@@ -209,6 +213,25 @@ function mapCenter(row: Record<string, unknown>): EvacuationCenterRecord {
   };
 }
 
+/** Fetches display names from the client-safe public profile projection. */
+export async function fetchPublicProfileNames(profileIds: (string | null | undefined)[]): Promise<Record<string, string>> {
+  const uniqueProfileIds = [...new Set(profileIds.filter((profileId): profileId is string => Boolean(profileId)))];
+  if (uniqueProfileIds.length === 0) return {};
+
+  const { data, error } = await supabase
+    .from('app_profiles_public')
+    .select('id, first_name, last_name')
+    .in('id', uniqueProfileIds);
+
+  if (error) return {};
+
+  return (data ?? []).reduce<Record<string, string>>((names, profile) => {
+    const fullName = `${profile.first_name ?? ''} ${profile.last_name ?? ''}`.trim();
+    if (profile.id && fullName) names[profile.id] = fullName;
+    return names;
+  }, {});
+}
+
 /** True when last verification is older than 90 days (or never verified). */
 export function isReviewOverdue(lastVerifiedAt: string | null | undefined): boolean {
   if (!lastVerifiedAt) return true;
@@ -231,7 +254,7 @@ export async function fetchActiveHotlines(): Promise<{
   const { data, error } = await supabase
     .from('hotlines')
     .select(
-      'id, name, number, category, barangay_id, facility_id, is_active, last_verified_at, last_verified_by, created_at, updated_at',
+      'id, name, number, category, barangay_id, facility_id, is_active, last_verified_at, last_verified_by, created_by, created_at, updated_at',
     )
     .eq('is_active', true)
     .order('name', { ascending: true });
@@ -265,7 +288,7 @@ export async function fetchOfficialHotlines(options?: {
   let query = supabase
     .from('hotlines')
     .select(
-      'id, name, number, category, barangay_id, facility_id, is_active, last_verified_at, last_verified_by, created_at, updated_at',
+      'id, name, number, category, barangay_id, facility_id, is_active, last_verified_at, last_verified_by, created_by, created_at, updated_at',
     )
     .order('name', { ascending: true });
 
@@ -320,7 +343,7 @@ export async function createHotline(input: {
       is_active: input.isActive ?? true,
     })
     .select(
-      'id, name, number, category, barangay_id, facility_id, is_active, last_verified_at, last_verified_by, created_at, updated_at',
+      'id, name, number, category, barangay_id, facility_id, is_active, last_verified_at, last_verified_by, created_by, created_at, updated_at',
     )
     .maybeSingle();
 
@@ -374,7 +397,7 @@ export async function updateHotline(
     .update(updates)
     .eq('id', id)
     .select(
-      'id, name, number, category, barangay_id, facility_id, is_active, last_verified_at, last_verified_by, created_at, updated_at',
+      'id, name, number, category, barangay_id, facility_id, is_active, last_verified_at, last_verified_by, created_by, created_at, updated_at',
     )
     .maybeSingle();
 
@@ -413,7 +436,7 @@ export async function fetchActiveFacilities(): Promise<{
   const mapped = await supabase
     .from('facilities_map')
     .select(
-      'id, name, type, latitude, longitude, address, contact, barangay_id, is_active, last_verified_at, last_verified_by, created_at, updated_at',
+      'id, name, type, latitude, longitude, address, contact, barangay_id, is_active, last_verified_at, last_verified_by, created_by, created_at, updated_at',
     )
     .eq('is_active', true)
     .order('name', { ascending: true });
@@ -430,7 +453,7 @@ export async function fetchActiveFacilities(): Promise<{
   const { data, error } = await supabase
     .from('facilities')
     .select(
-      'id, name, type, location, address, contact, barangay_id, is_active, last_verified_at, last_verified_by, created_at, updated_at',
+      'id, name, type, location, address, contact, barangay_id, is_active, last_verified_at, last_verified_by, created_by, created_at, updated_at',
     )
     .eq('is_active', true)
     .order('name', { ascending: true });
@@ -467,7 +490,7 @@ export async function fetchOfficialFacilities(options?: {
   let mappedQuery = supabase
     .from('facilities_map')
     .select(
-      'id, name, type, latitude, longitude, address, contact, barangay_id, is_active, last_verified_at, last_verified_by, created_at, updated_at',
+      'id, name, type, latitude, longitude, address, contact, barangay_id, is_active, last_verified_at, last_verified_by, created_by, created_at, updated_at',
     )
     .order('name', { ascending: true });
 
@@ -491,7 +514,7 @@ export async function fetchOfficialFacilities(options?: {
   let query = supabase
     .from('facilities')
     .select(
-      'id, name, type, location, address, contact, barangay_id, is_active, last_verified_at, last_verified_by, created_at, updated_at',
+      'id, name, type, location, address, contact, barangay_id, is_active, last_verified_at, last_verified_by, created_by, created_at, updated_at',
     )
     .order('name', { ascending: true });
 
@@ -557,7 +580,7 @@ export async function createFacility(input: {
       is_active: input.isActive ?? true,
     })
     .select(
-      'id, name, type, location, address, contact, barangay_id, is_active, last_verified_at, last_verified_by, created_at, updated_at',
+      'id, name, type, location, address, contact, barangay_id, is_active, last_verified_at, last_verified_by, created_by, created_at, updated_at',
     )
     .maybeSingle();
 
@@ -628,7 +651,7 @@ export async function updateFacility(
     .update(updates)
     .eq('id', id)
     .select(
-      'id, name, type, location, address, contact, barangay_id, is_active, last_verified_at, last_verified_by, created_at, updated_at',
+      'id, name, type, location, address, contact, barangay_id, is_active, last_verified_at, last_verified_by, created_by, created_at, updated_at',
     )
     .maybeSingle();
 

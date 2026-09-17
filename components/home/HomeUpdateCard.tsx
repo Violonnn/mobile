@@ -37,6 +37,14 @@ function toReportMedia(item: AnnouncementRecord['media'][number]): ReportMediaAt
     type: item.type,
     url: item.url,
     durationSeconds: item.durationSeconds,
+    thumbnailUrl: item.thumbnailUrl,
+    storagePath: item.storagePath,
+    thumbnailStoragePath: item.thumbnailStoragePath,
+    displayStoragePath: item.displayStoragePath,
+    width: item.width,
+    height: item.height,
+    bucket: 'announcement-media',
+    detailUrlResolved: item.detailUrlResolved,
   };
 }
 

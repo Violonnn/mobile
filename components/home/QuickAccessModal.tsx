@@ -1,15 +1,12 @@
 import React from 'react';
 import {
   ActivityIndicator,
-  Modal,
-  Pressable,
   ScrollView,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
   evacuationStatusLabel,
@@ -22,6 +19,7 @@ import {
 } from '../../lib/resources';
 import { quickAccessModalStyles as styles } from '../../styles/components/quickAccessModal.styles';
 import { colors } from '../../styles/theme';
+import ResidentBottomSheet from '../ui/ResidentBottomSheet';
 
 export type QuickAccessType = 'hotlines' | 'facilities' | 'evacuation';
 
@@ -68,7 +66,6 @@ export default function QuickAccessModal({
   onRetry,
   onOpenMap,
 }: QuickAccessModalProps) {
-  const insets = useSafeAreaInsets();
   if (!type) return null;
 
   const details = TYPE_DETAILS[type];
@@ -78,32 +75,21 @@ export default function QuickAccessModal({
     (type === 'evacuation' && centers.length === 0);
 
   return (
-    <Modal
+    <ResidentBottomSheet
       visible={visible}
-      transparent
+      onClose={onClose}
+      initialHeightRatio={0.78}
+      minimumHeight={300}
+      sheetStyle={styles.sheet}
+      handleAccessibilityLabel={`Resize ${details.title.toLocaleLowerCase()} panel`}
       animationType="slide"
-      statusBarTranslucent
-      onRequestClose={onClose}
     >
-      <Pressable style={styles.backdrop} onPress={onClose}>
-        <Pressable
-          style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 16) }]}
-          onPress={(event) => event.stopPropagation()}
-        >
-          <View style={styles.handle} />
+      <View style={styles.content}>
           <View style={styles.headerRow}>
             <View style={styles.headerCopy}>
               <Text style={styles.title}>{details.title}</Text>
               <Text style={styles.subtitle}>{details.subtitle}</Text>
             </View>
-            <TouchableOpacity
-              style={styles.closeButton}
-              onPress={onClose}
-              accessibilityRole="button"
-              accessibilityLabel="Close quick access"
-            >
-              <Ionicons name="close" size={21} color={colors.textMuted} />
-            </TouchableOpacity>
           </View>
 
           {loading ? (
@@ -223,8 +209,7 @@ export default function QuickAccessModal({
                 : null}
             </ScrollView>
           )}
-        </Pressable>
-      </Pressable>
-    </Modal>
+      </View>
+    </ResidentBottomSheet>
   );
 }

@@ -3,27 +3,13 @@ import { StyleSheet } from 'react-native';
 import { colors, fonts, fontSizes, radius, spacing } from '../theme';
 
 export const quickAccessModalStyles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    backgroundColor: 'rgba(17, 24, 39, 0.42)',
-  },
   sheet: {
-    maxHeight: '78%',
-    minHeight: 300,
-    paddingHorizontal: spacing.lg,
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
     backgroundColor: '#FFFEFC',
   },
-  handle: {
-    width: 42,
-    height: 4,
-    alignSelf: 'center',
-    marginTop: spacing.sm,
-    marginBottom: spacing.md,
-    borderRadius: radius.full,
-    backgroundColor: '#D9DDE3',
+  content: {
+    flex: 1,
+    minHeight: 0,
+    paddingHorizontal: spacing.lg,
   },
   headerRow: {
     flexDirection: 'row',
@@ -47,17 +33,9 @@ export const quickAccessModalStyles = StyleSheet.create({
     lineHeight: 18,
     color: colors.textMuted,
   },
-  closeButton: {
-    width: 34,
-    height: 34,
-    flexShrink: 0,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 17,
-    backgroundColor: '#F1F3F5',
-  },
   list: {
-    flexGrow: 0,
+    flex: 1,
+    minHeight: 0,
   },
   listContent: {
     gap: spacing.sm,
@@ -152,7 +130,8 @@ export const quickAccessModalStyles = StyleSheet.create({
     color: colors.primary,
   },
   stateBlock: {
-    minHeight: 220,
+    flex: 1,
+    minHeight: 180,
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.sm,

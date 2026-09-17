@@ -13,8 +13,11 @@ import {
 } from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, fonts, fontSizes, spacing } from '../../styles/theme';
-import type { MapReportMarker } from '../../lib/reports';
+import { colors, fonts, fontSizes, radius, spacing } from '../../styles/theme';
+import {
+  getReportStatusPresentation,
+  type MapReportMarker,
+} from '../../lib/reports';
 
 const CENTER = { lat: 10.2447, lng: 123.7967 };
 const ZOOM = 14;
@@ -35,6 +38,13 @@ export type MapLayerVisibility = {
   evacuationCenters: boolean;
 };
 
+export type ReportStatusFilter =
+  | 'all'
+  | 'unverified'
+  | 'verified'
+  | 'escalated'
+  | 'resolved';
+
 export type MapUserLocation = {
   latitude: number;
   longitude: number;
@@ -49,12 +59,24 @@ export type MapFocusTarget = {
   longitude: number;
 };
 
+export type MapViewportFrame = {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+  borderRadius?: number;
+};
+
 type Props = {
   markers?: MapReportMarker[];
   facilities?: MapResourceMarker[];
   evacuationCenters?: MapResourceMarker[];
   layerVisibility?: MapLayerVisibility;
   showLayerFilters?: boolean;
+  /** Lets users collapse and reopen the resident map's floating layer controls. */
+  collapsibleLayerFilters?: boolean;
+  /** Adds resident-facing workflow statuses beneath the Reports layer. */
+  showReportStatusFilters?: boolean;
   /** Keeps resident layer controls clear of the device status bar. */
   layerFiltersTopInset?: number;
   /** Reduces vertical spacing for filters shown over a full-screen map. */
@@ -67,16 +89,20 @@ type Props = {
   onReportSelection?: (reportIds: string[]) => void;
   /** Opens a marker popup with a separate report-details action when requested. */
   showReportDetailsPopup?: boolean;
-  /** Adds a subtle red pulse around report clusters in compact map previews. */
-  pulseReportClusters?: boolean;
   onReportDetailsRequest?: (reportId: string) => void;
   onResourceSelection?: (resource: MapResourceMarker) => void;
   focusTarget?: MapFocusTarget | null;
+  /** Selected resident report rendered above clustering with a pulsing warning marker. */
+  highlightedReportId?: string | null;
+  /** Focused facility or evacuation center rendered with a matching pulse. */
+  highlightedResourceId?: string | null;
   showZoomControls?: boolean;
   /** Shows the base map's roads, labels, and geographic details. */
   showMapDetails?: boolean;
   /** Adjusts map contrast for resident and command-center contexts. */
   tone?: 'light' | 'dark';
+  /** Keeps this framed portion crisp while a synchronized map behind it is blurred. */
+  unblurredViewportFrame?: MapViewportFrame;
   /** Lets a parent ScrollView freeze while the user is panning or zooming the map. */
   onGestureActiveChange?: (active: boolean) => void;
   /** Controls how close the camera moves when a report is focused. */
@@ -94,15 +120,36 @@ const DEFAULT_LAYERS: MapLayerVisibility = {
   evacuationCenters: true,
 };
 
+const REPORT_STATUS_OPTIONS: {
+  value: ReportStatusFilter;
+  label: string;
+}[] = [
+  { value: 'all', label: 'All' },
+  { value: 'unverified', label: 'Unverified' },
+  { value: 'verified', label: 'Verified' },
+  { value: 'escalated', label: 'Escalated' },
+  { value: 'resolved', label: 'Resolved' },
+];
+
 function buildMapHtml(
   showZoomControls: boolean,
   tone: 'light' | 'dark',
-  pulseReportClusters: boolean,
   initialShowMapDetails: boolean,
   stickyFocus: boolean,
   focusZoomLevel: number,
+  unblurredViewportTop: number,
+  unblurredViewportRight: number,
+  unblurredViewportBottom: number,
+  unblurredViewportLeft: number,
+  unblurredViewportRadius: number,
 ): string {
   const isDark = tone === 'dark';
+  const hasUnblurredViewport = unblurredViewportTop > 0;
+  const darkMapFilter = isDark
+    ? 'invert(82%) hue-rotate(180deg) brightness(88%) saturate(65%) contrast(96%)'
+    : '';
+  const blurredMapFilter = [darkMapFilter, 'blur(2px)'].filter(Boolean).join(' ');
+  const framedMapClip = `inset(${unblurredViewportTop}px ${unblurredViewportRight}px ${unblurredViewportBottom}px ${unblurredViewportLeft}px round ${unblurredViewportRadius}px)`;
   return `<!DOCTYPE html>
 <html>
   <head>
@@ -112,10 +159,14 @@ function buildMapHtml(
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
     <style>
-      html, body, #map { height: 100%; margin: 0; padding: 0; background: ${isDark ? '#343B44' : '#F0F4FF'}; }
+      html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; background: ${isDark ? '#343B44' : '#F0F4FF'}; }
+      #map, #map-background { position: absolute; inset: 0; height: 100%; }
+      #map { z-index: 1; ${hasUnblurredViewport ? `-webkit-clip-path: ${framedMapClip}; clip-path: ${framedMapClip};` : ''} }
+      #map-background { z-index: 0; pointer-events: none; }
       .leaflet-tile-pane {
-        ${isDark ? 'filter: invert(82%) hue-rotate(180deg) brightness(88%) saturate(65%) contrast(96%);' : ''}
+        ${darkMapFilter ? `filter: ${darkMapFilter};` : ''}
       }
+      #map-background .leaflet-tile-pane { filter: ${blurredMapFilter}; }
       .leaflet-control-attribution { display: none; }
 
       .report-pin-wrap, .resource-pin-wrap {
@@ -124,32 +175,55 @@ function buildMapHtml(
       }
 
       .report-pin {
-        width: 46px;
-        height: 46px;
+        width: 32px;
+        height: 32px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        background: #C65B66;
+        border: 3px solid #FFFFFF;
+        box-shadow: 0 4px 12px rgba(106, 24, 36, 0.3);
+      }
+
+      .report-pin-core {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #FFFFFF;
+      }
+
+      .report-pin-highlighted {
+        width: 58px;
+        height: 58px;
         position: relative;
         display: flex;
         align-items: center;
         justify-content: center;
-        border-radius: 50%;
-        background: rgba(169, 51, 64, 0.14);
-        border: 1px solid rgba(169, 51, 64, 0.2);
       }
 
-      .report-pin-core {
-        width: 31px;
-        height: 31px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border-radius: 50%;
-        background: #B33443;
-        border: 3px solid #FFFFFF;
-        box-shadow: 0 4px 12px rgba(106, 24, 36, 0.34);
+      .report-pin-highlighted svg {
+        position: relative;
+        z-index: 2;
+        width: 46px;
+        height: 46px;
+        filter: drop-shadow(0 5px 7px rgba(106, 24, 36, 0.38));
       }
 
-      .report-pin-core svg {
-        width: 17px;
-        height: 17px;
+      .report-highlight-pulse {
+        position: absolute;
+        inset: 8px;
+        z-index: 1;
+        border-radius: 50%;
+        background: rgba(220, 38, 38, 0.42);
+        pointer-events: none;
+        animation: reportHighlightPulse 1.55s ease-out infinite;
+      }
+
+      @keyframes reportHighlightPulse {
+        0% { opacity: 0.74; transform: scale(0.72); }
+        72% { opacity: 0.12; transform: scale(1.55); }
+        100% { opacity: 0; transform: scale(1.9); }
       }
 
       .resource-pin {
@@ -180,6 +254,31 @@ function buildMapHtml(
         box-shadow: 0 0 0 3px rgba(234, 179, 8, 0.55), 0 3px 10px rgba(28, 43, 75, 0.28);
       }
 
+      .resource-pin-highlighted {
+        width: 58px;
+        height: 58px;
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .resource-pin-highlighted .resource-pin {
+        position: relative;
+        z-index: 2;
+        width: 36px;
+        height: 36px;
+      }
+
+      .resource-highlight-pulse {
+        position: absolute;
+        inset: 8px;
+        z-index: 1;
+        border-radius: 50%;
+        pointer-events: none;
+        animation: reportHighlightPulse 1.55s ease-out infinite;
+      }
+
       .marker-cluster-report {
         overflow: visible;
         background: rgba(169, 51, 64, 0.13);
@@ -195,42 +294,29 @@ function buildMapHtml(
         height: 34px;
         margin-left: 2px;
         margin-top: 2px;
-        background: #B33443;
+        background: #D9828A;
         color: #FFFFFF;
         font: 700 13px/34px system-ui, sans-serif;
         border-radius: 50%;
         text-align: center;
       }
 
-      .cluster-pulse {
-        position: absolute;
-        inset: 0;
-        border-radius: 50%;
-        background: rgba(220, 38, 38, 0.48);
-        box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.38);
-        pointer-events: none;
-        animation: clusterPulse 1.8s ease-out infinite;
+      .marker-cluster-report.cluster-medium div {
+        background: #C85E69;
       }
 
-      @keyframes clusterPulse {
-        0% {
-          opacity: 0.78;
-          transform: scale(0.88);
-        }
-        70% {
-          opacity: 0.14;
-          transform: scale(1.8);
-        }
-        100% {
-          opacity: 0;
-          transform: scale(2.15);
-        }
+      .marker-cluster-report.cluster-high div {
+        background: #A93340;
+      }
+
+      .marker-cluster-report.cluster-critical div {
+        background: #741F2A;
       }
 
       @media (prefers-reduced-motion: reduce) {
-        .cluster-pulse {
+        .report-highlight-pulse {
           animation: none;
-          opacity: 0;
+          opacity: 0.28;
         }
       }
 
@@ -283,10 +369,23 @@ function buildMapHtml(
     </style>
   </head>
   <body>
+    ${hasUnblurredViewport ? '<div id="map-background"></div>' : ''}
     <div id="map"></div>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
     <script>
+      var backgroundMap = ${hasUnblurredViewport ? `L.map('map-background', {
+        center: [${CENTER.lat}, ${CENTER.lng}],
+        zoom: ${ZOOM},
+        zoomControl: false,
+        attributionControl: false,
+        dragging: false,
+        touchZoom: false,
+        doubleClickZoom: false,
+        scrollWheelZoom: false,
+        keyboard: false
+      })` : 'null'};
+
       var map = L.map('map', {
         center: [${CENTER.lat}, ${CENTER.lng}],
         zoom: ${ZOOM},
@@ -328,6 +427,9 @@ function buildMapHtml(
       var detailedTileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 19
       });
+      var backgroundDetailedTileLayer = backgroundMap
+        ? L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 })
+        : null;
 
       // This layer retains roads and geography but removes basemap labels and POI icons.
       var cleanTileLayer = L.tileLayer(
@@ -337,10 +439,17 @@ function buildMapHtml(
           maxZoom: 19
         }
       );
+      var backgroundCleanTileLayer = backgroundMap
+        ? L.tileLayer(
+            'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+            { maxNativeZoom: 16, maxZoom: 19 }
+          )
+        : null;
 
       var cleanMapMaximumZoom = 16;
       var showDetailsRequested = ${initialShowMapDetails ? 'true' : 'false'};
       var currentBaseLayer = null;
+      var currentBackgroundBaseLayer = null;
 
       function updateBaseLayer(nextZoom) {
         // Close zoom levels fall back to OSM so the limited clean layer never stretches.
@@ -354,6 +463,19 @@ function buildMapHtml(
           map.removeLayer(currentBaseLayer);
         }
         currentBaseLayer = nextBaseLayer;
+
+        if (backgroundMap) {
+          var nextBackgroundLayer = useDetailedLayer
+            ? backgroundDetailedTileLayer
+            : backgroundCleanTileLayer;
+          if (currentBackgroundBaseLayer !== nextBackgroundLayer) {
+            nextBackgroundLayer.addTo(backgroundMap);
+            if (currentBackgroundBaseLayer) {
+              backgroundMap.removeLayer(currentBackgroundBaseLayer);
+            }
+            currentBackgroundBaseLayer = nextBackgroundLayer;
+          }
+        }
       }
 
       window.setMapDetailsVisibility = function(showDetails) {
@@ -368,35 +490,56 @@ function buildMapHtml(
       map.on('zoomend', function() {
         updateBaseLayer();
       });
+      if (backgroundMap) {
+        var syncBackgroundCamera = function() {
+          backgroundMap.setView(map.getCenter(), map.getZoom(), { animate: false });
+        };
+        map.on('move', syncBackgroundCamera);
+        map.on('zoom', syncBackgroundCamera);
+      }
       updateBaseLayer();
 
       var reportPinIcon = L.divIcon({
         className: 'report-pin-wrap',
-        html:
-          '<div class="report-pin">' +
-            '<div class="report-pin-core">' +
-              '<svg viewBox="0 0 24 24" aria-hidden="true">' +
-                '<path d="M12 3.4 21 20H3L12 3.4Z" fill="#FFFFFF"/>' +
-                '<path d="M12 8v6" stroke="#B33443" stroke-width="2.2" stroke-linecap="round"/>' +
-                '<circle cx="12" cy="17.2" r="1.25" fill="#B33443"/>' +
-              '</svg>' +
-            '</div>' +
-          '</div>',
-        iconSize: [46, 46],
-        iconAnchor: [23, 23],
-        popupAnchor: [0, -25]
+        html: '<div class="report-pin"><div class="report-pin-core"></div></div>',
+        iconSize: [32, 32],
+        iconAnchor: [16, 16],
+        popupAnchor: [0, -19]
       });
 
-      function resourceIcon(kind, isPriority) {
+      function highlightedReportPinIcon(statusColor) {
+        return L.divIcon({
+          className: 'report-pin-wrap',
+          html:
+            '<div class="report-pin-highlighted">' +
+              '<span class="report-highlight-pulse" style="background:' + statusColor + '"></span>' +
+              '<svg viewBox="0 0 52 48" aria-hidden="true">' +
+                '<path d="M26 3 49 44H3L26 3Z" fill="' + statusColor + '" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round"/>' +
+                '<path d="M26 16v13" stroke="#FFFFFF" stroke-width="4" stroke-linecap="round"/>' +
+                '<circle cx="26" cy="35" r="2.4" fill="#FFFFFF"/>' +
+              '</svg>' +
+            '</div>',
+          iconSize: [58, 58],
+          iconAnchor: [29, 29],
+          popupAnchor: [0, -31]
+        });
+      }
+
+      function resourceIcon(kind, isPriority, highlighted) {
         var extra = kind === 'evacuation' && isPriority ? ' priority' : '';
+        var markerColor = isPriority ? '#EAB308' : kind === 'facility' ? '#4B82B5' : '#3F7B6C';
         var icon = kind === 'facility'
           ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 6v12M6 12h12" stroke="#FFFFFF" stroke-width="2.7" stroke-linecap="round"/></svg>'
           : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 11 8-6 8 6v8H4v-8Z" fill="#FFFFFF"/><path d="M10 19v-5h4v5" fill="#3F7B6C"/></svg>';
+        var markerHtml = '<div class="resource-pin ' + kind + extra + '">' + icon + '</div>';
+        if (highlighted) {
+          markerHtml = '<div class="resource-pin-highlighted"><span class="resource-highlight-pulse" style="background:' + markerColor + '"></span>' + markerHtml + '</div>';
+        }
         return L.divIcon({
           className: 'resource-pin-wrap',
-          html: '<div class="resource-pin ' + kind + extra + '">' + icon + '</div>',
-          iconSize: [32, 32],
-          iconAnchor: [16, 16]
+          html: markerHtml,
+          iconSize: highlighted ? [58, 58] : [32, 32],
+          iconAnchor: highlighted ? [29, 29] : [16, 16]
         });
       }
 
@@ -419,9 +562,16 @@ function buildMapHtml(
         maxClusterRadius: 52,
         iconCreateFunction: function(cluster) {
           var count = cluster.getChildCount();
+          var depthClass = count >= 20
+            ? 'cluster-critical'
+            : count >= 10
+              ? 'cluster-high'
+              : count >= 5
+                ? 'cluster-medium'
+                : 'cluster-low';
           return L.divIcon({
-            html: '${pulseReportClusters ? '<span class="cluster-pulse"></span>' : ''}<div><span>' + count + '</span></div>',
-            className: 'marker-cluster-report',
+            html: '<div><span>' + count + '</span></div>',
+            className: 'marker-cluster-report ' + depthClass,
             iconSize: L.point(38, 38)
           });
         }
@@ -429,7 +579,38 @@ function buildMapHtml(
 
       var resourceGroup = L.layerGroup().addTo(map);
       var userLocationGroup = L.layerGroup().addTo(map);
+      var highlightedReportGroup = L.layerGroup().addTo(map);
       var reportMarkersById = {};
+      var highlightedReportId = null;
+
+      window.setHighlightedReport = function(reportId) {
+        var previousMarker = highlightedReportId
+          ? reportMarkersById[highlightedReportId]
+          : null;
+        if (previousMarker) {
+          highlightedReportGroup.removeLayer(previousMarker);
+          previousMarker.setIcon(reportPinIcon);
+          previousMarker.setZIndexOffset(0);
+          clusterGroup.addLayer(previousMarker);
+        }
+
+        highlightedReportId = reportId || null;
+        if (!highlightedReportId) {
+          clusterGroup.refreshClusters();
+          return;
+        }
+
+        var nextMarker = reportMarkersById[highlightedReportId];
+        if (!nextMarker) return;
+
+        clusterGroup.removeLayer(nextMarker);
+        nextMarker.setIcon(
+          highlightedReportPinIcon(nextMarker.options.reportMeta.statusColor)
+        );
+        nextMarker.setZIndexOffset(1000);
+        highlightedReportGroup.addLayer(nextMarker);
+        clusterGroup.refreshClusters();
+      };
 
       function postSelection(reportIds) {
         if (!window.ReactNativeWebView || !reportIds || !reportIds.length) return;
@@ -489,9 +670,15 @@ function buildMapHtml(
       var initialViewFitted = false;
 
       window.setReportMarkers = function(markers) {
+        var requestedHighlight = highlightedReportId;
         clusterGroup.clearLayers();
+        highlightedReportGroup.clearLayers();
         reportMarkersById = {};
-        if (!markers || !markers.length) return;
+        highlightedReportId = null;
+        if (!markers || !markers.length) {
+          highlightedReportId = requestedHighlight;
+          return;
+        }
 
         var bounds = [];
         markers.forEach(function(m) {
@@ -500,7 +687,11 @@ function buildMapHtml(
           var marker = L.marker([m.latitude, m.longitude], {
             icon: reportPinIcon,
             reportId: m.id,
-            reportMeta: { id: m.id, createdAt: m.created_at || '' }
+            reportMeta: {
+              id: m.id,
+              createdAt: m.created_at || '',
+              statusColor: m.statusColor || '#B33443'
+            }
           });
 
           if (m.showDetailsPopup) {
@@ -524,6 +715,10 @@ function buildMapHtml(
           bounds.push([m.latitude, m.longitude]);
         });
 
+        if (requestedHighlight) {
+          window.setHighlightedReport(requestedHighlight);
+        }
+
         if (initialViewFitted || !bounds.length) return;
         initialViewFitted = true;
 
@@ -534,14 +729,17 @@ function buildMapHtml(
         }
       };
 
+      var resourceMarkersData = [];
+      var highlightedResourceId = null;
       window.setResourceMarkers = function(resources) {
+        resourceMarkersData = resources || [];
         resourceGroup.clearLayers();
-        if (!resources || !resources.length) return;
+        if (!resourceMarkersData.length) return;
 
-        resources.forEach(function(r) {
+        resourceMarkersData.forEach(function(r) {
           if (typeof r.latitude !== 'number' || typeof r.longitude !== 'number') return;
           var marker = L.marker([r.latitude, r.longitude], {
-            icon: resourceIcon(r.kind, !!r.isPriority),
+            icon: resourceIcon(r.kind, !!r.isPriority, r.id === highlightedResourceId),
             resourceMeta: r
           });
           marker.on('click', function(e) {
@@ -550,6 +748,11 @@ function buildMapHtml(
           });
           resourceGroup.addLayer(marker);
         });
+      };
+
+      window.setHighlightedResource = function(resourceId) {
+        highlightedResourceId = resourceId || null;
+        window.setResourceMarkers(resourceMarkersData);
       };
 
       window.setUserLocation = function(location) {
@@ -596,6 +799,14 @@ function buildMapHtml(
         window.focusReport(window.__pendingFocusTarget);
         window.__pendingFocusTarget = null;
       }
+      if (window.__pendingHighlightedReportId !== undefined) {
+        window.setHighlightedReport(window.__pendingHighlightedReportId);
+        window.__pendingHighlightedReportId = undefined;
+      }
+      if (window.__pendingHighlightedResourceId !== undefined) {
+        window.setHighlightedResource(window.__pendingHighlightedResourceId);
+        window.__pendingHighlightedResourceId = undefined;
+      }
     </script>
   </body>
 </html>`;
@@ -610,6 +821,7 @@ function markersToInjectScript(
     latitude: m.latitude,
     longitude: m.longitude,
     created_at: m.created_at,
+    statusColor: getReportStatusPresentation(m.status).color,
     showDetailsPopup: showReportDetailsPopup,
   }));
   const json = JSON.stringify(payload).replace(/</g, '\\u003c');
@@ -673,6 +885,30 @@ function focusToInjectScript(target: MapFocusTarget): string {
   })(); true;`;
 }
 
+function highlightedReportToInjectScript(reportId: string | null): string {
+  const json = JSON.stringify(reportId).replace(/</g, '\\u003c');
+  return `(function() {
+    var reportId = ${json};
+    if (window.setHighlightedReport) {
+      window.setHighlightedReport(reportId);
+    } else {
+      window.__pendingHighlightedReportId = reportId;
+    }
+  })(); true;`;
+}
+
+function highlightedResourceToInjectScript(resourceId: string | null): string {
+  const json = JSON.stringify(resourceId).replace(/</g, '\\u003c');
+  return `(function() {
+    var resourceId = ${json};
+    if (window.setHighlightedResource) {
+      window.setHighlightedResource(resourceId);
+    } else {
+      window.__pendingHighlightedResourceId = resourceId;
+    }
+  })(); true;`;
+}
+
 function mapDetailsToInjectScript(showMapDetails: boolean): string {
   return `(function() {
     if (window.setMapDetailsVisibility) {
@@ -687,6 +923,8 @@ export default function InteractiveMap({
   evacuationCenters = [],
   layerVisibility = DEFAULT_LAYERS,
   showLayerFilters = false,
+  collapsibleLayerFilters = false,
+  showReportStatusFilters = false,
   layerFiltersTopInset = spacing.md,
   compactLayerFilters = false,
   showSearchBar = false,
@@ -695,13 +933,15 @@ export default function InteractiveMap({
   onLayerVisibilityChange,
   onReportSelection,
   showReportDetailsPopup = false,
-  pulseReportClusters = false,
   onReportDetailsRequest,
   onResourceSelection,
   focusTarget,
+  highlightedReportId = null,
+  highlightedResourceId = null,
   showZoomControls = true,
   showMapDetails = true,
   tone = 'light',
+  unblurredViewportFrame,
   onGestureActiveChange,
   focusZoomLevel = 16,
   stickyFocus = false,
@@ -711,20 +951,33 @@ export default function InteractiveMap({
   const lastFocusSignatureRef = useRef('');
   // Leaflet supports a wider range, but the app's tile sources are configured for levels 1-19.
   const safeFocusZoomLevel = Math.min(19, Math.max(1, Math.round(focusZoomLevel)));
+  const safeViewportTop = Math.min(500, Math.max(0, Math.round(unblurredViewportFrame?.top ?? 0)));
+  const safeViewportRight = Math.min(200, Math.max(0, Math.round(unblurredViewportFrame?.right ?? 0)));
+  const safeViewportBottom = Math.min(300, Math.max(0, Math.round(unblurredViewportFrame?.bottom ?? 0)));
+  const safeViewportLeft = Math.min(200, Math.max(0, Math.round(unblurredViewportFrame?.left ?? 0)));
+  const safeViewportRadius = Math.min(80, Math.max(0, Math.round(unblurredViewportFrame?.borderRadius ?? 0)));
   const html = useMemo(
     () =>
       buildMapHtml(
         showZoomControls,
         tone,
-        pulseReportClusters,
         initialShowMapDetails,
         stickyFocus,
         safeFocusZoomLevel,
+        safeViewportTop,
+        safeViewportRight,
+        safeViewportBottom,
+        safeViewportLeft,
+        safeViewportRadius,
       ),
     [
       initialShowMapDetails,
-      pulseReportClusters,
       safeFocusZoomLevel,
+      safeViewportBottom,
+      safeViewportLeft,
+      safeViewportRadius,
+      safeViewportRight,
+      safeViewportTop,
       showZoomControls,
       stickyFocus,
       tone,
@@ -734,15 +987,21 @@ export default function InteractiveMap({
   const [searchQuery, setSearchQuery] = useState('');
   const [searchFocused, setSearchFocused] = useState(false);
   const [layerPanelVisible, setLayerPanelVisible] = useState(showLayerFilters);
+  const [reportStatusFilter, setReportStatusFilter] =
+    useState<ReportStatusFilter>('all');
 
   useEffect(() => {
     lastFocusSignatureRef.current = '';
   }, [html]);
 
-  const visibleReports = useMemo(
-    () => (layerVisibility.reports ? markers : []),
-    [layerVisibility.reports, markers],
-  );
+  const visibleReports = useMemo(() => {
+    if (!layerVisibility.reports) return [];
+    if (reportStatusFilter === 'all') return markers;
+    // Keep a directly requested report visible even when a saved filter excludes it.
+    return markers.filter(
+      (report) => report.id === highlightedReportId || report.status === reportStatusFilter,
+    );
+  }, [highlightedReportId, layerVisibility.reports, markers, reportStatusFilter]);
   const visibleResources = useMemo(() => {
     const next: MapResourceMarker[] = [];
     if (layerVisibility.facilities) {
@@ -770,6 +1029,20 @@ export default function InteractiveMap({
     if (!readyRef.current || !webRef.current) return;
     webRef.current.injectJavaScript(userLocationToInjectScript(userLocation));
   }, [userLocation]);
+
+  useEffect(() => {
+    if (!readyRef.current || !webRef.current) return;
+    webRef.current.injectJavaScript(
+      highlightedReportToInjectScript(highlightedReportId),
+    );
+  }, [highlightedReportId]);
+
+  useEffect(() => {
+    if (!readyRef.current || !webRef.current) return;
+    webRef.current.injectJavaScript(
+      highlightedResourceToInjectScript(highlightedResourceId),
+    );
+  }, [highlightedResourceId]);
 
   useEffect(() => {
     if (!focusTarget || !readyRef.current || !webRef.current) return;
@@ -917,6 +1190,12 @@ export default function InteractiveMap({
           webRef.current?.injectJavaScript(resourcesToInjectScript(visibleResources));
           webRef.current?.injectJavaScript(userLocationToInjectScript(userLocation));
           webRef.current?.injectJavaScript(mapDetailsToInjectScript(showMapDetails));
+          webRef.current?.injectJavaScript(
+            highlightedReportToInjectScript(highlightedReportId),
+          );
+          webRef.current?.injectJavaScript(
+            highlightedResourceToInjectScript(highlightedResourceId),
+          );
           if (focusTarget) {
             lastFocusSignatureRef.current = focusSignature(focusTarget);
             webRef.current?.injectJavaScript(focusToInjectScript(focusTarget));
@@ -1018,6 +1297,19 @@ export default function InteractiveMap({
           ]}
           pointerEvents="box-none"
         >
+          {collapsibleLayerFilters ? (
+            <View style={mapStyles.legendHeader}>
+              <Text style={mapStyles.legendTitle}>Map filters</Text>
+              <Pressable
+                style={mapStyles.legendCollapseButton}
+                onPress={() => setLayerPanelVisible(false)}
+                accessibilityRole="button"
+                accessibilityLabel="Hide map filters"
+              >
+                <Ionicons name="chevron-up" size={18} color={colors.navigationActive} />
+              </Pressable>
+            </View>
+          ) : null}
           <Pressable
             style={[
               mapStyles.legendRow,
@@ -1042,6 +1334,38 @@ export default function InteractiveMap({
               <View style={[mapStyles.layerSwitchThumb, layerVisibility.reports && mapStyles.layerSwitchThumbActive]} />
             </View>
           </Pressable>
+          {layerVisibility.reports && showReportStatusFilters ? (
+            <View style={mapStyles.statusFilterWrap}>
+              <Text style={mapStyles.statusFilterLabel}>Report status</Text>
+              <View style={mapStyles.statusFilterGrid}>
+                {REPORT_STATUS_OPTIONS.map((option) => {
+                  const selected = reportStatusFilter === option.value;
+                  return (
+                    <Pressable
+                      key={option.value}
+                      style={[
+                        mapStyles.statusFilterChip,
+                        selected && mapStyles.statusFilterChipSelected,
+                      ]}
+                      onPress={() => setReportStatusFilter(option.value)}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected }}
+                      accessibilityLabel={`Show ${option.label.toLocaleLowerCase()} reports`}
+                    >
+                      <Text
+                        style={[
+                          mapStyles.statusFilterChipText,
+                          selected && mapStyles.statusFilterChipTextSelected,
+                        ]}
+                      >
+                        {option.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+          ) : null}
           <Pressable
             style={[
               mapStyles.legendRow,
@@ -1101,6 +1425,17 @@ export default function InteractiveMap({
           </Text>
         </View>
       ) : null}
+
+      {showLayerFilters && collapsibleLayerFilters && !layerPanelVisible && !showSearchBar ? (
+        <Pressable
+          style={[mapStyles.legendOpenButton, { top: layerFiltersTopInset }]}
+          onPress={() => setLayerPanelVisible(true)}
+          accessibilityRole="button"
+          accessibilityLabel="Show map filters"
+        >
+          <Ionicons name="options-outline" size={21} color={colors.navigationActive} />
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -1142,10 +1477,46 @@ const mapStyles = StyleSheet.create({
     elevation: 7,
   },
   legendCompact: {
-    width: 160,
+    width: 210,
     gap: 2,
     paddingVertical: 10,
     paddingHorizontal: 12,
+  },
+  legendHeader: {
+    width: '100%',
+    minHeight: 36,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  legendTitle: {
+    fontFamily: fonts.semibold,
+    fontSize: fontSizes.sm,
+    color: colors.navigationActive,
+  },
+  legendCollapseButton: {
+    width: 48,
+    height: 48,
+    marginTop: -10,
+    marginRight: -10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  legendOpenButton: {
+    position: 'absolute',
+    left: spacing.md,
+    zIndex: 20,
+    width: 48,
+    height: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.full,
+    backgroundColor: 'rgba(255, 255, 255, 0.96)',
+    shadowColor: '#1C2B4B',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.14,
+    shadowRadius: 12,
+    elevation: 7,
   },
   legendRow: {
     minHeight: 25,
@@ -1160,6 +1531,47 @@ const mapStyles = StyleSheet.create({
   },
   legendRowInactive: {
     opacity: 0.65,
+  },
+  statusFilterWrap: {
+    width: '100%',
+    gap: spacing.xs,
+    paddingTop: spacing.xs,
+    paddingBottom: spacing.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  statusFilterLabel: {
+    fontFamily: fonts.medium,
+    fontSize: 10,
+    color: colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.35,
+  },
+  statusFilterGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+  },
+  statusFilterChip: {
+    minHeight: 28,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.full,
+    backgroundColor: colors.white,
+  },
+  statusFilterChipSelected: {
+    borderColor: colors.navigationActive,
+    backgroundColor: colors.navigationActive,
+  },
+  statusFilterChipText: {
+    fontFamily: fonts.medium,
+    fontSize: 10,
+    color: colors.text,
+  },
+  statusFilterChipTextSelected: {
+    color: colors.white,
   },
   legendDot: {
     width: 10,

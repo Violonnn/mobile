@@ -3,16 +3,26 @@
 import { createClient } from "@supabase/supabase-js";
 import { GENERIC_SERVER_ERROR, jsonResponse } from "../_shared/http.ts";
 import { rejectExtraKeys, trimText } from "../_shared/validation.ts";
+import { verifyPrivateMedia } from "../_shared/private-media.ts";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const MAX_DESCRIPTION = 4000;
 
-type MediaItem = { id?: string; type?: string; storagePath?: string; durationSeconds?: number | null };
+type MediaItem = {
+  id?: string;
+  type?: string;
+  storagePath?: string;
+  displayStoragePath?: string | null;
+  thumbnailStoragePath?: string | null;
+  durationSeconds?: number | null;
+  fileSizeBytes?: number | null;
+  width?: number | null;
+  height?: number | null;
+};
 type Payload = {
   announcementId?: string;
   description?: string;
   media?: MediaItem[];
-  isPinned?: boolean;
 };
 
 function validateMedia(media: MediaItem[], userId: string, announcementId: string): string | null {
@@ -22,6 +32,8 @@ function validateMedia(media: MediaItem[], userId: string, announcementId: strin
   let videoSeconds = 0;
   const ids = new Set<string>();
   for (const item of media) {
+    if (!item || typeof item !== "object") return "Invalid media item.";
+    if (rejectExtraKeys(item as Record<string, unknown>, ["id", "type", "storagePath", "displayStoragePath", "thumbnailStoragePath", "durationSeconds", "fileSizeBytes", "width", "height"])) return "Invalid media fields.";
     const id = trimText(item?.id);
     const type = trimText(item?.type);
     const storagePath = trimText(item?.storagePath);
@@ -37,40 +49,13 @@ function validateMedia(media: MediaItem[], userId: string, announcementId: strin
       if (!Number.isFinite(seconds) || seconds <= 0) return "Videos need a valid duration.";
       videoSeconds += seconds;
     } else return "Invalid media type.";
+    if (item.width != null && (!Number.isFinite(Number(item.width)) || Number(item.width) <= 0 || Number(item.width) > 20000)) return "Invalid media width.";
+    if (item.height != null && (!Number.isFinite(Number(item.height)) || Number(item.height) <= 0 || Number(item.height) > 20000)) return "Invalid media height.";
   }
   if (photos > 3) return "You can add up to 3 photos.";
   if (videos > 1) return "You can add one video.";
   if (videoSeconds > 30) return "Videos must stay within 30 seconds total.";
   return null;
-}
-
-async function verifyUploadedMedia(
-  admin: ReturnType<typeof createClient>,
-  userId: string,
-  announcementId: string,
-  paths: string[],
-): Promise<boolean> {
-  if (paths.length === 0) return true;
-
-  const folder = `${userId}/${announcementId}`;
-  const { data: objects, error } = await admin.storage
-    .from("announcement-media")
-    .list(folder, { limit: 10 });
-
-  if (error) {
-    console.error("create-official-announcement media verification:", error.message);
-    return false;
-  }
-
-  const uploadedPaths = new Set(
-    (objects ?? []).map((object) => `${folder}/${object.name}`),
-  );
-
-  // The client-side Storage policy permits inserts only in auth.uid()'s
-  // folder. The validated prefix plus this existence check therefore proves
-  // the caller uploaded each claimed object without depending on internal
-  // owner_id metadata.
-  return paths.every((path) => uploadedPaths.has(path));
 }
 
 Deno.serve(async (req) => {
@@ -89,14 +74,13 @@ Deno.serve(async (req) => {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
     return jsonResponse({ error: "Invalid request body." }, 400);
   }
+  // Accept the legacy key during rollout, but ignore it so no role can pin.
   if (rejectExtraKeys(payload as Record<string, unknown>, ["announcementId", "description", "media", "isPinned"])) return jsonResponse({ error: "Invalid request fields." }, 400);
   const request = payload as Payload;
   const announcementId = trimText(request.announcementId);
   const description = trimText(request.description);
   const media = Array.isArray(request.media) ? request.media : [];
-  const isPinned = request.isPinned ?? false;
   if (!UUID.test(announcementId) || !description || description.length > MAX_DESCRIPTION) return jsonResponse({ error: "Enter a description (max 4000 characters)." }, 400);
-  if (typeof isPinned !== "boolean") return jsonResponse({ error: "Invalid pin setting." }, 400);
   const mediaError = validateMedia(media, userData.user.id, announcementId);
   if (mediaError) return jsonResponse({ error: mediaError }, 400);
   const admin = createClient(url, service, { auth: { persistSession: false, autoRefreshToken: false } });
@@ -121,10 +105,16 @@ Deno.serve(async (req) => {
     : isActiveMayor
       ? "Mayor Announcement"
       : "MDRRMO Announcement";
-  const paths = media.map((item) => trimText(item.storagePath));
-  if (!(await verifyUploadedMedia(admin, userData.user.id, announcementId, paths))) {
-    return jsonResponse({ error: "One or more uploaded attachments could not be verified." }, 400);
-  }
+  const mediaVerification = await verifyPrivateMedia({
+    admin,
+    bucket: "announcement-media",
+    userId: userData.user.id,
+    parentId: announcementId,
+    media,
+    // Keep already-installed clients working while the derivative-aware build rolls out.
+    allowLegacyPath: true,
+  });
+  if (mediaVerification.error) return jsonResponse({ error: mediaVerification.error }, 400);
   const { error: announcementError } = await admin.from("announcements").insert({
     id: announcementId,
     author_id: userData.user.id,
@@ -132,14 +122,27 @@ Deno.serve(async (req) => {
     barangay_id: barangayId,
     title,
     body: description,
-    is_pinned: isPinned,
+    // Pinning is temporarily disabled across every official role.
+    is_pinned: false,
   });
   if (announcementError) {
     console.error("create-official-announcement insert:", announcementError.message);
     return jsonResponse({ error: "Could not publish this announcement." }, 400);
   }
   if (media.length > 0) {
-    const { error: mediaInsertError } = await admin.from("announcement_media").insert(media.map((item, position) => ({ id: trimText(item.id), announcement_id: announcementId, type: trimText(item.type), storage_path: trimText(item.storagePath), duration_seconds: item.type === "video" ? Number(item.durationSeconds) : null, position })));
+    const { error: mediaInsertError } = await admin.from("announcement_media").insert(media.map((item, position) => ({
+      id: trimText(item.id),
+      announcement_id: announcementId,
+      type: trimText(item.type),
+      storage_path: trimText(item.storagePath),
+      thumbnail_storage_path: trimText(item.thumbnailStoragePath) || null,
+      display_storage_path: trimText(item.displayStoragePath) || null,
+      duration_seconds: item.type === "video" ? Number(item.durationSeconds) : null,
+      file_size_bytes: mediaVerification.verified.find((verified) => verified.id === trimText(item.id))?.fileSizeBytes ?? null,
+      width: item.width == null ? null : Number(item.width),
+      height: item.height == null ? null : Number(item.height),
+      position,
+    })));
     if (mediaInsertError) {
       console.error("create-official-announcement media insert:", mediaInsertError.message);
       await admin.from("announcements").delete().eq("id", announcementId);

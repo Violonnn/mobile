@@ -1,19 +1,14 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Modal,
   View,
   Text,
   TouchableOpacity,
-  Pressable,
   ScrollView,
   RefreshControl,
   StyleSheet,
   Platform,
-  useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { navMetrics } from '../../styles/components/bottomNav.styles';
 import { colors, fonts, fontSizes, radius, spacing } from '../../styles/theme';
 import {
   formatReportLocation,
@@ -34,21 +29,20 @@ import CommentsSection from '../report/CommentsSection';
 import { useReportEngagement } from '../report/ReportEngagementProvider';
 import { useKeyboardHeight } from '../../hooks/useKeyboardHeight';
 import { useReportDetail } from '../../hooks/useReportDetail';
+import ResidentBottomSheet from '../ui/ResidentBottomSheet';
+import MapRelevantComments from './MapRelevantComments';
+import IncidentTypeBadge from '../report/IncidentTypeBadge';
 
 type Props = {
   reports: MapReportMarker[];
   visible: boolean;
   onClose: () => void;
-  /** Override when the screen uses a non-resident bottom navigation bar. */
-  bottomNavClearance?: number;
+  commentMode?: 'interactive' | 'prioritizedReadOnly';
+  onOpenCommunityReport?: (reportId: string) => void;
 };
 
-const BOTTOM_NAV_CLEARANCE = navMetrics.barHeight + navMetrics.reportLift + spacing.sm;
 const LIST_INITIAL_COUNT = 3;
 const LIST_PAGE_SIZE = 5;
-/** Approx. height of one shrunk card — viewport shows up to 5 at once. */
-const LIST_CARD_ESTIMATE = 148;
-const LIST_SCROLL_MAX_HEIGHT = LIST_CARD_ESTIMATE * 5;
 
 function ShrunkReportCard({
   report,
@@ -90,6 +84,10 @@ function ShrunkReportCard({
                 </Text>
               </View>
               <Text style={styles.listDate}>{formatPublishedAt(report.created_at)}</Text>
+              <IncidentTypeBadge
+                incidentType={report.incidentType}
+                incidentTypeOther={report.incidentTypeOther}
+              />
               <Text style={styles.listDescription} numberOfLines={2} ellipsizeMode="tail">
                 {report.description || 'No description provided.'}
               </Text>
@@ -129,9 +127,9 @@ export default function ReportMapDetailSheet({
   reports,
   visible,
   onClose,
-  bottomNavClearance = BOTTOM_NAV_CLEARANCE,
+  commentMode = 'interactive',
+  onOpenCommunityReport,
 }: Props) {
-  const insets = useSafeAreaInsets();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showingAllMedia, setShowingAllMedia] = useState(false);
   const [listVisibleCount, setListVisibleCount] = useState(LIST_INITIAL_COUNT);
@@ -152,12 +150,8 @@ export default function ReportMapDetailSheet({
   // KeyboardAvoidingView is unreliable inside a statusBarTranslucent Modal
   // (Android never resizes, iOS lags), so the sheet lifts itself above the
   // keyboard and shrinks to the remaining space.
-  const { height: windowHeight } = useWindowDimensions();
   const keyboardHeight = useKeyboardHeight(visible);
   const keyboardOpen = keyboardHeight > 0;
-  const sheetLift = keyboardOpen
-    ? { marginBottom: keyboardHeight + spacing.sm, maxHeight: windowHeight - keyboardHeight - insets.top - spacing.xl }
-    : null;
 
   // Once the keyboard is up the viewport shrinks — re-pin the composer so it
   // is never left hidden behind the keyboard.
@@ -190,7 +184,6 @@ export default function ReportMapDetailSheet({
   } = useReportDetail(selected);
 
   const showList = sorted.length > 1 && !detailReport;
-  const sheetBottom = insets.bottom + bottomNavClearance;
   const canGoBackToList = Boolean(detailReport && sorted.length > 1);
   const showBackButton = showingAllMedia || canGoBackToList;
   // 4+ attachments skip the 2x2 "+N" collage and list everything directly —
@@ -263,20 +256,15 @@ export default function ReportMapDetailSheet({
   if (!visible || sorted.length === 0) return null;
 
   return (
-    <Modal
+    <ResidentBottomSheet
       visible
-      transparent
-      animationType="fade"
-      presentationStyle="overFullScreen"
-      statusBarTranslucent
-      onRequestClose={handleClose}
+      onClose={handleClose}
+      initialHeightRatio={0.72}
+      minimumHeight={360}
+      bottomOffset={keyboardOpen ? keyboardHeight + spacing.sm : 0}
+      sheetStyle={styles.sheet}
+      handleAccessibilityLabel="Resize report details"
     >
-      <View style={styles.modalRoot}>
-        <Pressable style={styles.backdrop} onPress={handleClose} accessibilityLabel="Close report details" />
-
-        <View style={[styles.sheet, { marginBottom: sheetBottom }, sheetLift]}>
-          <View style={styles.handle} />
-
           <View style={styles.headerRow}>
             {showBackButton ? (
               <TouchableOpacity
@@ -307,53 +295,49 @@ export default function ReportMapDetailSheet({
               ) : null}
             </View>
 
-            <TouchableOpacity
-              style={styles.headerButton}
-              onPress={handleClose}
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityLabel="Close"
-            >
-              <Ionicons name="close" size={22} color={colors.textMuted} />
-            </TouchableOpacity>
+            <View style={styles.headerButton} />
           </View>
 
           {showList ? (
             <View style={styles.listSection}>
               <ScrollView
-                style={[styles.listScroll, { maxHeight: LIST_SCROLL_MAX_HEIGHT }]}
+                style={styles.listScroll}
                 contentContainerStyle={styles.listScrollContent}
                 showsVerticalScrollIndicator
                 nestedScrollEnabled
                 bounces={false}
               >
-                {visibleListReports.map((report) => (
-                  <ShrunkReportCard
-                    key={report.id}
-                    report={report}
-                    onPress={() => {
-                      setShowingAllMedia(false);
-                      setSelectedId(report.id);
-                    }}
-                    onCommentPress={() => openReportComments(report.id)}
-                  />
+                {visibleListReports.map((report, index) => (
+                  <React.Fragment key={report.id}>
+                    <ShrunkReportCard
+                      report={report}
+                      onPress={() => {
+                        setShowingAllMedia(false);
+                        setSelectedId(report.id);
+                      }}
+                      onCommentPress={() => openReportComments(report.id)}
+                    />
+                    {index < visibleListReports.length - 1 ? (
+                      <View style={styles.listSeparator} />
+                    ) : null}
+                  </React.Fragment>
                 ))}
-              </ScrollView>
 
-              {hasMoreListReports ? (
-                <TouchableOpacity
-                  style={styles.listFooterAction}
-                  onPress={handleSeeMore}
-                  accessibilityRole="button"
-                  accessibilityLabel="See more reports"
-                >
-                  <Text style={styles.listFooterActionText}>See More</Text>
-                </TouchableOpacity>
-              ) : (
-                <Text style={styles.listFooterNote}>
-                  That&apos;s all for the report within this area
-                </Text>
-              )}
+                {hasMoreListReports ? (
+                  <TouchableOpacity
+                    style={styles.listFooterAction}
+                    onPress={handleSeeMore}
+                    accessibilityRole="button"
+                    accessibilityLabel="See more reports"
+                  >
+                    <Text style={styles.listFooterActionText}>See More</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <Text style={styles.listFooterNote}>
+                    That&apos;s all for the reports within this area
+                  </Text>
+                )}
+              </ScrollView>
             </View>
           ) : (
             <ScrollView
@@ -397,42 +381,40 @@ export default function ReportMapDetailSheet({
 
                   {/* Inline thread — mounted (and live) only while details are open. */}
                   {!detailReport.isPending ? (
-                    <CommentsSection
-                      key={detailReport.id}
-                      reportId={detailReport.id}
-                      autoFocus={focusComments}
-                      highlighted={focusComments}
-                      refreshSignal={refreshVersion}
-                      onCommentAdded={notifyCommentAdded}
-                      onComposerFocus={() =>
-                        detailScrollRef.current?.scrollToEnd({ animated: true })
-                      }
-                    />
+                    commentMode === 'prioritizedReadOnly' && onOpenCommunityReport ? (
+                      <MapRelevantComments
+                        key={detailReport.id}
+                        reportId={detailReport.id}
+                        refreshSignal={refreshVersion}
+                        onOpenCommunityReport={() =>
+                          onOpenCommunityReport(detailReport.id)
+                        }
+                      />
+                    ) : (
+                      <CommentsSection
+                        key={detailReport.id}
+                        reportId={detailReport.id}
+                        autoFocus={focusComments}
+                        highlighted={focusComments}
+                        refreshSignal={refreshVersion}
+                        onCommentAdded={notifyCommentAdded}
+                        onComposerFocus={() =>
+                          detailScrollRef.current?.scrollToEnd({ animated: true })
+                        }
+                      />
+                    )
                   ) : null}
                 </>
               ) : null}
             </ScrollView>
           )}
-        </View>
-      </View>
-    </Modal>
+    </ResidentBottomSheet>
   );
 }
 
 const styles = StyleSheet.create({
-  modalRoot: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  backdrop: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(17, 24, 39, 0.48)',
-  },
   sheet: {
-    maxHeight: '72%',
     backgroundColor: colors.card,
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
     borderWidth: 1,
     borderColor: 'rgba(229, 231, 235, 0.9)',
     overflow: 'hidden',
@@ -448,26 +430,15 @@ const styles = StyleSheet.create({
       },
     }),
   },
-  handle: {
-    alignSelf: 'center',
-    width: 44,
-    height: 4,
-    borderRadius: radius.full,
-    backgroundColor: colors.border,
-    marginTop: spacing.sm,
-    marginBottom: spacing.xs,
-  },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: spacing.sm,
-    paddingBottom: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    paddingBottom: spacing.xs,
   },
   headerButton: {
-    width: 40,
-    height: 40,
+    width: 48,
+    height: 48,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -497,7 +468,8 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   scroll: {
-    flexGrow: 0,
+    flex: 1,
+    minHeight: 0,
   },
   scrollContent: {
     paddingHorizontal: spacing.md,
@@ -506,33 +478,36 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   listCard: {
-    backgroundColor: colors.background,
-    borderRadius: radius.lg,
-    padding: spacing.md,
+    backgroundColor: colors.card,
+    paddingVertical: spacing.md,
     gap: spacing.sm,
   },
   listSection: {
+    flex: 1,
+    minHeight: 0,
     paddingHorizontal: spacing.md,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.md,
-    gap: spacing.sm,
   },
   listScroll: {
-    flexGrow: 0,
+    flex: 1,
+    minHeight: 0,
   },
   listScrollContent: {
-    gap: spacing.sm,
-    paddingBottom: spacing.xs,
+    paddingBottom: spacing.md,
+  },
+  listSeparator: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.border,
   },
   listFooterAction: {
     alignSelf: 'center',
+    marginTop: spacing.sm,
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
   },
   listFooterActionText: {
     fontFamily: fonts.semibold,
     fontSize: fontSizes.md,
-    color: colors.themeSoft,
+    color: colors.navigationActive,
   },
   listFooterNote: {
     fontFamily: fonts.regular,

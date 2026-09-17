@@ -26,6 +26,9 @@ export const homeStyles = StyleSheet.create({
     flexGrow: 1,
     paddingBottom: 126,
   },
+  homeScrollView: {
+    flex: 1,
+  },
   residentStickyHeader: {
     width: '100%',
     zIndex: 10,
@@ -118,14 +121,12 @@ export const homeStyles = StyleSheet.create({
   },
   notificationDot: {
     position: 'absolute',
-    top: 5,
-    right: 2,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: colors.secondary,
-    borderWidth: 1.5,
-    borderColor: colors.white,
+    top: 4,
+    right: 1,
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+    backgroundColor: '#E14348',
   },
   avatar: {
     width: 46,

@@ -3,7 +3,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-    Modal,
     Platform,
     Pressable,
     RefreshControl,
@@ -12,21 +11,19 @@ import {
     StyleSheet,
     Text,
     TouchableOpacity,
-    useWindowDimensions,
     View,
     type StyleProp,
     type ViewStyle,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useKeyboardHeight } from '../../hooks/useKeyboardHeight';
 import {
+    fetchAnnouncementById,
     formatAnnouncementAuthorName,
     type AnnouncementMediaAttachment,
     type AnnouncementRecord,
 } from '../../lib/announcements';
 import { formatPublishedAt } from '../../lib/formatTime';
 import type { ReportMediaAttachment } from '../../lib/reports';
-import { officialNavMetrics } from '../../styles/components/officialBottomNav.styles';
 import { colors, fonts, fontSizes, radius, spacing } from '../../styles/theme';
 import CommentsSection from '../report/CommentsSection';
 import {
@@ -38,10 +35,10 @@ import {
     VerticalAttachmentList,
 } from '../report/ReportDetailCard';
 import { ReporterAvatar } from '../report/ReporterAvatar';
+import ResidentBottomSheet from '../ui/ResidentBottomSheet';
 import { useAnnouncementEngagement } from './AnnouncementEngagementProvider';
 import ResidentFeedFeaturedHero from './ResidentFeedFeaturedHero';
 
-const BOTTOM_NAV_CLEARANCE = officialNavMetrics.barHeight + spacing.sm;
 
 function toReportMedia(item: AnnouncementMediaAttachment): ReportMediaAttachment {
   return {
@@ -49,6 +46,14 @@ function toReportMedia(item: AnnouncementMediaAttachment): ReportMediaAttachment
     type: item.type,
     url: item.url,
     durationSeconds: item.durationSeconds,
+    thumbnailUrl: item.thumbnailUrl,
+    storagePath: item.storagePath,
+    thumbnailStoragePath: item.thumbnailStoragePath,
+    displayStoragePath: item.displayStoragePath,
+    width: item.width,
+    height: item.height,
+    bucket: 'announcement-media',
+    detailUrlResolved: item.detailUrlResolved,
   };
 }
 
@@ -68,6 +73,7 @@ function AnnouncementMetaHeader({
             firstName: announcement.author.firstName,
             lastName: announcement.author.lastName,
             middleName: announcement.author.middleName,
+            avatarPath: announcement.author.avatarPath,
           }}
           size={40}
         />
@@ -83,16 +89,6 @@ function AnnouncementMetaHeader({
               <Text style={reportDetailStyles.publishedDate}>
                 {formatPublishedAt(announcement.createdAt)}
               </Text>
-            ) : null}
-            {announcement.isPinned ? (
-              <View
-                style={[
-                  reportDetailStyles.statusPillSmall,
-                  reportDetailStyles.statusVerified,
-                ]}
-              >
-                <Text style={reportDetailStyles.statusTextSmall}>Pinned</Text>
-              </View>
             ) : null}
           </View>
         </View>
@@ -200,7 +196,7 @@ function ResidentAnnouncementCompactContent({
         {media.length > 0 ? (
           <View style={residentStyles.mediaCount}>
             <Ionicons name="images-outline" size={13} color={colors.white} />
-            <Text style={residentStyles.mediaCountText}>{media.length}</Text>
+            <Text style={residentStyles.mediaCountText}>{announcement.mediaCount}</Text>
           </View>
         ) : null}
 
@@ -211,6 +207,7 @@ function ResidentAnnouncementCompactContent({
               firstName: announcement.author.firstName,
               lastName: announcement.author.lastName,
               middleName: announcement.author.middleName,
+              avatarPath: announcement.author.avatarPath,
             }}
             size={44}
           />
@@ -333,6 +330,7 @@ function ResidentFeedOfficialPostContent({
             firstName: announcement.author.firstName,
             lastName: announcement.author.lastName,
             middleName: announcement.author.middleName,
+            avatarPath: announcement.author.avatarPath,
           }}
           size={40}
         />
@@ -380,10 +378,10 @@ function ResidentFeedOfficialPostContent({
       {firstMedia ? (
         <View style={residentFeedOfficialStyles.mediaFrame}>
           <CollageCellContent item={firstMedia} />
-          {announcement.media.length > 1 ? (
+          {announcement.mediaCount > 1 ? (
             <View style={residentFeedOfficialStyles.mediaCountBadge}>
               <Text style={residentFeedOfficialStyles.mediaCountText}>
-                1 / {announcement.media.length}
+                1 / {announcement.mediaCount}
               </Text>
             </View>
           ) : null}
@@ -494,6 +492,7 @@ function OfficialCommunityAnnouncementContent({
             firstName: announcement.author.firstName,
             lastName: announcement.author.lastName,
             middleName: announcement.author.middleName,
+            avatarPath: announcement.author.avatarPath,
           }}
           size={44}
         />
@@ -504,9 +503,6 @@ function OfficialCommunityAnnouncementContent({
           </Text>
           <Text style={officialCommunityStyles.date}>{formatPublishedAt(announcement.createdAt)}</Text>
         </View>
-        {announcement.isPinned ? (
-          <Ionicons name="pin-outline" size={20} color={colors.textMuted} />
-        ) : null}
       </View>
 
       {firstMedia ? (
@@ -515,10 +511,10 @@ function OfficialCommunityAnnouncementContent({
           <View style={officialCommunityStyles.scopeBadge}>
             <Text style={officialCommunityStyles.scopeBadgeText}>{scopeLabel}</Text>
           </View>
-          {announcement.media.length > 1 ? (
+          {announcement.mediaCount > 1 ? (
             <View style={officialCommunityStyles.mediaCountBadge}>
               <Ionicons name="images-outline" size={13} color={colors.white} />
-              <Text style={officialCommunityStyles.mediaCountText}>{announcement.media.length}</Text>
+              <Text style={officialCommunityStyles.mediaCountText}>{announcement.mediaCount}</Text>
             </View>
           ) : null}
         </View>
@@ -597,25 +593,16 @@ export default function OfficialAnnouncementPostCard({
   const [focusComments, setFocusComments] = useState(false);
   const [refreshSignal, setRefreshSignal] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
+  const [detailLoadError, setDetailLoadError] = useState<string | null>(null);
   const [featuredAnnouncement, setFeaturedAnnouncement] = useState(announcement);
   const [detailAnnouncement, setDetailAnnouncement] = useState(announcement);
   const [previousAnnouncementId, setPreviousAnnouncementId] = useState(announcement.id);
-  const insets = useSafeAreaInsets();
-  const { height: windowHeight } = useWindowDimensions();
-  const sheetBottom = insets.bottom + BOTTOM_NAV_CLEARANCE;
   const { notifyCommentAdded } = useAnnouncementEngagement();
   const modalScrollRef = useRef<ScrollView>(null);
   const pendingScrollToComments = useRef(false);
 
   const keyboardHeight = useKeyboardHeight(expanded);
   const keyboardOpen = keyboardHeight > 0;
-  const sheetLift = keyboardOpen
-    ? {
-        marginBottom: keyboardHeight + spacing.sm,
-        maxHeight: windowHeight - keyboardHeight - insets.top - spacing.xl,
-      }
-    : { marginBottom: sheetBottom };
-
   useEffect(() => {
     if (!expanded || !keyboardOpen) return;
     const timer = setTimeout(
@@ -644,6 +631,12 @@ export default function OfficialAnnouncementPostCard({
     pendingScrollToComments.current = withComments;
     setFocusComments(withComments);
     setExpanded(true);
+    if (!target.mediaDetailLoaded) {
+      void fetchAnnouncementById(target.id).then((result) => {
+        if (result.announcement) setDetailAnnouncement(result.announcement);
+        setDetailLoadError(result.error);
+      });
+    }
   };
 
   const closeExpanded = () => {
@@ -706,42 +699,15 @@ export default function OfficialAnnouncementPostCard({
         )}
       </Pressable>
 
-      <Modal
+      <ResidentBottomSheet
         visible={expanded}
-        transparent
-        animationType="fade"
-        presentationStyle="overFullScreen"
-        statusBarTranslucent
-        onRequestClose={closeExpanded}
+        onClose={closeExpanded}
+        initialHeightRatio={0.72}
+        minimumHeight={360}
+        bottomOffset={keyboardOpen ? keyboardHeight + spacing.sm : 0}
+        sheetStyle={reportDetailStyles.postModalSheet}
+        handleAccessibilityLabel="Resize official update"
       >
-        <View style={reportDetailStyles.postModalOverlay}>
-          <Pressable
-            style={reportDetailStyles.postModalBackdrop}
-            onPress={closeExpanded}
-            accessibilityLabel="Close announcement"
-          />
-
-          <View style={[reportDetailStyles.postModalSheet, sheetLift]}>
-            <View style={reportDetailStyles.postModalHandle} />
-
-            <View style={reportDetailStyles.postModalHeader}>
-              <View style={reportDetailStyles.postModalHeaderButton} />
-              <View style={reportDetailStyles.postModalTitleWrap}>
-                <Text style={reportDetailStyles.postModalTitle} numberOfLines={1}>
-                  Announcement
-                </Text>
-              </View>
-              <TouchableOpacity
-                style={reportDetailStyles.postModalHeaderButton}
-                onPress={closeExpanded}
-                hitSlop={8}
-                accessibilityRole="button"
-                accessibilityLabel="Close"
-              >
-                <Ionicons name="close" size={22} color={colors.textMuted} />
-              </TouchableOpacity>
-            </View>
-
             <ScrollView
               ref={modalScrollRef}
               style={reportDetailStyles.postModalScroll}
@@ -756,7 +722,11 @@ export default function OfficialAnnouncementPostCard({
                   onRefresh={() => {
                     setRefreshing(true);
                     setRefreshSignal((current) => current + 1);
-                    setRefreshing(false);
+                    void fetchAnnouncementById(detailAnnouncement.id).then((result) => {
+                      if (result.announcement) setDetailAnnouncement(result.announcement);
+                      setDetailLoadError(result.error);
+                      setRefreshing(false);
+                    });
                   }}
                   tintColor={colors.themeSoft}
                   colors={[colors.themeSoft]}
@@ -778,6 +748,12 @@ export default function OfficialAnnouncementPostCard({
                 onRequestComments={jumpToComments}
               />
 
+              {detailLoadError ? (
+                <Text style={reportDetailStyles.detailRefreshError}>
+                  {detailLoadError}
+                </Text>
+              ) : null}
+
               <CommentsSection
                 announcementId={detailAnnouncement.id}
                 autoFocus={focusComments}
@@ -790,9 +766,7 @@ export default function OfficialAnnouncementPostCard({
                 }
               />
             </ScrollView>
-          </View>
-        </View>
-      </Modal>
+      </ResidentBottomSheet>
     </>
   );
 }

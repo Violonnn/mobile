@@ -2,6 +2,7 @@
 import { supabase } from './supabase';
 import { getActiveSession } from './auth';
 import type { MapReportReporter } from './reports';
+import { isProfilePhotoSchemaMissing } from './schemaCompatibility';
 
 export type AnnouncementComment = {
   id: string;
@@ -38,12 +39,14 @@ function mapCommentRow(row: Record<string, unknown>): AnnouncementComment {
       middleName: row.author_middle_name
         ? String(row.author_middle_name)
         : null,
+      avatarPath: row.author_avatar_path ? String(row.author_avatar_path) : null,
     },
   };
 }
 
-const COMMENT_SELECT =
+const LEGACY_COMMENT_SELECT =
   'id, announcement_id, user_id, body, parent_comment_id, is_hidden, created_at, reply_count, author_first_name, author_last_name, author_middle_name';
+const COMMENT_SELECT = `${LEGACY_COMMENT_SELECT}, author_avatar_path`;
 
 export async function fetchTopLevelAnnouncementComments(
   announcementId: string,
@@ -59,6 +62,25 @@ export async function fetchTopLevelAnnouncementComments(
     .range(0, Math.max(0, limit - 1));
   if (!includeHidden) query = query.eq('is_hidden', false);
   const { data, error, count } = await query;
+
+  if (error && isProfilePhotoSchemaMissing(error.message)) {
+    let legacyQuery = supabase
+      .from('announcement_comments_view')
+      .select(LEGACY_COMMENT_SELECT, { count: 'exact' })
+      .eq('announcement_id', announcementId)
+      .is('parent_comment_id', null)
+      .order('created_at', { ascending: false })
+      .range(0, Math.max(0, limit - 1));
+    if (!includeHidden) legacyQuery = legacyQuery.eq('is_hidden', false);
+    const legacyResult = await legacyQuery;
+    return {
+      comments: (legacyResult.data ?? []).map((row) =>
+        mapCommentRow(row as Record<string, unknown>),
+      ),
+      total: legacyResult.count ?? 0,
+      error: legacyResult.error?.message ?? null,
+    };
+  }
 
   if (error) return { comments: [], total: 0, error: error.message };
   return {
@@ -85,6 +107,25 @@ export async function fetchAnnouncementCommentReplies(
     .range(0, Math.max(0, limit - 1));
   if (!includeHidden) query = query.eq('is_hidden', false);
   const { data, error, count } = await query;
+
+  if (error && isProfilePhotoSchemaMissing(error.message)) {
+    let legacyQuery = supabase
+      .from('announcement_comments_view')
+      .select(LEGACY_COMMENT_SELECT, { count: 'exact' })
+      .eq('announcement_id', announcementId)
+      .eq('parent_comment_id', parentCommentId)
+      .order('created_at', { ascending: true })
+      .range(0, Math.max(0, limit - 1));
+    if (!includeHidden) legacyQuery = legacyQuery.eq('is_hidden', false);
+    const legacyResult = await legacyQuery;
+    return {
+      comments: (legacyResult.data ?? []).map((row) =>
+        mapCommentRow(row as Record<string, unknown>),
+      ),
+      total: legacyResult.count ?? 0,
+      error: legacyResult.error?.message ?? null,
+    };
+  }
 
   if (error) return { comments: [], total: 0, error: error.message };
   return {

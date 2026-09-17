@@ -38,7 +38,7 @@ function getReportStatusColor(
       case 'resolved':
         return '#2F6B46';
       case 'escalated':
-        return '#B9382F';
+        return colors.escalated;
       default:
         return '#805900';
     }
@@ -50,7 +50,7 @@ function getReportStatusColor(
     case 'resolved':
       return '#8DDBAA';
     case 'escalated':
-      return '#FF6B61';
+      return colors.escalated;
     default:
       return '#FFD166';
   }
@@ -114,11 +114,11 @@ export default function HomeMapPreview({
         <InteractiveMap
           markers={reports}
           focusTarget={focusTarget}
+          highlightedReportId={focusedReport?.id ?? null}
           focusZoomLevel={14}
           showReportDetailsPopup={false}
           showMapDetails={false}
           tone={tone}
-          pulseReportClusters
           showZoomControls={false}
         />
       </View>
@@ -141,7 +141,7 @@ export default function HomeMapPreview({
               { color: secondaryTextColor },
             ]}
           >
-            Loading reports in your barangay...
+            Getting your current location and the latest active reports...
           </Text>
         </View>
       ) : error ? (
@@ -183,7 +183,7 @@ export default function HomeMapPreview({
               { color: secondaryTextColor },
             ]}
           >
-            Reports submitted in your barangay will appear here.
+            Active reports within 5 km of your current location will appear here.
           </Text>
         </View>
       ) : (
