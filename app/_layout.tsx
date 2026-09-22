@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Stack, usePathname } from 'expo-router';
+import { Stack } from 'expo-router';
 import { initialWindowMetrics, SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import * as SplashScreen from 'expo-splash-screen';
@@ -17,7 +17,6 @@ import { colors } from '../styles/theme';
 void SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
 export default function RootLayout() {
-  const pathname = usePathname();
   const [fontsLoaded] = useFonts({
     Inter_400Regular,
     Inter_500Medium,
@@ -31,9 +30,8 @@ export default function RootLayout() {
   // or the native splash stays forever.
   useEffect(() => {
     if (!fontsLoaded) return;
-    if (pathname === '/' || pathname === '/index') return;
     void hideNativeSplashOnce();
-  }, [fontsLoaded, pathname]);
+  }, [fontsLoaded]);
 
   // Keep the native splash up until the app font is ready so text never
   // flashes in the fallback system font.
