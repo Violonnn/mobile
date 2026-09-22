@@ -4,7 +4,7 @@
     "slug": "DisasterLink",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/images/iconDL.png",
     "scheme": "disasterlink",
     "userInterfaceStyle": "automatic",
     "ios": {
@@ -15,20 +15,20 @@
       "package": "com.yourcompany.disasterlink",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/icon.png"
+        "foregroundImage": "./assets/images/iconDL.png"
       },
       "predictiveBackGestureEnabled": false
     },
     "web": {
       "output": "static",
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/images/faviconDL.png"
     },
     "plugins": [
       "expo-router",
       [
         "expo-splash-screen",
         {
-          "image": "./assets/splash-icon.png",
+          "image": "./assets/images/splash_iconDL.png",
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff",
