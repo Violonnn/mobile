@@ -162,7 +162,7 @@ export const mdrrmoCommandStyles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderRadius: radius.sm,
-    backgroundColor: 'rgba(15, 32, 68, 0.06)',
+    backgroundColor: 'rgba(183, 93, 50, 0.08)',
   },
   activeIncidentQuoteAccent: {
     position: 'absolute',
@@ -170,7 +170,7 @@ export const mdrrmoCommandStyles = StyleSheet.create({
     bottom: 0,
     left: 0,
     width: 5,
-    backgroundColor: colors.navigationActive,
+    backgroundColor: colors.escalated,
   },
   activeIncidentQuoteMark: {
     width: 28,
@@ -178,7 +178,7 @@ export const mdrrmoCommandStyles = StyleSheet.create({
     fontFamily: fonts.bold,
     fontSize: 34,
     lineHeight: 36,
-    color: colors.navigationActive,
+    color: colors.escalated,
     textAlign: 'center',
   },
   activeIncidentQuoteCopy: { flex: 1, minWidth: 0, gap: spacing.xs },
@@ -202,10 +202,11 @@ export const mdrrmoCommandStyles = StyleSheet.create({
   incidentTimelineLine: {
     position: 'absolute',
     top: 12,
-    left: '16%',
-    right: '16%',
+    // Keep the translucent connector outside the completed timeline circles.
+    left: '20%',
+    right: '20%',
     height: 2,
-    backgroundColor: colors.navigationActive,
+    backgroundColor: 'rgba(15, 32, 68, 0.14)',
   },
   incidentTimelineStep: {
     width: '31%',
@@ -219,7 +220,7 @@ export const mdrrmoCommandStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 13,
-    backgroundColor: colors.navigationActive,
+    backgroundColor: 'rgba(15, 32, 68, 0.14)',
   },
   incidentTimelineDotCurrent: {
     backgroundColor: colors.escalated,

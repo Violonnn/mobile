@@ -29,6 +29,7 @@ import ProfileAvatar from '../../components/profile/ProfileAvatar';
 import ProfilePhotoModal from '../../components/profile/ProfilePhotoModal';
 import { officialStyles as styles } from '../../styles/screens/official.styles';
 import { colors } from '../../styles/theme';
+import { OfficialShellSkeleton, SettingsScreenSkeleton } from '../../components/ui/OfficialScreenSkeletons';
 
 type LegalDocument = 'privacy' | 'terms' | null;
 
@@ -143,9 +144,16 @@ export default function OfficialSettingsScreen() {
   if (scopeLoading || !isOfficial) {
     return (
       <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.themeSoft} />
-        </View>
+        <OfficialShellSkeleton />
+      </SafeAreaView>
+    );
+  }
+
+  if (officialKind === 'BDRRMO' && profileLoading && !profile) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+        <StatusBar style="dark" />
+        <SettingsScreenSkeleton />
       </SafeAreaView>
     );
   }
@@ -217,8 +225,8 @@ export default function OfficialSettingsScreen() {
             </View>
           </View>
 
-          {profileLoading ? (
-            <ActivityIndicator color={colors.themeSoft} />
+          {profileLoading && !profile ? (
+            <SettingsScreenSkeleton />
           ) : null}
           {profileError ? (
             <View style={styles.stateBox}>

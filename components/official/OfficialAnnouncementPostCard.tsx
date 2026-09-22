@@ -7,7 +7,6 @@ import {
     Pressable,
     RefreshControl,
     ScrollView,
-    Share,
     StyleSheet,
     Text,
     TouchableOpacity,
@@ -16,6 +15,7 @@ import {
     type ViewStyle,
 } from 'react-native';
 import { useKeyboardHeight } from '../../hooks/useKeyboardHeight';
+import { useShareSheetGuard } from '../../hooks/useShareSheetGuard';
 import {
     fetchAnnouncementById,
     formatAnnouncementAuthorName,
@@ -296,11 +296,13 @@ function ResidentFeedOfficialPostContent({
   officeLabel,
   onRequestExpand,
   onRequestComments,
+  onShareAnnouncement,
 }: {
   announcement: AnnouncementRecord;
   officeLabel: string;
   onRequestExpand: () => void;
   onRequestComments: () => void;
+  onShareAnnouncement: () => void;
 }) {
   const { getState, toggleUpvote } = useAnnouncementEngagement();
   const { upvoteCount, commentCount, hasUpvoted } = getState(announcement);
@@ -312,14 +314,6 @@ function ResidentFeedOfficialPostContent({
     announcement.scope === 'municipal' ? 'MUNICIPAL ADVISORY' : 'BARANGAY UPDATE';
   const title = announcement.title.trim() || announcement.body.trim() || 'Official update';
   const body = announcement.body.trim();
-
-  const shareAnnouncement = async () => {
-    try {
-      await Share.share({ message: `${title}\n${body}`, title });
-    } catch {
-      // Closing or unavailable native share sheets should not interrupt the feed.
-    }
-  };
 
   return (
     <View style={residentFeedOfficialStyles.content}>
@@ -443,7 +437,7 @@ function ResidentFeedOfficialPostContent({
             style={residentFeedOfficialStyles.iconAction}
             onPress={(event) => {
               event.stopPropagation?.();
-              void shareAnnouncement();
+              onShareAnnouncement();
             }}
             accessibilityLabel="Share announcement"
           >
@@ -463,10 +457,12 @@ function OfficialCommunityAnnouncementContent({
   announcement,
   onRequestExpand,
   onRequestComments,
+  onShareAnnouncement,
 }: {
   announcement: AnnouncementRecord;
   onRequestExpand: () => void;
   onRequestComments: () => void;
+  onShareAnnouncement: () => void;
 }) {
   const { getState, toggleUpvote } = useAnnouncementEngagement();
   const { upvoteCount, commentCount, hasUpvoted } = getState(announcement);
@@ -474,14 +470,6 @@ function OfficialCommunityAnnouncementContent({
   const displayName = formatAnnouncementAuthorName(announcement.author);
   const scopeLabel = announcement.scope === 'municipal' ? 'MUNICIPAL ADVISORY' : 'BARANGAY ADVISORY';
   const title = announcement.title.trim() || announcement.body.trim() || 'Official update';
-
-  const shareAnnouncement = async () => {
-    try {
-      await Share.share({ message: `${title}\n${announcement.body}`, title });
-    } catch {
-      // Closing or unavailable native share sheets should not interrupt the feed.
-    }
-  };
 
   return (
     <View style={officialCommunityStyles.content}>
@@ -544,7 +532,13 @@ function OfficialCommunityAnnouncementContent({
       </View>
 
       <View style={officialCommunityStyles.engagementRow}>
-        <TouchableOpacity style={officialCommunityStyles.engagementAction} onPress={shareAnnouncement}>
+        <TouchableOpacity
+          style={officialCommunityStyles.engagementAction}
+          onPress={(event) => {
+            event.stopPropagation?.();
+            onShareAnnouncement();
+          }}
+        >
           <Ionicons name="paper-plane-outline" size={22} color={colors.text} />
           <Text style={officialCommunityStyles.engagementText}>Share</Text>
         </TouchableOpacity>
@@ -591,6 +585,7 @@ export default function OfficialAnnouncementPostCard({
 }) {
   const [expanded, setExpanded] = useState(false);
   const [focusComments, setFocusComments] = useState(false);
+  const { shareSafely, canOpenCard } = useShareSheetGuard();
   const [refreshSignal, setRefreshSignal] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const [detailLoadError, setDetailLoadError] = useState<string | null>(null);
@@ -639,6 +634,11 @@ export default function OfficialAnnouncementPostCard({
     }
   };
 
+  const shareAnnouncement = (target: AnnouncementRecord) => {
+    const title = target.title.trim() || target.body.trim() || 'Official update';
+    void shareSafely({ message: `${title}\n${target.body}`, title });
+  };
+
   const closeExpanded = () => {
     pendingScrollToComments.current = false;
     setFocusComments(false);
@@ -655,7 +655,10 @@ export default function OfficialAnnouncementPostCard({
     <>
       <Pressable
         style={[reportDetailStyles.feedCard, cardStyle]}
-        onPress={() => openExpanded(false)}
+        onPress={() => {
+          if (!canOpenCard()) return;
+          openExpanded(false);
+        }}
       >
         {variant === 'residentCompact' ? (
           <ResidentAnnouncementCompactContent
@@ -671,6 +674,7 @@ export default function OfficialAnnouncementPostCard({
             paused={expanded}
             onActiveChange={handleFeaturedActiveChange}
             onRequestComments={() => openExpanded(true)}
+            onShareAnnouncement={shareAnnouncement}
           />
         ) : variant === 'residentFeedCompact' ? (
           <ResidentFeedAnnouncementContent
@@ -683,12 +687,14 @@ export default function OfficialAnnouncementPostCard({
             officeLabel={officeLabel || announcement.author.roleLabel}
             onRequestExpand={() => openExpanded(false)}
             onRequestComments={() => openExpanded(true)}
+            onShareAnnouncement={() => shareAnnouncement(announcement)}
           />
         ) : variant === 'officialCommunity' ? (
           <OfficialCommunityAnnouncementContent
             announcement={announcement}
             onRequestExpand={() => openExpanded(false)}
             onRequestComments={() => openExpanded(true)}
+            onShareAnnouncement={() => shareAnnouncement(announcement)}
           />
         ) : (
           <AnnouncementDetailContent
@@ -707,6 +713,7 @@ export default function OfficialAnnouncementPostCard({
         bottomOffset={keyboardOpen ? keyboardHeight + spacing.sm : 0}
         sheetStyle={reportDetailStyles.postModalSheet}
         handleAccessibilityLabel="Resize official update"
+        showCloseButton={false}
       >
             <ScrollView
               ref={modalScrollRef}

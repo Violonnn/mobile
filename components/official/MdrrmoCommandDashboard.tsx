@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef } from 'react';
-import { ActivityIndicator, RefreshControl, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { RefreshControl, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MdrrmoHeader from './MdrrmoHeader';
@@ -8,9 +8,9 @@ import CommandQuickResponse from './CommandQuickResponse';
 import MdrrmoBarangayFieldUpdates from './MdrrmoBarangayFieldUpdates';
 import { useAnnouncements } from '../../hooks/useAnnouncements';
 import type { OfficialReportQueueItem } from '../../lib/officialReports';
-import { colors } from '../../styles/theme';
 import { officialStyles } from '../../styles/screens/official.styles';
 import { mdrrmoCommandStyles as styles } from '../../styles/screens/mdrrmoCommand.styles';
+import { CommandScreenSkeleton } from '../ui/OfficialScreenSkeletons';
 
 type MdrrmoCommandDashboardProps = {
   reports: OfficialReportQueueItem[];
@@ -92,10 +92,8 @@ export default function MdrrmoCommandDashboard({
           />
         }
       >
-        {reportsLoading ? (
-          <View style={officialStyles.stateBoxBorderless}>
-            <ActivityIndicator color={colors.navigationActive} />
-          </View>
+        {reportsLoading && reports.length === 0 ? (
+          <CommandScreenSkeleton />
         ) : reportsError ? (
           <View style={[officialStyles.stateBox, styles.padded]}>
             <Text style={officialStyles.stateTitle}>Could not load command updates</Text>

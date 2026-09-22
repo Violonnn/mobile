@@ -159,8 +159,6 @@ const localStyles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
   },
   headerSide: { width: 52, minHeight: 40, justifyContent: 'center', alignItems: 'flex-end' },
   headerTitle: {

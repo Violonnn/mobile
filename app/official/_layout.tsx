@@ -3,7 +3,7 @@
 // Access is gated once; OfficialPortalProvider loads scope for role-aware UI.
 
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { View } from 'react-native';
 import { useRouter, type Href } from 'expo-router';
 import { Tabs } from 'expo-router/js-tabs';
 import OfficialBottomNav from '../../components/navigation/OfficialBottomNav';
@@ -14,6 +14,7 @@ import {
   resolveSessionDestination,
 } from '../../lib/portalAccess';
 import { colors } from '../../styles/theme';
+import { OfficialShellSkeleton } from '../../components/ui/OfficialScreenSkeletons';
 
 function OfficialTabs() {
   return (
@@ -75,8 +76,8 @@ export default function OfficialLayout() {
 
   if (!allowed) {
     return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background }}>
-        <ActivityIndicator size="large" color={colors.themeSoft} />
+      <View style={{ flex: 1, backgroundColor: colors.background }}>
+        <OfficialShellSkeleton />
       </View>
     );
   }

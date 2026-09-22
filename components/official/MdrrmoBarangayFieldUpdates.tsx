@@ -140,7 +140,7 @@ export default function MdrrmoBarangayFieldUpdates({
     <View style={styles.fieldUpdatesSection}>
       <View style={styles.fieldUpdatesHeader}>
         <View style={styles.fieldUpdatesHeadingCopy}>
-          <Text style={styles.fieldUpdatesTitle}>Barangay updates</Text>
+          <Text style={styles.fieldUpdatesTitle}>Barangay Updates</Text>
           <Text style={styles.fieldUpdatesSubtitle}>
             Latest reports and announcement in each barangay
           </Text>

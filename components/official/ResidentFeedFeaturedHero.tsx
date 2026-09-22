@@ -2,7 +2,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useEffect, useMemo, useState } from 'react';
-import { Share, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import type {
   AnnouncementMediaAttachment,
@@ -71,11 +71,13 @@ export default function ResidentFeedFeaturedHero({
   paused = false,
   onActiveChange,
   onRequestComments,
+  onShareAnnouncement,
 }: {
   announcements: AnnouncementRecord[];
   paused?: boolean;
   onActiveChange: (announcement: AnnouncementRecord) => void;
   onRequestComments: () => void;
+  onShareAnnouncement: (announcement: AnnouncementRecord) => void;
 }) {
   const slides = useMemo(() => buildHeroSlides(announcements), [announcements]);
   const [activeSlideIndex, setActiveSlideIndex] = useState(0);
@@ -120,17 +122,6 @@ export default function ResidentFeedFeaturedHero({
   const bodyText = currentAnnouncement.body.trim();
   const showBody = bodyText.length > 0 && bodyText !== title;
   const { upvoteCount, commentCount, hasUpvoted } = getState(currentAnnouncement);
-
-  const shareAnnouncement = async () => {
-    try {
-      await Share.share({
-        message: `${title}\n${currentAnnouncement.body}`,
-        title,
-      });
-    } catch {
-      // Closing or unavailable native share sheets should not interrupt the feed.
-    }
-  };
 
   return (
     <View style={styles.content}>
@@ -220,7 +211,13 @@ export default function ResidentFeedFeaturedHero({
           <Ionicons name="chatbubble-outline" size={22} color={colors.text} />
           <Text style={styles.actionText}>{commentCount} Comments</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.actionButton} onPress={() => void shareAnnouncement()}>
+        <TouchableOpacity
+          style={styles.actionButton}
+          onPress={(event) => {
+            event.stopPropagation?.();
+            onShareAnnouncement(currentAnnouncement);
+          }}
+        >
           <Ionicons name="paper-plane-outline" size={23} color={colors.text} />
           <Text style={styles.actionText}>Share</Text>
         </TouchableOpacity>

@@ -5,7 +5,6 @@ import {
   ScrollView,
   Text,
   TouchableOpacity,
-  useWindowDimensions,
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,7 +13,6 @@ import { StatusBar } from 'expo-status-bar';
 import { useRouter, type Href } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import MdrrmoHeader from './MdrrmoHeader';
 import OfficialPasswordModal from './OfficialPasswordModal';
 import LegalModal, {
   PRIVACY_NOTICE_CONTENT,
@@ -27,9 +25,9 @@ import { mdrrmoSettingsStyles as styles } from '../../styles/screens/mdrrmoSetti
 import { colors } from '../../styles/theme';
 import ProfileAvatar from '../profile/ProfileAvatar';
 import ProfilePhotoModal from '../profile/ProfilePhotoModal';
+import { SettingsScreenSkeleton } from '../ui/OfficialScreenSkeletons';
 
 type LegalDocument = 'privacy' | 'terms' | null;
-type IoniconName = keyof typeof Ionicons.glyphMap;
 
 type Props = {
   profile: OfficialPublicProfile | null;
@@ -41,11 +39,9 @@ type Props = {
 };
 
 type SettingsRowProps = {
-  icon: IoniconName;
   title: string;
-  subtitle: string;
-  iconColor?: string;
-  rightIcon?: IoniconName;
+  subtitle?: string;
+  value?: string;
   onPress?: () => void;
 };
 
@@ -65,67 +61,33 @@ function initials(profile: OfficialPublicProfile | null): string {
     .join('') || 'M';
 }
 
-function SettingsRow({
-  icon,
-  title,
-  subtitle,
-  iconColor = '#53617A',
-  rightIcon = 'chevron-forward',
-  onPress,
-}: SettingsRowProps) {
+function SettingsRow({ title, subtitle, value, onPress }: SettingsRowProps) {
   const content = (
     <>
-      <View style={styles.rowIcon}>
-        <Ionicons name={icon} size={29} color={iconColor} />
-      </View>
       <View style={styles.rowCopy}>
         <Text style={styles.rowTitle}>{title}</Text>
-        <Text style={styles.rowSubtitle}>{subtitle}</Text>
+        {subtitle ? <Text style={styles.rowSubtitle}>{subtitle}</Text> : null}
       </View>
-      <Ionicons name={rightIcon} size={22} color={colors.textMuted} />
+      {value ? <Text style={styles.rowValue}>{value}</Text> : null}
+      {onPress ? <Ionicons name="chevron-forward" size={22} color={colors.textMuted} /> : null}
     </>
   );
 
   if (!onPress) {
-    // These rows deliberately mirror the planned settings without implying a live control.
-    return <View style={styles.row}>{content}</View>;
+    // Informational rows are intentionally not touchable because they have no action.
+    return <View style={styles.settingsRow}>{content}</View>;
   }
 
   return (
     <TouchableOpacity
-      style={styles.row}
+      style={styles.settingsRow}
       onPress={onPress}
-      activeOpacity={0.7}
+      activeOpacity={0.65}
       accessibilityRole="button"
       accessibilityLabel={title}
     >
       {content}
     </TouchableOpacity>
-  );
-}
-
-function StaticAlertRow({
-  color,
-  title,
-  subtitle,
-}: {
-  color: string;
-  title: string;
-  subtitle: string;
-}) {
-  return (
-    <View style={styles.row} accessibilityLabel={`${title}, enabled`}>
-      <View style={styles.rowIcon}>
-        <View style={[styles.statusDot, { backgroundColor: color }]} />
-      </View>
-      <View style={styles.rowCopy}>
-        <Text style={styles.rowTitle}>{title}</Text>
-        <Text style={styles.rowSubtitle}>{subtitle}</Text>
-      </View>
-      <View style={[styles.staticToggle, { backgroundColor: color }]}>
-        <View style={styles.staticToggleKnob} />
-      </View>
-    </View>
   );
 }
 
@@ -138,33 +100,30 @@ export default function MdrrmoSettingsWorkspace({
   roleVariant = 'mdrrmo',
 }: Props) {
   const router = useRouter();
-  const { width: windowWidth } = useWindowDimensions();
   const [securityVisible, setSecurityVisible] = useState(false);
   const [passwordSubmitting, setPasswordSubmitting] = useState(false);
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [legalDocument, setLegalDocument] = useState<LegalDocument>(null);
   const [loggingOut, setLoggingOut] = useState(false);
   const [profilePhotoVisible, setProfilePhotoVisible] = useState(false);
-  const compactHero = windowWidth < 380;
 
   const version = Constants.expoConfig?.version || 'Unavailable';
   const isMayor = roleVariant === 'mayor';
   const name = profileName(profile, isMayor ? 'Mayor account' : 'MDRRMO account');
   const documentTitle = legalDocument === 'privacy' ? 'Privacy notice' : 'Terms and conditions';
-  const documentContent = legalDocument === 'privacy'
-    ? PRIVACY_NOTICE_CONTENT
-    : TERMS_INFORMATION_CONTENT;
+  const documentContent =
+    legalDocument === 'privacy' ? PRIVACY_NOTICE_CONTENT : TERMS_INFORMATION_CONTENT;
 
-  const openPasswordAccess = () => {
+  function openPasswordAccess() {
     setPasswordError(null);
     setSecurityVisible(true);
-  };
+  }
 
-  const submitPasswordChange = async (input: {
+  async function submitPasswordChange(input: {
     currentPassword: string;
     newPassword: string;
     confirmPassword: string;
-  }) => {
+  }) {
     if (passwordSubmitting) return;
     setPasswordSubmitting(true);
     setPasswordError(null);
@@ -180,9 +139,9 @@ export default function MdrrmoSettingsWorkspace({
       result.warning || 'Sign in again using your new official-account password.',
     );
     router.replace('/(auth)/official-login' as Href);
-  };
+  }
 
-  const confirmLogout = () => {
+  function confirmLogout() {
     Alert.alert('Log out of DisasterLink?', 'You will need to sign in again to access the official portal.', [
       { text: 'Cancel', style: 'cancel' },
       {
@@ -201,191 +160,81 @@ export default function MdrrmoSettingsWorkspace({
         },
       },
     ]);
-  };
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <StatusBar style="dark" />
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <View style={styles.horizontalContent}>
-          <MdrrmoHeader title="Settings" />
-        </View>
+        <Text style={styles.screenTitle}>Settings</Text>
 
-        {profileLoading ? (
-          <View style={styles.stateBox}>
-            <ActivityIndicator color={colors.primary} />
-            <Text style={styles.stateText}>Loading official account…</Text>
-          </View>
+        {profileLoading && !profile ? (
+          <SettingsScreenSkeleton />
         ) : profileError && !profile ? (
           <View style={styles.stateBox}>
             <Text style={styles.stateText}>{profileError}</Text>
-            <TouchableOpacity onPress={onRetryProfile}>
-              <Text style={styles.retryText}>Try again</Text>
-            </TouchableOpacity>
+            <TouchableOpacity onPress={onRetryProfile} accessibilityRole="button"><Text style={styles.retryText}>Try again</Text></TouchableOpacity>
           </View>
         ) : (
-          <View style={styles.hero}>
-            <View style={styles.contourOne} pointerEvents="none" />
-            <View style={styles.contourTwo} pointerEvents="none" />
-            <TouchableOpacity
-              onPress={() => setProfilePhotoVisible(true)}
-              accessibilityRole="button"
-              accessibilityLabel="View profile picture"
-            >
-              <ProfileAvatar
-                avatarPath={profile?.avatar_path}
-                firstName={profile?.first_name}
-                lastName={profile?.last_name}
-                fallback={initials(profile)}
-                size={72}
-                style={styles.heroAvatar}
-                textStyle={styles.heroAvatarText}
-              />
+          <View style={styles.identityRow}>
+            <TouchableOpacity onPress={() => setProfilePhotoVisible(true)} accessibilityRole="button" accessibilityLabel="View profile picture">
+              <ProfileAvatar avatarPath={profile?.avatar_path} firstName={profile?.first_name} lastName={profile?.last_name} fallback={initials(profile)} size={92} style={styles.avatar} textStyle={styles.avatarText} />
             </TouchableOpacity>
-            <View style={styles.heroCopy}>
-              <Text style={styles.heroName} numberOfLines={2}>{name}</Text>
-              <Text style={styles.heroRole}>
-                {isMayor ? 'Mayor · Executive account' : 'MDRRMO · Official account'}
-              </Text>
-            </View>
-            {!compactHero ? (
-              <TouchableOpacity
-                style={styles.heroAction}
-                onPress={openPasswordAccess}
-                accessibilityRole="button"
-                accessibilityLabel="Open account security"
-              >
-                <Text style={styles.heroActionText} numberOfLines={2}>Account & security</Text>
-                <Ionicons name="arrow-forward" size={21} color="#70A4FF" />
+            <View style={styles.identityCopy}>
+              <Text style={styles.identityName} numberOfLines={2}>{name}</Text>
+              <Text style={styles.identityRole}>{isMayor ? 'Mayor · Executive account' : 'MDRRMO · Official account'}</Text>
+              <TouchableOpacity style={styles.viewProfileButton} onPress={() => setProfilePhotoVisible(true)} accessibilityRole="button" accessibilityLabel="View profile picture">
+                <Text style={styles.viewProfileText}>View profile picture</Text>
               </TouchableOpacity>
-            ) : null}
+            </View>
           </View>
         )}
 
-        <View style={styles.section}>
-          <Text style={styles.sectionLabel}>ALERT DELIVERY</Text>
-          <StaticAlertRow
-            color="#F0524A"
-            title="Critical incident alerts"
-            subtitle={isMayor ? 'Municipal decisions and urgent reports' : 'Escalations and urgent reports'}
-          />
-          <StaticAlertRow
-            color="#2F6FED"
-            title={isMayor ? 'Executive brief updates' : 'Operations updates'}
-            subtitle={isMayor ? 'Barangay activity and shelter readiness' : 'Assignments, comments and center status'}
-          />
-        </View>
+        <View style={styles.divider} />
 
         <View style={styles.section}>
-          <Text style={styles.sectionLabel}>{isMayor ? 'EXECUTIVE WORKSPACE' : 'WORKSPACE'}</Text>
-          <SettingsRow
-            icon="person-circle-outline"
-            title="Profile picture"
-            subtitle="View, change, or remove your photo"
-            onPress={() => setProfilePhotoVisible(true)}
-          />
-          <SettingsRow icon="location-outline" title="Default area" subtitle="Minglanilla" />
-          <SettingsRow
-            icon="locate-outline"
-            title={isMayor ? 'Municipal map' : 'Map & location'}
-            subtitle={isMayor ? 'All barangays · Read-only awareness' : 'Enabled'}
-          />
-          <SettingsRow
-            icon="shield-checkmark-outline"
-            title="Password & access"
-            subtitle="Review official account security"
-            onPress={openPasswordAccess}
-          />
+          <Text style={styles.sectionLabel}>ACCOUNT</Text>
+          <SettingsRow title="Password & access" subtitle="Change your official account password" onPress={openPasswordAccess} />
+          <SettingsRow title="Official coverage" subtitle={isMayor ? 'Municipal executive account' : 'Municipal disaster operations'} value="Minglanilla" />
         </View>
 
+        <View style={styles.divider} />
+
         <View style={styles.section}>
-          <Text style={styles.sectionLabel}>HELP & LEGAL</Text>
-          <SettingsRow
-            icon="document-outline"
-            title="Privacy notice"
-            subtitle="How DisasterLink handles personal data"
-            onPress={() => setLegalDocument('privacy')}
-          />
-          <SettingsRow
-            icon="scale-outline"
-            title="Terms and conditions"
-            subtitle="Acceptable use for DisasterLink"
-            onPress={() => setLegalDocument('terms')}
-          />
-          <SettingsRow
-            icon="information-circle-outline"
-            title="Emergency disclaimer"
-            subtitle="Supports local coordination, not emergency services"
-            rightIcon="information-circle-outline"
-            onPress={() => Alert.alert(
-              'Emergency disclaimer',
-              'DisasterLink supports local disaster coordination. It does not replace emergency services. Follow local emergency procedures when immediate help is needed.',
-            )}
-          />
-          <SettingsRow
-            icon="phone-portrait-outline"
-            title="App information"
-            subtitle={`DisasterLink · Version ${version}`}
-            onPress={() => Alert.alert('App information', `DisasterLink ${version}`)}
-          />
+          <Text style={styles.sectionLabel}>{isMayor ? 'EXECUTIVE WORKSPACE' : 'MDRRMO WORKSPACE'}</Text>
+          <SettingsRow title={isMayor ? 'Executive brief alerts' : 'Command alerts'} subtitle={isMayor ? 'Municipal decisions and urgent reports' : 'Escalations and urgent reports'} value="On" />
+          <SettingsRow title={isMayor ? 'Municipal updates' : 'Operations updates'} subtitle={isMayor ? 'Barangay activity and shelter readiness' : 'Assignments, comments, and center status'} value="On" />
+          <SettingsRow title={isMayor ? 'Municipal map' : 'Map & location'} subtitle={isMayor ? 'All barangays · Read-only awareness' : 'Command map and incident location access'} value="Enabled" />
         </View>
+
+        <View style={styles.divider} />
+
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>PRIVACY & SUPPORT</Text>
+          <SettingsRow title="Privacy notice" subtitle="How DisasterLink handles personal data" onPress={() => setLegalDocument('privacy')} />
+          <SettingsRow title="Terms and conditions" subtitle="Acceptable use for DisasterLink" onPress={() => setLegalDocument('terms')} />
+          <SettingsRow title="Emergency disclaimer" subtitle="Supports local coordination, not emergency services" onPress={() => Alert.alert('Emergency disclaimer', 'DisasterLink supports local disaster coordination. It does not replace emergency services. Follow local emergency procedures when immediate help is needed.')} />
+          <SettingsRow title="App information" subtitle={`DisasterLink · Version ${version}`} onPress={() => Alert.alert('App information', `DisasterLink ${version}`)} />
+        </View>
+
+        <View style={styles.divider} />
 
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>SESSION</Text>
-          <TouchableOpacity
-            style={styles.row}
-            onPress={confirmLogout}
-            disabled={loggingOut}
-            accessibilityRole="button"
-            accessibilityLabel="Log out"
-          >
-            <View style={styles.rowIcon}>
-              {loggingOut ? (
-                <ActivityIndicator color="#F0524A" />
-              ) : (
-                <Ionicons name="log-out-outline" size={29} color="#F0524A" />
-              )}
-            </View>
+          <TouchableOpacity style={styles.logoutRow} onPress={confirmLogout} disabled={loggingOut} accessibilityRole="button" accessibilityLabel="Log out">
             <View style={styles.rowCopy}>
               <Text style={styles.logoutTitle}>Log out</Text>
               <Text style={styles.rowSubtitle}>Sign out of this official account</Text>
             </View>
-            <Ionicons name="chevron-forward" size={22} color={colors.textMuted} />
+            {loggingOut ? <ActivityIndicator color={colors.unverified} /> : <Ionicons name="log-out-outline" size={28} color={colors.unverified} />}
           </TouchableOpacity>
           <Text style={styles.footerVersion}>DisasterLink {version}</Text>
         </View>
       </ScrollView>
 
-      <OfficialPasswordModal
-        visible={securityVisible}
-        submitting={passwordSubmitting}
-        error={passwordError}
-        onClose={() => {
-          setPasswordError(null);
-          setSecurityVisible(false);
-        }}
-        onSubmit={(input) => void submitPasswordChange(input)}
-      />
-
-      <LegalModal
-        visible={legalDocument !== null}
-        title={documentTitle}
-        content={documentContent}
-        actionLabel="Close"
-        requireRead={false}
-        onAccept={() => setLegalDocument(null)}
-        onClose={() => setLegalDocument(null)}
-      />
-      {profile ? (
-        <ProfilePhotoModal
-          visible={profilePhotoVisible}
-          firstName={profile.first_name}
-          lastName={profile.last_name}
-          avatarPath={profile.avatar_path}
-          onClose={() => setProfilePhotoVisible(false)}
-          onChanged={onAvatarChanged}
-        />
-      ) : null}
+      <OfficialPasswordModal visible={securityVisible} submitting={passwordSubmitting} error={passwordError} onClose={() => { setPasswordError(null); setSecurityVisible(false); }} onSubmit={(input) => void submitPasswordChange(input)} />
+      <LegalModal visible={legalDocument !== null} title={documentTitle} content={documentContent} actionLabel="Close" requireRead={false} onAccept={() => setLegalDocument(null)} onClose={() => setLegalDocument(null)} />
+      {profile ? <ProfilePhotoModal visible={profilePhotoVisible} firstName={profile.first_name} lastName={profile.last_name} avatarPath={profile.avatar_path} onClose={() => setProfilePhotoVisible(false)} onChanged={onAvatarChanged} /> : null}
     </SafeAreaView>
   );
 }

@@ -27,6 +27,7 @@ import { formatPublishedAt } from '../../lib/formatTime';
 import type { ReportStatus } from '../../lib/officialReports';
 import MayorSituations from '../../components/official/MayorSituations';
 import MdrrmoReportsWorkspace from '../../components/official/MdrrmoReportsWorkspace';
+import { OfficialShellSkeleton } from '../../components/ui/OfficialScreenSkeletons';
 
 type StatusFilter = ReportStatus | 'all';
 type OfficialReportSort = 'recent' | 'relevance' | 'oldest';
@@ -154,9 +155,7 @@ export default function OfficialIncidentsScreen() {
     return (
       <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
         <StatusBar style="dark" />
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.themeSoft} />
-        </View>
+        <OfficialShellSkeleton />
       </SafeAreaView>
     );
   }

@@ -403,6 +403,18 @@ export const officialStyles = StyleSheet.create({
     flex: 1,
     gap: 2,
   },
+  // Command keeps the greeting and municipal identity within the standard header height.
+  commandGreetingGroup: {
+    flex: 1,
+    minWidth: 0,
+    gap: 0,
+  },
+  commandIdentitySubtitle: {
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.sm,
+    lineHeight: 18,
+    color: colors.textMuted,
+  },
   brandLabel: {
     fontFamily: fonts.semibold,
     fontSize: fontSizes.sm,

@@ -41,6 +41,7 @@ import MdrrmoCommunityFeed from '../../components/official/MdrrmoCommunityFeed';
 import { AnnouncementEngagementProvider } from '../../components/official/AnnouncementEngagementProvider';
 import { ReportEngagementProvider } from '../../components/report/ReportEngagementProvider';
 import ProfileAvatar from '../../components/profile/ProfileAvatar';
+import { OfficialShellSkeleton } from '../../components/ui/OfficialScreenSkeletons';
 
 const PAGE_SIZE = 5;
 // How close to the bottom (px) before we reveal the next batch of reports.
@@ -241,9 +242,7 @@ export default function OfficialCommunityScreen() {
     return (
       <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
         <StatusBar style="dark" />
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.themeSoft} />
-        </View>
+        <OfficialShellSkeleton />
       </SafeAreaView>
     );
   }

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { FontAwesome6, Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
-import { useRouter, type Href } from 'expo-router';
+import { useFocusEffect, useRouter, type Href } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import MdrrmoHeader from './MdrrmoHeader';
@@ -27,6 +27,7 @@ import type {
 } from '../../lib/officialReports';
 import { mdrrmoReportsStyles as styles } from '../../styles/screens/mdrrmoReports.styles';
 import { colors } from '../../styles/theme';
+import { ReportsScreenSkeleton } from '../ui/OfficialScreenSkeletons';
 
 type StatusFilter = ReportStatus | 'all';
 type QueueSort = 'recent' | 'relevance' | 'oldest';
@@ -91,6 +92,16 @@ export default function MdrrmoReportsWorkspace({
     setPreviousInitialStatus(initialStatus);
     setStatusFilter(initialStatus ?? 'escalated');
   }
+
+  useFocusEffect(
+    useCallback(() => {
+      // Keep the selected filters and query, but return to the compact queue header.
+      setSearchVisible(false);
+      setFilterVisible(false);
+      setAddMenuVisible(false);
+      return undefined;
+    }, []),
+  );
 
   const filteredReports = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLocaleLowerCase();
@@ -242,7 +253,10 @@ export default function MdrrmoReportsWorkspace({
             </View>
           </View>
 
-          {loading ? (
+          {loading && reports.length === 0 ? (
+            <ReportsScreenSkeleton />
+          ) : null}
+          {loading && reports.length > 0 ? (
             <View style={styles.stateBox}>
               <ActivityIndicator color={colors.navigationActive} />
               <Text style={styles.stateBody}>Loading municipal reports…</Text>

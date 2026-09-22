@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { useLocalSearchParams, useRouter, type Href } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter, type Href } from 'expo-router';
 import InteractiveMap, {
   type MapLayerVisibility,
   type MapResourceMarker,
@@ -39,6 +39,7 @@ import { residentMapStyles } from '../../styles/screens/residentMap.styles';
 import { officialNavMetrics } from '../../styles/components/officialBottomNav.styles';
 import { isValidReportId } from '../../lib/officialReports';
 import { createMutableNumber } from '../../lib/mutableNumber';
+import { MapScreenSkeleton } from '../../components/ui/OfficialScreenSkeletons';
 
 const COLLAPSED_PANEL_HEADER_HEIGHT = 88;
 
@@ -79,6 +80,8 @@ export default function OfficialMapScreen() {
     facilities: true,
     evacuationCenters: true,
   });
+  const [layerPanelVisible, setLayerPanelVisible] = useState(false);
+  const [dismissMapSearchSignal, setDismissMapSearchSignal] = useState(0);
   const [escalatedPanelCollapsed, setEscalatedPanelCollapsed] = useState(false);
   const [escalatedPanelTranslateY] = useState(() => new Animated.Value(0));
   const [highlightedReportTranslateY] = useState(() => new Animated.Value(0));
@@ -203,6 +206,19 @@ export default function OfficialMapScreen() {
       }).start();
     },
     [collapsedPanelOffset, escalatedPanelTranslateY],
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      // Preserve layer choices and map position while dismissing focus-only UI.
+      setLayerPanelVisible(false);
+      setDismissMapSearchSignal((current) => current + 1);
+      setSelectedReportIds([]);
+      setHighlightedReportId(null);
+      setHighlightedResourceId(null);
+      settleEscalatedPanel(true);
+      return undefined;
+    }, [settleEscalatedPanel]),
   );
 
   const handleLayerVisibilityChange = useCallback((nextLayers: MapLayerVisibility) => {
@@ -373,6 +389,10 @@ export default function OfficialMapScreen() {
     return () => clearTimeout(routeSyncTimer);
   }, [centerMarkers, facilityMarkers, resourceId, settleEscalatedPanel]);
 
+  if (loading && markers.length === 0) {
+    return <View style={residentMapStyles.screen}><MapScreenSkeleton /></View>;
+  }
+
   if (officialKind === 'Mayor') {
     return (
       <ReportEngagementProvider reports={scopedMarkers}>
@@ -386,6 +406,9 @@ export default function OfficialMapScreen() {
               layerVisibility={layers}
               showLayerFilters
               collapsibleLayerFilters
+              layerPanelVisible={layerPanelVisible}
+              onLayerPanelVisibilityChange={setLayerPanelVisible}
+              dismissSearchSignal={dismissMapSearchSignal}
               showReportStatusFilters
               showSearchBar
               compactLayerFilters
@@ -477,6 +500,9 @@ export default function OfficialMapScreen() {
               layerVisibility={layers}
               showLayerFilters
               collapsibleLayerFilters
+              layerPanelVisible={layerPanelVisible}
+              onLayerPanelVisibilityChange={setLayerPanelVisible}
+              dismissSearchSignal={dismissMapSearchSignal}
               showReportStatusFilters
               showSearchBar
               compactLayerFilters
@@ -581,6 +607,9 @@ export default function OfficialMapScreen() {
             layerVisibility={layers}
             showLayerFilters
             collapsibleLayerFilters
+            layerPanelVisible={layerPanelVisible}
+            onLayerPanelVisibilityChange={setLayerPanelVisible}
+            dismissSearchSignal={dismissMapSearchSignal}
             showReportStatusFilters
             showSearchBar
             compactLayerFilters

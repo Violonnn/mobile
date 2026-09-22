@@ -278,11 +278,17 @@ export default function CommandEscalationMap({
                     !step.complete && styles.incidentTimelineDotPending,
                   ]}
                 >
-                  {step.current ? (
-                    <Ionicons name="alert" size={13} color={colors.white} />
-                  ) : step.complete ? (
-                    <Ionicons name="checkmark" size={13} color={colors.white} />
-                  ) : null}
+                  <Ionicons
+                    name={
+                      step.label === 'Reported by'
+                        ? 'time-outline'
+                        : step.label === 'Verified by'
+                          ? 'location-outline'
+                          : 'document-text-outline'
+                    }
+                    size={13}
+                    color={colors.white}
+                  />
                 </View>
                 <Text style={styles.incidentTimelineLabel}>{step.label}</Text>
                 <Text style={styles.incidentTimelineName} numberOfLines={2}>

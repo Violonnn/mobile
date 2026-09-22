@@ -182,6 +182,11 @@ export default function OfficialBottomNav({
   const usesOperationalNavigation = isBdrrmo || isMdrrmo;
   const tabs = useMemo(() => tabsForRole(isMayor), [isMayor]);
   const currentRouteName = state.routes[state.index]?.name;
+  // MDRRMO manages reports from Command, just like its resource quick tools.
+  const commandSectionActive =
+    currentRouteName === 'index' ||
+    currentRouteName === 'resources' ||
+    (isMdrrmo && currentRouteName === 'incidents');
 
   const navigateTo = useCallback(
     (routeName: string) => {
@@ -230,7 +235,7 @@ export default function OfficialBottomNav({
                 config={tab}
                 focused={
                   currentRouteName === tab.name ||
-                  (tab.name === 'index' && currentRouteName === 'resources')
+                  (tab.name === 'index' && commandSectionActive)
                 }
                 onPress={() => navigateTo(tab.name)}
               />

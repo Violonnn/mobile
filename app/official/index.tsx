@@ -38,6 +38,7 @@ import { formatPublishedAt } from '../../lib/formatTime';
 import type { OfficialReportQueueItem, ReportStatus } from '../../lib/officialReports';
 import IncidentTypeBadge from '../../components/report/IncidentTypeBadge';
 import ProfileAvatar from '../../components/profile/ProfileAvatar';
+import { OfficialShellSkeleton } from '../../components/ui/OfficialScreenSkeletons';
 
 function officialDisplayName(profile: OfficialPublicProfile | null): string | null {
   if (!profile) return null;
@@ -187,9 +188,7 @@ export default function OfficialCommandScreen() {
     return (
       <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
         <StatusBar style="dark" />
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.themeSoft} />
-        </View>
+        <OfficialShellSkeleton />
       </SafeAreaView>
     );
   }

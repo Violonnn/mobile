@@ -9,7 +9,8 @@ import {
   reportDetailStyles,
 } from '../report/ReportDetailCard';
 import type { OfficialReportQueueItem } from '../../lib/officialReports';
-import type { MapReportMarker } from '../../lib/reports';
+import { formatReportLocation, type MapReportMarker } from '../../lib/reports';
+import { useShareSheetGuard } from '../../hooks/useShareSheetGuard';
 
 export function officialQueueItemToPost(report: OfficialReportQueueItem): MapReportMarker {
   return {
@@ -47,19 +48,32 @@ export default function OfficialReportPostCard({
   onCommentPress: () => void;
 }) {
   const post = officialQueueItemToPost(report);
+  const { shareSafely, canOpenCard } = useShareSheetGuard();
+
+  const shareReport = () => {
+    void shareSafely({
+      message: `${post.title}\n${post.description}\n${formatReportLocation(post)}`,
+      title: post.title,
+    });
+  };
+
   return (
     <Pressable
       style={[
         reportDetailStyles.feedCard,
         isLast && reportDetailStyles.feedCardLast,
       ]}
-      onPress={onPress}
+      onPress={() => {
+        if (!canOpenCard()) return;
+        onPress();
+      }}
     >
       {variant === 'residentFeed' ? (
         <ResidentFeedReportContent
           report={post}
           onRequestExpand={onPress}
           onRequestComments={onCommentPress}
+          onShareReport={shareReport}
         />
       ) : (
         <ReportDetailContent

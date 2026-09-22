@@ -1,5 +1,5 @@
 // Resources (BDRRMO/MDRRMO) / Priority (Mayor): compact, scoped directory management.
-import React, { useEffect, useMemo, useState, type ReactNode } from 'react';
+import React, { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -13,7 +13,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
-import { useLocalSearchParams, useRouter, type Href } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter, type Href } from 'expo-router';
 import { officialStyles as styles } from '../../styles/screens/official.styles';
 import { colors } from '../../styles/theme';
 import { useOfficialPortal } from '../../context/OfficialPortalContext';
@@ -45,6 +45,7 @@ import ResourceDetailSheet, {
 import ResourceTypePickerSheet, {
   type ResourceCreateType,
 } from '../../components/official/ResourceTypePickerSheet';
+import { OfficialShellSkeleton, ResourcesScreenSkeleton } from '../../components/ui/OfficialScreenSkeletons';
 
 type TabKey = 'hotlines' | 'facilities' | 'centers';
 type EditorKey = 'hotline' | 'facility' | 'center' | null;
@@ -167,6 +168,13 @@ function DirectoryRecord({
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
 
+  useFocusEffect(
+    useCallback(() => {
+      setMenuOpen(false);
+      return undefined;
+    }, []),
+  );
+
   return (
     <View style={[styles.resourceDirectoryRecord, menuOpen && styles.resourceDirectoryRecordRaised]}>
       <View style={styles.resourceDirectoryRecordHeader}>
@@ -277,6 +285,17 @@ export function ResourceManagementContent({ header }: { header?: ReactNode }) {
       : null;
   const [handledCreateParam, setHandledCreateParam] =
     useState<ResourceCreateType | null>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      // Directory choices stay applied; only close transient editing surfaces.
+      setEditor(null);
+      setDetail(null);
+      setPickerVisible(false);
+      setFilterOpen(false);
+      return undefined;
+    }, []),
+  );
 
   if (routeTab !== previousRouteTab) {
     setPreviousRouteTab(routeTab);
@@ -479,7 +498,7 @@ export function ResourceManagementContent({ header }: { header?: ReactNode }) {
   }
 
   if (scopeLoading || (!scope && !scopeError)) {
-    return <View style={styles.loadingContainer}><ActivityIndicator size="large" color={colors.themeSoft} /></View>;
+    return <OfficialShellSkeleton />;
   }
 
   if (scopeError || !scope) {
@@ -559,7 +578,7 @@ export function ResourceManagementContent({ header }: { header?: ReactNode }) {
           {filterOpen ? <View style={styles.resourceFilterRow}>{(['all', 'active', 'inactive'] as const).map((filter) => <TouchableOpacity key={filter} style={[styles.resourceFilterChip, statusFilter === filter && styles.resourceFilterChipActive]} onPress={() => setStatusFilter(filter)}><Text style={[styles.resourceFilterChipText, statusFilter === filter && styles.resourceFilterChipTextActive]}>{filter === 'all' ? 'All' : filter === 'active' ? (tab === 'centers' ? 'Open' : 'Active') : (tab === 'centers' ? 'Not open' : 'Inactive')}</Text></TouchableOpacity>)}</View> : null}
         </> : <TextInput style={styles.searchInput} value={search} onChangeText={setSearch} placeholder={`Search ${tab}`} placeholderTextColor={colors.textMuted} />) : null}
 
-        {currentLoading ? <View style={styles.stateBox}><ActivityIndicator color={colors.themeSoft} /></View> : null}
+        {currentLoading && activeRecords === 0 ? <ResourcesScreenSkeleton /> : null}
         {!currentLoading && currentError ? <View style={styles.stateBox}><Text style={styles.stateTitle}>Could not load {tab}</Text><Text style={styles.stateBody}>{currentError}</Text><TouchableOpacity style={styles.retryButton} onPress={() => tab === 'centers' ? void reloadCenters() : void reloadResources()}><Text style={styles.retryButtonText}>Try again</Text></TouchableOpacity></View> : null}
 
         {!currentLoading && !currentError && tab === 'hotlines' && !isMayor ? (
@@ -744,7 +763,7 @@ export default function OfficialResourcesScreen() {
   }, [preservedTab, redirectsMayorToSituations, redirectsToCommunityResources, router]);
 
   if (redirectsToCommunityResources || redirectsMayorToSituations) {
-    return <SafeAreaView style={styles.container} edges={['top', 'bottom']}><StatusBar style="dark" /><View style={styles.loadingContainer}><ActivityIndicator size="large" color={colors.themeSoft} /></View></SafeAreaView>;
+    return <SafeAreaView style={styles.container} edges={['top', 'bottom']}><StatusBar style="dark" /><OfficialShellSkeleton /></SafeAreaView>;
   }
 
   return <SafeAreaView style={styles.container} edges={['top', 'bottom']}><StatusBar style="dark" /><ResourceManagementContent /></SafeAreaView>;

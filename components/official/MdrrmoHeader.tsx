@@ -1,9 +1,9 @@
 // Shared MDRRMO tab header: municipal seal + Name · Role (+ optional right controls).
 
-import React, { useEffect, useState, type ReactNode } from 'react';
+import React, { useCallback, useState, type ReactNode } from 'react';
 import { Image, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter, type Href } from 'expo-router';
+import { useFocusEffect, useRouter, type Href } from 'expo-router';
 import NotificationsModal from '../notifications/NotificationsModal';
 import { useOfficialPortal } from '../../context/OfficialPortalContext';
 import {
@@ -51,26 +51,35 @@ export default function MdrrmoHeader({
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [notificationUnreadCount, setNotificationUnreadCount] = useState(0);
 
-  useEffect(() => {
-    let cancelled = false;
-    void fetchMyOfficialPublicProfile().then((result) => {
-      if (!cancelled) setProfile(result.profile);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+
+      // Re-read the shared profile whenever this tab becomes active so a newly
+      // saved profile photo is immediately reflected in the Command header.
+      void fetchMyOfficialPublicProfile().then((result) => {
+        if (!cancelled) setProfile(result.profile);
+      });
+
+      return () => {
+        cancelled = true;
+      };
+    }, []),
+  );
 
   const name = fullNameFromProfile(profile);
   const roleLabel =
     officialKind === 'BDRRMO' && scope?.barangay_name
       ? `BDRRMO — ${scope.barangay_name}`
       : officialKind || 'MDRRMO';
-  // Command uses the municipal operations identity shown in the reference UI.
-  // Other workspaces retain the signed-in official's identity.
+  const isMdrrmoCommand = title === 'Command' && officialKind === 'MDRRMO';
+  const isMdrrmoCommunity = title === 'Community' && officialKind === 'MDRRMO';
+  const commandGreeting = profile?.first_name?.trim() || 'there';
+  // The MDRRMO Command dashboard is personal to the signed-in officer.
+  // Community already identifies its workspace, so it does not repeat the officer name.
   const identityLine =
-    title === 'Command' && officialKind === 'MDRRMO'
-      ? 'MDRRMO · Minglanilla'
+    isMdrrmoCommand || isMdrrmoCommunity
+      ? null
       : name
         ? `${name} · ${roleLabel}`
         : roleLabel;
@@ -186,21 +195,8 @@ export default function MdrrmoHeader({
   return (
     <>
       <View style={styles.headerRow}>
-        <View style={styles.headerIdentity}>
-          {showCommandBack ? (
-            <TouchableOpacity
-              style={styles.resourceDirectoryBack}
-              onPress={goBackToCommand}
-              accessibilityRole="button"
-              accessibilityLabel="Back to Command"
-            >
-              <Ionicons
-                name="arrow-back"
-                size={24}
-                color={isOverlay ? colors.white : colors.text}
-              />
-            </TouchableOpacity>
-          ) : (
+        {isMdrrmoCommand ? (
+          <View style={styles.headerIdentity}>
             <View style={styles.brandMark}>
               <Image
                 source={require('../../assets/images/mingla.png')}
@@ -208,22 +204,63 @@ export default function MdrrmoHeader({
                 accessibilityLabel="Minglanilla official seal"
               />
             </View>
-          )}
-          <View style={styles.headerTextGroup}>
-            <Text
-              style={[styles.screenTitle, isOverlay && styles.screenTitleOverlay]}
-              numberOfLines={1}
-            >
-              {title}
-            </Text>
-            <Text
-              style={[styles.screenSubtitle, isOverlay && styles.screenSubtitleOverlay]}
-              numberOfLines={1}
-            >
-              {identityLine}
-            </Text>
+            <View style={styles.commandGreetingGroup}>
+              <Text
+                style={[styles.screenTitle, isOverlay && styles.screenTitleOverlay]}
+                numberOfLines={1}
+              >
+                {`Hi, ${commandGreeting}`}
+              </Text>
+              <Text
+                style={[styles.commandIdentitySubtitle, isOverlay && styles.screenSubtitleOverlay]}
+                numberOfLines={1}
+              >
+                MDRRMO Minglanilla
+              </Text>
+            </View>
           </View>
-        </View>
+        ) : (
+          <View style={styles.headerIdentity}>
+            {showCommandBack ? (
+              <TouchableOpacity
+                style={styles.resourceDirectoryBack}
+                onPress={goBackToCommand}
+                accessibilityRole="button"
+                accessibilityLabel="Back to Command"
+              >
+                <Ionicons
+                  name="arrow-back"
+                  size={24}
+                  color={isOverlay ? colors.white : colors.text}
+                />
+              </TouchableOpacity>
+            ) : (
+              <View style={styles.brandMark}>
+                <Image
+                  source={require('../../assets/images/mingla.png')}
+                  style={styles.brandMarkImage}
+                  accessibilityLabel="Minglanilla official seal"
+                />
+              </View>
+            )}
+            <View style={styles.headerTextGroup}>
+              <Text
+                style={[styles.screenTitle, isOverlay && styles.screenTitleOverlay]}
+                numberOfLines={1}
+              >
+                {title}
+              </Text>
+              {identityLine ? (
+                <Text
+                  style={[styles.screenSubtitle, isOverlay && styles.screenSubtitleOverlay]}
+                  numberOfLines={1}
+                >
+                  {identityLine}
+                </Text>
+              ) : null}
+            </View>
+          </View>
+        )}
         {headerControls ? <View style={styles.commandHeaderControls}>{headerControls}</View> : null}
       </View>
       {showDefaultControls ? (

@@ -22,6 +22,7 @@ import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { officialStyles as styles } from '../../styles/screens/official.styles';
 import { colors } from '../../styles/theme';
+import { OfficialShellSkeleton } from '../../components/ui/OfficialScreenSkeletons';
 import { useOfficialPortal } from '../../context/OfficialPortalContext';
 import { useOfficialReportDetail } from '../../hooks/useOfficialReports';
 import {
@@ -275,9 +276,7 @@ export default function OfficialReportDetailScreen() {
     return (
       <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
         <StatusBar style="dark" />
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.themeSoft} />
-        </View>
+        <OfficialShellSkeleton />
       </SafeAreaView>
     );
   }

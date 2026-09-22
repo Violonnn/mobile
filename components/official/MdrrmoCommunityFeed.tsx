@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -17,7 +17,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter, type Href } from 'expo-router';
+import { useFocusEffect, useRouter, type Href } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AnnouncementEngagementProvider } from './AnnouncementEngagementProvider';
@@ -41,6 +41,7 @@ import type { OfficialReportQueueItem } from '../../lib/officialReports';
 import type { OfficialPublicProfile } from '../../lib/profile';
 import { mdrrmoCommunityStyles as styles } from '../../styles/screens/mdrrmoCommunity.styles';
 import { colors } from '../../styles/theme';
+import { CommunityScreenSkeleton } from '../ui/OfficialScreenSkeletons';
 
 type FeedTab = 'official' | 'community';
 type AnnouncementScopeFilter = 'all' | AnnouncementScope;
@@ -149,6 +150,16 @@ export default function MdrrmoCommunityFeed({
   const [barangays, setBarangays] = useState<BarangayOption[]>([]);
   const [barangaysLoading, setBarangaysLoading] = useState(true);
   const [barangaysError, setBarangaysError] = useState<string | null>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      // Preserve the selected feed and applied filters, only dismiss temporary surfaces.
+      setSearchVisible(false);
+      setFiltersVisible(false);
+      setBarangayPickerVisible(false);
+      return undefined;
+    }, []),
+  );
 
   const normalizedQuery = normalizeSearchText(searchQuery);
   const compactHeader = windowWidth < 360;
@@ -399,7 +410,9 @@ export default function MdrrmoCommunityFeed({
             </View>
           ) : null}
 
-          {reportsLoading ? (
+          {reportsLoading && reports.length === 0 ? (
+            <CommunityScreenSkeleton />
+          ) : reportsLoading ? (
             <View style={styles.stateBox}>
               <ActivityIndicator color={colors.primary} />
               <Text style={styles.stateBody}>Loading community reports…</Text>
@@ -492,7 +505,9 @@ export default function MdrrmoCommunityFeed({
             </View>
           </View>
 
-          {announcementsLoading ? (
+          {announcementsLoading && announcements.length === 0 ? (
+            <CommunityScreenSkeleton />
+          ) : announcementsLoading ? (
             <View style={styles.stateBox}>
               <ActivityIndicator color={colors.primary} />
               <Text style={styles.stateBody}>Loading official updates…</Text>
