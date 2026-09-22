@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { View } from 'react-native';
 import { useRouter, type Href } from 'expo-router';
 import { Tabs } from 'expo-router/js-tabs';
 import BottomNav from '../../components/navigation/BottomNav';
 import NewNotificationOverlay from '../../components/notifications/NewNotificationOverlay';
+import { HomeScreenSkeleton } from '../../components/ui/ResidentScreenSkeletons';
+import { NotificationsProvider } from '../../context/NotificationsContext';
+import { ResidentDataProvider } from '../../context/ResidentDataContext';
 import { startReportQueueWatcher } from '../../lib/reportQueueFlush';
 import { resolveSessionDestination } from '../../lib/portalAccess';
 import { colors } from '../../styles/theme';
@@ -48,28 +51,33 @@ export default function MainLayout() {
 
   if (!allowed) {
     return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background }}>
-        <ActivityIndicator size="large" color={colors.primary} />
+      <View style={{ flex: 1, backgroundColor: colors.background }}>
+        <HomeScreenSkeleton />
       </View>
     );
   }
 
   return (
-    <View style={{ flex: 1 }}>
-      <Tabs
-        screenOptions={{
-          headerShown: false,
-          animation: 'none',
-          sceneStyle: { backgroundColor: colors.background },
-        }}
-        tabBar={(props) => <BottomNav {...props} />}
-      >
-        <Tabs.Screen name="home" />
-        <Tabs.Screen name="feed" />
-        <Tabs.Screen name="map" />
-        <Tabs.Screen name="profile" />
-      </Tabs>
-      <NewNotificationOverlay />
-    </View>
+    <ResidentDataProvider>
+      <NotificationsProvider>
+        <View style={{ flex: 1 }}>
+          <Tabs
+            screenOptions={{
+              headerShown: false,
+              animation: 'none',
+              freezeOnBlur: true,
+              sceneStyle: { backgroundColor: colors.background },
+            }}
+            tabBar={(props) => <BottomNav {...props} />}
+          >
+            <Tabs.Screen name="home" />
+            <Tabs.Screen name="feed" />
+            <Tabs.Screen name="map" />
+            <Tabs.Screen name="profile" />
+          </Tabs>
+          <NewNotificationOverlay />
+        </View>
+      </NotificationsProvider>
+    </ResidentDataProvider>
   );
 }

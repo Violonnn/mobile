@@ -21,6 +21,8 @@ import {
 
 const CENTER = { lat: 10.2447, lng: 123.7967 };
 const ZOOM = 14;
+// Bump this when embedded marker HTML changes so Fast Refresh rebuilds the WebView document.
+const MAP_HTML_VERSION = 'incident-glyphs-v2';
 
 export type MapResourceMarker = {
   id: string;
@@ -75,6 +77,11 @@ type Props = {
   showLayerFilters?: boolean;
   /** Lets users collapse and reopen the resident map's floating layer controls. */
   collapsibleLayerFilters?: boolean;
+  /** Optionally controls the visibility of the floating layer panel. */
+  layerPanelVisible?: boolean;
+  onLayerPanelVisibilityChange?: (visible: boolean) => void;
+  /** Changes when the owning screen needs search suggestions dismissed. */
+  dismissSearchSignal?: number;
   /** Adds resident-facing workflow statuses beneath the Reports layer. */
   showReportStatusFilters?: boolean;
   /** Keeps resident layer controls clear of the device status bar. */
@@ -94,6 +101,8 @@ type Props = {
   focusTarget?: MapFocusTarget | null;
   /** Selected resident report rendered above clustering with a pulsing warning marker. */
   highlightedReportId?: string | null;
+  /** Replaces the highlighted triangle's warning glyph with a known incident-type glyph. */
+  showHighlightedReportIncidentIcon?: boolean;
   /** Focused facility or evacuation center rendered with a matching pulse. */
   highlightedResourceId?: string | null;
   showZoomControls?: boolean;
@@ -154,6 +163,7 @@ function buildMapHtml(
 <html>
   <head>
     <meta charset="utf-8" />
+    <meta name="disasterlink-map-version" content="${MAP_HTML_VERSION}" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
@@ -507,7 +517,25 @@ function buildMapHtml(
         popupAnchor: [0, -19]
       });
 
-      function highlightedReportPinIcon(statusColor) {
+      function highlightedReportGlyph(incidentType) {
+        if (incidentType === 'fire') {
+          return '<g transform="translate(0 3)"><path d="M26 15c-1 5-8 7-8 13 0 5 3 8 8 8s8-3 8-8c0-4-2-7-5-10 0 4-1 6-3 8-2-2-3-5 0-11Zm0 18c-2 0-3-1-3-3s1-3 3-5c0 2 3 3 3 5s-1 3-3 3Z" fill="#FFFFFF" fill-rule="evenodd"/></g>';
+        }
+        if (incidentType === 'flood') {
+          return '<g transform="translate(0 3)"><path d="M15 33h22c-2-5-6-8-11-8s-9 3-11 8Zm6-2c1-6 5-10 10-10 3 0 6 2 7 5-2-1-5-1-7 1-3 2-4 4-7 5h-3Z" fill="#FFFFFF"/></g>';
+        }
+        if (incidentType === 'road_crash') {
+          return '<g transform="translate(0 3)"><path d="m19 25 3-7h8l3 7v7h-3v-2h-8v2h-3v-7Zm3-1h8l-1-3h-6l-1 3Zm0 2a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3Zm8 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3Z" fill="#FFFFFF" fill-rule="evenodd"/></g>';
+        }
+        if (incidentType === 'medical') {
+          return '<g transform="translate(0 3)"><path d="M23 16h6v6h6v6h-6v6h-6v-6h-6v-6h6v-6Z" fill="#FFFFFF"/></g>';
+        }
+
+        // Legacy, custom, and missing incident types retain the warning glyph.
+        return '<path d="M26 16v13" stroke="#FFFFFF" stroke-width="4" stroke-linecap="round"/><circle cx="26" cy="35" r="2.4" fill="#FFFFFF"/>';
+      }
+
+      function highlightedReportPinIcon(statusColor, incidentType) {
         return L.divIcon({
           className: 'report-pin-wrap',
           html:
@@ -515,8 +543,7 @@ function buildMapHtml(
               '<span class="report-highlight-pulse" style="background:' + statusColor + '"></span>' +
               '<svg viewBox="0 0 52 48" aria-hidden="true">' +
                 '<path d="M26 3 49 44H3L26 3Z" fill="' + statusColor + '" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round"/>' +
-                '<path d="M26 16v13" stroke="#FFFFFF" stroke-width="4" stroke-linecap="round"/>' +
-                '<circle cx="26" cy="35" r="2.4" fill="#FFFFFF"/>' +
+                highlightedReportGlyph(incidentType) +
               '</svg>' +
             '</div>',
           iconSize: [58, 58],
@@ -605,7 +632,10 @@ function buildMapHtml(
 
         clusterGroup.removeLayer(nextMarker);
         nextMarker.setIcon(
-          highlightedReportPinIcon(nextMarker.options.reportMeta.statusColor)
+          highlightedReportPinIcon(
+            nextMarker.options.reportMeta.statusColor,
+            nextMarker.options.reportMeta.incidentType
+          )
         );
         nextMarker.setZIndexOffset(1000);
         highlightedReportGroup.addLayer(nextMarker);
@@ -690,7 +720,8 @@ function buildMapHtml(
             reportMeta: {
               id: m.id,
               createdAt: m.created_at || '',
-              statusColor: m.statusColor || '#B33443'
+              statusColor: m.statusColor || '#B33443',
+              incidentType: m.incidentType || null
             }
           });
 
@@ -815,6 +846,7 @@ function buildMapHtml(
 function markersToInjectScript(
   markers: MapReportMarker[],
   showReportDetailsPopup: boolean,
+  showHighlightedReportIncidentIcon: boolean,
 ): string {
   const payload = markers.map((m) => ({
     id: m.id,
@@ -822,6 +854,7 @@ function markersToInjectScript(
     longitude: m.longitude,
     created_at: m.created_at,
     statusColor: getReportStatusPresentation(m.status).color,
+    incidentType: showHighlightedReportIncidentIcon ? m.incidentType : null,
     showDetailsPopup: showReportDetailsPopup,
   }));
   const json = JSON.stringify(payload).replace(/</g, '\\u003c');
@@ -924,6 +957,9 @@ export default function InteractiveMap({
   layerVisibility = DEFAULT_LAYERS,
   showLayerFilters = false,
   collapsibleLayerFilters = false,
+  layerPanelVisible,
+  onLayerPanelVisibilityChange,
+  dismissSearchSignal = 0,
   showReportStatusFilters = false,
   layerFiltersTopInset = spacing.md,
   compactLayerFilters = false,
@@ -937,6 +973,7 @@ export default function InteractiveMap({
   onResourceSelection,
   focusTarget,
   highlightedReportId = null,
+  showHighlightedReportIncidentIcon = false,
   highlightedResourceId = null,
   showZoomControls = true,
   showMapDetails = true,
@@ -972,6 +1009,7 @@ export default function InteractiveMap({
       ),
     [
       initialShowMapDetails,
+      MAP_HTML_VERSION,
       safeFocusZoomLevel,
       safeViewportBottom,
       safeViewportLeft,
@@ -986,9 +1024,18 @@ export default function InteractiveMap({
   const readyRef = useRef(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchFocused, setSearchFocused] = useState(false);
-  const [layerPanelVisible, setLayerPanelVisible] = useState(showLayerFilters);
+  const [uncontrolledLayerPanelVisible, setUncontrolledLayerPanelVisible] =
+    useState(showLayerFilters);
   const [reportStatusFilter, setReportStatusFilter] =
     useState<ReportStatusFilter>('all');
+  const isLayerPanelVisible = layerPanelVisible ?? uncontrolledLayerPanelVisible;
+
+  useEffect(() => {
+    // The screen owns navigation focus, while the map keeps its WebView and viewport mounted.
+    setSearchQuery('');
+    setSearchFocused(false);
+    Keyboard.dismiss();
+  }, [dismissSearchSignal]);
 
   useEffect(() => {
     lastFocusSignatureRef.current = '';
@@ -1020,10 +1067,19 @@ export default function InteractiveMap({
   useEffect(() => {
     if (!readyRef.current || !webRef.current) return;
     webRef.current.injectJavaScript(
-      markersToInjectScript(visibleReports, showReportDetailsPopup),
+      markersToInjectScript(
+        visibleReports,
+        showReportDetailsPopup,
+        showHighlightedReportIncidentIcon,
+      ),
     );
     webRef.current.injectJavaScript(resourcesToInjectScript(visibleResources));
-  }, [visibleReports, visibleResources, showReportDetailsPopup]);
+  }, [
+    showHighlightedReportIncidentIcon,
+    showReportDetailsPopup,
+    visibleReports,
+    visibleResources,
+  ]);
 
   useEffect(() => {
     if (!readyRef.current || !webRef.current) return;
@@ -1096,6 +1152,13 @@ export default function InteractiveMap({
       ...layerVisibility,
       [key]: !layerVisibility[key],
     });
+  }
+
+  function setLayerPanelVisibility(visible: boolean) {
+    if (layerPanelVisible === undefined) {
+      setUncontrolledLayerPanelVisible(visible);
+    }
+    onLayerPanelVisibilityChange?.(visible);
   }
 
   const normalizedSearchQuery = searchQuery.trim().toLocaleLowerCase();
@@ -1185,7 +1248,11 @@ export default function InteractiveMap({
         onLoadEnd={() => {
           readyRef.current = true;
           webRef.current?.injectJavaScript(
-            markersToInjectScript(visibleReports, showReportDetailsPopup),
+            markersToInjectScript(
+              visibleReports,
+              showReportDetailsPopup,
+              showHighlightedReportIncidentIcon,
+            ),
           );
           webRef.current?.injectJavaScript(resourcesToInjectScript(visibleResources));
           webRef.current?.injectJavaScript(userLocationToInjectScript(userLocation));
@@ -1241,10 +1308,15 @@ export default function InteractiveMap({
             ) : null}
             <Pressable
               style={mapStyles.searchAction}
-              onPress={() => setLayerPanelVisible((current) => !current)}
+              onPress={() => {
+                // Keep the filter card clear of any open search suggestions.
+                Keyboard.dismiss();
+                setSearchFocused(false);
+                setLayerPanelVisibility(!isLayerPanelVisible);
+              }}
               accessibilityRole="button"
               accessibilityLabel="Show or hide map layers"
-              accessibilityState={{ expanded: layerPanelVisible }}
+              accessibilityState={{ expanded: isLayerPanelVisible }}
             >
               <Ionicons name="options-outline" size={22} color={colors.navigationActive} />
             </Pressable>
@@ -1288,12 +1360,13 @@ export default function InteractiveMap({
         </View>
       ) : null}
 
-      {showLayerFilters && layerPanelVisible ? (
+      {showLayerFilters && isLayerPanelVisible ? (
         <View
           style={[
             mapStyles.legend,
             compactLayerFilters && mapStyles.legendCompact,
-            { top: layerFiltersTopInset },
+            showSearchBar && mapStyles.legendBelowSearch,
+            { top: showSearchBar ? searchBarTopInset + 60 : layerFiltersTopInset },
           ]}
           pointerEvents="box-none"
         >
@@ -1302,7 +1375,7 @@ export default function InteractiveMap({
               <Text style={mapStyles.legendTitle}>Map filters</Text>
               <Pressable
                 style={mapStyles.legendCollapseButton}
-                onPress={() => setLayerPanelVisible(false)}
+                onPress={() => setLayerPanelVisibility(false)}
                 accessibilityRole="button"
                 accessibilityLabel="Hide map filters"
               >
@@ -1426,10 +1499,10 @@ export default function InteractiveMap({
         </View>
       ) : null}
 
-      {showLayerFilters && collapsibleLayerFilters && !layerPanelVisible && !showSearchBar ? (
+      {showLayerFilters && collapsibleLayerFilters && !isLayerPanelVisible && !showSearchBar ? (
         <Pressable
           style={[mapStyles.legendOpenButton, { top: layerFiltersTopInset }]}
-          onPress={() => setLayerPanelVisible(true)}
+          onPress={() => setLayerPanelVisibility(true)}
           accessibilityRole="button"
           accessibilityLabel="Show map filters"
         >
@@ -1481,6 +1554,11 @@ const mapStyles = StyleSheet.create({
     gap: 2,
     paddingVertical: 10,
     paddingHorizontal: 12,
+  },
+  // Right-align with the search filter icon, so the collapse chevron sits directly beneath it.
+  legendBelowSearch: {
+    left: undefined,
+    right: 20,
   },
   legendHeader: {
     width: '100%',

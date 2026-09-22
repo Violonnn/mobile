@@ -20,8 +20,45 @@ export type PublicProfile = {
   avatar_path: string | null;
 };
 
+const PROFILE_CACHE_TTL_MS = 5 * 60 * 1000;
+let cachedProfile: PublicProfile | null = null;
+let cachedProfileAt = 0;
+let cachedProfileUserId: string | null = null;
+let profileRequest: Promise<{ profile: PublicProfile | null; error: string | null }> | null = null;
+
+export function setCachedMyProfile(profile: PublicProfile | null): void {
+  cachedProfile = profile;
+  cachedProfileAt = profile ? Date.now() : 0;
+  cachedProfileUserId = profile?.id ?? null;
+}
+
+export function clearMyProfileCache(): void {
+  setCachedMyProfile(null);
+}
+
 /** Read the logged-in user's profile without ever touching pin_hash. */
-export async function fetchMyProfile(): Promise<{
+export async function fetchMyProfile(options?: { force?: boolean }): Promise<{
+  profile: PublicProfile | null;
+  error: string | null;
+}> {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const currentUserId = sessionData.session?.user.id ?? null;
+  const cacheIsFresh =
+    cachedProfile &&
+    cachedProfileUserId === currentUserId &&
+    Date.now() - cachedProfileAt < PROFILE_CACHE_TTL_MS;
+  if (!options?.force && cacheIsFresh) {
+    return { profile: cachedProfile, error: null };
+  }
+  if (profileRequest) return profileRequest;
+
+  profileRequest = fetchMyProfileFromServer().finally(() => {
+    profileRequest = null;
+  });
+  return profileRequest;
+}
+
+async function fetchMyProfileFromServer(): Promise<{
   profile: PublicProfile | null;
   error: string | null;
 }> {
@@ -46,19 +83,17 @@ export async function fetchMyProfile(): Promise<{
   if (sharedProfileError) {
     // Profile photos are optional during deployment; never hide resident data
     // just because the new shared avatar column is not available yet.
-    return {
-      profile: { ...residentProfile, avatar_path: null },
-      error: null,
-    };
+    const profile = { ...residentProfile, avatar_path: null };
+    setCachedMyProfile(profile);
+    return { profile, error: null };
   }
 
-  return {
-    profile: {
-      ...residentProfile,
-      avatar_path: sharedProfile?.avatar_path ? String(sharedProfile.avatar_path) : null,
-    },
-    error: null,
+  const profile = {
+    ...residentProfile,
+    avatar_path: sharedProfile?.avatar_path ? String(sharedProfile.avatar_path) : null,
   };
+  setCachedMyProfile(profile);
+  return { profile, error: null };
 }
 
 export type ResidentProfileUpdateInput = {
@@ -194,7 +229,7 @@ export async function updateMyResidentProfile(input: ResidentProfileUpdateInput)
   } | null;
   const nextUpdateAt = resultRow?.next_update_at ?? null;
   const [profileResult, eligibilityResult] = await Promise.all([
-    fetchMyProfile(),
+    fetchMyProfile({ force: true }),
     fetchProfileUpdateEligibility(),
   ]);
   if (profileResult.error || !profileResult.profile) {

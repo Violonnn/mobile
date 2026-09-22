@@ -29,6 +29,7 @@ export default function ResourceMapDetailSheet({
       minimumHeight={220}
       sheetStyle={sheetStyles.sheet}
       handleAccessibilityLabel={`Resize ${kindLabel.toLocaleLowerCase()} details`}
+      showCloseButton={false}
     >
           <View style={sheetStyles.headerRow}>
             <View style={{ flex: 1 }}>

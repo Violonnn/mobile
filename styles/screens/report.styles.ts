@@ -23,6 +23,9 @@ export const reportStyles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.lg,
   },
+  overlayDismissArea: {
+    ...StyleSheet.absoluteFill,
+  },
   keyboardHost: {
     width: '100%',
     maxWidth: 440,
@@ -31,7 +34,7 @@ export const reportStyles = StyleSheet.create({
   },
   card: {
     backgroundColor: colors.white,
-    borderRadius: 28,
+    borderRadius: 18,
     width: '100%',
     maxHeight: '100%',
     overflow: 'hidden',
@@ -43,9 +46,15 @@ export const reportStyles = StyleSheet.create({
     shadowOffset: { width: 0, height: 12 },
     elevation: 14,
   },
+  cardCompact: {
+    maxHeight: '96%',
+  },
   headerContainer: {
     paddingTop: 18,
     backgroundColor: colors.navigationActive,
+  },
+  headerContainerCompact: {
+    paddingTop: 12,
   },
 
   headerRow: {
@@ -54,12 +63,22 @@ export const reportStyles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: spacing.sm,
     paddingHorizontal: spacing.lg,
-    marginBottom: 17,
+    marginBottom: 12,
+  },
+  headerRowCompact: {
+    marginBottom: 8,
+  },
+  deliveredCloseButton: {
+    width: 40,
+    height: 40,
+    marginRight: -8,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerTitle: {
     flexShrink: 1,
     fontFamily: fonts.bold,
-    fontSize: fontSizes.xl,
+    fontSize: 22,
     color: reportColors.white,
     letterSpacing: -0.5,
   },
@@ -67,7 +86,7 @@ export const reportStyles = StyleSheet.create({
   // --- Progress ---
   progressWrap: {
     paddingHorizontal: spacing.xl,
-    marginBottom: 10,
+    marginBottom: 8,
   },
   progressSteps: {
     flexDirection: 'row',
@@ -107,7 +126,7 @@ export const reportStyles = StyleSheet.create({
     marginTop: 7,
     textAlign: 'center',
     fontFamily: fonts.semibold,
-    fontSize: fontSizes.sm,
+    fontSize: 13,
     color: reportColors.white,
     letterSpacing: 0.2,
   },
@@ -115,22 +134,26 @@ export const reportStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.lg,
-    paddingBottom: 12,
+    paddingBottom: 9,
   },
   emergencyBannerText: {
     fontFamily: fonts.medium,
-    fontSize: fontSizes.xs,
+    fontSize: 11,
     color: '#FF9A82',
   },
   contentPanel: {
     flexShrink: 1,
     overflow: 'hidden',
-    borderTopLeftRadius: 26,
-    borderTopRightRadius: 26,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
     backgroundColor: colors.white,
-    paddingHorizontal: 23,
-    paddingTop: 14,
-    paddingBottom: 16,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 12,
+  },
+  contentPanelCompact: {
+    paddingTop: 9,
+    paddingBottom: 9,
   },
 
   // --- Step shell ---
@@ -172,17 +195,17 @@ export const reportStyles = StyleSheet.create({
   },
   residentStepTitle: {
     fontFamily: fonts.bold,
-    fontSize: 24,
-    lineHeight: 27,
+    fontSize: 26,
+    lineHeight: 30,
     letterSpacing: -0.65,
     color: reportColors.text,
   },
   residentStepSubtitle: {
     marginTop: 3,
-    marginBottom: 10,
+    marginBottom: 6,
     fontFamily: fonts.regular,
-    fontSize: 12,
-    lineHeight: 17,
+    fontSize: 13,
+    lineHeight: 19,
     color: '#31558B',
   },
   locationCenter: {
@@ -214,19 +237,19 @@ export const reportStyles = StyleSheet.create({
   },
   locationLabel: {
     fontFamily: fonts.semibold,
-    fontSize: fontSizes.md,
+    fontSize: 15,
     color: reportColors.text,
     textAlign: 'center',
   },
   locationHint: {
     fontFamily: fonts.regular,
-    fontSize: fontSizes.sm,
+    fontSize: 13,
     color: reportColors.textLight,
     textAlign: 'center',
   },
   locationErrorText: {
     fontFamily: fonts.medium,
-    fontSize: fontSizes.sm,
+    fontSize: 13,
     color: reportColors.accent,
     textAlign: 'center',
   },
@@ -445,13 +468,131 @@ export const reportStyles = StyleSheet.create({
   },
   residentAddressPrimary: {
     fontFamily: fonts.bold,
-    fontSize: 14,
+    fontSize: 15,
     color: reportColors.text,
   },
   residentAddressSecondary: {
     fontFamily: fonts.medium,
-    fontSize: 12,
+    fontSize: 13,
     color: '#31558B',
+  },
+  residentBarangayPickerOverlay: {
+    ...StyleSheet.absoluteFill,
+    zIndex: 50,
+    elevation: 50,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing.md,
+  },
+  residentBarangayPickerBackdrop: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(8, 20, 43, 0.64)',
+  },
+  residentBarangayPickerCard: {
+    width: '100%',
+    maxWidth: 420,
+    maxHeight: '72%',
+    overflow: 'hidden',
+    borderRadius: 16,
+    backgroundColor: colors.white,
+    shadowColor: '#07152E',
+    shadowOpacity: 0.24,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 14,
+  },
+  residentBarangayPickerHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.md,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: reportColors.border,
+  },
+  residentBarangayPickerHeading: {
+    flex: 1,
+    gap: 3,
+  },
+  residentBarangayPickerTitle: {
+    fontFamily: fonts.bold,
+    fontSize: 20,
+    color: reportColors.text,
+  },
+  residentBarangayPickerSubtitle: {
+    fontFamily: fonts.regular,
+    fontSize: 12,
+    lineHeight: 17,
+    color: reportColors.textLight,
+  },
+  residentBarangayPickerClose: {
+    width: 40,
+    height: 40,
+    marginTop: -5,
+    marginRight: -5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  residentBarangayPickerList: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
+  },
+  residentBarangayPickerOption: {
+    minHeight: 52,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 10,
+    borderRadius: 9,
+  },
+  residentBarangayPickerOptionSelected: {
+    backgroundColor: reportColors.primaryLight,
+  },
+  residentBarangayPickerOptionIcon: {
+    width: 31,
+    height: 31,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 8,
+    backgroundColor: '#E5EEFC',
+  },
+  residentBarangayPickerOptionText: {
+    flex: 1,
+    fontFamily: fonts.medium,
+    fontSize: 14,
+    color: reportColors.text,
+  },
+  residentBarangayPickerOptionTextSelected: {
+    fontFamily: fonts.bold,
+    color: reportColors.primary,
+  },
+  residentBarangayPickerState: {
+    minHeight: 180,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    padding: spacing.lg,
+  },
+  residentBarangayPickerStateText: {
+    fontFamily: fonts.regular,
+    fontSize: 13,
+    lineHeight: 19,
+    textAlign: 'center',
+    color: reportColors.textLight,
+  },
+  residentBarangayPickerRetry: {
+    minHeight: 42,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.md,
+    borderRadius: 8,
+    backgroundColor: reportColors.primary,
+  },
+  residentBarangayPickerRetryText: {
+    fontFamily: fonts.semibold,
+    fontSize: 13,
+    color: reportColors.white,
   },
   residentInlineWarning: {
     flexDirection: 'row',
@@ -466,9 +607,20 @@ export const reportStyles = StyleSheet.create({
   residentInlineWarningText: {
     flex: 1,
     fontFamily: fonts.medium,
-    fontSize: 10,
-    lineHeight: 14,
+    fontSize: 11,
+    lineHeight: 16,
     color: '#9D3F2A',
+  },
+  residentPinAdjustmentActions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+  },
+  residentPinAdjustmentButton: {
+    flex: 1,
+    minHeight: 48,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 0,
   },
   residentAdjustButton: {
     minHeight: 46,
@@ -479,15 +631,15 @@ export const reportStyles = StyleSheet.create({
   },
   residentAdjustButtonText: {
     fontFamily: fonts.semibold,
-    fontSize: 13,
+    fontSize: 14,
     color: reportColors.primary,
   },
   residentAdjustmentText: {
     marginTop: -6,
-    marginBottom: 7,
+    marginBottom: 5,
     textAlign: 'center',
     fontFamily: fonts.regular,
-    fontSize: 9,
+    fontSize: 10,
     color: reportColors.textLight,
   },
 
@@ -612,10 +764,10 @@ export const reportStyles = StyleSheet.create({
     color: reportColors.text,
   },
   residentFieldLabel: {
-    marginTop: 10,
-    marginBottom: 6,
+    marginTop: 8,
+    marginBottom: 4,
     fontFamily: fonts.bold,
-    fontSize: 12,
+    fontSize: 13,
     color: reportColors.text,
   },
   residentOptionalText: {
@@ -635,7 +787,7 @@ export const reportStyles = StyleSheet.create({
     gap: 3,
     borderWidth: 1,
     borderColor: '#D8E2F0',
-    borderRadius: 11,
+    borderRadius: 8,
     backgroundColor: colors.white,
   },
   residentIncidentTypeOptionSelected: {
@@ -651,8 +803,8 @@ export const reportStyles = StyleSheet.create({
     maxWidth: '95%',
     textAlign: 'center',
     fontFamily: fonts.bold,
-    fontSize: 9,
-    lineHeight: 10,
+    fontSize: 10,
+    lineHeight: 12,
     color: reportColors.text,
   },
   residentIncidentTypeTextSelected: {
@@ -665,8 +817,8 @@ export const reportStyles = StyleSheet.create({
     borderRadius: 11,
     backgroundColor: '#EEF5FF',
     fontFamily: fonts.regular,
-    fontSize: 12,
-    lineHeight: 17,
+    fontSize: 14,
+    lineHeight: 19,
     color: reportColors.text,
   },
   residentTextArea: {
@@ -676,7 +828,7 @@ export const reportStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 7,
-    marginTop: 9,
+    marginTop: 7,
     paddingHorizontal: 10,
     paddingVertical: 8,
     borderRadius: 9,
@@ -685,12 +837,12 @@ export const reportStyles = StyleSheet.create({
   residentBarangayStateText: {
     flex: 1,
     fontFamily: fonts.regular,
-    fontSize: 10,
+    fontSize: 11,
     color: reportColors.textLight,
   },
   residentRetryText: {
     fontFamily: fonts.semibold,
-    fontSize: 10,
+    fontSize: 11,
     color: reportColors.primary,
   },
 
@@ -771,8 +923,8 @@ export const reportStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 9,
-    marginBottom: 9,
-    borderRadius: 13,
+    marginBottom: 7,
+    borderRadius: 10,
     backgroundColor: '#EAF2FF',
   },
   residentCameraCircle: {
@@ -785,7 +937,7 @@ export const reportStyles = StyleSheet.create({
   },
   residentCaptureLabel: {
     fontFamily: fonts.semibold,
-    fontSize: 13,
+    fontSize: 14,
     color: reportColors.text,
   },
   residentVideoAction: {
@@ -794,35 +946,35 @@ export const reportStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 9,
-    marginBottom: 17,
-    borderRadius: 11,
+    marginBottom: 12,
+    borderRadius: 8,
     backgroundColor: '#EAF2FF',
   },
   residentVideoActionText: {
     fontFamily: fonts.semibold,
-    fontSize: 12,
+    fontSize: 13,
     color: reportColors.primary,
   },
   residentEvidenceHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   residentEvidenceTitle: {
     fontFamily: fonts.bold,
-    fontSize: 12,
+    fontSize: 13,
     color: reportColors.text,
   },
   residentEvidenceCount: {
     fontFamily: fonts.bold,
-    fontSize: 11,
+    fontSize: 12,
     color: reportColors.text,
   },
   residentEvidenceRow: {
     gap: 8,
     paddingRight: 2,
-    paddingBottom: 14,
+    paddingBottom: 10,
   },
   residentEvidenceCard: {
     position: 'relative',
@@ -873,11 +1025,11 @@ export const reportStyles = StyleSheet.create({
     borderStyle: 'dashed',
     borderColor: '#CDD8E8',
     backgroundColor: '#F8FAFD',
-    marginBottom: 14,
+    marginBottom: 10,
   },
   residentEvidenceEmptyText: {
     fontFamily: fonts.medium,
-    fontSize: 11,
+    fontSize: 12,
     color: reportColors.textLight,
   },
 
@@ -926,9 +1078,9 @@ export const reportStyles = StyleSheet.create({
   // --- Review ---
   reviewTimeline: {
     position: 'relative',
-    gap: 18,
-    marginTop: 7,
-    marginBottom: 10,
+    gap: 14,
+    marginTop: 5,
+    marginBottom: 8,
   },
   reviewTimelineLine: {
     position: 'absolute',
@@ -963,17 +1115,17 @@ export const reportStyles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: spacing.sm,
     minHeight: 20,
-    marginBottom: 8,
+    marginBottom: 5,
   },
   reviewSectionTitle: {
     fontFamily: fonts.semibold,
-    fontSize: fontSizes.sm,
+    fontSize: 13,
     color: reportColors.text,
     flexShrink: 1,
   },
   reviewEditText: {
     fontFamily: fonts.semibold,
-    fontSize: fontSizes.xs,
+    fontSize: 11,
     color: '#0D63E5',
   },
   reviewTypeText: {
@@ -982,25 +1134,25 @@ export const reportStyles = StyleSheet.create({
     paddingHorizontal: 0,
     paddingVertical: 0,
     fontFamily: fonts.semibold,
-    fontSize: 11,
+    fontSize: 12,
     color: reportColors.text,
   },
   reviewPrimaryText: {
     fontFamily: fonts.semibold,
-    fontSize: 11,
-    lineHeight: 16,
+    fontSize: 13,
+    lineHeight: 18,
     color: reportColors.text,
   },
   reviewSecondaryText: {
     fontFamily: fonts.regular,
-    fontSize: 10,
-    lineHeight: 15,
+    fontSize: 12,
+    lineHeight: 17,
     color: '#31558B',
   },
   reviewAdjustmentText: {
     marginTop: 2,
     fontFamily: fonts.regular,
-    fontSize: 8,
+    fontSize: 10,
     color: reportColors.textLight,
   },
   reviewLocationRow: {
@@ -1057,7 +1209,7 @@ export const reportStyles = StyleSheet.create({
   reviewAccuracyText: {
     flex: 1,
     fontFamily: fonts.medium,
-    fontSize: fontSizes.xs,
+    fontSize: 11,
     color: reportColors.primary,
   },
   // --- Buttons / footer ---
@@ -1070,7 +1222,7 @@ export const reportStyles = StyleSheet.create({
   },
   errorText: {
     fontFamily: fonts.medium,
-    fontSize: fontSizes.sm,
+    fontSize: 13,
     color: reportColors.accent,
     marginBottom: spacing.xs,
   },
@@ -1092,15 +1244,15 @@ export const reportStyles = StyleSheet.create({
     flex: 0,
     width: '100%',
     minHeight: 48,
-    borderRadius: 11,
-    marginTop: 12,
+    borderRadius: 8,
+    marginTop: 10,
   },
   primaryButtonDisabled: {
     opacity: 0.55,
   },
   primaryButtonText: {
     fontFamily: fonts.semibold,
-    fontSize: fontSizes.md,
+    fontSize: 15,
     color: colors.white,
   },
   secondaryButton: {
@@ -1114,7 +1266,7 @@ export const reportStyles = StyleSheet.create({
   },
   secondaryButtonText: {
     fontFamily: fonts.semibold,
-    fontSize: fontSizes.md,
+    fontSize: 15,
     color: reportColors.textLight,
   },
 
@@ -1141,20 +1293,20 @@ export const reportStyles = StyleSheet.create({
   },
   successTitle: {
     fontFamily: fonts.bold,
-    fontSize: fontSizes.xl,
+    fontSize: 22,
     color: reportColors.text,
     textAlign: 'center',
   },
   successAddress: {
     fontFamily: fonts.regular,
-    fontSize: fontSizes.sm,
+    fontSize: 13,
     color: reportColors.textLight,
     textAlign: 'center',
     lineHeight: 20,
   },
   deliveryStatusMessage: {
     fontFamily: fonts.regular,
-    fontSize: fontSizes.sm,
+    fontSize: 13,
     color: reportColors.textLight,
     textAlign: 'center',
     lineHeight: 20,

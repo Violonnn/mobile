@@ -13,7 +13,6 @@ import {
     Pressable,
     RefreshControl,
     ScrollView,
-    Share,
     StyleSheet,
     Text,
     TouchableOpacity,
@@ -21,6 +20,7 @@ import {
 } from 'react-native';
 import { useKeyboardHeight } from '../../hooks/useKeyboardHeight';
 import { useReportDetail } from '../../hooks/useReportDetail';
+import { useShareSheetGuard } from '../../hooks/useShareSheetGuard';
 import { formatPublishedAt } from '../../lib/formatTime';
 import { formatIncidentType } from '../../lib/incidentTypes';
 import {
@@ -631,11 +631,13 @@ export function ResidentFeedReportContent({
   distanceLabel,
   onRequestExpand,
   onRequestComments,
+  onShareReport,
 }: {
   report: MapReportMarker;
   distanceLabel?: string;
   onRequestExpand: () => void;
   onRequestComments: () => void;
+  onShareReport: () => void;
 }) {
   const { getState, toggleUpvote } = useReportEngagement();
   const { upvoteCount, commentCount, hasUpvoted } = getState(report);
@@ -648,17 +650,6 @@ export function ResidentFeedReportContent({
         : report.status === 'escalated'
           ? colors.escalated
           : '#A16207';
-
-  const shareReport = async () => {
-    try {
-      await Share.share({
-        message: `${report.title}\n${report.description}\n${formatReportLocation(report)}`,
-        title: report.title,
-      });
-    } catch {
-      // Closing or unavailable native share sheets should not interrupt the feed.
-    }
-  };
 
   return (
     <View style={residentFeedStyles.reportContent}>
@@ -776,25 +767,13 @@ export function ResidentFeedReportContent({
             style={residentFeedStyles.iconAction}
             onPress={(event) => {
               event.stopPropagation?.();
-              void shareReport();
+              onShareReport();
             }}
             accessibilityLabel="Share report"
           >
             <Ionicons name="arrow-redo-outline" size={23} color={colors.text} />
           </TouchableOpacity>
         </View>
-        <TouchableOpacity
-          style={residentFeedStyles.viewReportButton}
-          onPress={(event) => {
-            event.stopPropagation?.();
-            onRequestExpand();
-          }}
-          accessibilityRole="button"
-          accessibilityLabel="View report details"
-        >
-          <Text style={residentFeedStyles.viewReportText}>View report</Text>
-          <Ionicons name="chevron-forward" size={18} color={colors.primary} />
-        </TouchableOpacity>
       </View>
     </View>
   );
@@ -824,6 +803,7 @@ export function ReportDetailCard({
 }) {
   const [expanded, setExpanded] = useState(false);
   const [focusComments, setFocusComments] = useState(false);
+  const { shareSafely, canOpenCard } = useShareSheetGuard();
   const { notifyCommentAdded } = useReportEngagement();
   const {
     report: detailReport,
@@ -862,6 +842,13 @@ export function ReportDetailCard({
     setExpanded(true);
   };
 
+  const shareReport = () => {
+    void shareSafely({
+      message: `${report.title}\n${report.description}\n${formatReportLocation(report)}`,
+      title: report.title,
+    });
+  };
+
   const closeExpanded = () => {
     pendingScrollToComments.current = false;
     setFocusComments(false);
@@ -890,7 +877,10 @@ export function ReportDetailCard({
     <>
       <Pressable
         style={[reportDetailStyles.feedCard, isLast && reportDetailStyles.feedCardLast]}
-        onPress={() => openExpanded(false)}
+        onPress={() => {
+          if (!canOpenCard()) return;
+          openExpanded(false);
+        }}
       >
         {variant === 'residentFeed' ? (
           <ResidentFeedReportContent
@@ -898,6 +888,7 @@ export function ReportDetailCard({
             distanceLabel={distanceLabel}
             onRequestExpand={() => openExpanded(false)}
             onRequestComments={() => openExpanded(true)}
+            onShareReport={shareReport}
           />
         ) : (
           <ReportDetailContent
@@ -917,6 +908,7 @@ export function ReportDetailCard({
         bottomOffset={keyboardOpen ? keyboardHeight + spacing.sm : 0}
         sheetStyle={reportDetailStyles.postModalSheet}
         handleAccessibilityLabel="Resize community report"
+        showCloseButton={false}
       >
             <View style={reportDetailStyles.postModalHeader}>
               <View style={reportDetailStyles.postModalHeaderButton} />
@@ -1146,18 +1138,6 @@ const residentFeedStyles = StyleSheet.create({
     fontSize: fontSizes.md,
     lineHeight: 22,
     color: colors.text,
-  },
-  viewReportButton: {
-    minHeight: 40,
-    marginLeft: 'auto',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  viewReportText: {
-    fontFamily: fonts.semibold,
-    fontSize: fontSizes.sm,
-    color: colors.primary,
   },
   actionRow: {
     minHeight: 42,

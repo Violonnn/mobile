@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   Animated,
   Easing,
@@ -19,7 +18,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import Swipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { useNotifications } from '../../hooks/useNotifications';
+import { useNotifications } from '../../context/NotificationsContext';
 import {
   groupNotificationsByDate,
   type NotificationDateSection,
@@ -33,6 +32,7 @@ import NotificationMailContent, {
   toRemoteNotificationItem,
   type NotificationDisplayItem,
 } from './NotificationMailContent';
+import { ListRowsSkeleton } from '../ui/ResidentScreenSkeletons';
 
 type Props = {
   visible: boolean;
@@ -231,9 +231,7 @@ export default function NotificationsModal({
           </View>
 
         {refreshing && items.length === 0 ? (
-          <View style={styles.state}>
-            <ActivityIndicator size="large" color={colors.navigationActive} />
-          </View>
+          <ListRowsSkeleton rows={6} />
         ) : visibleError && items.length === 0 ? (
           <View style={styles.state}>
             <View style={styles.stateIcon}>

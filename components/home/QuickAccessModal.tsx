@@ -1,6 +1,5 @@
-import React from 'react';
+import React, { type ComponentProps } from 'react';
 import {
-  ActivityIndicator,
   ScrollView,
   Text,
   TouchableOpacity,
@@ -20,6 +19,7 @@ import {
 import { quickAccessModalStyles as styles } from '../../styles/components/quickAccessModal.styles';
 import { colors } from '../../styles/theme';
 import ResidentBottomSheet from '../ui/ResidentBottomSheet';
+import { ListRowsSkeleton } from '../ui/ResidentScreenSkeletons';
 
 export type QuickAccessType = 'hotlines' | 'facilities' | 'evacuation';
 
@@ -54,6 +54,23 @@ const TYPE_DETAILS = {
   },
 };
 
+type ResourceIconName = ComponentProps<typeof Ionicons>['name'];
+
+function WashedResourceIcon({
+  name,
+  color,
+}: {
+  name: ResourceIconName;
+  color: string;
+}) {
+  return (
+    <View style={styles.washedResourceIcon} pointerEvents="none">
+      <Ionicons name={name} size={25} color={colors.text} />
+      <Ionicons name={name} size={20} color={color} style={styles.washedResourceIconFill} />
+    </View>
+  );
+}
+
 export default function QuickAccessModal({
   visible,
   type,
@@ -82,6 +99,7 @@ export default function QuickAccessModal({
       minimumHeight={300}
       sheetStyle={styles.sheet}
       handleAccessibilityLabel={`Resize ${details.title.toLocaleLowerCase()} panel`}
+      showCloseButton={false}
       animationType="slide"
     >
       <View style={styles.content}>
@@ -93,10 +111,7 @@ export default function QuickAccessModal({
           </View>
 
           {loading ? (
-            <View style={styles.stateBlock}>
-              <ActivityIndicator color={colors.primary} />
-              <Text style={styles.stateText}>Loading current information…</Text>
-            </View>
+            <ListRowsSkeleton rows={4} />
           ) : error ? (
             <View style={styles.stateBlock}>
               <Ionicons name="cloud-offline-outline" size={25} color={colors.textMuted} />
@@ -120,7 +135,7 @@ export default function QuickAccessModal({
                 ? hotlines.map((hotline) => (
                     <View key={hotline.id} style={styles.resourceCard}>
                       <View style={[styles.cardIcon, styles.hotlineCardIcon]}>
-                        <Ionicons name="call-outline" size={21} color={colors.text} />
+                        <WashedResourceIcon name="call" color="#C98585" />
                       </View>
                       <View style={styles.cardCopy}>
                         <Text style={styles.cardTitle}>{hotline.name}</Text>
@@ -128,19 +143,8 @@ export default function QuickAccessModal({
                           {hotline.number} · {hotlineCategoryLabel(hotline.category)}
                         </Text>
                       </View>
-                      {hotline.facilityId &&
-                      facilities.some((facility) => facility.id === hotline.facilityId) ? (
-                        <TouchableOpacity
-                          style={styles.secondaryAction}
-                          onPress={() => onOpenMap('facility', hotline.facilityId!)}
-                          accessibilityRole="button"
-                          accessibilityLabel={`View ${hotline.name} location`}
-                        >
-                          <Ionicons name="location-outline" size={20} color={colors.primary} />
-                        </TouchableOpacity>
-                      ) : null}
                       <TouchableOpacity
-                        style={styles.callAction}
+                        style={styles.cardAction}
                         onPress={() => void openHotlineDialer(hotline.number)}
                         accessibilityRole="button"
                         accessibilityLabel={`Call ${hotline.name}`}
@@ -165,7 +169,7 @@ export default function QuickAccessModal({
                       accessibilityLabel={`View ${facility.name} on the map`}
                     >
                       <View style={[styles.cardIcon, styles.facilityCardIcon]}>
-                        <Ionicons name="business-outline" size={21} color={colors.text} />
+                        <WashedResourceIcon name="business" color="#D5B66B" />
                       </View>
                       <View style={styles.cardCopy}>
                         <Text style={styles.cardTitle}>{facility.name}</Text>
@@ -174,8 +178,13 @@ export default function QuickAccessModal({
                           {facility.address ? ` · ${facility.address}` : ''}
                         </Text>
                       </View>
-                      <View style={styles.mapAction}>
-                        <Text style={styles.mapActionText}>Directions</Text>
+                      <View style={styles.cardAction}>
+                        <View style={[styles.viewActionIcon, styles.facilityViewActionIcon]}>
+                          <Ionicons name="location" size={18} color={colors.text} />
+                        </View>
+                        <Text style={[styles.viewActionText, styles.facilityViewActionText]}>
+                          View
+                        </Text>
                       </View>
                     </TouchableOpacity>
                   ))
@@ -192,7 +201,7 @@ export default function QuickAccessModal({
                       accessibilityLabel={`View ${center.name} on the map`}
                     >
                       <View style={[styles.cardIcon, styles.evacuationCardIcon]}>
-                        <Ionicons name="exit-outline" size={21} color={colors.white} />
+                        <WashedResourceIcon name="home" color="#7BA682" />
                       </View>
                       <View style={styles.cardCopy}>
                         <Text style={styles.cardTitle}>{center.name}</Text>
@@ -201,8 +210,13 @@ export default function QuickAccessModal({
                           {center.capacity != null ? ` · Capacity ${center.capacity}` : ''}
                         </Text>
                       </View>
-                      <View style={styles.mapAction}>
-                        <Text style={styles.mapActionText}>Directions</Text>
+                      <View style={styles.cardAction}>
+                        <View style={[styles.viewActionIcon, styles.evacuationViewActionIcon]}>
+                          <Ionicons name="location" size={18} color={colors.white} />
+                        </View>
+                        <Text style={[styles.viewActionText, styles.evacuationViewActionText]}>
+                          View
+                        </Text>
                       </View>
                     </TouchableOpacity>
                   ))

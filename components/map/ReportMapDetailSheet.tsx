@@ -264,6 +264,7 @@ export default function ReportMapDetailSheet({
       bottomOffset={keyboardOpen ? keyboardHeight + spacing.sm : 0}
       sheetStyle={styles.sheet}
       handleAccessibilityLabel="Resize report details"
+      showCloseButton={false}
     >
           <View style={styles.headerRow}>
             {showBackButton ? (

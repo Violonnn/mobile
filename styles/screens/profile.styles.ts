@@ -16,8 +16,10 @@ export const profileStyles = StyleSheet.create({
     paddingBottom: 130,
   },
   screenTitle: {
-    fontFamily: fonts.bold,
-    fontSize: fontSizes.xxl,
+    fontFamily: fonts.semibold,
+    fontSize: 22,
+    lineHeight: 28,
+    letterSpacing: -0.45,
     color: colors.text,
     marginBottom: spacing.md,
   },

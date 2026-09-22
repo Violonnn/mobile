@@ -102,16 +102,7 @@ export default function SuccessStep({
         ) : null}
       </View>
 
-      {synced ? (
-        <TouchableOpacity
-          style={[styles.primaryButton, styles.residentPrimaryButton]}
-          onPress={onDone}
-          accessibilityRole="button"
-          accessibilityLabel="Done"
-        >
-          <Text style={styles.primaryButtonText}>Done</Text>
-        </TouchableOpacity>
-      ) : failed || delayed ? (
+      {failed || delayed ? (
         <TouchableOpacity
           style={styles.secondaryButton}
           onPress={onDone}

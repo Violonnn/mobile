@@ -1,6 +1,5 @@
 import React, { useMemo } from 'react';
 import {
-  Alert,
   ScrollView,
   StyleSheet,
   Text,
@@ -17,20 +16,15 @@ import {
 import { formatIncidentType } from '../../lib/incidentTypes';
 import { colors, fonts, fontSizes, radius, spacing } from '../../styles/theme';
 import { CollageCellContent } from '../report/ReportDetailCard';
+import ReportStatusTimeline, {
+  residentReportStatusIconName,
+} from '../report/ReportStatusTimeline';
 
 type ResidentReportPreviewContentProps = {
   report: MapReportMarker;
-  onClose: () => void;
   onOpenFullReport: () => void;
   primaryActionLabel?: string;
 };
-
-const STATUS_STEPS = [
-  { key: 'unverified', label: 'Under review' },
-  { key: 'verified', label: 'Verified' },
-  { key: 'escalated', label: 'Escalated' },
-  { key: 'resolved', label: 'Resolved' },
-] as const;
 
 function formatReportCode(reportId: string): string {
   return `DL-${reportId.replaceAll('-', '').slice(-6).toLocaleUpperCase()}`;
@@ -85,35 +79,8 @@ function ReportMediaStrip({ report }: { report: MapReportMarker }) {
   );
 }
 
-function StatusJourney({ activeStep }: { activeStep: number }) {
-  return (
-    <View style={styles.journey}>
-      <View style={styles.journeyTrack} pointerEvents="none" />
-      {STATUS_STEPS.map((step, index) => {
-        const completed = index <= activeStep;
-        return (
-          <View key={step.key} style={styles.journeyStep}>
-            <View style={[styles.journeyDot, completed && styles.journeyDotCompleted]}>
-              {completed ? (
-                <Ionicons name="checkmark" size={13} color={colors.white} />
-              ) : null}
-            </View>
-            <Text
-              style={[styles.journeyLabel, completed && styles.journeyLabelCompleted]}
-              numberOfLines={2}
-            >
-              {step.label}
-            </Text>
-          </View>
-        );
-      })}
-    </View>
-  );
-}
-
 export function ResidentReportPreviewContent({
   report,
-  onClose,
   onOpenFullReport,
   primaryActionLabel = 'Open full report',
 }: ResidentReportPreviewContentProps) {
@@ -121,14 +88,6 @@ export function ResidentReportPreviewContent({
     () => getReportStatusPresentation(report.status),
     [report.status],
   );
-
-  const showOptions = () => {
-    Alert.alert('Report options', undefined, [
-      { text: primaryActionLabel, onPress: onOpenFullReport },
-      { text: 'Close preview', onPress: onClose },
-      { text: 'Cancel', style: 'cancel' },
-    ]);
-  };
 
   return (
     <>
@@ -149,17 +108,13 @@ export function ResidentReportPreviewContent({
               { borderColor: status.color, backgroundColor: status.backgroundColor },
             ]}
           >
-            <Ionicons name="checkmark-circle-outline" size={14} color={status.color} />
+            <Ionicons
+              name={residentReportStatusIconName(report.status)}
+              size={14}
+              color={status.color}
+            />
             <Text style={[styles.statusText, { color: status.color }]}>{status.label}</Text>
           </View>
-          <TouchableOpacity
-            style={styles.moreButton}
-            onPress={showOptions}
-            accessibilityRole="button"
-            accessibilityLabel="Report options"
-          >
-            <Ionicons name="ellipsis-vertical" size={20} color={colors.text} />
-          </TouchableOpacity>
         </View>
 
         <ReportMediaStrip report={report} />
@@ -187,7 +142,7 @@ export function ResidentReportPreviewContent({
           </View>
         </View>
 
-        <StatusJourney activeStep={status.activeStep} />
+        <ReportStatusTimeline status={report.status} style={styles.timeline} />
 
         <Text style={styles.updatedText}>
           Status updates are synchronized across response teams
@@ -253,6 +208,7 @@ const styles = StyleSheet.create({
     color: colors.navigationActive,
   },
   statusPill: {
+    marginLeft: 'auto',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
@@ -264,12 +220,6 @@ const styles = StyleSheet.create({
   statusText: {
     fontFamily: fonts.medium,
     fontSize: 10,
-  },
-  moreButton: {
-    width: 32,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   mediaRow: {
     height: 112,
@@ -349,50 +299,9 @@ const styles = StyleSheet.create({
     lineHeight: 16,
     color: colors.text,
   },
-  journey: {
-    position: 'relative',
-    flexDirection: 'row',
+  timeline: {
     marginTop: 22,
     marginBottom: spacing.sm,
-  },
-  journeyTrack: {
-    position: 'absolute',
-    top: 12,
-    left: '11%',
-    right: '11%',
-    height: 2,
-    backgroundColor: '#D7DAE1',
-  },
-  journeyStep: {
-    width: '25%',
-    alignItems: 'center',
-    gap: 7,
-  },
-  journeyDot: {
-    width: 25,
-    height: 25,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#C4C8D0',
-    borderRadius: radius.full,
-    backgroundColor: colors.white,
-  },
-  journeyDotCompleted: {
-    borderColor: '#244D5B',
-    backgroundColor: '#244D5B',
-  },
-  journeyLabel: {
-    minHeight: 28,
-    fontFamily: fonts.regular,
-    fontSize: 9,
-    lineHeight: 13,
-    textAlign: 'center',
-    color: colors.textMuted,
-  },
-  journeyLabelCompleted: {
-    fontFamily: fonts.medium,
-    color: colors.navigationActive,
   },
   updatedText: {
     fontFamily: fonts.regular,

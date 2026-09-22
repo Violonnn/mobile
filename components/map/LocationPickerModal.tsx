@@ -318,16 +318,6 @@ export function LocationPickerPanel({
             {title}
           </Text>
         </View>
-        {!embedded ? (
-          <TouchableOpacity
-            onPress={onClose}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel="Close location picker"
-          >
-            <Ionicons name="close" size={22} color={colors.textMuted} />
-          </TouchableOpacity>
-        ) : null}
       </View>
       <Text style={localStyles.hint}>{hint}</Text>
 

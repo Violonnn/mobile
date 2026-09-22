@@ -25,6 +25,8 @@ type UseReportsOptions = {
   includeMediaSummaries?: boolean;
   /** Maximum server rows for this screen. */
   limit?: number;
+  /** Avoid refetching on quick tab switches while the current data is fresh. */
+  staleTimeMs?: number;
 };
 
 export function useReports({
@@ -35,6 +37,7 @@ export function useReports({
   includeLatestActivity = false,
   includeMediaSummaries = false,
   limit,
+  staleTimeMs = 60_000,
 }: UseReportsOptions = {}) {
   const [reports, setReports] = useState<MapReportMarker[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -42,6 +45,7 @@ export function useReports({
   const [lastUpdatedAt, setLastUpdatedAt] = useState<number | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
+  const loadRequestRef = useRef<Promise<void> | null>(null);
 
   // Unique channel name per hook instance so the map and feed subscriptions
   // (which can be mounted at the same time) never collide.
@@ -55,23 +59,32 @@ export function useReports({
   }, [reports]);
 
   const load = useCallback(async () => {
-    const { reports: fetched, error: fetchError } = await fetchMapReports({
-      barangayId,
-      includePending,
-      loadAll,
-      includeLatestActivity,
-      includeMediaSummaries,
-      limit,
+    if (loadRequestRef.current) return loadRequestRef.current;
+
+    const request = (async () => {
+      const { reports: fetched, error: fetchError } = await fetchMapReports({
+        barangayId,
+        includePending,
+        loadAll,
+        includeLatestActivity,
+        includeMediaSummaries,
+        limit,
+      });
+      setLoading(false);
+      if (fetchError) {
+        setError(fetchError);
+        return;
+      }
+      setError(null);
+      setReports(fetched);
+      setHasMore(Boolean(limit && fetched.filter((report) => !report.isPending).length >= limit));
+      setLastUpdatedAt(Date.now());
+    })().finally(() => {
+      loadRequestRef.current = null;
     });
-    setLoading(false);
-    if (fetchError) {
-      setError(fetchError);
-      return;
-    }
-    setError(null);
-    setReports(fetched);
-    setHasMore(Boolean(limit && fetched.filter((report) => !report.isPending).length >= limit));
-    setLastUpdatedAt(Date.now());
+
+    loadRequestRef.current = request;
+    return request;
   }, [barangayId, includeLatestActivity, includeMediaSummaries, includePending, limit, loadAll]);
 
   const loadMore = useCallback(async () => {
@@ -165,8 +178,9 @@ export function useReports({
 
   useFocusEffect(
     useCallback(() => {
-      void load();
-    }, [load]),
+      const dataIsFresh = lastUpdatedAt != null && Date.now() - lastUpdatedAt < staleTimeMs;
+      if (!dataIsFresh) void load();
+    }, [lastUpdatedAt, load, staleTimeMs]),
   );
 
   // Refresh when a local report is queued or finishes uploading.

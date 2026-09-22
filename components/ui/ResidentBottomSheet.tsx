@@ -30,6 +30,7 @@ type ResidentBottomSheetProps = {
   backdropStyle?: StyleProp<ViewStyle>;
   handleAccessibilityLabel?: string;
   closeAccessibilityLabel?: string;
+  showCloseButton?: boolean;
   animationType?: 'none' | 'slide' | 'fade';
 };
 
@@ -56,6 +57,7 @@ export default function ResidentBottomSheet({
   backdropStyle,
   handleAccessibilityLabel = 'Resize panel',
   closeAccessibilityLabel = 'Close panel',
+  showCloseButton = true,
   animationType = 'fade',
 }: ResidentBottomSheetProps) {
   const insets = useSafeAreaInsets();
@@ -257,15 +259,17 @@ export default function ResidentBottomSheet({
             >
               <View style={styles.handle} />
             </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.closeButton}
-              onPress={dismissSheet}
-              activeOpacity={0.72}
-              accessibilityRole="button"
-              accessibilityLabel={closeAccessibilityLabel}
-            >
-              <Ionicons name="close" size={22} color={colors.textMuted} />
-            </TouchableOpacity>
+            {showCloseButton ? (
+              <TouchableOpacity
+                style={styles.closeButton}
+                onPress={dismissSheet}
+                activeOpacity={0.72}
+                accessibilityRole="button"
+                accessibilityLabel={closeAccessibilityLabel}
+              >
+                <Ionicons name="close" size={22} color={colors.textMuted} />
+              </TouchableOpacity>
+            ) : null}
           </View>
 
           <View style={[styles.content, { paddingBottom: insets.bottom }]}>{children}</View>

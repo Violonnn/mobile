@@ -34,15 +34,6 @@ export default function HighlightedReportCallout({
       style={[styles.positioner, { bottom: bottomOffset }]}
     >
       <View style={[styles.container, { borderColor: status.backgroundColor }]}>
-        <TouchableOpacity
-          style={styles.closeButton}
-          onPress={onClose}
-          accessibilityRole="button"
-          accessibilityLabel="Remove report highlight"
-        >
-          <Ionicons name="close" size={20} color={colors.textMuted} />
-        </TouchableOpacity>
-
         <View style={[styles.iconBadge, { backgroundColor: status.color }]}>
           <Ionicons name="warning" size={18} color={colors.white} />
         </View>
@@ -71,6 +62,16 @@ export default function HighlightedReportCallout({
             <CollageCellContent item={previewMedia} />
           </View>
         ) : null}
+
+        <TouchableOpacity
+          style={styles.closeButton}
+          onPress={onClose}
+          activeOpacity={0.72}
+          accessibilityRole="button"
+          accessibilityLabel="Close selected report"
+        >
+          <Ionicons name="close" size={19} color={colors.textMuted} />
+        </TouchableOpacity>
       </View>
 
       <TouchableOpacity
@@ -100,7 +101,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
     padding: spacing.md,
-    paddingTop: spacing.lg,
+    paddingTop: spacing.md,
     borderWidth: 1,
     borderColor: 'rgba(179, 52, 67, 0.18)',
     borderTopLeftRadius: radius.xl,
@@ -111,16 +112,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.16,
     shadowRadius: 18,
     elevation: 10,
-  },
-  closeButton: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    zIndex: 2,
-    width: 48,
-    height: 48,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   iconBadge: {
     width: 36,
@@ -140,7 +131,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    paddingRight: 34,
   },
   eyebrow: {
     fontFamily: fonts.bold,
@@ -154,7 +144,6 @@ const styles = StyleSheet.create({
     color: colors.navigationActive,
   },
   title: {
-    paddingRight: 24,
     fontFamily: fonts.bold,
     fontSize: fontSizes.md,
     color: colors.text,
@@ -183,6 +172,15 @@ const styles = StyleSheet.create({
     flexShrink: 0,
     overflow: 'hidden',
     borderRadius: radius.md,
+    backgroundColor: colors.background,
+  },
+  closeButton: {
+    width: 28,
+    height: 28,
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.full,
     backgroundColor: colors.background,
   },
   detailsButton: {

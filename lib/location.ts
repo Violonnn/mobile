@@ -136,6 +136,56 @@ export async function getGrantedMapGps(): Promise<GpsPosition | null> {
 }
 
 /**
+ * Read a data-friendly location for nearby content. A recent OS location is
+ * reused first; a balanced fix is requested only when the cache is stale.
+ */
+export async function getNearbyReportsGps(): Promise<{
+  position: GpsPosition | null;
+  error: string | null;
+}> {
+  const permissionError = await ensureLocationPermission();
+  if (permissionError) {
+    return {
+      position: null,
+      error: 'Location permission is required to find reports near you.',
+    };
+  }
+
+  try {
+    const lastKnown = await Location.getLastKnownPositionAsync({
+      maxAge: 5 * 60_000,
+      requiredAccuracy: 500,
+    });
+    const location =
+      lastKnown ??
+      (await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }));
+    const latitude = location.coords.latitude;
+    const longitude = location.coords.longitude;
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+      return { position: null, error: 'Could not read a valid location.' };
+    }
+
+    return {
+      position: {
+        latitude,
+        longitude,
+        accuracyMeters:
+          typeof location.coords.accuracy === 'number' &&
+          Number.isFinite(location.coords.accuracy)
+            ? location.coords.accuracy
+            : null,
+      },
+      error: null,
+    };
+  } catch {
+    return {
+      position: null,
+      error: 'Could not get your location. Try again outdoors.',
+    };
+  }
+}
+
+/**
  * Suggest a barangay from nearest centroids. The resident must still confirm
  * the barangay before submit — this is only a preselect/display helper.
  */
@@ -212,6 +262,17 @@ export function getCurrentGpsWithTimeout(timeoutMs = 20_000): Promise<{
   error: string | null;
 }> {
   return withTimeout(getCurrentGps(), timeoutMs, {
+    position: null,
+    error: 'Getting your location took too long. Try again.',
+  });
+}
+
+/** Balanced nearby-content location with a short bounded wait. */
+export function getNearbyReportsGpsWithTimeout(timeoutMs = 8_000): Promise<{
+  position: GpsPosition | null;
+  error: string | null;
+}> {
+  return withTimeout(getNearbyReportsGps(), timeoutMs, {
     position: null,
     error: 'Getting your location took too long. Try again.',
   });

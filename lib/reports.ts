@@ -92,7 +92,7 @@ export function getReportStatusPresentation(status: string): ReportStatusPresent
 
   if (normalizedStatus === 'escalated') {
     return {
-      label: 'Escalated',
+      label: 'Municipal review',
       color: colors.escalated,
       backgroundColor: '#FFF0E8',
       activeStep: 2,
@@ -102,7 +102,7 @@ export function getReportStatusPresentation(status: string): ReportStatusPresent
 
   if (normalizedStatus === 'verified') {
     return {
-      label: 'Verified',
+      label: 'Confirmed',
       color: '#356E66',
       backgroundColor: '#E9F5F1',
       activeStep: 1,

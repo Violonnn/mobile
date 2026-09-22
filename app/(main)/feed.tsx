@@ -20,20 +20,20 @@ import OfficialAnnouncementPostCard from '../../components/official/OfficialAnno
 import { ReportDetailCard } from '../../components/report/ReportDetailCard';
 import { ReportEngagementProvider } from '../../components/report/ReportEngagementProvider';
 import ResidentBottomSheet from '../../components/ui/ResidentBottomSheet';
+import { FeedScreenSkeleton } from '../../components/ui/ResidentScreenSkeletons';
+import { useResidentData } from '../../context/ResidentDataContext';
 import { useAnnouncements } from '../../hooks/useAnnouncements';
 import { useReports } from '../../hooks/useReports';
 import {
   formatAnnouncementOfficeLabel,
   type AnnouncementRecord,
 } from '../../lib/announcements';
-import { fetchBarangays } from '../../lib/barangays';
 import {
   buildCommunityReportSections,
   type CommunityReportScope,
   type CommunityReportSort,
   type CommunityReportStatusFilter,
 } from '../../lib/communityReportFeed';
-import { fetchMyProfile } from '../../lib/profile';
 import {
   formatDistance,
   normalizeSearchText,
@@ -79,13 +79,16 @@ function getCommunitySectionCopy(
 export default function FeedScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { reportId, openRequest } = useLocalSearchParams<{
+  const { reportId, openRequest, tab } = useLocalSearchParams<{
     reportId?: string | string[];
     openRequest?: string | string[];
+    tab?: string | string[];
   }>();
   const requestedReportId = Array.isArray(reportId) ? reportId[0] : reportId;
   const requestedOpenKey = Array.isArray(openRequest) ? openRequest[0] : openRequest;
+  const requestedTab = Array.isArray(tab) ? tab[0] : tab;
   const handledRequestedScopeKey = useRef<string | undefined>(undefined);
+  const { profile, barangays, profileInitialLoading, refreshProfile } = useResidentData();
   const {
     reports,
     error: reportsError,
@@ -111,11 +114,20 @@ export default function FeedScreen() {
   } = useAnnouncements({ limit: 15, realtime: false });
 
   const [activeTab, setActiveTab] = useState<FeedTab>('community');
-  const [municipality, setMunicipality] = useState('Minglanilla');
-  const [barangay, setBarangay] = useState('your area');
-  const [barangayId, setBarangayId] = useState<string | null>(null);
-  const [barangayCenter, setBarangayCenter] = useState<Coordinate | null>(null);
-  const [profileLoading, setProfileLoading] = useState(true);
+  const municipality = profile?.municipality || 'Minglanilla';
+  const barangay = profile?.barangay || 'your area';
+  const matchingBarangay = useMemo(() => {
+    const normalizedBarangay = normalizeSearchText(profile?.barangay ?? '');
+    return barangays.find((item) => normalizeSearchText(item.name) === normalizedBarangay) ?? null;
+  }, [barangays, profile?.barangay]);
+  const barangayId = matchingBarangay?.id ?? null;
+  const barangayCenter = useMemo<Coordinate | null>(
+    () =>
+      matchingBarangay?.latitude != null && matchingBarangay.longitude != null
+        ? { latitude: matchingBarangay.latitude, longitude: matchingBarangay.longitude }
+        : null,
+    [matchingBarangay],
+  );
   const [searchVisible, setSearchVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterVisible, setFilterVisible] = useState(false);
@@ -127,6 +139,21 @@ export default function FeedScreen() {
   const [officialOrder, setOfficialOrder] = useState<FeedOrder>('latest');
   const [refreshing, setRefreshing] = useState(false);
 
+  useFocusEffect(
+    useCallback(() => {
+      // A returning visitor should see the normal feed header, not a stale open search or sheet.
+      setSearchVisible(false);
+      setFilterVisible(false);
+      void refreshProfile();
+    }, [refreshProfile]),
+  );
+
+  useEffect(() => {
+    if (requestedTab !== 'official') return;
+    const frameId = requestAnimationFrame(() => setActiveTab('official'));
+    return () => cancelAnimationFrame(frameId);
+  }, [requestedTab]);
+
   useEffect(() => {
     if (!requestedReportId) return;
 
@@ -134,48 +161,6 @@ export default function FeedScreen() {
     const frameId = requestAnimationFrame(() => setActiveTab('community'));
     return () => cancelAnimationFrame(frameId);
   }, [requestedReportId, requestedOpenKey]);
-
-  useFocusEffect(
-    useCallback(() => {
-      let cancelled = false;
-
-      // Profile edits must immediately update the feed's location scope.
-      void Promise.all([fetchMyProfile(), fetchBarangays()])
-        .then(([profileResult, barangayResult]) => {
-          if (cancelled) return;
-
-          const profile = profileResult.profile;
-          if (!profile) {
-            setProfileLoading(false);
-            return;
-          }
-
-          setMunicipality(profile.municipality || 'Minglanilla');
-          setBarangay(profile.barangay || 'your area');
-          const normalizedBarangay = normalizeSearchText(profile.barangay);
-          const matchingBarangay = barangayResult.barangays.find(
-            (item) => normalizeSearchText(item.name) === normalizedBarangay,
-          );
-          setBarangayId(matchingBarangay?.id ?? null);
-          if (matchingBarangay?.latitude != null && matchingBarangay.longitude != null) {
-            setBarangayCenter({
-              latitude: matchingBarangay.latitude,
-              longitude: matchingBarangay.longitude,
-            });
-          } else {
-            setBarangayCenter(null);
-          }
-          setProfileLoading(false);
-        })
-        .catch(() => {
-          if (!cancelled) setProfileLoading(false);
-        });
-
-      return () => {
-        cancelled = true;
-      };
-    }, []),
-  );
 
   const normalizedQuery = searchQuery.trim().toLocaleLowerCase();
 
@@ -301,11 +286,18 @@ export default function FeedScreen() {
   };
 
   const initialLoading =
-    profileLoading ||
+    profileInitialLoading ||
     (activeTab === 'community'
       ? reportsLoading && reports.length === 0
       : announcementsLoading && announcements.length === 0);
-  const activeError = activeTab === 'community' ? reportsError : announcementsError;
+  const activeError =
+    activeTab === 'community'
+      ? reports.length === 0
+        ? reportsError
+        : null
+      : announcements.length === 0
+        ? announcementsError
+        : null;
 
   return (
     <ReportEngagementProvider reports={reports}>
@@ -470,10 +462,7 @@ export default function FeedScreen() {
               }
               ListEmptyComponent={
                 initialLoading ? (
-                  <View style={styles.stateBlock}>
-                    <ActivityIndicator color={colors.primary} />
-                    <Text style={styles.stateText}>Loading your feed…</Text>
-                  </View>
+                  <FeedScreenSkeleton />
                 ) : activeError ? (
                   <View style={styles.stateBlock}>
                     <Ionicons name="cloud-offline-outline" size={28} color={colors.textMuted} />
@@ -552,10 +541,7 @@ export default function FeedScreen() {
               )}
               ListEmptyComponent={
                 initialLoading ? (
-                  <View style={styles.stateBlock}>
-                    <ActivityIndicator color={colors.primary} />
-                    <Text style={styles.stateText}>Loading your feed…</Text>
-                  </View>
+                  <FeedScreenSkeleton />
                 ) : activeError ? (
                   <View style={styles.stateBlock}>
                     <Ionicons name="cloud-offline-outline" size={28} color={colors.textMuted} />

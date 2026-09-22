@@ -7,6 +7,11 @@ export type BarangayOption = {
   longitude?: number | null;
 };
 
+const BARANGAY_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
+let cachedBarangays: BarangayOption[] | null = null;
+let cachedBarangaysAt = 0;
+let barangayRequest: Promise<{ barangays: BarangayOption[]; error: string | null }> | null = null;
+
 function parseCentroid(raw: unknown): {
   latitude: number | null;
   longitude: number | null;
@@ -39,7 +44,23 @@ function parseCentroid(raw: unknown): {
 }
 
 /** Load Minglanilla barangays for the BDRRMO invite selector. */
-export async function fetchBarangays(): Promise<{
+export async function fetchBarangays(options?: { force?: boolean }): Promise<{
+  barangays: BarangayOption[];
+  error: string | null;
+}> {
+  const cacheIsFresh = Date.now() - cachedBarangaysAt < BARANGAY_CACHE_TTL_MS;
+  if (!options?.force && cachedBarangays && cacheIsFresh) {
+    return { barangays: cachedBarangays, error: null };
+  }
+  if (barangayRequest) return barangayRequest;
+
+  barangayRequest = fetchBarangaysFromServer().finally(() => {
+    barangayRequest = null;
+  });
+  return barangayRequest;
+}
+
+async function fetchBarangaysFromServer(): Promise<{
   barangays: BarangayOption[];
   error: string | null;
 }> {
@@ -52,8 +73,7 @@ export async function fetchBarangays(): Promise<{
     return { barangays: [], error: error.message };
   }
 
-  return {
-    barangays: (data ?? []).map((row) => {
+  const barangays = (data ?? []).map((row) => {
       const centroid = parseCentroid(row.centroid);
       return {
         id: String(row.id),
@@ -61,7 +81,8 @@ export async function fetchBarangays(): Promise<{
         latitude: centroid.latitude,
         longitude: centroid.longitude,
       };
-    }),
-    error: null,
-  };
+    });
+  cachedBarangays = barangays;
+  cachedBarangaysAt = Date.now();
+  return { barangays, error: null };
 }

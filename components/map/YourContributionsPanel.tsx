@@ -1,6 +1,5 @@
 import React, { useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
   type GestureResponderHandlers,
   ScrollView,
   Text,
@@ -9,11 +8,17 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-import { formatReportLocation, type MapReportMarker } from '../../lib/reports';
+import {
+  formatReportLocation,
+  getReportStatusPresentation,
+  type MapReportMarker,
+} from '../../lib/reports';
 import { contributionStyles as styles } from '../../styles/components/yourContributions.styles';
 import { colors } from '../../styles/theme';
 import { CollageCellContent } from '../report/ReportDetailCard';
 import IncidentTypeBadge from '../report/IncidentTypeBadge';
+import { residentReportStatusIconName } from '../report/ReportStatusTimeline';
+import { ContributionSkeleton } from '../ui/ResidentScreenSkeletons';
 import { ResidentReportPreviewContent } from './ResidentReportPreviewSheet';
 
 type ContributionDateGroup = {
@@ -101,20 +106,24 @@ function contributionStatus(report: MapReportMarker): {
   label: string;
   icon: keyof typeof Ionicons.glyphMap;
   color: string;
+  backgroundColor: string;
 } {
   if (report.isPending) {
-    return { label: 'Uploading', icon: 'cloud-upload-outline', color: colors.primary };
+    return {
+      label: 'Uploading',
+      icon: 'cloud-upload-outline',
+      color: colors.primary,
+      backgroundColor: colors.primaryLight,
+    };
   }
-  if (report.status === 'resolved') {
-    return { label: 'Resolved', icon: 'checkmark-circle-outline', color: colors.success };
-  }
-  if (report.status === 'escalated') {
-    return { label: 'Escalated', icon: 'warning-outline', color: colors.escalated };
-  }
-  if (report.status === 'verified') {
-    return { label: 'Received', icon: 'shield-checkmark-outline', color: colors.primary };
-  }
-  return { label: 'Under review', icon: 'time-outline', color: '#F05B4F' };
+
+  const presentation = getReportStatusPresentation(report.status);
+  return {
+    label: presentation.label,
+    icon: residentReportStatusIconName(report.status),
+    color: presentation.color,
+    backgroundColor: presentation.backgroundColor,
+  };
 }
 
 function ContributionMediaThumb({ report }: { report: MapReportMarker }) {
@@ -252,7 +261,6 @@ export default function YourContributionsPanel({
         <View style={[styles.detailContent, { paddingBottom: bottomInset }]}>
           <ResidentReportPreviewContent
             report={selectedReport}
-            onClose={returnToContributions}
             onOpenFullReport={() => onShowReportOnMap(selectedReport)}
             primaryActionLabel="Show on map"
           />
@@ -265,10 +273,7 @@ export default function YourContributionsPanel({
         keyboardShouldPersistTaps="handled"
       >
         {loading && reports.length === 0 ? (
-          <View style={styles.stateBlock}>
-            <ActivityIndicator color={colors.primary} />
-            <Text style={styles.stateText}>Loading your reports…</Text>
-          </View>
+          <ContributionSkeleton />
         ) : error && reports.length === 0 ? (
           <View style={styles.stateBlock}>
             <Ionicons name="cloud-offline-outline" size={27} color={colors.textMuted} />
@@ -315,7 +320,15 @@ export default function YourContributionsPanel({
                             <Text style={styles.dateGroupTitle}>{group.label}</Text>
                             <Text style={styles.dateSeparator}>•</Text>
                             {isLatest ? <Text style={styles.latestBadge}>LATEST</Text> : null}
-                            <View style={[styles.statusPill, { borderColor: status.color }]}>
+                            <View
+                              style={[
+                                styles.statusPill,
+                                {
+                                  borderColor: status.color,
+                                  backgroundColor: status.backgroundColor,
+                                },
+                              ]}
+                            >
                               <Ionicons name={status.icon} size={13} color={status.color} />
                               <Text style={[styles.statusText, { color: status.color }]}>
                                 {status.label}

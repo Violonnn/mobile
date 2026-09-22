@@ -20,6 +20,8 @@ import LegalModal, {
 import ResidentProfileModal from '../../components/profile/ResidentProfileModal';
 import ProfileAvatar from '../../components/profile/ProfileAvatar';
 import ProfilePhotoModal from '../../components/profile/ProfilePhotoModal';
+import { ProfileScreenSkeleton } from '../../components/ui/ResidentScreenSkeletons';
+import { useResidentData } from '../../context/ResidentDataContext';
 import { logout } from '../../lib/auth';
 import {
   getResidentMapTheme,
@@ -27,10 +29,8 @@ import {
   type ResidentMapTheme,
 } from '../../lib/mapPreferences';
 import {
-  fetchMyProfile,
   fetchProfileUpdateEligibility,
   type ProfileUpdateEligibility,
-  type PublicProfile,
 } from '../../lib/profile';
 import { formatNameWithMiddleInitial } from '../../lib/validation/name';
 import { profileStyles as styles } from '../../styles/screens/profile.styles';
@@ -107,11 +107,14 @@ function SettingsRow({
 export default function ProfileScreen() {
   const router = useRouter();
   const blurTargetRef = useRef<View>(null);
-  const skipNextProfileReloadRef = useRef(false);
-  const [profile, setProfile] = useState<PublicProfile | null>(null);
+  const {
+    profile,
+    profileInitialLoading,
+    profileError,
+    refreshProfile,
+    updateProfile,
+  } = useResidentData();
   const [eligibility, setEligibility] = useState<ProfileUpdateEligibility | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
   const [loggingOut, setLoggingOut] = useState(false);
   const [mapTheme, setMapTheme] = useState<ResidentMapTheme>('light');
   const [mapThemeSaving, setMapThemeSaving] = useState(false);
@@ -119,42 +122,11 @@ export default function ProfileScreen() {
   const [profilePhotoVisible, setProfilePhotoVisible] = useState(false);
   const [legalDocument, setLegalDocument] = useState<LegalDocument>(null);
 
-  const loadProfile = useCallback(async () => {
-    setLoading(true);
-    setLoadError(null);
-    const [profileResult, eligibilityResult] = await Promise.all([
-      fetchMyProfile(),
-      fetchProfileUpdateEligibility(),
-    ]);
-
-    if (profileResult.error || !profileResult.profile) {
-      setLoadError(profileResult.error || 'Your resident profile could not be found.');
-      setLoading(false);
-      return;
-    }
-
-    setProfile(profileResult.profile);
-    setEligibility(eligibilityResult.eligibility);
-    setLoadError(eligibilityResult.error);
-    setLoading(false);
-  }, []);
-
-  useFocusEffect(
-    useCallback(() => {
-      // Returning from PIN reset cannot change profile data, so keep the loaded Settings screen.
-      if (skipNextProfileReloadRef.current) {
-        skipNextProfileReloadRef.current = false;
-        return;
-      }
-
-      void loadProfile();
-    }, [loadProfile]),
-  );
-
   useFocusEffect(
     useCallback(() => {
       let active = true;
 
+      void refreshProfile();
       void getResidentMapTheme().then((storedTheme) => {
         if (active) setMapTheme(storedTheme);
       });
@@ -162,7 +134,7 @@ export default function ProfileScreen() {
       return () => {
         active = false;
       };
-    }, []),
+    }, [refreshProfile]),
   );
 
   async function handleMapThemeChange(useDarkMap: boolean) {
@@ -209,10 +181,20 @@ export default function ProfileScreen() {
   function openPinReset() {
     if (!profile) return;
 
-    skipNextProfileReloadRef.current = true;
     router.push({
       pathname: '/(auth)/forgot-password',
       params: { phone: profile.phone, source: 'settings' },
+    });
+  }
+
+  function openPersonalInformation() {
+    if (!profile) return;
+    setProfileVisible(true);
+    if (eligibility) return;
+
+    // Eligibility is only needed by the editor, so avoid this RPC on every Settings visit.
+    void fetchProfileUpdateEligibility().then((result) => {
+      if (result.eligibility) setEligibility(result.eligibility);
     });
   }
 
@@ -227,15 +209,16 @@ export default function ProfileScreen() {
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <Text style={styles.screenTitle}>Settings</Text>
 
-        {loading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={colors.primary} />
-          </View>
-        ) : loadError && !profile ? (
+        {profileInitialLoading ? (
+          <ProfileScreenSkeleton />
+        ) : profileError && !profile ? (
           <View style={styles.errorCard}>
             <Ionicons name="cloud-offline-outline" size={28} color={colors.textMuted} />
-            <Text style={styles.errorText}>{loadError}</Text>
-            <TouchableOpacity style={styles.retryButton} onPress={() => void loadProfile()}>
+            <Text style={styles.errorText}>{profileError}</Text>
+            <TouchableOpacity
+              style={styles.retryButton}
+              onPress={() => void refreshProfile({ force: true })}
+            >
               <Text style={styles.retryText}>Try again</Text>
             </TouchableOpacity>
           </View>
@@ -277,7 +260,7 @@ export default function ProfileScreen() {
               <SettingsRow
                 title="Personal information"
                 subtitle="Name, phone number, birth details, and barangay"
-                onPress={() => setProfileVisible(true)}
+                onPress={openPersonalInformation}
               />
               <SettingsRow
                 title="Security & PIN"
@@ -358,7 +341,7 @@ export default function ProfileScreen() {
             eligibility={eligibility}
             onClose={() => setProfileVisible(false)}
             onSaved={(updatedProfile, updatedEligibility) => {
-              setProfile(updatedProfile);
+              updateProfile(updatedProfile);
               setEligibility(updatedEligibility);
             }}
           />
@@ -370,9 +353,7 @@ export default function ProfileScreen() {
             blurTarget={blurTargetRef}
             onClose={() => setProfilePhotoVisible(false)}
             onChanged={(avatarPath) => {
-              setProfile((currentProfile) =>
-                currentProfile ? { ...currentProfile, avatar_path: avatarPath } : currentProfile,
-              );
+              updateProfile({ ...profile, avatar_path: avatarPath });
             }}
           />
         </>

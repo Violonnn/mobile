@@ -24,10 +24,8 @@ import YourContributionsPanel, {
   type ContributionPanelState,
 } from '../../components/map/YourContributionsPanel';
 import { ReportEngagementProvider } from '../../components/report/ReportEngagementProvider';
-import { useEvacuationCenters } from '../../hooks/useEvacuationCenters';
+import { useResidentData } from '../../context/ResidentDataContext';
 import { useReports } from '../../hooks/useReports';
-import { useResources } from '../../hooks/useResources';
-import { getActiveSession } from '../../lib/auth';
 import { getGrantedMapGps, type GpsPosition } from '../../lib/location';
 import { getResidentMapTheme, type ResidentMapTheme } from '../../lib/mapPreferences';
 import { createMutableNumber } from '../../lib/mutableNumber';
@@ -38,6 +36,7 @@ import { residentMapStyles as styles } from '../../styles/screens/residentMap.st
 import { colors, spacing } from '../../styles/theme';
 
 const COLLAPSED_HEADER_HEIGHT = 88;
+const RESTING_CONTRIBUTION_LIFT = 12;
 const CONTRIBUTION_PANEL_STATES: ContributionPanelState[] = [
   'collapsed',
   'medium',
@@ -62,13 +61,17 @@ export default function MapScreen() {
     error,
     loading: reportsLoading,
     reload,
-  } = useReports({ realtime: true });
-  const { facilities } = useResources({ mode: 'resident' });
-  const { centers } = useEvacuationCenters();
+  } = useReports({ realtime: true, staleTimeMs: 5 * 60_000 });
+  const {
+    profile,
+    profileInitialLoading,
+    facilities,
+    centers,
+    ensureFacilities,
+    ensureCenters,
+  } = useResidentData();
 
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [userLocation, setUserLocation] = useState<GpsPosition | null>(null);
-  const [identityLoading, setIdentityLoading] = useState(true);
   const [mapTheme, setMapTheme] = useState<ResidentMapTheme>('light');
   const [selectedReportIds, setSelectedReportIds] = useState<string[]>([]);
   const [fullReportVisible, setFullReportVisible] = useState(false);
@@ -76,11 +79,12 @@ export default function MapScreen() {
   const [selectedResource, setSelectedResource] = useState<MapResourceMarker | null>(null);
   const [focusTarget, setFocusTarget] = useState<MapFocusTarget | null>(null);
   const [contributionPanelState, setContributionPanelState] =
-    useState<ContributionPanelState>('medium');
-  const [contributionPanelStateIndex] = useState(() => createMutableNumber(1));
+    useState<ContributionPanelState>('collapsed');
+  const [contributionPanelStateIndex] = useState(() => createMutableNumber(0));
   const [contributionTranslateY] = useState(() => new Animated.Value(0));
   const [highlightedReportTranslateY] = useState(() => new Animated.Value(0));
   const [dragStartOffset] = useState(() => createMutableNumber());
+  const [mapFilterVisible, setMapFilterVisible] = useState(false);
   const [layers, setLayers] = useState<MapLayerVisibility>({
     reports: true,
     facilities: true,
@@ -94,19 +98,11 @@ export default function MapScreen() {
     ? resourceKind[0]
     : resourceKind;
 
+  const currentUserId = profile?.id ?? null;
+
   useEffect(() => {
-    let cancelled = false;
-
-    void getActiveSession().then((session) => {
-      if (cancelled) return;
-      setCurrentUserId(session?.user.id ?? null);
-      setIdentityLoading(false);
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    void Promise.all([ensureFacilities(), ensureCenters()]);
+  }, [ensureCenters, ensureFacilities]);
 
   useFocusEffect(
     useCallback(() => {
@@ -297,13 +293,17 @@ export default function MapScreen() {
   const contributionOffsets = useMemo(
     () => ({
       expanded: 0,
-      medium: Math.max(0, contributionFullHeight - contributionMediumHeight),
+      medium: Math.max(
+        0,
+        contributionFullHeight - contributionMediumHeight - RESTING_CONTRIBUTION_LIFT,
+      ),
       collapsed: Math.max(
         0,
         contributionFullHeight -
           navMetrics.barHeight -
           insets.bottom -
-          COLLAPSED_HEADER_HEIGHT,
+          COLLAPSED_HEADER_HEIGHT -
+          RESTING_CONTRIBUTION_LIFT,
       ),
     }),
     [contributionFullHeight, contributionMediumHeight, insets.bottom],
@@ -322,6 +322,14 @@ export default function MapScreen() {
       }).start();
     },
     [contributionOffsets, contributionPanelStateIndex, contributionTranslateY],
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      // Reset only presentation state when returning to the cached map screen.
+      setMapFilterVisible(false);
+      settleContributions('collapsed');
+    }, [settleContributions]),
   );
 
   useEffect(() => {
@@ -376,8 +384,9 @@ export default function MapScreen() {
     setFullReportVisible(true);
   }, [highlightedReport]);
 
-  const clearReportHighlight = useCallback(() => {
+  const clearHighlightedReport = useCallback(() => {
     setHighlightedReportId(null);
+    setSelectedReportIds([]);
   }, []);
 
   const openReportInCommunity = useCallback(
@@ -470,6 +479,8 @@ export default function MapScreen() {
             showReportStatusFilters
             showSearchBar
             compactLayerFilters
+            layerPanelVisible={mapFilterVisible}
+            onLayerPanelVisibilityChange={setMapFilterVisible}
             searchBarTopInset={insets.top + (openedFromNotification ? 62 : 12)}
             layerFiltersTopInset={
               insets.top + (error ? 126 : 76) + (openedFromNotification ? 50 : 0)
@@ -488,6 +499,7 @@ export default function MapScreen() {
             }}
             focusTarget={focusTarget}
             highlightedReportId={highlightedReportId}
+            showHighlightedReportIncidentIcon
             onReportSelection={handleReportSelection}
             onResourceSelection={(resource) => {
               setSelectedReportIds([]);
@@ -522,12 +534,12 @@ export default function MapScreen() {
         </View>
 
         {highlightedReport ? (
-          <HighlightedReportCallout
-            report={highlightedReport}
-            bottomOffset={navMetrics.barHeight + insets.bottom + spacing.md}
-            onClose={clearReportHighlight}
-            onOpenDetails={openHighlightedReportDetails}
-          />
+            <HighlightedReportCallout
+              report={highlightedReport}
+              bottomOffset={navMetrics.barHeight + insets.bottom + spacing.md}
+              onClose={clearHighlightedReport}
+              onOpenDetails={openHighlightedReportDetails}
+            />
         ) : null}
 
         <Animated.View
@@ -548,7 +560,7 @@ export default function MapScreen() {
         >
           <YourContributionsPanel
             reports={contributions}
-            loading={reportsLoading || identityLoading}
+            loading={reportsLoading || profileInitialLoading}
             error={error}
             bottomInset={contributionBottomInset}
             onReportPress={openContribution}

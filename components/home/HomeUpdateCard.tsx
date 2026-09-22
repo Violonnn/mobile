@@ -1,5 +1,5 @@
 import React from 'react';
-import { Image, Text, TouchableOpacity, View } from 'react-native';
+import { Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { CollageCellContent } from '../report/ReportDetailCard';
@@ -13,22 +13,11 @@ type HomeUpdateCardProps = {
   announcement: AnnouncementRecord;
   label: string;
   onPress: () => void;
-  variant?: 'compact' | 'featured';
 };
 
-function formatMunicipalCardDate(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return formatPublishedAt(iso);
-
-  const dateLabel = date.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-  });
-  const timeLabel = date.toLocaleTimeString('en-US', {
-    hour: 'numeric',
-    minute: '2-digit',
-  });
-  return `${dateLabel} · ${timeLabel}`;
+function announcementAgeLabel(createdAt: string): string {
+  const formatted = formatPublishedAt(createdAt);
+  return /^\d+(s|m|hr)$/.test(formatted) ? `${formatted} ago` : formatted;
 }
 
 function toReportMedia(item: AnnouncementRecord['media'][number]): ReportMediaAttachment {
@@ -48,87 +37,79 @@ function toReportMedia(item: AnnouncementRecord['media'][number]): ReportMediaAt
   };
 }
 
+function announcementSourceLabel(announcement: AnnouncementRecord, fallbackLabel: string): string {
+  if (announcement.scope === 'barangay' && announcement.barangayName?.trim()) {
+    return `Brgy. ${announcement.barangayName.trim()}`;
+  }
+
+  return announcement.author.roleLabel.trim() || fallbackLabel;
+}
+
 export default function HomeUpdateCard({
   announcement,
   label,
   onPress,
-  variant = 'compact',
 }: HomeUpdateCardProps) {
-  const sourceLabel = announcement.author.roleLabel || 'Official';
   const title = announcement.title.trim() || 'Official update';
+  const body = announcement.body.trim() || 'No announcement details provided.';
+  const sourceLabel = announcementSourceLabel(announcement, label);
   const firstMedia = announcement.media[0] ? toReportMedia(announcement.media[0]) : null;
-  const badgeLabel = sourceLabel.toLocaleLowerCase() === 'official' ? label : sourceLabel;
 
-  if (variant === 'featured') {
-    return (
+  return (
+    <View style={styles.officialUpdateCard}>
       <TouchableOpacity
-        style={styles.featuredUpdateCard}
         activeOpacity={0.88}
         onPress={onPress}
         accessibilityRole="button"
         accessibilityLabel={`Open ${title}`}
       >
-        <View style={styles.featuredThumb} pointerEvents="none">
+        <View style={styles.officialUpdateMediaFrame}>
           {firstMedia ? (
-            <View style={styles.featuredThumbMedia}>
+            <View style={styles.officialUpdateMedia}>
               <CollageCellContent item={firstMedia} />
             </View>
           ) : (
-            <View style={styles.featuredThumbFallback}>
-              <Ionicons name="megaphone-outline" size={36} color={homeColors.accentBlue} />
+            <View style={styles.officialUpdateMediaPlaceholder}>
+              <Ionicons name="megaphone-outline" size={34} color={homeColors.ink} />
+              <Text style={styles.officialUpdateMediaPlaceholderText}>No media attached</Text>
             </View>
           )}
-          <View style={styles.featuredOfficialBadge}>
-            <Text style={styles.featuredOfficialBadgeText}>{badgeLabel.toLocaleUpperCase()}</Text>
+
+          <View style={styles.officialUpdateMediaLabel}>
+            <Text style={styles.officialUpdateMediaLabelText} numberOfLines={1}>
+              {sourceLabel} · {announcementAgeLabel(announcement.createdAt)}
+            </Text>
           </View>
-          {firstMedia?.type === 'video' ? (
-            <View style={styles.featuredVideoBadge}>
-              <Ionicons name="play" size={12} color={colors.white} />
+
+          {announcement.mediaCount > 0 ? (
+            <View style={styles.officialUpdateMediaCount}>
+              <Ionicons name="images-outline" size={15} color={colors.white} />
+              <Text style={styles.officialUpdateMediaCountText}>
+                {announcement.mediaCount} media
+              </Text>
             </View>
           ) : null}
         </View>
-
-        <View style={styles.featuredCopy}>
-          <View style={styles.featuredTextBlock}>
-            <Text style={styles.featuredUpdateTitle} numberOfLines={2}>
-              {title}
-            </Text>
-            <Text style={styles.featuredUpdateDate} numberOfLines={1}>
-              {formatMunicipalCardDate(announcement.createdAt)}
-            </Text>
-          </View>
-          <Ionicons name="chevron-forward" size={23} color={homeColors.ink} />
-        </View>
       </TouchableOpacity>
-    );
-  }
 
-  return (
-    <TouchableOpacity
-      style={styles.updateCard}
-      activeOpacity={0.86}
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={`Open ${announcement.title || label}`}
-    >
-      <Image
-        source={require('../../assets/images/mingla.png')}
-        style={styles.updateSeal}
-        resizeMode="contain"
-        accessibilityLabel="Minglanilla official seal"
-      />
-
-      <View style={styles.updateContent}>
-        <Text style={styles.updateLabel}>{label.toLocaleUpperCase()}</Text>
-        <Text style={styles.updateTitle} numberOfLines={2}>
-          {announcement.title || 'Official update'}
+      <View style={styles.officialUpdateCardCopy}>
+        <Text style={styles.officialUpdateTitle} numberOfLines={2}>
+          {title}
         </Text>
-        <Text style={styles.updateMeta} numberOfLines={1}>
-          {sourceLabel} · {formatPublishedAt(announcement.createdAt)}
+        <Text style={styles.officialUpdateBody} numberOfLines={3} ellipsizeMode="tail">
+          {body}
         </Text>
+        <TouchableOpacity
+          style={styles.officialUpdateAction}
+          hitSlop={8}
+          onPress={onPress}
+          accessibilityRole="button"
+          accessibilityLabel={`View ${title} in official updates`}
+        >
+          <Text style={styles.officialUpdateActionText}>View announcement</Text>
+          <Ionicons name="arrow-forward" size={20} color={homeColors.ink} />
+        </TouchableOpacity>
       </View>
-
-      <Ionicons name="chevron-forward" size={23} style={styles.updateChevron} />
-    </TouchableOpacity>
+    </View>
   );
 }

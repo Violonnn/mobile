@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Animated, Easing, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { useNotifications } from '../../hooks/useNotifications';
+import { useNotifications } from '../../context/NotificationsContext';
 import { notificationStyles as styles } from '../../styles/components/notifications.styles';
 import { spacing } from '../../styles/theme';
 import NotificationMailContent, {
@@ -16,16 +16,21 @@ const POPUP_HIDDEN_OFFSET = -180;
 
 export default function NewNotificationOverlay() {
   const insets = useSafeAreaInsets();
-  const { notifications, loading, error } = useNotifications();
+  const {
+    notifications,
+    loading,
+    error,
+    inboxOpen,
+    highlightedNotificationId,
+    openInbox,
+    closeInbox,
+  } = useNotifications();
   const knownNotificationIds = useRef<Set<string> | null>(null);
   const [translateY] = useState(
     () => new Animated.Value(POPUP_HIDDEN_OFFSET),
   );
   const [pendingNotifications, setPendingNotifications] =
     useState<NotificationDisplayItem[]>([]);
-  const [inboxOpen, setInboxOpen] = useState(false);
-  const [highlightedNotificationId, setHighlightedNotificationId] =
-    useState<string | null>(null);
 
   useEffect(() => {
     if (loading || error) return;
@@ -97,17 +102,11 @@ export default function NewNotificationOverlay() {
     if (!popupNotification) return;
 
     // Opening the inbox only focuses the mail; its unread state is unchanged.
-    setHighlightedNotificationId(popupNotification.id);
     setPendingNotifications((currentNotifications) =>
       currentNotifications.slice(1),
     );
-    setInboxOpen(true);
-  }, [popupNotification]);
-
-  const closeInbox = useCallback(() => {
-    setInboxOpen(false);
-    setHighlightedNotificationId(null);
-  }, []);
+    openInbox(popupNotification.id);
+  }, [openInbox, popupNotification]);
 
   return (
     <>

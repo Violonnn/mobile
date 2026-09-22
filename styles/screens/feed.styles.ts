@@ -24,9 +24,9 @@ export const feedStyles = StyleSheet.create({
   },
   title: {
     fontFamily: fonts.semibold,
-    fontSize: 24,
-    lineHeight: 30,
-    letterSpacing: 0.8,
+    fontSize: 22,
+    lineHeight: 28,
+    letterSpacing: -0.45,
     color: colors.text,
   },
   communityEyebrow: {

@@ -38,16 +38,17 @@ export const quickAccessModalStyles = StyleSheet.create({
     minHeight: 0,
   },
   listContent: {
-    gap: spacing.sm,
+    gap: 6,
     paddingTop: spacing.xs,
     paddingBottom: spacing.md,
   },
   resourceCard: {
-    minHeight: 74,
+    minHeight: 62,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    padding: spacing.sm,
+    gap: 6,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
     borderWidth: 1,
     borderColor: '#E7E3DE',
     borderRadius: radius.lg,
@@ -59,21 +60,30 @@ export const quickAccessModalStyles = StyleSheet.create({
     elevation: 1,
   },
   cardIcon: {
-    width: 44,
-    height: 44,
+    width: 38,
+    height: 38,
     flexShrink: 0,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 14,
   },
   hotlineCardIcon: {
-    backgroundColor: '#FCE2D1',
+    backgroundColor: 'transparent',
   },
   facilityCardIcon: {
-    backgroundColor: '#FAEDC9',
+    backgroundColor: 'transparent',
   },
   evacuationCardIcon: {
-    backgroundColor: '#6F9B75',
+    backgroundColor: 'transparent',
+  },
+  washedResourceIcon: {
+    width: 28,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  washedResourceIconFill: {
+    position: 'absolute',
   },
   cardCopy: {
     flex: 1,
@@ -82,24 +92,17 @@ export const quickAccessModalStyles = StyleSheet.create({
   cardTitle: {
     fontFamily: fonts.semibold,
     fontSize: fontSizes.md,
+    lineHeight: 18,
     color: colors.text,
   },
   cardMeta: {
-    marginTop: 3,
+    marginTop: 1,
     fontFamily: fonts.regular,
     fontSize: fontSizes.xs,
-    lineHeight: 16,
+    lineHeight: 14,
     color: colors.textMuted,
   },
-  secondaryAction: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 18,
-    backgroundColor: colors.primaryLight,
-  },
-  callAction: {
+  cardAction: {
     width: 46,
     alignItems: 'center',
     justifyContent: 'center',
@@ -118,16 +121,28 @@ export const quickAccessModalStyles = StyleSheet.create({
     fontSize: fontSizes.xs,
     color: colors.unverified,
   },
-  mapAction: {
-    height: 36,
+  viewActionIcon: {
+    width: 34,
+    height: 34,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 10,
+    borderRadius: radius.full,
   },
-  mapActionText: {
-    fontFamily: fonts.medium,
+  facilityViewActionIcon: {
+    backgroundColor: '#FAEDC9',
+  },
+  evacuationViewActionIcon: {
+    backgroundColor: '#6F9B75',
+  },
+  viewActionText: {
+    fontFamily: fonts.semibold,
     fontSize: fontSizes.xs,
-    color: colors.primary,
+  },
+  facilityViewActionText: {
+    color: '#9A6B16',
+  },
+  evacuationViewActionText: {
+    color: '#56805D',
   },
   stateBlock: {
     flex: 1,

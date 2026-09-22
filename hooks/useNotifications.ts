@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { getActiveSession } from '../lib/auth';
 import {
@@ -10,26 +10,44 @@ import {
 import { supabase } from '../lib/supabase';
 import { useRealtimeChannelName } from './useRealtimeChannelName';
 
-export function useNotifications() {
+/** Standalone notification data for portals that do not mount the resident provider. */
+export function useStandaloneNotifications(options?: { enabled?: boolean }) {
+  const enabled = options?.enabled ?? true;
   const [notifications, setNotifications] = useState<InAppNotification[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(enabled);
   const [error, setError] = useState<string | null>(null);
+  const hasLoadedRef = useRef(false);
+  const requestRef = useRef<Promise<void> | null>(null);
   const channelName = useRealtimeChannelName('my-notifications');
 
   const reload = useCallback(async () => {
-    setLoading(true);
-    const result = await fetchMyNotifications();
-    setNotifications(result.notifications);
-    setError(result.error);
-    setLoading(false);
-  }, []);
+    if (!enabled) return;
+    if (requestRef.current) return requestRef.current;
+
+    const request = (async () => {
+      if (!hasLoadedRef.current) setLoading(true);
+      const result = await fetchMyNotifications();
+      if (!result.error) setNotifications(result.notifications);
+      setError(result.error);
+      hasLoadedRef.current = true;
+      setLoading(false);
+    })().finally(() => {
+      requestRef.current = null;
+    });
+
+    requestRef.current = request;
+    return request;
+  }, [enabled]);
 
   useEffect(() => {
+    if (!enabled) return;
     const initialLoadTimer = setTimeout(() => void reload(), 0);
     return () => clearTimeout(initialLoadTimer);
-  }, [reload]);
+  }, [enabled, reload]);
 
   useEffect(() => {
+    if (!enabled) return;
+
     let active = true;
     let cleanup: (() => void) | null = null;
 
@@ -59,29 +77,24 @@ export function useNotifications() {
       active = false;
       cleanup?.();
     };
-  }, [channelName, reload]);
+  }, [channelName, enabled, reload]);
 
   const unreadCount = useMemo(
     () => notifications.filter((notification) => !notification.isRead).length,
     [notifications],
   );
 
-  const setReadState = useCallback(async (
-    notificationId: string,
-    isRead: boolean,
-  ) => {
+  const setReadState = useCallback(async (notificationId: string, isRead: boolean) => {
     setNotifications((current) =>
       current.map((notification) =>
-        notification.id === notificationId
-          ? { ...notification, isRead }
-          : notification,
+        notification.id === notificationId ? { ...notification, isRead } : notification,
       ),
     );
 
     const updateError = await updateNotificationReadState(notificationId, isRead);
     if (updateError) {
       setError(updateError);
-      void reload();
+      await reload();
     }
   }, [reload]);
 
@@ -93,7 +106,7 @@ export function useNotifications() {
     const deleteError = await deleteNotification(notificationId);
     if (deleteError) {
       setError(deleteError);
-      void reload();
+      await reload();
     }
   }, [reload]);
 

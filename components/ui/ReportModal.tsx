@@ -5,9 +5,11 @@ import {
   View,
   Text,
   TouchableOpacity,
+  Pressable,
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, {
@@ -24,8 +26,8 @@ import LocationStep from '../report/LocationStep';
 import DetailsStep from '../report/DetailsStep';
 import AttachmentsStep from '../report/AttachmentsStep';
 import SuccessStep from '../report/SuccessStep';
-import ReportLocationPicker from '../report/ReportLocationPicker';
 import ReviewStep from '../report/ReviewStep';
+import ReportBarangayPicker from '../report/ReportBarangayPicker';
 
 type Props = {
   visible: boolean;
@@ -49,6 +51,12 @@ const STEP_NUMBERS: Record<Exclude<ReportStep, 'success'>, number> = {
 
 export default function ReportModal({ visible, onClose, onSubmitted }: Props) {
   const flow = useReportFlow(visible);
+  const { height, fontScale } = useWindowDimensions();
+
+  // Keep the larger, readable text usable on shorter screens and when the
+  // resident has selected a larger system text size.
+  const useCompactSpacing = height < 720 || fontScale > 1.15;
+  const [barangayPickerVisible, setBarangayPickerVisible] = React.useState(false);
 
   const submittedIdRef = React.useRef<string | null>(null);
 
@@ -64,6 +72,7 @@ export default function ReportModal({ visible, onClose, onSubmitted }: Props) {
           text: 'Discard report',
           style: 'destructive',
           onPress: () => {
+            setBarangayPickerVisible(false);
             flow.discardDraftMedia();
             onClose();
           },
@@ -73,6 +82,7 @@ export default function ReportModal({ visible, onClose, onSubmitted }: Props) {
   }, [flow, onClose]);
 
   const handleDone = useCallback(() => {
+    setBarangayPickerVisible(false);
     onClose();
     if (submittedIdRef.current) {
       const submittedReportId = submittedIdRef.current;
@@ -84,6 +94,9 @@ export default function ReportModal({ visible, onClose, onSubmitted }: Props) {
   const handleSubmit = useCallback(async () => {
     await flow.submit();
   }, [flow]);
+
+  const canDismissDeliveredReport =
+    flow.step === 'success' && flow.syncStatus === 'synced';
 
   // Capture the queued id so "Done" can navigate to the map afterwards.
   React.useEffect(() => {
@@ -102,20 +115,47 @@ export default function ReportModal({ visible, onClose, onSubmitted }: Props) {
       transparent
       presentationStyle="overFullScreen"
       animationType="fade"
-      // Only the visible X may request closing; Android's back button is ignored.
-      onRequestClose={() => {}}
+      onRequestClose={canDismissDeliveredReport ? handleDone : () => {}}
       statusBarTranslucent
     >
       <View style={styles.overlay}>
+        {canDismissDeliveredReport ? (
+          <Pressable
+            style={styles.overlayDismissArea}
+            onPress={handleDone}
+            accessibilityRole="button"
+            accessibilityLabel="Close sent report"
+          />
+        ) : null}
         <KeyboardAvoidingView
           style={styles.keyboardHost}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
-          <View style={styles.card}>
-            <View style={styles.headerContainer}>
-              <View style={styles.headerRow}>
+          <View style={[styles.card, useCompactSpacing && styles.cardCompact]}>
+            <View
+              style={[
+                styles.headerContainer,
+                useCompactSpacing && styles.headerContainerCompact,
+              ]}
+            >
+              <View
+                style={[
+                  styles.headerRow,
+                  useCompactSpacing && styles.headerRowCompact,
+                ]}
+              >
                 <Text style={styles.headerTitle}>Report incident</Text>
-                {flow.step !== 'success' ? (
+                {canDismissDeliveredReport ? (
+                  <TouchableOpacity
+                    style={styles.deliveredCloseButton}
+                    onPress={handleDone}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel="Close sent report"
+                  >
+                    <Ionicons name="close" size={25} color={reportColors.white} />
+                  </TouchableOpacity>
+                ) : flow.step !== 'success' ? (
                   <TouchableOpacity
                     onPress={requestClose}
                     hitSlop={8}
@@ -144,7 +184,12 @@ export default function ReportModal({ visible, onClose, onSubmitted }: Props) {
               ) : null}
             </View>
 
-            <View style={styles.contentPanel}>
+            <View
+              style={[
+                styles.contentPanel,
+                useCompactSpacing && styles.contentPanelCompact,
+              ]}
+            >
               <ScrollView
                 style={styles.stepHost}
                 contentContainerStyle={styles.stepHostContent}
@@ -152,36 +197,27 @@ export default function ReportModal({ visible, onClose, onSubmitted }: Props) {
                 showsVerticalScrollIndicator={false}
               >
                 <Animated.View
-                  key={`${flow.step}-${flow.locationPickerVisible ? 'adjusting' : 'standard'}`}
+                  key={flow.step}
                   entering={SlideInRight.duration(330)}
                   exiting={FadeOutLeft.duration(160)}
                 >
-                  {flow.step === 'location' &&
-                  flow.locationPickerVisible &&
-                  flow.position &&
-                  flow.devicePosition ? (
-                      <ReportLocationPicker
-                        embedded
-                        incidentPosition={flow.position}
-                        devicePosition={flow.devicePosition}
-                        maximumDistanceMeters={flow.maximumAdjustmentMeters}
-                        onConfirm={flow.confirmManualPosition}
-                        onClose={flow.closeLocationPicker}
-                      />
-                    ) : null}
-
-                  {flow.step === 'location' && !flow.locationPickerVisible && (
+                  {flow.step === 'location' && (
                     <LocationStep
                       loading={flow.locationLoading}
                       error={flow.locationError}
                       position={flow.position}
+                      devicePosition={flow.devicePosition}
                       address={flow.address}
                       needsConfirmation={flow.locationNeedsConfirmation}
                       accuracyMeters={flow.position?.accuracyMeters}
                       movedDistanceMeters={flow.movedDistanceMeters}
                       maximumDistanceMeters={flow.maximumAdjustmentMeters}
+                      adjustingPin={flow.locationPickerVisible}
                       onRetry={flow.retryLocation}
                       onConfirmOnMap={flow.openLocationPicker}
+                      onCancelPinAdjustment={flow.closeLocationPicker}
+                      onConfirmPinAdjustment={flow.confirmManualPosition}
+                      onOpenBarangayPicker={() => setBarangayPickerVisible(true)}
                       onContinue={flow.confirmLocation}
                       residentLayout
                     />
@@ -267,6 +303,17 @@ export default function ReportModal({ visible, onClose, onSubmitted }: Props) {
                 </Animated.View>
               </ScrollView>
             </View>
+
+            <ReportBarangayPicker
+              visible={barangayPickerVisible}
+              barangays={flow.barangays}
+              selectedBarangayId={flow.selectedBarangayId}
+              loading={flow.barangaysLoading}
+              error={flow.barangaysError}
+              onSelect={flow.setSelectedBarangayId}
+              onRetry={flow.retryBarangays}
+              onClose={() => setBarangayPickerVisible(false)}
+            />
           </View>
         </KeyboardAvoidingView>
       </View>

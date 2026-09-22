@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, {
@@ -20,14 +20,19 @@ type Props = {
   loading: boolean;
   error: string | null;
   position?: GpsPosition | null;
+  devicePosition?: GpsPosition | null;
   address?: ReadableAddress | null;
   /** Low-confidence GPS gets a clear warning but can use the bounded picker. */
   needsConfirmation?: boolean;
   accuracyMeters?: number | null;
   movedDistanceMeters?: number;
   maximumDistanceMeters?: number;
+  adjustingPin?: boolean;
   onRetry: () => void;
   onConfirmOnMap?: () => void;
+  onCancelPinAdjustment?: () => void;
+  onConfirmPinAdjustment?: (position: GpsPosition) => void;
+  onOpenBarangayPicker?: () => void;
   onContinue?: () => void;
   residentLayout?: boolean;
 };
@@ -76,18 +81,35 @@ export default function LocationStep({
   loading,
   error,
   position = null,
+  devicePosition = null,
   address = null,
   needsConfirmation = false,
   accuracyMeters = null,
   movedDistanceMeters = 0,
   maximumDistanceMeters = 150,
+  adjustingPin = false,
   onRetry,
   onConfirmOnMap,
+  onCancelPinAdjustment,
+  onConfirmPinAdjustment,
+  onOpenBarangayPicker,
   onContinue,
   residentLayout = false,
 }: Props) {
+  const [draftPosition, setDraftPosition] = useState<GpsPosition | null>(position);
   const showError = !loading && !position && Boolean(error);
   const locationReady = !loading && Boolean(position);
+
+  const startAdjustingPin = () => {
+    if (!position || !onConfirmOnMap) return;
+    setDraftPosition(position);
+    onConfirmOnMap();
+  };
+
+  const confirmAdjustedPin = () => {
+    if (!draftPosition || !onConfirmPinAdjustment) return;
+    onConfirmPinAdjustment(draftPosition);
+  };
 
   if (residentLayout) {
     return (
@@ -121,7 +143,18 @@ export default function LocationStep({
         ) : locationReady && position ? (
           <>
             <View style={styles.residentMapCard}>
-              <ReportMapPreview position={position} />
+              <ReportMapPreview
+                position={position}
+                referencePosition={devicePosition ?? position}
+                maximumDistanceMeters={maximumDistanceMeters}
+                adjusting={adjustingPin}
+                onPositionChange={(nextPosition) =>
+                  setDraftPosition({
+                    ...nextPosition,
+                    accuracyMeters: position.accuracyMeters,
+                  })
+                }
+              />
               <View style={styles.residentAccuracyPill}>
                 <Ionicons name="locate" size={15} color={reportColors.primary} />
                 <Text style={styles.residentAccuracyPillText}>
@@ -131,29 +164,50 @@ export default function LocationStep({
                 </Text>
               </View>
 
-              <TouchableOpacity
-                style={styles.residentAddressCard}
-                onPress={onConfirmOnMap}
-                activeOpacity={0.9}
-                accessibilityRole="button"
-                accessibilityLabel="Review incident address"
-              >
-                <View style={styles.residentAddressIcon}>
-                  <Ionicons name="location" size={29} color={reportColors.white} />
-                </View>
-                <View style={styles.residentAddressCopy}>
-                  <Text style={styles.residentAddressPrimary} numberOfLines={1}>
-                    {address?.barangay ?? 'Incident location'}
-                  </Text>
-                  <Text style={styles.residentAddressSecondary} numberOfLines={1}>
-                    {address ? `${address.municipality}, Cebu` : 'Location captured'}
-                  </Text>
-                </View>
-                <Ionicons name="chevron-forward" size={22} color={reportColors.primary} />
-              </TouchableOpacity>
+              {!adjustingPin ? (
+                <TouchableOpacity
+                  style={styles.residentAddressCard}
+                  onPress={onOpenBarangayPicker}
+                  activeOpacity={0.88}
+                  accessibilityRole="button"
+                  accessibilityLabel="Change incident barangay"
+                >
+                  <View style={styles.residentAddressIcon}>
+                    <Ionicons name="location" size={29} color={reportColors.white} />
+                  </View>
+                  <View style={styles.residentAddressCopy}>
+                    <Text style={styles.residentAddressPrimary} numberOfLines={1}>
+                      {address?.barangay ?? 'Incident location'}
+                    </Text>
+                    <Text style={styles.residentAddressSecondary} numberOfLines={1}>
+                      {address ? `${address.municipality}, Cebu` : 'Location captured'}
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={22} color={reportColors.primary} />
+                </TouchableOpacity>
+              ) : null}
             </View>
 
-            {needsConfirmation ? (
+            {adjustingPin ? (
+              <View style={styles.residentPinAdjustmentActions}>
+                <TouchableOpacity
+                  style={[styles.secondaryButton, styles.residentPinAdjustmentButton]}
+                  onPress={onCancelPinAdjustment}
+                  accessibilityRole="button"
+                  accessibilityLabel="Cancel pin adjustment"
+                >
+                  <Text style={styles.secondaryButtonText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.primaryButton, styles.residentPinAdjustmentButton]}
+                  onPress={confirmAdjustedPin}
+                  accessibilityRole="button"
+                  accessibilityLabel="Confirm adjusted incident pin"
+                >
+                  <Text style={styles.primaryButtonText}>Confirm pin</Text>
+                </TouchableOpacity>
+              </View>
+            ) : needsConfirmation ? (
               <View style={styles.residentInlineWarning}>
                 <Ionicons name="warning" size={16} color={reportColors.accent} />
                 <Text style={styles.residentInlineWarningText}>
@@ -162,9 +216,11 @@ export default function LocationStep({
               </View>
             ) : null}
 
+            {!adjustingPin ? (
+              <>
             <TouchableOpacity
               style={styles.residentAdjustButton}
-              onPress={onConfirmOnMap}
+              onPress={startAdjustingPin}
               accessibilityRole="button"
               accessibilityLabel="Adjust incident pin"
             >
@@ -185,6 +241,8 @@ export default function LocationStep({
             >
               <Text style={styles.primaryButtonText}>Confirm location</Text>
             </TouchableOpacity>
+              </>
+            ) : null}
           </>
         ) : (
           <View style={styles.residentLocationLoading}>
@@ -192,6 +250,7 @@ export default function LocationStep({
             <Text style={styles.locationHint}>Location is not available yet.</Text>
           </View>
         )}
+
       </View>
     );
   }

@@ -9,9 +9,14 @@ import {
 import { supabase } from '../lib/supabase';
 import { useRealtimeChannelName } from './useRealtimeChannelName';
 
-export function useAnnouncements(options?: { limit?: number; realtime?: boolean }) {
+export function useAnnouncements(options?: {
+  limit?: number;
+  realtime?: boolean;
+  staleTimeMs?: number;
+}) {
   const limit = options?.limit ?? 50;
   const realtime = options?.realtime ?? true;
+  const staleTimeMs = options?.staleTimeMs ?? 2 * 60_000;
   const [announcements, setAnnouncements] = useState<AnnouncementRecord[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -20,6 +25,8 @@ export function useAnnouncements(options?: { limit?: number; realtime?: boolean 
   const [hasMore, setHasMore] = useState(false);
   const announcementsRef = useRef<AnnouncementRecord[]>([]);
   const hasLoadedRef = useRef(false);
+  const lastLoadedAtRef = useRef(0);
+  const loadRequestRef = useRef<Promise<void> | null>(null);
 
   useEffect(() => {
     announcementsRef.current = announcements;
@@ -28,12 +35,24 @@ export function useAnnouncements(options?: { limit?: number; realtime?: boolean 
   const channelName = useRealtimeChannelName('announcements');
 
   const load = useCallback(async () => {
-    const result = await fetchRankedAnnouncements({ limit });
-    setAnnouncements(result.announcements);
-    setHasMore(result.announcements.length >= limit);
-    setError(result.error);
-    hasLoadedRef.current = true;
-    setLoading(false);
+    if (loadRequestRef.current) return loadRequestRef.current;
+
+    const request = (async () => {
+      const result = await fetchRankedAnnouncements({ limit });
+      setError(result.error);
+      hasLoadedRef.current = true;
+      setLoading(false);
+      if (result.error) return;
+
+      setAnnouncements(result.announcements);
+      setHasMore(result.announcements.length >= limit);
+      lastLoadedAtRef.current = Date.now();
+    })().finally(() => {
+      loadRequestRef.current = null;
+    });
+
+    loadRequestRef.current = request;
+    return request;
   }, [limit]);
 
   const loadMore = useCallback(async () => {
@@ -66,8 +85,9 @@ export function useAnnouncements(options?: { limit?: number; realtime?: boolean 
     useCallback(() => {
       // Preserve the current feed while checking for newer announcements.
       if (!hasLoadedRef.current) setLoading(true);
-      void load();
-    }, [load]),
+      const dataIsFresh = Date.now() - lastLoadedAtRef.current < staleTimeMs;
+      if (!dataIsFresh) void load();
+    }, [load, staleTimeMs]),
   );
 
   useEffect(() => {

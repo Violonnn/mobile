@@ -39,18 +39,17 @@ export const fontWeights = {
   extrabold: "800" as const,
 };
 
-// Sora — a clean, modern, geometric sans-serif. Minimalist and distinctive
-// (not the usual system font), and versatile enough for use across the app.
+// Inter is the shared UI font, matching the resident Home screen.
 // Each weight is registered as its own family name (Expo Google Fonts).
 export const fonts = {
-  regular: "Sora_400Regular",
-  medium: "Sora_500Medium",
-  semibold: "Sora_600SemiBold",
-  bold: "Sora_700Bold",
-  extrabold: "Sora_800ExtraBold",
-  // Condensed display face for escalation card titles — elongated, modern.
-  display: "BarlowCondensed_600SemiBold",
-  // Neutral UI face for home section titles — pairs with Sora without looking as heavy.
+  regular: "Inter_400Regular",
+  medium: "Inter_500Medium",
+  semibold: "Inter_600SemiBold",
+  bold: "Inter_700Bold",
+  extrabold: "Inter_800ExtraBold",
+  // Retained for specialized display styles while preserving the shared font.
+  display: "Inter_600SemiBold",
+  // Reusable section-title weight.
   section: "Inter_600SemiBold",
 };
 
