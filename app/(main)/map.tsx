@@ -11,6 +11,7 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { goBackOrReplace } from '../../lib/navigation';
 
 import InteractiveMap, {
   type MapFocusTarget,
@@ -511,7 +512,7 @@ export default function MapScreen() {
           {openedFromNotification ? (
             <TouchableOpacity
               style={[styles.notificationBackButton, { top: insets.top + 8 }]}
-              onPress={() => router.back()}
+              onPress={() => goBackOrReplace(router, '/(main)/home')}
               activeOpacity={0.82}
               accessibilityRole="button"
               accessibilityLabel="Back to notifications"

@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import { Alert, Keyboard } from 'react-native';
 import { useRouter } from 'expo-router';
+import { goBackOrReplace } from '../lib/navigation';
 import { loginOfficialWithPassword } from '../lib/officialLogin';
 
 /**
@@ -79,7 +80,7 @@ export function useOfficialLoginFlow() {
   }, [email, password, router, submitting]);
 
   const goBack = useCallback(() => {
-    router.back();
+    goBackOrReplace(router, '/(auth)/login');
     return true;
   }, [router]);
 

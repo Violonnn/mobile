@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Keyboard } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, type Href } from 'expo-router';
+import { goBackOrReplace } from '../lib/navigation';
 import {
   endResetSession,
   requestPasswordResetOtp,
@@ -23,6 +24,7 @@ import {
 export type ForgotStep = 0 | 1 | 2;
 
 type ForgotPasswordFlowOptions = {
+  fallbackRoute?: Href;
   initialPhone?: string;
 };
 
@@ -53,6 +55,7 @@ function localPhoneDigits(phone: string | undefined): string {
 
 export function useForgotPasswordFlow(options: ForgotPasswordFlowOptions = {}) {
   const router = useRouter();
+  const fallbackRoute = options.fallbackRoute ?? '/(auth)/login';
 
   const [step, setStep] = useState<ForgotStep>(0);
 
@@ -302,9 +305,9 @@ export function useForgotPasswordFlow(options: ForgotPasswordFlowOptions = {}) {
       endResetSession();
       hasResetSessionRef.current = false;
     }
-    router.back();
+    goBackOrReplace(router, fallbackRoute);
     return true;
-  }, [router, step]);
+  }, [fallbackRoute, router, step]);
 
   return {
     step,

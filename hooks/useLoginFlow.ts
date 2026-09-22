@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Alert, Keyboard } from 'react-native';
 import { useRouter, type Href } from 'expo-router';
 import { loginWithPin } from '../lib/login';
+import { goBackOrReplace } from '../lib/navigation';
 import { getSavedPhone, setSavedPhone } from '../lib/savedPhone';
 import {
   formatFullPHMobile,
@@ -116,7 +117,7 @@ export function useLoginFlow() {
   }, [e164Number, phoneDigits, pin, pinValid, router, submitting]);
 
   const goBack = useCallback(() => {
-    router.back();
+    goBackOrReplace(router, '/(auth)/login');
     return true;
   }, [router]);
 

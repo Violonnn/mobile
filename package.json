@@ -14,7 +14,7 @@
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --no-cache && deno lint --no-config supabase/functions",
-    "test:unit": "node --no-warnings --experimental-strip-types --test tests/mayorAnalytics.test.ts tests/reportLocation.test.ts tests/notificationDates.test.ts tests/communityReportFeed.test.ts tests/mediaPolicy.test.ts",
+    "test:unit": "node --no-warnings --experimental-strip-types --test tests/mayorAnalytics.test.ts tests/reportLocation.test.ts tests/notificationDates.test.ts tests/communityReportFeed.test.ts tests/mediaPolicy.test.ts tests/navigation.test.ts",
     "test": "npm run test:unit && npm run typecheck && npm run lint",
     "test:rls": "npx --yes supabase@latest test db"
   },

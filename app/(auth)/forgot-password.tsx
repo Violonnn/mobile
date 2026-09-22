@@ -62,6 +62,7 @@ export default function ForgotPasswordScreen() {
     submitReset,
     goBack,
   } = useForgotPasswordFlow({
+    fallbackRoute: openedFromSettings ? '/(main)/profile' : '/(auth)/login',
     initialPhone: typeof params.phone === 'string' ? params.phone : undefined,
   });
 

@@ -7,7 +7,6 @@ import {
   View,
   Text,
   TouchableOpacity,
-  ActivityIndicator,
   ScrollView,
   KeyboardAvoidingView,
   Platform,
@@ -18,6 +17,7 @@ import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { officialStyles as styles } from '../../styles/screens/official.styles';
 import { colors } from '../../styles/theme';
+import { goBackOrReplace } from '../../lib/navigation';
 import { OfficialShellSkeleton } from '../../components/ui/OfficialScreenSkeletons';
 import { useOfficialPortal } from '../../context/OfficialPortalContext';
 import LocationStep from '../../components/report/LocationStep';
@@ -103,7 +103,7 @@ export function OfficialReportForm({
       onClose();
       return;
     }
-    router.back();
+    goBackOrReplace(router, '/official/incidents');
   };
 
   const usedPhotoSlots = media.filter((m) => m.type === 'photo').length;

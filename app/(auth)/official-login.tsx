@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -24,7 +24,7 @@ import { loginColors, loginStyles as styles } from '../../styles/screens/login.s
 export default function OfficialLoginScreen() {
   const [emailFocused, setEmailFocused] = useState(false);
   const [passwordFocused, setPasswordFocused] = useState(false);
-  const sealTranslateY = useRef(new Animated.Value(-80)).current;
+  const [sealTranslateY] = useState(() => new Animated.Value(-80));
   const flow = useOfficialLoginFlow();
 
   useEffect(() => {

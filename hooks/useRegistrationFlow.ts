@@ -9,6 +9,7 @@ import {
   verifyRegistrationOtp,
 } from '../lib/registration';
 import { clearOtpSession, loadOtpSession, saveOtpSession } from '../lib/otpSession';
+import { goBackOrReplace } from '../lib/navigation';
 import { formatPhoneRegistrationError } from '../lib/registrationErrors';
 import { setSavedPhone } from '../lib/savedPhone';
 import {
@@ -354,7 +355,7 @@ export function useRegistrationFlow() {
       return true;
     }
 
-    router.back();
+    goBackOrReplace(router, '/(auth)/login');
     return true;
   }, [isComplete, router, step]);
 

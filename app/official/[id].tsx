@@ -22,6 +22,7 @@ import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { officialStyles as styles } from '../../styles/screens/official.styles';
 import { colors } from '../../styles/theme';
+import { goBackOrReplace } from '../../lib/navigation';
 import { OfficialShellSkeleton } from '../../components/ui/OfficialScreenSkeletons';
 import { useOfficialPortal } from '../../context/OfficialPortalContext';
 import { useOfficialReportDetail } from '../../hooks/useOfficialReports';
@@ -329,7 +330,7 @@ export default function OfficialReportDetailScreen() {
           <View style={styles.headerRow}>
             <TouchableOpacity
               style={styles.backButton}
-              onPress={() => router.back()}
+              onPress={() => goBackOrReplace(router, '/official/incidents')}
               accessibilityRole="button"
               accessibilityLabel="Back to queue"
             >
