@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
 import type { ImageSourcePropType } from 'react-native';
 import {
+    AccessibilityInfo,
     ActivityIndicator,
     Image,
     StyleSheet,
@@ -23,7 +24,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { hideNativeSplashOnce } from '../lib/nativeSplash';
-import { resolveSessionDestination } from '../lib/portalAccess';
+import { resolveSessionDestination, type PortalDestination } from '../lib/portalAccess';
 import { styles } from '../styles/screens/welcome.styles';
 import { colors } from '../styles/theme';
 
@@ -66,19 +67,23 @@ export default function WelcomeScreen() {
   const router = useRouter();
   const [loadingDone, setLoadingDone] = useState(false);
   const [phase, setPhase] = useState<'checking' | 'welcome'>('checking');
+  const [sessionDestination, setSessionDestination] = useState<PortalDestination | null | undefined>(undefined);
+  const [reduceMotionEnabled, setReduceMotionEnabled] = useState<boolean | null>(null);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const splashHiddenRef = useRef(false);
 
   const logoOpacity = useSharedValue(0);
-  const logoScale = useSharedValue(0.82);
-  const taglineOpacity = useSharedValue(0);
-  const taglineY = useSharedValue(10);
-  const lineWidth = useSharedValue(0);
-  const lineOpacity = useSharedValue(0);
+  const logoScale = useSharedValue(0.62);
+  const logoX = useSharedValue(0);
+  const logoRotation = useSharedValue(0);
+  const disasterOpacity = useSharedValue(0);
+  const disasterX = useSharedValue(96);
+  const linkOpacity = useSharedValue(0);
+  const linkX = useSharedValue(72);
   const overlayOpacity = useSharedValue(1);
   const visibleImageIndex = useSharedValue(0);
 
-  function onLoadingDone() {
+  function finishSplashAnimation() {
     setLoadingDone(true);
   }
 
@@ -87,17 +92,46 @@ export default function WelcomeScreen() {
 
     resolveSessionDestination().then((destination) => {
       if (!mounted) return;
-      if (destination) {
-        router.replace(destination);
-        return;
-      }
-      setPhase('welcome');
+      setSessionDestination(destination);
     });
 
     return () => {
       mounted = false;
     };
   }, [router]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    AccessibilityInfo.isReduceMotionEnabled()
+      .then((isEnabled) => {
+        if (mounted) setReduceMotionEnabled(isEnabled);
+      })
+      .catch(() => {
+        if (mounted) setReduceMotionEnabled(false);
+      });
+
+    const subscription = AccessibilityInfo.addEventListener(
+      'reduceMotionChanged',
+      setReduceMotionEnabled,
+    );
+
+    return () => {
+      mounted = false;
+      subscription.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!loadingDone || sessionDestination === undefined) return;
+
+    if (sessionDestination) {
+      router.replace(sessionDestination);
+      return;
+    }
+
+    setPhase('welcome');
+  }, [loadingDone, router, sessionDestination]);
 
   useEffect(() => {
     if (phase !== 'welcome') return;
@@ -113,22 +147,48 @@ export default function WelcomeScreen() {
   }, [activeImageIndex, phase, visibleImageIndex]);
 
   useEffect(() => {
-    logoOpacity.value = withTiming(1, { duration: 520, easing: Easing.out(Easing.cubic) });
-    logoScale.value = withSpring(1, { damping: 14, stiffness: 120 });
+    if (reduceMotionEnabled === null) return;
 
-    taglineOpacity.value = withDelay(400, withTiming(1, { duration: 400 }));
-    taglineY.value = withDelay(400, withSpring(0, { damping: 16, stiffness: 140 }));
+    if (reduceMotionEnabled) {
+      // Reduced Motion shows the finished logo without bouncing or spinning.
+      logoScale.value = 0.66;
+      logoX.value = -100;
+      logoRotation.value = 0;
+      disasterX.value = 0;
+      linkX.value = 0;
+      logoOpacity.value = withTiming(1, { duration: 260 });
+      disasterOpacity.value = withTiming(1, { duration: 260 });
+      linkOpacity.value = withTiming(1, { duration: 260 });
+      overlayOpacity.value = withDelay(
+        900,
+        withTiming(0, { duration: 220, easing: Easing.in(Easing.cubic) }, (finished) => {
+          if (finished) runOnJS(finishSplashAnimation)();
+        }),
+      );
+      return;
+    }
 
-    lineOpacity.value = withDelay(600, withTiming(1, { duration: 200 }));
-    lineWidth.value = withDelay(700, withTiming(1, { duration: 900, easing: Easing.inOut(Easing.cubic) }));
+    logoOpacity.value = withTiming(1, { duration: 180 });
+    // Keep the arrival visible while retaining the requested distant-to-near bounce.
+    logoScale.value = withSpring(1.05, { damping: 11, stiffness: 100, mass: 0.9 });
+
+    // After settling, the logo rotates gently into its final position on the left.
+    logoX.value = withDelay(900, withTiming(-100, { duration: 550, easing: Easing.inOut(Easing.cubic) }));
+    logoScale.value = withDelay(900, withTiming(0.66, { duration: 550, easing: Easing.inOut(Easing.cubic) }));
+    logoRotation.value = withDelay(900, withTiming(360, { duration: 550, easing: Easing.inOut(Easing.cubic) }));
+
+    disasterOpacity.value = withDelay(1450, withTiming(1, { duration: 380 }));
+    disasterX.value = withDelay(1450, withTiming(0, { duration: 500, easing: Easing.out(Easing.cubic) }));
+    linkOpacity.value = withDelay(1720, withTiming(1, { duration: 360 }));
+    linkX.value = withDelay(1720, withTiming(0, { duration: 480, easing: Easing.out(Easing.cubic) }));
 
     overlayOpacity.value = withDelay(
-      1800,
-      withTiming(0, { duration: 400, easing: Easing.in(Easing.cubic) }, (finished) => {
-        if (finished) runOnJS(onLoadingDone)();
+      2700,
+      withTiming(0, { duration: 300, easing: Easing.in(Easing.cubic) }, (finished) => {
+        if (finished) runOnJS(finishSplashAnimation)();
       }),
     );
-  }, []);
+  }, [reduceMotionEnabled]);
 
   function handleSplashOverlayReady() {
     if (splashHiddenRef.current) return;
@@ -138,17 +198,21 @@ export default function WelcomeScreen() {
 
   const logoStyle = useAnimatedStyle(() => ({
     opacity: logoOpacity.value,
-    transform: [{ scale: logoScale.value }],
+    transform: [
+      { translateX: logoX.value },
+      { rotate: `${logoRotation.value}deg` },
+      { scale: logoScale.value },
+    ],
   }));
 
-  const taglineStyle = useAnimatedStyle(() => ({
-    opacity: taglineOpacity.value,
-    transform: [{ translateY: taglineY.value }],
+  const disasterStyle = useAnimatedStyle(() => ({
+    opacity: disasterOpacity.value,
+    transform: [{ translateX: disasterX.value }],
   }));
 
-  const lineStyle = useAnimatedStyle(() => ({
-    opacity: lineOpacity.value,
-    width: lineWidth.value * 120,
+  const linkStyle = useAnimatedStyle(() => ({
+    opacity: linkOpacity.value,
+    transform: [{ translateX: linkX.value }],
   }));
 
   const overlayStyle = useAnimatedStyle(() => ({
@@ -246,22 +310,23 @@ export default function WelcomeScreen() {
           style={[splashStyles.overlay, overlayStyle]}
           onLayout={handleSplashOverlayReady}
         >
-          <View style={splashStyles.centerBlock}>
+          <View style={splashStyles.brandLockup}>
             <Animated.View style={logoStyle}>
               <Image
-                source={require('../assets/images/AppLogo.png')}
+                source={require('../assets/images/splash_iconDL-transparent.png')}
                 style={splashStyles.logo}
                 resizeMode="contain"
               />
             </Animated.View>
-            <Animated.Text style={[splashStyles.appName, taglineStyle]}>
-              DisasterLink
-            </Animated.Text>
-            <Animated.View style={[splashStyles.line, lineStyle]} />
+            <View style={splashStyles.wordmark}>
+              <Animated.Text style={[splashStyles.disasterText, disasterStyle]}>
+                DISASTER
+              </Animated.Text>
+              <Animated.Text style={[splashStyles.linkText, linkStyle]}>
+                L<Text style={splashStyles.linkI}>i</Text>NK
+              </Animated.Text>
+            </View>
           </View>
-          <Animated.Text style={[splashStyles.footer, taglineStyle]}>
-            Minglanilla Disaster and Risk Report
-          </Animated.Text>
         </Animated.View>
       )}
     </View>
@@ -271,37 +336,40 @@ export default function WelcomeScreen() {
 const splashStyles = StyleSheet.create({
   overlay: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: '#ffffff',
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  centerBlock: {
+  brandLockup: {
     alignItems: 'center',
-    gap: 12,
+    justifyContent: 'center',
+    height: 132,
+    width: '100%',
+  },
+  wordmark: {
+    position: 'absolute',
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    left: '50%',
+    marginLeft: -50,
   },
   logo: {
-    width: 88,
-    height: 88,
+    width: 124,
+    height: 124,
   },
-  appName: {
-    fontSize: 26,
+  disasterText: {
+    fontSize: 29,
     fontWeight: '800',
-    color: colors.text,
-    letterSpacing: -0.8,
+    color: '#123B79',
+    letterSpacing: -1.3,
   },
-  line: {
-    height: 3,
-    backgroundColor: '#1A56DB',
-    borderRadius: 999,
-    marginTop: 6,
+  linkText: {
+    fontSize: 29,
+    fontWeight: '800',
+    color: '#1599F2',
+    letterSpacing: -1.3,
   },
-  footer: {
-    position: 'absolute',
-    bottom: 48,
-    fontSize: 11,
-    fontWeight: '500',
-    color: '#6B7280',
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
+  linkI: {
+    color: '#D41545',
   },
 });
