@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import React, { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Animated,
   Alert,
   Image,
   Keyboard,
@@ -18,11 +19,14 @@ import {
   View,
 } from 'react-native';
 import FieldError from '../../components/register/FieldError';
+import LoginSplashTransition from '../../components/ui/LoginSplashTransition';
 import NumericKeyboardAccessory, { NUMERIC_ACCESSORY_ID } from '../../components/ui/NumericKeyboardAccessory';
 import { useLoginFlow } from '../../hooks/useLoginFlow';
 import { loginColors, loginStyles as styles } from '../../styles/screens/login.styles';
+import { fonts } from '../../styles/theme';
 
 const PIN_LENGTH = 6;
+const LOGIN_LOGO_SOURCE = require('../../assets/images/splash_iconDL-transparent.png');
 const PLACEHOLDER_DOTS = '······';
 
 export default function LoginScreen() {
@@ -31,8 +35,11 @@ export default function LoginScreen() {
   const [phoneFocused, setPhoneFocused] = useState(false);
   const [pinFocused, setPinFocused] = useState(false);
   const [pinVisible, setPinVisible] = useState(false);
-  const [swapPressed, setSwapPressed] = useState(false);
   const [signUpLoading, setSignUpLoading] = useState(false);
+  const [showLoginContent, setShowLoginContent] = useState(false);
+  const [loginContentOpacity] = useState(() => new Animated.Value(0));
+  const [loginLogoScale] = useState(() => new Animated.Value(1.2));
+  const [loginLogoTranslateY] = useState(() => new Animated.Value(-180));
 
   const {
     phoneDigits,
@@ -46,7 +53,6 @@ export default function LoginScreen() {
     clearPhoneForEdit,
     handlePinChange,
     submitLogin,
-    goBack,
     goToForgotPassword,
     goToRegister,
     goToOfficialLogin,
@@ -58,7 +64,7 @@ export default function LoginScreen() {
     }, []),
   );
 
-  function handleSwapPhonePress() {
+  function handleSavedPhonePress() {
     Alert.alert(
       'Change mobile number?',
       'Do you want to use a different mobile number? Your current number will be cleared.',
@@ -80,12 +86,45 @@ export default function LoginScreen() {
     goToRegister();
   }
 
+  function handlePinInputChange(text: string) {
+    if (text.length === 0) {
+      setPinVisible(false);
+    }
+
+    handlePinChange(text);
+  }
+
+  function handleSplashComplete() {
+    setShowLoginContent(true);
+    Animated.timing(loginContentOpacity, {
+      toValue: 1,
+      duration: 260,
+      useNativeDriver: true,
+    }).start();
+    // The login logo drops into its resting position after the splash logo exits.
+    Animated.parallel([
+      Animated.spring(loginLogoTranslateY, {
+        toValue: 0,
+        friction: 7,
+        tension: 75,
+        useNativeDriver: true,
+      }),
+      Animated.spring(loginLogoScale, {
+        toValue: 1,
+        friction: 7,
+        tension: 75,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }
+
   const pinDisplayText =
     pin.length === 0 ? PLACEHOLDER_DOTS : pinVisible ? pin : '•'.repeat(pin.length);
 
   return (
     <View style={styles.container}>
-      <StatusBar style="light" />
+      <StatusBar style="dark" />
+      {!showLoginContent && <LoginSplashTransition onComplete={handleSplashComplete} />}
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -98,38 +137,38 @@ export default function LoginScreen() {
             showsVerticalScrollIndicator={false}
             bounces={false}
           >
-            {/* ── Hero image with overlay ── */}
-            <View style={styles.heroWrapper}>
-              <Image
-                source={require('../../assets/images/loginHeader.png')}
-                style={styles.heroImage}
-                resizeMode="cover"
-              />
-              <View style={styles.heroOverlay}>
-                <Text style={styles.heroBrandText}>DisasterLink</Text>
-              </View>
-            </View>
-
-            {/* ── Back button overlaying the hero ── */}
-            <TouchableOpacity style={styles.backButton} onPress={goBack} activeOpacity={0.8}>
-              <Ionicons name="chevron-back" size={18} color={loginColors.white} />
-            </TouchableOpacity>
-
             {/* ── Content section ── */}
-            <View style={styles.content}>
-              <Text style={styles.sectionLabel}>Resident Login</Text>
-              <Text style={styles.headline}>Welcome back.</Text>
-              <Text style={styles.subtitle}>Enter your mobile number and PIN.</Text>
+            <Animated.View
+              pointerEvents={showLoginContent ? 'auto' : 'none'}
+              style={[styles.loginContentShell, { opacity: loginContentOpacity }]}
+            >
+              <View style={styles.loginMainContent}>
+              <Animated.View
+                style={[
+                  styles.loginLogoWrap,
+                  { transform: [{ translateY: loginLogoTranslateY }, { scale: loginLogoScale }] },
+                ]}
+              >
+                <Image source={LOGIN_LOGO_SOURCE} style={styles.loginLogo} resizeMode="contain" />
+              </Animated.View>
+              <View style={styles.content}>
+                <Text style={styles.sectionLabel}>Welcome back</Text>
+                <Text style={styles.headline}>
+                  Login to <Text style={styles.headlineAccent}>your</Text> account
+                </Text>
 
               {/* ── Mobile number field ── */}
               <View style={styles.fieldWrap}>
-                <Text style={styles.fieldLabel}>Mobile number</Text>
-                <View
+                <Pressable
                   style={[
                     styles.fieldRow,
                     !phoneLocked && phoneFocused && styles.fieldRowFocused,
                     !!phoneError && styles.fieldRowError,
                   ]}
+                  onPress={handleSavedPhonePress}
+                  disabled={!phoneLocked || !hasSavedPhone}
+                  accessibilityRole={phoneLocked && hasSavedPhone ? 'button' : undefined}
+                  accessibilityLabel={phoneLocked && hasSavedPhone ? 'Change saved mobile number' : undefined}
                 >
                   <View style={styles.phonePrefixBox}>
                     <Text style={styles.phonePrefixText}>+63</Text>
@@ -161,33 +200,13 @@ export default function LoginScreen() {
                       inputAccessoryViewID={NUMERIC_ACCESSORY_ID}
                     />
                   )}
-                  {hasSavedPhone && phoneLocked && (
-                    <Pressable
-                      style={[
-                        styles.phoneSwapIconBtn,
-                        swapPressed && styles.phoneSwapIconBtnPressed,
-                      ]}
-                      onPress={handleSwapPhonePress}
-                      onPressIn={() => setSwapPressed(true)}
-                      onPressOut={() => setSwapPressed(false)}
-                      hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                      accessibilityLabel="Change saved mobile number"
-                    >
-                      <Ionicons
-                        name="swap-horizontal"
-                        size={18}
-                        color={swapPressed ? loginColors.primary : loginColors.textLight}
-                      />
-                    </Pressable>
-                  )}
-                </View>
+                </Pressable>
               </View>
 
-              {!!phoneError && <FieldError message={phoneError} />}
+              {!!phoneError && <FieldError message={phoneError} textStyle={styles.fieldErrorText} />}
 
               {/* ── PIN field ── */}
               <View style={styles.fieldWrap}>
-                <Text style={styles.fieldLabel}>6-digit PIN</Text>
                 <View
                   style={[
                     styles.fieldRow,
@@ -212,7 +231,7 @@ export default function LoginScreen() {
                       ref={pinRef}
                       style={styles.pinHiddenInput}
                       value={pin}
-                      onChangeText={handlePinChange}
+                      onChangeText={handlePinInputChange}
                       onFocus={() => setPinFocused(true)}
                       onBlur={() => setPinFocused(false)}
                       keyboardType="number-pad"
@@ -226,20 +245,23 @@ export default function LoginScreen() {
                       onSubmitEditing={submitLogin}
                     />
                   </Pressable>
-                  <TouchableOpacity
-                    onPress={() => setPinVisible((prev) => !prev)}
-                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                  >
-                    <Ionicons
-                      name={pinVisible ? 'eye-off-outline' : 'eye-outline'}
-                      size={20}
-                      color="#9CA3AF"
-                    />
-                  </TouchableOpacity>
+                  {pin.length > 0 && (
+                    <TouchableOpacity
+                      onPress={() => setPinVisible((prev) => !prev)}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      accessibilityLabel={pinVisible ? 'Hide PIN' : 'Show PIN'}
+                    >
+                      <Ionicons
+                        name={pinVisible ? 'eye-off-outline' : 'eye-outline'}
+                        size={20}
+                        color="#9CA3AF"
+                      />
+                    </TouchableOpacity>
+                  )}
                 </View>
               </View>
 
-              {!!pinError && <FieldError message={pinError} />}
+              {!!pinError && <FieldError message={pinError} textStyle={styles.fieldErrorText} />}
 
               {/* ── Forgot PIN ── */}
               <TouchableOpacity
@@ -260,12 +282,7 @@ export default function LoginScreen() {
                 {submitting ? (
                   <ActivityIndicator color={loginColors.white} />
                 ) : (
-                  <>
-                    <Text style={styles.loginButtonText}>Log in</Text>
-                    <View style={styles.loginButtonArrow}>
-                      <Ionicons name="arrow-forward" size={18} color={loginColors.white} />
-                    </View>
-                  </>
+                  <Text style={styles.loginButtonText}>Sign in</Text>
                 )}
               </TouchableOpacity>
 
@@ -280,44 +297,35 @@ export default function LoginScreen() {
                   <ActivityIndicator color={loginColors.primary} />
                 ) : (
                   <>
-                    <Text style={styles.signUpPrompt}>New here?</Text>
-                    <Text style={styles.signUpLink}>Create account</Text>
+                    <Text style={styles.signUpPrompt}>Don&apos;t have an account?</Text>
+                    <Text style={styles.signUpLink}>Sign up</Text>
                   </>
                 )}
               </TouchableOpacity>
 
               {/* ── Official access (preserved from current design) ── */}
+              </View>
+              </View>
               <TouchableOpacity
                 style={styles.officialSection}
                 onPress={goToOfficialLogin}
                 activeOpacity={0.7}
               >
                 <View style={styles.officialLoginContent}>
-                  <Image
-                    source={require('../../assets/images/mingla.png')}
-                    style={styles.officialLoginLogo}
-                    resizeMode="cover"
+                  <Text style={styles.officialLoginTitle}>Official Access</Text>
+                  <Ionicons
+                    name="arrow-forward"
+                    size={18}
+                    color={loginColors.text}
+                    style={styles.officialLoginArrow}
                   />
-                  <View style={styles.officialLoginTextGroup}>
-                    <View style={styles.officialLoginTitleRow}>
-                      <Text style={styles.officialLoginTitle}>Official Access</Text>
-                      <Ionicons
-                        name="arrow-forward"
-                        size={17}
-                        color={loginColors.text}
-                      />
-                    </View>
-                    <Text style={styles.officialLoginSubtitle}>
-                      Authorized government personnel only
-                    </Text>
-                  </View>
                 </View>
               </TouchableOpacity>
-            </View>
+            </Animated.View>
           </ScrollView>
         </TouchableWithoutFeedback>
 
-        <NumericKeyboardAccessory />
+        <NumericKeyboardAccessory doneTextStyle={{ fontFamily: fonts.semibold }} />
       </KeyboardAvoidingView>
     </View>
   );

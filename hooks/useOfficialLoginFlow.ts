@@ -29,6 +29,10 @@ export function useOfficialLoginFlow() {
   const handlePasswordChange = useCallback((text: string) => {
     setPasswordError('');
     setFormError('');
+    // Match the resident PIN field: an empty credential is always concealed.
+    if (text.length === 0) {
+      setShowPassword(false);
+    }
     setPassword(text);
   }, []);
 

@@ -2,8 +2,6 @@ import { StyleSheet } from 'react-native';
 import { colors, fonts, fontSizes, radius, spacing } from '../theme';
 import { layout, scaleByWidth } from '../../lib/layout';
 
-const HERO_HEIGHT_RATIO = layout.isSmallScreen ? 0.22 : 0.28;
-
 export const loginColors = {
   background: colors.background,
   white: '#ffffff',
@@ -15,6 +13,9 @@ export const loginColors = {
   grayMuted: '#BCC5D3',
   error: '#EF4444',
   primary: colors.primary,
+  logoSkyBlue: '#009EF9',
+  headlineAccent: '#C71246',
+  signInButton: '#042C5C',
   inputBg: '#F5F6F8',
   inputBorder: '#E5E7EB',
 };
@@ -29,53 +30,31 @@ export const loginStyles = StyleSheet.create({
     flexGrow: 1,
   },
 
-  /* ── Hero image section ── */
-  heroWrapper: {
-    width: '100%',
-    height: layout.screenHeight * HERO_HEIGHT_RATIO,
-    overflow: 'hidden',
-  },
-  heroImage: {
-    width: '100%',
-    height: '100%',
-  },
-  heroOverlay: {
-    ...StyleSheet.absoluteFill,
+  loginLogoWrap: {
     alignItems: 'center',
-    justifyContent: 'flex-start',
-    paddingTop: spacing.xxl,
+    paddingTop: layout.isSmallScreen ? spacing.lg : spacing.xl,
   },
-  heroBrandText: {
-    fontFamily: fonts.medium,
-    fontSize: scaleByWidth(20),
-    color: colors.white,
-    letterSpacing: 0.5,
+  loginLogo: {
+    height: layout.isSmallScreen ? 120 : 152,
+    width: layout.isSmallScreen ? 120 : 152,
   },
-
-  /* ── Back button ── */
-  backButton: {
-    position: 'absolute',
-    top: spacing.xxl,
-    left: spacing.md,
-    zIndex: 10,
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: 'rgba(15,32,68,0.55)',
-    alignItems: 'center',
+  loginContentShell: {
+    flex: 1,
+  },
+  loginMainContent: {
+    flex: 1,
     justifyContent: 'center',
   },
 
-  /* ── Content section below the hero ── */
+  /* ── Login content ── */
   content: {
-    flex: 1,
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.md,
     paddingBottom: spacing.sm,
   },
   sectionLabel: {
     fontFamily: fonts.medium,
-    fontSize: fontSizes.sm,
+    fontSize: fontSizes.md,
     color: loginColors.textMuted,
     marginBottom: spacing.xs,
   },
@@ -85,16 +64,11 @@ export const loginStyles = StyleSheet.create({
     color: loginColors.text,
     letterSpacing: -0.8,
     lineHeight: scaleByWidth(36),
-  },
-  subtitle: {
-    fontFamily: fonts.regular,
-    fontSize: fontSizes.md,
-    color: loginColors.textMuted,
-    lineHeight: 22,
-    marginTop: spacing.xs,
     marginBottom: layout.isSmallScreen ? spacing.sm : spacing.md,
   },
-
+  headlineAccent: {
+    color: loginColors.headlineAccent,
+  },
   /* ── Field styling ── */
   fieldWrap: {
     width: '100%',
@@ -105,6 +79,9 @@ export const loginStyles = StyleSheet.create({
     fontSize: fontSizes.sm,
     color: loginColors.textMuted,
     marginBottom: spacing.xs,
+  },
+  fieldErrorText: {
+    fontFamily: fonts.regular,
   },
   fieldRow: {
     flexDirection: 'row',
@@ -162,20 +139,6 @@ export const loginStyles = StyleSheet.create({
     alignSelf: 'stretch',
     justifyContent: 'center',
   },
-  phoneSwapIconBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#F3F4F6',
-  },
-  phoneSwapIconBtnPressed: {
-    backgroundColor: '#EEF2FF',
-    borderWidth: 1.5,
-    borderColor: loginColors.primary,
-  },
-
   /* ── PIN field ── */
   pinIconBox: {
     paddingRight: spacing.sm,
@@ -218,15 +181,15 @@ export const loginStyles = StyleSheet.create({
   forgotPinText: {
     fontFamily: fonts.semibold,
     fontSize: fontSizes.sm,
-    color: loginColors.primary,
+    color: loginColors.logoSkyBlue,
   },
 
   /* ── Login button (pill with arrow) ── */
   loginButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: loginColors.text,
+    justifyContent: 'center',
+    backgroundColor: loginColors.signInButton,
     borderRadius: radius.md,
     paddingVertical: spacing.sm + 4,
     paddingLeft: spacing.lg,
@@ -239,19 +202,10 @@ export const loginStyles = StyleSheet.create({
   },
   loginButtonText: {
     fontFamily: fonts.semibold,
-    fontSize: fontSizes.lg,
+    fontSize: fontSizes.xl,
     color: loginColors.white,
     letterSpacing: 0.2,
   },
-  loginButtonArrow: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
   /* ── Sign up row ── */
   signUpRow: {
     flexDirection: 'row',
@@ -268,52 +222,29 @@ export const loginStyles = StyleSheet.create({
   signUpLink: {
     fontFamily: fonts.semibold,
     fontSize: fontSizes.md,
-    color: loginColors.primary,
+    color: loginColors.logoSkyBlue,
   },
 
   /* ── Official login section (preserved from current design) ── */
   officialSection: {
-    alignItems: 'center',
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.sm,
-    marginTop: layout.isSmallScreen ? spacing.md : spacing.lg,
-    borderTopWidth: 1,
-    borderTopColor: loginColors.grayLight,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    paddingBottom: layout.isSmallScreen ? spacing.md : spacing.lg,
+    width: '100%',
   },
   officialLoginContent: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-  },
-  officialLoginLogo: {
-    width: layout.isSmallScreen ? 56 : 76,
-    height: layout.isSmallScreen ? 56 : 76,
-    borderRadius: layout.isSmallScreen ? 28 : 38,
-  },
-  officialLoginTextGroup: {
-    alignItems: 'center',
-    flexShrink: 1,
-  },
-  officialLoginTitleRow: {
+    alignSelf: 'center',
     alignItems: 'center',
     flexDirection: 'row',
-    gap: 4,
-    justifyContent: 'center',
+    paddingVertical: spacing.sm,
   },
   officialLoginTitle: {
-    fontFamily: fonts.bold,
+    fontFamily: fonts.semibold,
     color: loginColors.text,
     fontSize: fontSizes.lg,
-    letterSpacing: 0.4,
-    lineHeight: 22,
-    textAlign: 'center',
+    letterSpacing: 0.2,
   },
-  officialLoginSubtitle: {
-    fontFamily: fonts.regular,
-    color: loginColors.textLight,
-    fontSize: fontSizes.md,
-    lineHeight: 20,
-    marginTop: spacing.xs,
-    textAlign: 'center',
+  officialLoginArrow: {
+    marginLeft: spacing.sm,
   },
 });

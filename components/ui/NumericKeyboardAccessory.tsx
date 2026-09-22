@@ -7,19 +7,27 @@ import {
   Text,
   View,
   StyleSheet,
+  StyleProp,
+  TextStyle,
 } from 'react-native';
 import { registerColors } from '../../styles/screens/register.styles';
 
 export const NUMERIC_ACCESSORY_ID = 'numeric-keyboard-done';
 
-export default function NumericKeyboardAccessory() {
+type NumericKeyboardAccessoryProps = {
+  doneTextStyle?: StyleProp<TextStyle>;
+};
+
+export default function NumericKeyboardAccessory({
+  doneTextStyle,
+}: NumericKeyboardAccessoryProps) {
   if (Platform.OS !== 'ios') return null;
 
   return (
     <InputAccessoryView nativeID={NUMERIC_ACCESSORY_ID}>
       <View style={styles.bar}>
         <TouchableOpacity onPress={Keyboard.dismiss} hitSlop={{ top: 8, bottom: 8, left: 16, right: 16 }}>
-          <Text style={styles.doneText}>Done</Text>
+          <Text style={[styles.doneText, doneTextStyle]}>Done</Text>
         </TouchableOpacity>
       </View>
     </InputAccessoryView>
