@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { isDemoAuthEnabled } from './demoAuth';
 
 const SAVED_PHONE_KEY = 'disasterlink_saved_phone';
 
@@ -12,6 +13,8 @@ export async function getSavedPhone(): Promise<string | null> {
 }
 
 export async function setSavedPhone(digits: string): Promise<void> {
+  if (isDemoAuthEnabled()) return;
+
   try {
     const trimmed = digits.trim();
     if (!trimmed) {

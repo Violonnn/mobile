@@ -17,6 +17,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import FieldError from '../../components/register/FieldError';
+import LoginSafetyCarousel from '../../components/ui/LoginSafetyCarousel';
 import { useOfficialLoginFlow } from '../../hooks/useOfficialLoginFlow';
 import { loginColors, loginStyles as styles } from '../../styles/screens/login.styles';
 
@@ -46,8 +47,14 @@ export default function OfficialLoginScreen() {
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <TouchableOpacity style={localStyles.backButton} onPress={flow.goBack} activeOpacity={0.8}>
-          <Text style={localStyles.backButtonText}>{'‹'}</Text>
+        <TouchableOpacity
+          style={localStyles.backButton}
+          onPress={flow.goBack}
+          activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+        >
+          <Ionicons name="arrow-back" size={24} color={loginColors.text} />
         </TouchableOpacity>
 
         <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
@@ -174,6 +181,9 @@ export default function OfficialLoginScreen() {
                     <Text style={styles.loginButtonText}>Sign in</Text>
                   )}
                 </TouchableOpacity>
+
+                <LoginSafetyCarousel />
+
               </View>
             </View>
           </ScrollView>
@@ -189,18 +199,10 @@ const localStyles = StyleSheet.create({
     top: 8,
     left: 16,
     zIndex: 10,
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: 'rgba(15,32,68,0.55)',
-    alignItems: 'center',
+    width: 40,
+    height: 44,
+    alignItems: 'flex-start',
     justifyContent: 'center',
-  },
-  backButtonText: {
-    color: loginColors.white,
-    fontSize: 24,
-    lineHeight: 26,
-    marginTop: -2,
   },
   loginMainContent: {
     flex: 1,

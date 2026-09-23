@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -6,33 +6,39 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
-  Image,
   Keyboard,
+  Image,
+  StyleSheet,
   TouchableWithoutFeedback,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { responsiveImageHeight } from '../../lib/layout';
+import { useLocalSearchParams } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { useRegistrationFlow } from '../../hooks/useRegistrationFlow';
+import { getRegistrationPreview, type RegistrationPreviewName } from '../../lib/authPreview';
 import { useRegistrationBackHandler } from '../../hooks/useRegistrationBackHandler';
-import { RegistrationStep } from '../../types/registration';
-import { registerStyles as styles } from '../../styles/screens/register.styles';
+import { registerColors, registerStyles as styles } from '../../styles/screens/register.styles';
+import { colors, fonts, spacing } from '../../styles/theme';
 import Stepper from '../../components/register/Stepper';
 import PhoneStep from '../../components/register/PhoneStep';
 import OTPStep from '../../components/register/OTPStep';
 import DetailsStep from '../../components/register/DetailsStep';
 import PINStep from '../../components/register/PINStep';
 
-const STEP_IMAGES: Record<RegistrationStep, number> = {
-  0: require('../../assets/images/inputPhone.png'),
-  1: require('../../assets/images/inputVerify.png'),
-  2: require('../../assets/images/inputDetails.png'),
-  3: require('../../assets/images/inputPIN.png'),
-};
+const REGISTRATION_LOGO_SOURCE = require('../../assets/images/splash_iconDL-transparent.png');
 
 export default function RegisterScreen() {
-  const [phoneFocused, setPhoneFocused] = useState(false);
+  const params = useLocalSearchParams<{ preview?: RegistrationPreviewName }>();
+  const preview = typeof params.preview === 'string' ? params.preview as RegistrationPreviewName : undefined;
 
-  const flow = useRegistrationFlow();
+  return <RegisterFlowScreen key={preview ?? 'live'} preview={preview} />;
+}
+
+function RegisterFlowScreen({ preview }: { preview?: RegistrationPreviewName }) {
+  const [phoneFocused, setPhoneFocused] = useState(false);
+  const [timelineDirection, setTimelineDirection] = useState<'forward' | 'backward'>('forward');
+
+  const flow = useRegistrationFlow(getRegistrationPreview(preview));
   const {
     step,
     isComplete,
@@ -67,24 +73,37 @@ export default function RegisterScreen() {
     completeRegistration,
   } = flow;
 
+  const handleStepBack = useCallback(() => {
+    setTimelineDirection('backward');
+    return goBack();
+  }, [goBack]);
+
+  function runForwardStep(action: () => void | Promise<void>) {
+    setTimelineDirection('forward');
+    return action();
+  }
+
   // Android hardware back uses the same logic as the on-screen back button.
-  useRegistrationBackHandler(goBack, !isComplete);
+  useRegistrationBackHandler(handleStepBack, !isComplete);
 
   const isDetailsStep = step === 2;
   const isPinStep = step === 3;
-  const imageHeight = responsiveImageHeight(isDetailsStep ? 0.2 : 0.22);
-
   const header = (
     <>
-      <Text style={styles.screenTitle}>Registration</Text>
-      <View style={[styles.imageContainer, { height: imageHeight }]}>
-        <Image
-          source={STEP_IMAGES[step]}
-          style={styles.imagePlaceholder}
-          resizeMode="contain"
-        />
+      <View style={localStyles.brandHeader}>
+        <Image source={REGISTRATION_LOGO_SOURCE} style={localStyles.brandLogo} resizeMode="contain" />
+        <View style={localStyles.wordmark}>
+          <Text style={localStyles.disasterText}>DISASTER</Text>
+          <Text style={localStyles.linkText}>
+            L<Text style={localStyles.linkI}>i</Text>NK
+          </Text>
+        </View>
       </View>
-      <Stepper current={step} />
+      <Stepper
+        current={step}
+        direction={timelineDirection}
+        hasPhoneInput={phoneDigits.length > 0}
+      />
     </>
   );
 
@@ -97,8 +116,8 @@ export default function RegisterScreen() {
           phoneFocused={phoneFocused}
           onFocus={() => setPhoneFocused(true)}
           onBlur={() => setPhoneFocused(false)}
-          onSubmit={handleGetOTP}
-          onContinueVerification={continueToOtpVerification}
+          onSubmit={() => runForwardStep(handleGetOTP)}
+          onContinueVerification={() => runForwardStep(continueToOtpVerification)}
           isValid={phoneValidation.valid}
           sendingOTP={sendingOTP}
           resendCooldown={resendCooldown}
@@ -119,14 +138,14 @@ export default function RegisterScreen() {
           sendingOTP={sendingOTP}
           verifyingOTP={verifyingOTP}
           onResend={handleResend}
-          onVerify={verifyOTP}
+          onVerify={() => runForwardStep(verifyOTP)}
         />
       )}
       {step === 2 && (
         <DetailsStep
           details={details}
           onUpdateDetails={updateDetails}
-          onSubmit={goToDetailsNext}
+          onSubmit={() => runForwardStep(goToDetailsNext)}
         />
       )}
       {step === 3 && (
@@ -143,13 +162,6 @@ export default function RegisterScreen() {
     </View>
   );
 
-  const centeredBody = (
-    <View style={styles.centeredBlock}>
-      {header}
-      {stepContent}
-    </View>
-  );
-
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <KeyboardAvoidingView
@@ -157,29 +169,56 @@ export default function RegisterScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}
       >
-        <TouchableOpacity style={styles.backButton} onPress={goBack} activeOpacity={0.8}>
-          <Text style={styles.backButtonText}>‹</Text>
+        <TouchableOpacity
+          style={localStyles.backButton}
+          onPress={handleStepBack}
+          activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+        >
+          <Ionicons name="arrow-back" size={24} color={registerColors.text} />
         </TouchableOpacity>
 
-        {isDetailsStep || isPinStep ? (
+        {isDetailsStep ? (
+          <>
+            <View style={localStyles.registrationHeader}>{header}</View>
+            <ScrollView
+              style={localStyles.stepScrollView}
+              contentContainerStyle={styles.scrollContent}
+              keyboardShouldPersistTaps="always"
+              showsVerticalScrollIndicator={false}
+              keyboardDismissMode="on-drag"
+            >
+              {stepContent}
+            </ScrollView>
+          </>
+        ) : isPinStep ? (
           <ScrollView
-            contentContainerStyle={isDetailsStep ? styles.scrollContent : styles.fixedScrollContent}
+            style={localStyles.stepScrollView}
+            contentContainerStyle={localStyles.centeredStepContent}
             keyboardShouldPersistTaps="always"
             showsVerticalScrollIndicator={false}
             keyboardDismissMode="on-drag"
           >
-            {centeredBody}
+            <View style={localStyles.centeredRegistrationFlow}>
+              <View style={localStyles.registrationHeader}>{header}</View>
+              {stepContent}
+            </View>
           </ScrollView>
         ) : (
           <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
             <ScrollView
-              contentContainerStyle={styles.fixedScrollContent}
+              style={localStyles.stepScrollView}
+              contentContainerStyle={localStyles.centeredStepContent}
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
               bounces={false}
               scrollEnabled={false}
             >
-              {centeredBody}
+              <View style={localStyles.centeredRegistrationFlow}>
+                <View style={localStyles.registrationHeader}>{header}</View>
+                {stepContent}
+              </View>
             </ScrollView>
           </TouchableWithoutFeedback>
         )}
@@ -187,3 +226,64 @@ export default function RegisterScreen() {
     </SafeAreaView>
   );
 }
+
+const localStyles = StyleSheet.create({
+  // Mirrors the official-login back control for consistent entry-screen navigation.
+  backButton: {
+    position: 'absolute',
+    top: 8,
+    left: 16,
+    zIndex: 10,
+    width: 40,
+    height: 44,
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+  },
+  registrationHeader: {
+    flexShrink: 0,
+    // Reserve the top row for the back button before the brand and timeline begin.
+    paddingTop: 48,
+  },
+  stepScrollView: {
+    flex: 1,
+  },
+  centeredStepContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    paddingBottom: spacing.md,
+  },
+  centeredRegistrationFlow: {
+    width: '100%',
+  },
+  brandHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'center',
+    marginTop: 12,
+    marginBottom: 4,
+  },
+  brandLogo: {
+    width: 42,
+    height: 42,
+    marginRight: 8,
+  },
+  wordmark: {
+    flexDirection: 'row',
+  },
+  disasterText: {
+    color: colors.navigationActive,
+    fontFamily: fonts.extrabold,
+    fontSize: 22,
+    letterSpacing: -0.8,
+  },
+  linkText: {
+    color: '#009EF9',
+    fontFamily: fonts.extrabold,
+    fontSize: 22,
+    letterSpacing: -0.8,
+  },
+  linkI: {
+    color: '#D71945',
+    fontFamily: fonts.extrabold,
+  },
+});

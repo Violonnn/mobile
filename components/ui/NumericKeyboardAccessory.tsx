@@ -13,18 +13,21 @@ import {
 import { registerColors } from '../../styles/screens/register.styles';
 
 export const NUMERIC_ACCESSORY_ID = 'numeric-keyboard-done';
+export const LOGIN_NUMERIC_ACCESSORY_ID = 'login-numeric-keyboard-done';
 
 type NumericKeyboardAccessoryProps = {
   doneTextStyle?: StyleProp<TextStyle>;
+  accessoryID?: string;
 };
 
 export default function NumericKeyboardAccessory({
   doneTextStyle,
+  accessoryID = NUMERIC_ACCESSORY_ID,
 }: NumericKeyboardAccessoryProps) {
   if (Platform.OS !== 'ios') return null;
 
   return (
-    <InputAccessoryView nativeID={NUMERIC_ACCESSORY_ID}>
+    <InputAccessoryView nativeID={accessoryID}>
       <View style={styles.bar}>
         <TouchableOpacity onPress={Keyboard.dismiss} hitSlop={{ top: 8, bottom: 8, left: 16, right: 16 }}>
           <Text style={[styles.doneText, doneTextStyle]}>Done</Text>

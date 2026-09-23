@@ -19,8 +19,11 @@ import {
   View,
 } from 'react-native';
 import FieldError from '../../components/register/FieldError';
+import DemoAuthBanner from '../../components/auth/DemoAuthBanner';
 import LoginSplashTransition from '../../components/ui/LoginSplashTransition';
-import NumericKeyboardAccessory, { NUMERIC_ACCESSORY_ID } from '../../components/ui/NumericKeyboardAccessory';
+import NumericKeyboardAccessory, {
+  LOGIN_NUMERIC_ACCESSORY_ID,
+} from '../../components/ui/NumericKeyboardAccessory';
 import { useLoginFlow } from '../../hooks/useLoginFlow';
 import { loginColors, loginStyles as styles } from '../../styles/screens/login.styles';
 import { fonts } from '../../styles/theme';
@@ -83,6 +86,7 @@ export default function LoginScreen() {
 
   function handleSignUp() {
     setSignUpLoading(true);
+    Keyboard.dismiss();
     goToRegister();
   }
 
@@ -124,6 +128,7 @@ export default function LoginScreen() {
   return (
     <View style={styles.container}>
       <StatusBar style="dark" />
+      <DemoAuthBanner />
       {!showLoginContent && <LoginSplashTransition onComplete={handleSplashComplete} />}
       <KeyboardAvoidingView
         style={{ flex: 1 }}
@@ -197,7 +202,7 @@ export default function LoginScreen() {
                       placeholderTextColor={loginColors.grayMuted}
                       maxLength={12}
                       returnKeyType="next"
-                      inputAccessoryViewID={NUMERIC_ACCESSORY_ID}
+                      inputAccessoryViewID={LOGIN_NUMERIC_ACCESSORY_ID}
                     />
                   )}
                 </Pressable>
@@ -240,7 +245,7 @@ export default function LoginScreen() {
                       autoComplete="off"
                       textContentType="none"
                       caretHidden
-                      inputAccessoryViewID={NUMERIC_ACCESSORY_ID}
+                      inputAccessoryViewID={LOGIN_NUMERIC_ACCESSORY_ID}
                       returnKeyType="done"
                       onSubmitEditing={submitLogin}
                     />
@@ -306,27 +311,33 @@ export default function LoginScreen() {
               {/* ── Official access (preserved from current design) ── */}
               </View>
               </View>
-              <TouchableOpacity
-                style={styles.officialSection}
-                onPress={goToOfficialLogin}
-                activeOpacity={0.7}
-              >
-                <View style={styles.officialLoginContent}>
-                  <Text style={styles.officialLoginTitle}>Official Access</Text>
-                  <Ionicons
-                    name="arrow-forward"
-                    size={18}
-                    color={loginColors.text}
-                    style={styles.officialLoginArrow}
-                  />
-                </View>
-              </TouchableOpacity>
             </Animated.View>
           </ScrollView>
         </TouchableWithoutFeedback>
 
-        <NumericKeyboardAccessory doneTextStyle={{ fontFamily: fonts.semibold }} />
+        <NumericKeyboardAccessory
+          accessoryID={LOGIN_NUMERIC_ACCESSORY_ID}
+          doneTextStyle={{ fontFamily: fonts.semibold }}
+        />
       </KeyboardAvoidingView>
+
+      {/* Keep Official Access outside keyboard avoidance so it stays below the keyboard. */}
+      <Animated.View
+        pointerEvents={showLoginContent ? 'auto' : 'none'}
+        style={[styles.officialSection, { opacity: loginContentOpacity }]}
+      >
+        <TouchableOpacity onPress={goToOfficialLogin} activeOpacity={0.7}>
+          <View style={styles.officialLoginContent}>
+            <Text style={styles.officialLoginTitle}>Official Access</Text>
+            <Ionicons
+              name="arrow-forward"
+              size={18}
+              color={loginColors.text}
+              style={styles.officialLoginArrow}
+            />
+          </View>
+        </TouchableOpacity>
+      </Animated.View>
     </View>
   );
 }

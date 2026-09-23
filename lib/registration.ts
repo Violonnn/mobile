@@ -6,6 +6,13 @@ import {
 } from './edgeFunctionErrors';
 import { normalizeName } from './validation/name';
 import { RegistrationDetails } from '../types/registration';
+import {
+  completeDemoRegistration,
+  getDemoOtpStatus,
+  isDemoAuthEnabled,
+  requestDemoOtp,
+  verifyDemoOtp,
+} from './demoAuth';
 
 export type CompleteRegistrationInput = {
   phone: string;
@@ -79,6 +86,8 @@ export async function fetchRegistrationOtpStatus(
   phone: string,
   purpose: OtpPurpose = 'registration',
 ): Promise<OtpRequestResult> {
+  if (isDemoAuthEnabled()) return getDemoOtpStatus();
+
   const { data, error, response } = await supabase.functions.invoke(
     'request-registration-otp',
     {
@@ -110,6 +119,8 @@ export async function requestRegistrationOtp(
   phone: string,
   purpose: OtpPurpose = 'registration',
 ): Promise<OtpRequestResult> {
+  if (isDemoAuthEnabled()) return requestDemoOtp(purpose, phone);
+
   const { data, error, response } = await supabase.functions.invoke(
     'request-registration-otp',
     {
@@ -144,6 +155,8 @@ export async function verifyRegistrationOtp(
   phone: string,
   token: string,
 ): Promise<{ error: string | null }> {
+  if (isDemoAuthEnabled()) return verifyDemoOtp(token);
+
   const { data, error } = await supabase.auth.verifyOtp({
     phone,
     token,
@@ -185,6 +198,8 @@ export async function getActiveSession() {
 export async function completeRegistrationProfile(
   input: CompleteRegistrationInput,
 ): Promise<{ error: string | null }> {
+  if (isDemoAuthEnabled()) return completeDemoRegistration();
+
   const session = await getActiveSession();
 
   if (!session) {
@@ -224,5 +239,7 @@ export async function completeRegistrationProfile(
 }
 
 export async function signOutAfterRegistrationFailure(): Promise<void> {
+  if (isDemoAuthEnabled()) return;
+
   await supabase.auth.signOut();
 }

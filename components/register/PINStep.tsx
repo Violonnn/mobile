@@ -2,6 +2,7 @@ import React, { useRef, useEffect, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Keyboard, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { registerStyles as styles, registerColors } from '../../styles/screens/register.styles';
+import { fonts } from '../../styles/theme';
 import NumericKeyboardAccessory from '../ui/NumericKeyboardAccessory';
 import PinField from '../ui/PinField';
 
@@ -76,16 +77,17 @@ export default function PINStep({
 
   return (
     <View style={styles.stepContent}>
+      {title === 'Almost there...' && (
+        <Text style={styles.registrationPhoneSectionLabel}>Your last step process</Text>
+      )}
       <Text style={styles.stepTitle}>{title}</Text>
-      <Text style={styles.stepSubtitle}>
-        Enter your PIN for{' '}
-        <Text style={styles.stepSubtitleBold}>{phoneNumber}</Text>
+      <Text style={[styles.stepSubtitle, styles.registrationPhoneSubtitle]}>
+        Enter your 6-digit PIN for{' '}
+        <Text style={[styles.stepSubtitleBold, styles.registrationPhoneSubtitleBold]}>{phoneNumber}</Text>
       </Text>
 
       <PinField
         ref={pinRef}
-        label="PIN"
-        iconName="keypad-outline"
         value={pin}
         onChangeText={handlePinChange}
         hasError={pinHasError}
@@ -96,8 +98,6 @@ export default function PINStep({
 
       <PinField
         ref={confirmRef}
-        label="Confirm PIN"
-        iconName="lock-closed-outline"
         value={confirmPin}
         onChangeText={handleConfirmPinChange}
         hasError={confirmHasError}
@@ -130,7 +130,7 @@ export default function PINStep({
         )}
       </TouchableOpacity>
 
-      <NumericKeyboardAccessory />
+      <NumericKeyboardAccessory doneTextStyle={{ fontFamily: fonts.semibold }} />
     </View>
   );
 }

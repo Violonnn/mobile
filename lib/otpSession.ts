@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { OTP_MAX_SENDS_PER_SESSION } from '../types/registration';
+import { isDemoAuthEnabled } from './demoAuth';
 
 const OTP_SESSION_KEY = 'disasterlink_otp_session';
 
@@ -28,6 +29,7 @@ export async function loadOtpSession(phoneClean: string): Promise<{
   hasPendingOtp: boolean;
   limitReached: boolean;
 } | null> {
+  if (isDemoAuthEnabled()) return null;
   if (!phoneClean) return null;
 
   try {
@@ -58,6 +60,7 @@ export async function saveOtpSession(
   sendCount: number,
   cooldownSeconds: number,
 ): Promise<void> {
+  if (isDemoAuthEnabled()) return;
   if (!phoneClean) return;
 
   const now = Date.now();
@@ -90,6 +93,8 @@ export async function saveOtpSession(
 }
 
 export async function clearOtpSession(): Promise<void> {
+  if (isDemoAuthEnabled()) return;
+
   try {
     await AsyncStorage.removeItem(OTP_SESSION_KEY);
   } catch {

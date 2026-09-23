@@ -6,6 +6,12 @@ import {
   verifyRegistrationOtp,
   OtpRequestResult,
 } from './registration';
+import {
+  completeDemoPinReset,
+  endDemoResetSession,
+  isDemoAuthEnabled,
+  verifyDemoOtp,
+} from './demoAuth';
 
 export type ResetPinInput = {
   phone: string;
@@ -30,6 +36,8 @@ export async function verifyPasswordResetOtp(
   phone: string,
   token: string,
 ): Promise<{ error: string | null }> {
+  if (isDemoAuthEnabled()) return verifyDemoOtp(token);
+
   return verifyRegistrationOtp(phone, token);
 }
 
@@ -39,6 +47,8 @@ export async function verifyPasswordResetOtp(
  * verified reset never lingers as an app login.
  */
 export async function submitNewPin(input: ResetPinInput): Promise<{ error: string | null }> {
+  if (isDemoAuthEnabled()) return completeDemoPinReset();
+
   const session = await getActiveSession();
 
   if (!session) {
@@ -73,5 +83,7 @@ export async function submitNewPin(input: ResetPinInput): Promise<{ error: strin
 
 /** End the reset session so a verified-but-abandoned reset can't stay logged in. */
 export async function endResetSession(): Promise<void> {
+  if (isDemoAuthEnabled()) return endDemoResetSession();
+
   await supabase.auth.signOut();
 }

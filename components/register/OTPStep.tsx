@@ -29,14 +29,14 @@ export default function OTPStep({
 }: Props) {
   return (
     <View style={styles.stepContent}>
-      <Text style={styles.stepTitle}>OTP Verification</Text>
+      <Text style={[styles.stepTitle, styles.centeredStepTitle]}>OTP Verification</Text>
       <Text style={styles.otpTargetText}>
         Enter the OTP sent to{' '}
         <Text style={styles.otpTargetNumber}>{displayNumber}</Text>
       </Text>
 
       <View style={styles.loginFieldWrap}>
-        <Text style={styles.loginFieldLabel}>6-digit code</Text>
+        <Text style={[styles.loginFieldLabel, styles.centeredFieldLabel]}>6-digit code</Text>
         <OTPInput value={otp} onChange={onChangeOtp} hasError={!!otpError} />
         <FieldError message={otpError} centered />
       </View>

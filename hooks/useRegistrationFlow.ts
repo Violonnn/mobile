@@ -9,6 +9,7 @@ import {
   verifyRegistrationOtp,
 } from '../lib/registration';
 import { clearOtpSession, loadOtpSession, saveOtpSession } from '../lib/otpSession';
+import { clearDemoOtpState } from '../lib/demoAuth';
 import { goBackOrReplace } from '../lib/navigation';
 import { formatPhoneRegistrationError } from '../lib/registrationErrors';
 import { setSavedPhone } from '../lib/savedPhone';
@@ -35,33 +36,56 @@ type OtpLimitMeta = {
   limitReached?: boolean;
 };
 
+export type RegistrationFlowOptions = {
+  initialStep?: RegistrationStep;
+  initialPhone?: string;
+  initialOtp?: string;
+  initialOtpError?: string;
+  initialDetails?: RegistrationDetails;
+  initialPin?: string;
+  initialConfirmPin?: string;
+  initialResendCooldown?: number;
+  initialOtpSendCount?: number;
+  initialVerified?: boolean;
+  initialSubmitting?: boolean;
+  isPreview?: boolean;
+};
+
 /**
  * Single source of truth for the registration wizard.
  *
  * OTP limits are enforced on the server (request-registration-otp) and mirrored
  * locally via AsyncStorage so counters survive app restarts.
  */
-export function useRegistrationFlow() {
+export function useRegistrationFlow(options: RegistrationFlowOptions = {}) {
   const router = useRouter();
 
-  const [step, setStep] = useState<RegistrationStep>(0);
+  const [step, setStep] = useState<RegistrationStep>(() => options.initialStep ?? 0);
   const [isComplete, setIsComplete] = useState(false);
 
-  const [phoneDigits, setPhoneDigits] = useState('');
+  const [phoneDigits, setPhoneDigits] = useState(() => options.initialPhone ?? '');
   const [phoneError, setPhoneError] = useState('');
-  const [otpError, setOtpError] = useState('');
-  const [otp, setOtp] = useState('');
-  const [details, setDetails] = useState<RegistrationDetails>(EMPTY_DETAILS);
-  const [pin, setPin] = useState('');
-  const [confirmPin, setConfirmPin] = useState('');
+  const [otpError, setOtpError] = useState(() => options.initialOtpError ?? '');
+  const [otp, setOtp] = useState(() => options.initialOtp ?? '');
+  const [details, setDetails] = useState<RegistrationDetails>(
+    () => options.initialDetails ?? EMPTY_DETAILS,
+  );
+  const [pin, setPin] = useState(() => options.initialPin ?? '');
+  const [confirmPin, setConfirmPin] = useState(() => options.initialConfirmPin ?? '');
 
-  const [resendCooldown, setResendCooldown] = useState(0);
-  const [otpSendCount, setOtpSendCount] = useState(0);
-  const [otpSentPhone, setOtpSentPhone] = useState('');
+  const [resendCooldown, setResendCooldown] = useState(() => options.initialResendCooldown ?? 0);
+  const [otpSendCount, setOtpSendCount] = useState(() => options.initialOtpSendCount ?? 0);
+  const [otpSentPhone, setOtpSentPhone] = useState(
+    () => options.initialPhone?.replace(/\s/g, '') ?? '',
+  );
   const [otpAttempts, setOtpAttempts] = useState(0);
+  // This is local-only proof in demo mode; it never represents an app session.
+  const [isOtpVerified, setIsOtpVerified] = useState(() => options.initialVerified ?? false);
   const [sendingOTP, setSendingOTP] = useState(false);
   const [verifyingOTP, setVerifyingOTP] = useState(false);
-  const [submittingRegistration, setSubmittingRegistration] = useState(false);
+  const [submittingRegistration, setSubmittingRegistration] = useState(
+    () => options.initialSubmitting ?? false,
+  );
   const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const hydratedPhoneRef = useRef('');
 
@@ -86,6 +110,7 @@ export function useRegistrationFlow() {
   useEffect(() => {
     return () => {
       if (cooldownRef.current) clearInterval(cooldownRef.current);
+      clearDemoOtpState('registration');
     };
   }, []);
 
@@ -142,6 +167,7 @@ export function useRegistrationFlow() {
     setOtpSentPhone('');
     setOtp('');
     setOtpAttempts(0);
+    setIsOtpVerified(false);
     clearCooldownTimer();
     clearOtpSession();
     hydratedPhoneRef.current = '';
@@ -172,6 +198,7 @@ export function useRegistrationFlow() {
   );
 
   useEffect(() => {
+    if (options.isPreview) return;
     if (!phoneValidation.valid) return;
     if (hydratedPhoneRef.current === cleanedPhone) return;
 
@@ -220,7 +247,15 @@ export function useRegistrationFlow() {
     return () => {
       mounted = false;
     };
-  }, [applyOtpLimits, cleanedPhone, clearCooldownTimer, e164Number, phoneValidation.valid, startCooldown]);
+  }, [
+    applyOtpLimits,
+    cleanedPhone,
+    clearCooldownTimer,
+    e164Number,
+    options.isPreview,
+    phoneValidation.valid,
+    startCooldown,
+  ]);
 
   const sendOTP = useCallback(async () => {
     if (!phoneValidation.valid) return;
@@ -254,6 +289,7 @@ export function useRegistrationFlow() {
       setOtp('');
       setOtpSentPhone(cleanedPhone);
       setOtpAttempts(0);
+      setIsOtpVerified(false);
 
       const sendCount = result.sendCount ?? otpSendCount + 1;
       const cooldownSeconds = result.cooldownSeconds ?? OTP_COOLDOWN_SECONDS;
@@ -313,6 +349,7 @@ export function useRegistrationFlow() {
       if (error) throw new Error(error);
 
       setOtpAttempts(0);
+      setIsOtpVerified(true);
       setStep(2);
     } catch (err: unknown) {
       const message =
@@ -361,6 +398,12 @@ export function useRegistrationFlow() {
 
   const completeRegistration = useCallback(
     async (submittedPin: string) => {
+      if (!isOtpVerified) {
+        setOtpError('Please verify your phone before completing registration.');
+        setStep(1);
+        return;
+      }
+
       setSubmittingRegistration(true);
       try {
         const { error } = await completeRegistrationProfile({
@@ -399,7 +442,7 @@ export function useRegistrationFlow() {
         setSubmittingRegistration(false);
       }
     },
-    [router, details, e164Number, phoneDigits],
+    [router, details, e164Number, isOtpVerified, phoneDigits],
   );
 
   return {

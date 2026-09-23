@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, TextInput, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { registerStyles as styles, registerColors } from '../../styles/screens/register.styles';
+import { fonts } from '../../styles/theme';
 import { OTP_MAX_SENDS_PER_SESSION } from '../../types/registration';
 import NumericKeyboardAccessory, { NUMERIC_ACCESSORY_ID } from '../ui/NumericKeyboardAccessory';
 import FieldError from './FieldError';
@@ -24,6 +25,7 @@ type Props = {
   phoneError?: string;
   phoneLocked?: boolean;
   settingsReset?: boolean;
+  sectionLabel?: string;
 };
 
 export default function PhoneStep({
@@ -44,6 +46,7 @@ export default function PhoneStep({
   phoneError = '',
   phoneLocked = false,
   settingsReset = false,
+  sectionLabel = 'Sign up',
 }: Props) {
   const getOtpDisabled = !isValid || sendingOTP || !canRequestOtp;
   const hasPhoneError = !!phoneError;
@@ -60,26 +63,35 @@ export default function PhoneStep({
         </View>
       ) : (
         <>
+          <Text style={styles.registrationPhoneSectionLabel}>{sectionLabel}</Text>
           <Text style={styles.stepTitle}>Verify Your Number</Text>
-          <Text style={styles.stepSubtitle}>
+          <Text style={[styles.stepSubtitle, styles.registrationPhoneSubtitle]}>
             We will send you a{' '}
-            <Text style={styles.stepSubtitleBold}>One Time Password (OTP)</Text>
+            <Text style={[styles.stepSubtitleBold, styles.registrationPhoneSubtitleBold]}>
+              One Time Password (OTP)
+            </Text>
           </Text>
         </>
       )}
 
       <View
-        style={[styles.loginFieldWrap, settingsReset && styles.settingsResetFieldWrap]}
+        style={[
+          styles.loginFieldWrap,
+          !settingsReset && styles.registrationPhoneFieldWrap,
+          settingsReset && styles.settingsResetFieldWrap,
+        ]}
       >
-        <Text style={styles.loginFieldLabel}>
-          {phoneLocked ? 'Registered Mobile Number' : 'Enter Mobile Number'}
-        </Text>
+        {phoneLocked ? (
+          <Text style={styles.loginFieldLabel}>Registered Mobile Number</Text>
+        ) : null}
         <View
           style={[
             styles.phoneRow,
+            !settingsReset && styles.registrationPhoneRow,
             settingsReset && styles.settingsResetPhoneRow,
             phoneFocused &&
               (settingsReset ? styles.settingsResetPhoneRowFocused : styles.phoneRowFocused),
+            phoneFocused && !settingsReset && styles.registrationPhoneRowFocused,
             hasPhoneError && styles.inputError,
           ]}
         >
@@ -87,10 +99,12 @@ export default function PhoneStep({
             <Ionicons name="call-outline" size={20} color={registerColors.textLight} />
           </View>
           <View style={styles.phonePrefixBox}>
-            <Text style={styles.phonePrefixText}>+63</Text>
+            <Text style={[styles.phonePrefixText, !settingsReset && styles.registrationPhonePrefixText]}>
+              +63
+            </Text>
           </View>
           <TextInput
-            style={styles.phoneInput}
+            style={[styles.phoneInput, !settingsReset && styles.registrationPhoneInput]}
             value={phoneDigits}
             onChangeText={onChangePhone}
             onFocus={onFocus}
@@ -150,14 +164,14 @@ export default function PhoneStep({
         {sendingOTP ? (
           <ActivityIndicator color={registerColors.white} />
         ) : (
-          <>
-            {!settingsReset ? (
-              <Ionicons name="chevron-forward-outline" size={18} color={registerColors.white} />
-            ) : null}
-            <Text style={[styles.primaryButtonText, !isValid && styles.primaryButtonTextDisabled]}>
-              GET OTP
-            </Text>
-          </>
+          <Text
+            style={[
+              styles.primaryButtonText,
+              !isValid && styles.primaryButtonTextDisabled,
+            ]}
+          >
+            GET OTP
+          </Text>
         )}
       </TouchableOpacity>
 
@@ -170,6 +184,7 @@ export default function PhoneStep({
           <Text
             style={[
               styles.continueVerificationText,
+              !settingsReset && styles.registrationPhoneContinueText,
               settingsReset && styles.settingsResetContinueVerificationText,
             ]}
           >
@@ -178,7 +193,7 @@ export default function PhoneStep({
         </TouchableOpacity>
       )}
 
-      <NumericKeyboardAccessory />
+      <NumericKeyboardAccessory doneTextStyle={{ fontFamily: fonts.semibold }} />
     </View>
   );
 }

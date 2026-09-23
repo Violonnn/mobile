@@ -186,7 +186,7 @@ export default function DetailsStep({ details, onUpdateDetails, onSubmit }: Deta
 
   return (
     <View style={styles.stepContent}>
-      <Text style={styles.stepTitle}>Account Information</Text>
+      <Text style={[styles.stepTitle, styles.centeredStepTitle]}>Account Information</Text>
       <Text style={styles.otpTargetText}>Enter your details to create your account</Text>
 
       <LabeledInput

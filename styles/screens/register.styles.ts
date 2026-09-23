@@ -5,6 +5,7 @@ import { scaleByWidth } from '../../lib/layout';
 export const registerColors = {
   background: themeColors.background,
   stepNode: '#e8f2ff',
+  stepTimelineActive: '#042C5C',
   accent: '#000000',
   white: '#ffffff',
   gray: '#8A94A6',
@@ -52,6 +53,7 @@ export const registerStyles = StyleSheet.create({
     justifyContent: 'center',
   },
   backButtonText: {
+    display: 'none',
     color: registerColors.white,
     fontSize: 18,
     lineHeight: 20,
@@ -79,6 +81,7 @@ export const registerStyles = StyleSheet.create({
   },
 
   screenTitle: {
+    fontFamily: fonts.extrabold,
     fontSize: scaleByWidth(28),
     fontWeight: '800',
     textAlign: 'center',
@@ -101,87 +104,120 @@ export const registerStyles = StyleSheet.create({
 
   stepperWrapper: {
     paddingTop: spacing.md,
-    paddingBottom: spacing.xs,
-    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.sm,
+    paddingHorizontal: spacing.md,
     backgroundColor: registerColors.white,
     alignItems: 'center',
   },
-  stepperRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  singleStepTimelineRow: {
     width: '100%',
-    justifyContent: 'center',
-    position: 'relative',
+    height: 44,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
   },
-  stepMarkerSlot: {
-    width: 58,
-    height: 40,
-    alignItems: 'center',
+  singleStepIncomingArea: {
+    flex: 1,
+    minWidth: 0,
+    height: 22,
     justifyContent: 'center',
+    overflow: 'visible',
+  },
+  singleStepNodeSlot: {
+    width: 42,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'flex-end',
     zIndex: 1,
   },
-  stepMarkerPlaceholder: {
-    width: 28,
-    height: 28,
-  },
-  activeMarkerLayer: {
-    position: 'absolute',
-    top: 2,
-    left: 0,
-    width: 36,
-    height: 36,
-    alignItems: 'center',
+  singleStepOutgoingArea: {
+    width: 52,
+    height: 22,
     justifyContent: 'center',
-    zIndex: 3,
+    overflow: 'visible',
   },
-  stepConnectorTrack: {
-    flex: 1,
-    height: 3,
-    marginHorizontal: 4,
-    position: 'relative',
-    justifyContent: 'center',
-  },
-  stepConnector: {
-    height: 3,
-    borderRadius: 2,
-  },
-  stepConnectorFill: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
+  singleStepLineTrack: {
     width: '100%',
+    height: 2,
+    position: 'relative',
+    overflow: 'visible',
+    justifyContent: 'center',
+  },
+  singleStepLine: {
+    width: '100%',
+    height: 2,
+    borderRadius: 1,
+    backgroundColor: registerColors.stepTimelineActive,
     transformOrigin: 'left',
   },
-  stepConnectorInactive: {
-    backgroundColor: registerColors.grayLight,
-    width: '100%',
+  singleStepLineReverse: {
+    transformOrigin: 'right',
   },
-  stepConnectorDone: {
-    backgroundColor: registerColors.primary,
-  },
-  stepLabelsRow: {
-    flexDirection: 'row',
-    width: '100%',
-    marginTop: spacing.sm,
-  },
-  stepLabel: {
-    fontSize: 9,
+  singleStepMovingPercentage: {
+    position: 'absolute',
+    top: -25,
+    width: 60,
+    fontFamily: fonts.bold,
+    fontSize: 17,
+    lineHeight: 20,
     textAlign: 'center',
-    width: 58, // match stepMarkerSlot — keep labels on one line (e.g. Password)
+    color: registerColors.stepTimelineActive,
+    backgroundColor: registerColors.white,
   },
-  stepLabelSpacer: {
-    flex: 1,
+  singleStepPhonePercentage: {
+    position: 'absolute',
+    top: -15,
+    left: 4,
+    width: 60,
+    zIndex: 2,
+    fontFamily: fonts.bold,
+    fontSize: 17,
+    lineHeight: 20,
+    textAlign: 'left',
+    color: registerColors.stepTimelineActive,
+    backgroundColor: registerColors.white,
   },
-  stepLabelInactive: {
-    color: registerColors.grayMuted,
+  singleStepNodeContent: {
+    width: 42,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'flex-end',
   },
-  stepLabelActive: {
-    color: registerColors.accent,
+  stepCurrentNodeWrap: {
+    width: 22,
+    height: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepCurrentPulseRing: {
+    position: 'absolute',
+    width: 22,
+    height: 22,
+    borderRadius: radius.full,
+    borderWidth: 1.5,
+    borderColor: registerColors.stepTimelineActive,
+    opacity: 0.48,
+  },
+  stepCurrentNode: {
+    width: 14,
+    height: 14,
+    borderRadius: radius.full,
+    borderWidth: 2,
+    borderColor: registerColors.stepTimelineActive,
+    backgroundColor: registerColors.white,
+  },
+  singleStepLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+    marginTop: spacing.xs,
+  },
+  singleStepLabel: {
+    width: 42,
+    fontFamily: fonts.bold,
+    fontSize: 11,
+    textAlign: 'center',
+    color: registerColors.stepTimelineActive,
     fontWeight: '700',
-  },
-  stepLabelDone: {
-    color: registerColors.primary,
-    fontWeight: '600',
   },
 
   card: {
@@ -197,24 +233,47 @@ export const registerStyles = StyleSheet.create({
   },
 
   stepTitle: {
-    fontSize: scaleByWidth(30),
+    fontFamily: fonts.extrabold,
+    fontSize: scaleByWidth(24),
     fontWeight: '800',
-    textAlign: 'center',
+    textAlign: 'left',
     color: registerColors.text,
-    marginBottom: spacing.sm,
-    letterSpacing: -1,
+    letterSpacing: -0.5,
+    marginBottom: spacing.xs,
+  },
+  centeredStepTitle: {
+    textAlign: 'center',
+  },
+  registrationPhoneSectionLabel: {
+    color: themeColors.textMuted,
+    fontFamily: fonts.medium,
+    fontSize: fontSizes.md,
+    marginBottom: spacing.xs,
+    textAlign: 'left',
+  },
+  registrationPhoneSubtitle: {
+    color: registerColors.text,
+    letterSpacing: 0,
+    textAlign: 'left',
+  },
+  registrationPhoneSubtitleBold: {
+    color: registerColors.text,
+  },
+  registrationPhoneContinueText: {
+    color: registerColors.text,
   },
   stepSubtitle: {
+    fontFamily: fonts.regular,
     fontSize: fontSizes.md,
-    letterSpacing: 0.5,
-    color: registerColors.primary,
+    color: registerColors.text,
     lineHeight: 20,
     marginBottom: spacing.md,
     textAlign: 'center',
   },
   stepSubtitleBold: {
+    fontFamily: fonts.extrabold,
     fontWeight: '900',
-    color: registerColors.primary,
+    color: registerColors.text,
   },
   settingsResetIntro: {
     alignSelf: 'center',
@@ -242,6 +301,7 @@ export const registerStyles = StyleSheet.create({
   },
 
   fieldLabel: {
+    fontFamily: fonts.bold,
     fontSize: fontSizes.sm,
     fontWeight: '700',
     color: registerColors.textLight,
@@ -297,11 +357,13 @@ export const registerStyles = StyleSheet.create({
     marginRight: spacing.sm,
   },
   phonePrefixText: {
+    fontFamily: fonts.semibold,
     color: registerColors.text,
     fontSize: scaleByWidth(20),
     fontWeight: '600',
   },
   phoneInput: {
+    fontFamily: fonts.regular,
     flex: 1,
     minWidth: 0,
     color: registerColors.text,
@@ -310,6 +372,7 @@ export const registerStyles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   phoneHint: {
+    fontFamily: fonts.regular,
     fontSize: fontSizes.xs,
     color: registerColors.gray,
     marginTop: spacing.xs,
@@ -326,6 +389,7 @@ export const registerStyles = StyleSheet.create({
     marginTop: spacing.xs,
   },
   continueVerificationText: {
+    fontFamily: fonts.semibold,
     color: registerColors.primary,
     fontSize: fontSizes.sm,
     fontWeight: '600',
@@ -336,6 +400,7 @@ export const registerStyles = StyleSheet.create({
   },
 
   otpTargetText: {
+    fontFamily: fonts.regular,
     fontSize: fontSizes.md,
     color: registerColors.textLight,
     lineHeight: 20,
@@ -343,6 +408,7 @@ export const registerStyles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   otpTargetNumber: {
+    fontFamily: fonts.bold,
     fontWeight: '700',
     color: registerColors.text,
   },
@@ -374,6 +440,7 @@ export const registerStyles = StyleSheet.create({
     borderWidth: 2,
   },
   otpBoxText: {
+    fontFamily: fonts.extrabold,
     fontWeight: '800',
     color: registerColors.text,
   },
@@ -387,10 +454,12 @@ export const registerStyles = StyleSheet.create({
     gap: 4,
   },
   resendLabel: {
+    fontFamily: fonts.regular,
     fontSize: fontSizes.sm,
     color: registerColors.textLight,
   },
   resendButton: {
+    fontFamily: fonts.bold,
     fontSize: fontSizes.sm,
     fontWeight: '700',
     color: registerColors.accent,
@@ -399,23 +468,23 @@ export const registerStyles = StyleSheet.create({
     color: registerColors.grayMuted,
   },
   resendTimer: {
+    fontFamily: fonts.semibold,
     fontSize: fontSizes.sm,
     fontWeight: '600',
     color: registerColors.gray,
   },
 
   primaryButton: {
-    paddingVertical: spacing.lg,
-    backgroundColor: registerColors.accent,
-    marginTop: spacing.lg,
+    paddingVertical: spacing.sm + 4,
+    paddingHorizontal: spacing.md,
+    backgroundColor: '#042C5C',
+    marginTop: spacing.xs,
     width: '100%',
-    borderRadius: radius.full,
+    borderRadius: radius.md,
     alignItems: 'center',
-    shadowColor: registerColors.text,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    elevation: 0,
     flexDirection: 'row',
     justifyContent: 'center',
     gap: 5,
@@ -435,10 +504,11 @@ export const registerStyles = StyleSheet.create({
     elevation: 0,
   },
   primaryButtonText: {
+    fontFamily: fonts.semibold,
     color: registerColors.white,
-    fontSize: fontSizes.lg,
-    fontWeight: fontWeights.bold,
-    letterSpacing: 0.5,
+    fontSize: fontSizes.xl,
+    fontWeight: '600',
+    letterSpacing: 0.2,
   },
   primaryButtonTextDisabled: {
     color: registerColors.gray,
@@ -448,6 +518,7 @@ export const registerStyles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   label: {
+    fontFamily: fonts.bold,
     fontSize: fontSizes.md,
     fontWeight: '700',
     color: registerColors.text,
@@ -458,6 +529,7 @@ export const registerStyles = StyleSheet.create({
     color: registerColors.error,
   },
   input: {
+    fontFamily: fonts.regular,
     backgroundColor: '#F5F6F8',
     borderRadius: radius.md,
     paddingHorizontal: spacing.lg,
@@ -481,6 +553,7 @@ export const registerStyles = StyleSheet.create({
     alignItems: 'center',
   },
   selectFieldText: {
+    fontFamily: fonts.regular,
     flex: 1,
     marginLeft: 8,
     color: registerColors.text,
@@ -500,6 +573,7 @@ export const registerStyles = StyleSheet.create({
     flex: 1,
   },
   errorText: {
+    fontFamily: fonts.medium,
     color: registerColors.error,
     fontSize: fontSizes.md,
     marginBottom: spacing.sm,
@@ -515,6 +589,7 @@ export const registerStyles = StyleSheet.create({
     alignSelf: 'stretch',
   },
   fieldErrorText: {
+    fontFamily: fonts.regular,
     flex: 1,
     color: registerColors.error,
     fontSize: fontSizes.sm,
@@ -600,31 +675,34 @@ export const registerStyles = StyleSheet.create({
     borderColor: registerColors.primary,
   },
   checkboxText: {
+    fontFamily: fonts.regular,
     flex: 1,
     fontSize: fontSizes.sm,
     color: registerColors.textLight,
   },
   linkText: {
+    fontFamily: fonts.semibold,
     color: registerColors.primary,
     fontWeight: '600',
   },
 
   modernButton: {
-    backgroundColor: registerColors.accent,
-    borderRadius: radius.full,
-    paddingVertical: spacing.lg,
+    backgroundColor: '#042C5C',
+    borderRadius: radius.md,
+    paddingVertical: spacing.sm + 4,
+    paddingHorizontal: spacing.md,
     alignItems: 'center',
-    marginTop: spacing.sm,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 3,
+    marginTop: spacing.xs,
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    elevation: 0,
   },
   modernButtonText: {
+    fontFamily: fonts.semibold,
     color: registerColors.white,
     fontSize: fontSizes.xl,
-    fontWeight: '700',
+    fontWeight: '600',
+    letterSpacing: 0.2,
   },
 
   modalOverlay: {
@@ -650,6 +728,7 @@ export const registerStyles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   modalTitle: {
+    fontFamily: fonts.bold,
     fontSize: fontSizes.lg,
     fontWeight: 'bold',
     marginBottom: spacing.md,
@@ -668,11 +747,13 @@ export const registerStyles = StyleSheet.create({
     borderRadius: radius.md,
   },
   modalOptionText: {
+    fontFamily: fonts.regular,
     fontSize: fontSizes.lg,
     color: registerColors.text,
     textAlign: 'center',
   },
   modalOptionTextSelected: {
+    fontFamily: fonts.bold,
     color: registerColors.primary,
     fontWeight: '700',
   },
@@ -683,6 +764,7 @@ export const registerStyles = StyleSheet.create({
     borderRadius: radius.sm,
   },
   modalCloseText: {
+    fontFamily: fonts.bold,
     textAlign: 'center',
     fontSize: fontSizes.lg,
     fontWeight: 'bold',
@@ -700,11 +782,13 @@ export const registerStyles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   dropdownText: {
+    fontFamily: fonts.regular,
     fontSize: fontSizes.lg,
     color: registerColors.text,
     flex: 1,
   },
   dropdownPlaceholder: {
+    fontFamily: fonts.regular,
     fontSize: fontSizes.lg,
     color: '#aaa',
     flex: 1,
@@ -723,6 +807,7 @@ export const registerStyles = StyleSheet.create({
     paddingHorizontal: spacing.xs,
   },
   pinHintText: {
+    fontFamily: fonts.regular,
     flexShrink: 1,
     fontSize: fontSizes.sm,
     color: registerColors.gray,
@@ -736,6 +821,7 @@ export const registerStyles = StyleSheet.create({
     position: 'relative',
   },
   pinDisplayText: {
+    fontFamily: fonts.regular,
     fontSize: fontSizes.lg,
     color: registerColors.text,
     paddingVertical: 0,
@@ -758,7 +844,57 @@ export const registerStyles = StyleSheet.create({
     maxWidth: 340,
     marginBottom: spacing.md,
   },
+  // Matches the resident login PIN input without its labels, icons, or shadow.
+  registrationPinFieldWrap: {
+    width: '100%',
+    marginBottom: spacing.sm,
+  },
+  registrationPinFieldRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+    minHeight: 50,
+    backgroundColor: registerColors.white,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  registrationPinFieldRowFocused: {
+    borderColor: registerColors.primary,
+    borderWidth: 1.5,
+  },
+  registrationPinFieldRowError: {
+    borderColor: registerColors.error,
+    borderWidth: 1.5,
+  },
+  registrationPhoneFieldWrap: {
+    maxWidth: '100%',
+  },
+  registrationPhoneRow: {
+    maxWidth: '100%',
+    minHeight: 50,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: registerColors.inputBorder,
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    elevation: 0,
+  },
+  registrationPhonePrefixText: {
+    fontSize: fontSizes.lg,
+  },
+  registrationPhoneInput: {
+    fontSize: fontSizes.lg,
+  },
+  registrationPhoneRowFocused: {
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    elevation: 0,
+  },
   loginFieldLabel: {
+    fontFamily: fonts.bold,
     fontSize: fontSizes.sm,
     fontWeight: '700',
     color: registerColors.textLight,
@@ -766,6 +902,9 @@ export const registerStyles = StyleSheet.create({
     marginBottom: spacing.sm,
     textAlign: 'left',
     alignSelf: 'stretch',
+  },
+  centeredFieldLabel: {
+    textAlign: 'center',
   },
   phoneSwapIconBtn: {
     width: 34,
@@ -781,6 +920,7 @@ export const registerStyles = StyleSheet.create({
     borderColor: registerColors.primary,
   },
   phoneDisplayText: {
+    fontFamily: fonts.regular,
     color: registerColors.text,
     fontSize: scaleByWidth(20),
     lineHeight: scaleByWidth(24),

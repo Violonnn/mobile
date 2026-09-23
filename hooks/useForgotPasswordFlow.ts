@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Keyboard } from 'react-native';
 import { useRouter, type Href } from 'expo-router';
 import { goBackOrReplace } from '../lib/navigation';
+import { clearDemoOtpState, isDemoAuthEnabled } from '../lib/demoAuth';
 import {
   endResetSession,
   requestPasswordResetOtp,
@@ -23,9 +24,18 @@ import {
 /** Steps: 0 = phone, 1 = OTP, 2 = new PIN. */
 export type ForgotStep = 0 | 1 | 2;
 
-type ForgotPasswordFlowOptions = {
+export type ForgotPasswordFlowOptions = {
   fallbackRoute?: Href;
   initialPhone?: string;
+  initialStep?: ForgotStep;
+  initialOtp?: string;
+  initialOtpError?: string;
+  initialPin?: string;
+  initialConfirmPin?: string;
+  initialOtpSendCount?: number;
+  initialVerified?: boolean;
+  initialSubmitting?: boolean;
+  isPreview?: boolean;
 };
 
 const OTP_RESEND_HINT =
@@ -57,26 +67,30 @@ export function useForgotPasswordFlow(options: ForgotPasswordFlowOptions = {}) {
   const router = useRouter();
   const fallbackRoute = options.fallbackRoute ?? '/(auth)/login';
 
-  const [step, setStep] = useState<ForgotStep>(0);
+  const [step, setStep] = useState<ForgotStep>(() => options.initialStep ?? 0);
 
   const [phoneDigits, setPhoneDigits] = useState(() => localPhoneDigits(options.initialPhone));
   const [phoneError, setPhoneError] = useState('');
-  const [otp, setOtp] = useState('');
-  const [otpError, setOtpError] = useState('');
-  const [pin, setPin] = useState('');
-  const [confirmPin, setConfirmPin] = useState('');
+  const [otp, setOtp] = useState(() => options.initialOtp ?? '');
+  const [otpError, setOtpError] = useState(() => options.initialOtpError ?? '');
+  const [pin, setPin] = useState(() => options.initialPin ?? '');
+  const [confirmPin, setConfirmPin] = useState(() => options.initialConfirmPin ?? '');
 
   const [resendCooldown, setResendCooldown] = useState(0);
-  const [otpSendCount, setOtpSendCount] = useState(0);
-  const [otpSentPhone, setOtpSentPhone] = useState('');
+  const [otpSendCount, setOtpSendCount] = useState(() => options.initialOtpSendCount ?? 0);
+  const [otpSentPhone, setOtpSentPhone] = useState(
+    () => localPhoneDigits(options.initialPhone).replace(/\s/g, ''),
+  );
   const [otpAttempts, setOtpAttempts] = useState(0);
   const [sendingOTP, setSendingOTP] = useState(false);
   const [verifyingOTP, setVerifyingOTP] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
+  const [submitting, setSubmitting] = useState(() => options.initialSubmitting ?? false);
 
   const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // True once verifyOtp has minted a session that must be signed out on exit.
   const hasResetSessionRef = useRef(false);
+  // Demo verification is intentionally local and never mints a Supabase session.
+  const hasLocalVerificationRef = useRef(options.initialVerified ?? false);
 
   const cleanedPhone = phoneDigits.replace(/\s/g, '');
   const e164Number = `+63${cleanedPhone.replace(/^0+/, '')}`;
@@ -131,6 +145,7 @@ export function useForgotPasswordFlow(options: ForgotPasswordFlowOptions = {}) {
         endResetSession();
         hasResetSessionRef.current = false;
       }
+      clearDemoOtpState('password_reset');
     };
   }, []);
 
@@ -176,6 +191,7 @@ export function useForgotPasswordFlow(options: ForgotPasswordFlowOptions = {}) {
 
       setOtp('');
       setOtpAttempts(0);
+      hasLocalVerificationRef.current = false;
       setOtpSentPhone(cleanedPhone);
       if (result.sendCount === undefined) {
         setOtpSendCount((prev) => prev + 1);
@@ -231,7 +247,8 @@ export function useForgotPasswordFlow(options: ForgotPasswordFlowOptions = {}) {
       if (error) throw new Error(error);
 
       // Session now exists only to authorize the PIN reset — never the app.
-      hasResetSessionRef.current = true;
+      hasResetSessionRef.current = !isDemoAuthEnabled();
+      hasLocalVerificationRef.current = true;
       setOtpAttempts(0);
       setStep(2);
     } catch (err: unknown) {
@@ -260,6 +277,12 @@ export function useForgotPasswordFlow(options: ForgotPasswordFlowOptions = {}) {
 
   const submitReset = useCallback(
     async (submittedPin: string) => {
+      if (!hasLocalVerificationRef.current) {
+        setOtpError('Please verify your phone before resetting your PIN.');
+        setStep(1);
+        return;
+      }
+
       setSubmitting(true);
       try {
         const { error } = await submitNewPin({ phone: e164Number, pin: submittedPin });
@@ -267,6 +290,7 @@ export function useForgotPasswordFlow(options: ForgotPasswordFlowOptions = {}) {
 
         // Reset succeeded: drop the session and send the user to log in fresh.
         hasResetSessionRef.current = false;
+        hasLocalVerificationRef.current = false;
         await endResetSession();
         await setSavedPhone(phoneDigits);
 
@@ -281,6 +305,7 @@ export function useForgotPasswordFlow(options: ForgotPasswordFlowOptions = {}) {
         const needsReverify = /session expired|verify your phone/i.test(message);
         if (needsReverify) {
           hasResetSessionRef.current = false;
+          hasLocalVerificationRef.current = false;
           await endResetSession();
           setOtp('');
           setStep(1);

@@ -8,18 +8,14 @@ import {
   ReturnKeyTypeOptions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { registerStyles as styles, registerColors } from '../../styles/screens/register.styles';
+import { registerStyles as styles } from '../../styles/screens/register.styles';
 import { NUMERIC_ACCESSORY_ID } from './NumericKeyboardAccessory';
 import FieldError from '../register/FieldError';
-
-type IconName = keyof typeof Ionicons.glyphMap;
 
 const PIN_LENGTH = 6;
 const PLACEHOLDER_DOTS = '······';
 
 type Props = {
-  label: string;
-  iconName: IconName;
   value: string;
   onChangeText: (value: string) => void;
   hasError?: boolean;
@@ -29,13 +25,11 @@ type Props = {
   onSubmitEditing?: () => void;
 };
 
-// Masked numeric PIN input shared by the login and registration screens.
+// Masked numeric PIN input shared by the registration and PIN-reset screens.
 // Owns only its own focus/visibility UI state; all PIN values and submit
 // handlers stay in the parent so behavior is unchanged.
 const PinField = forwardRef<TextInput, Props>(function PinField(
   {
-    label,
-    iconName,
     value,
     onChangeText,
     hasError = false,
@@ -63,22 +57,15 @@ const PinField = forwardRef<TextInput, Props>(function PinField(
     value.length === 0 ? PLACEHOLDER_DOTS : visible ? value : '•'.repeat(value.length);
 
   return (
-    <View style={styles.loginFieldWrap}>
-      <Text style={styles.loginFieldLabel}>{label}</Text>
+    <View style={styles.registrationPinFieldWrap}>
       <View
         style={[
-          styles.phoneRow,
-          focused && styles.phoneRowFocused,
-          hasError && styles.inputError,
+          styles.registrationPinFieldRow,
+          focused && styles.registrationPinFieldRowFocused,
+          hasError && styles.registrationPinFieldRowError,
         ]}
       >
-        <View style={styles.pinIconBox}>
-          <Ionicons name={iconName} size={20} color={registerColors.textLight} />
-        </View>
-        <Pressable
-          style={[styles.pinInputWrapper, styles.loginPinRow]}
-          onPress={() => innerRef.current?.focus()}
-        >
+        <Pressable style={styles.pinInputWrapper} onPress={() => innerRef.current?.focus()}>
           <Text
             style={[styles.pinDisplayText, value.length === 0 && { color: '#9CA3AF' }]}
             pointerEvents="none"
@@ -104,16 +91,19 @@ const PinField = forwardRef<TextInput, Props>(function PinField(
             onSubmitEditing={onSubmitEditing}
           />
         </Pressable>
-        <TouchableOpacity
-          onPress={() => setVisible((prev) => !prev)}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <Ionicons
-            name={visible ? 'eye-off-outline' : 'eye-outline'}
-            size={20}
-            color="#9CA3AF"
-          />
-        </TouchableOpacity>
+        {value.length > 0 && (
+          <TouchableOpacity
+            onPress={() => setVisible((prev) => !prev)}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            accessibilityLabel={visible ? 'Hide PIN' : 'Show PIN'}
+          >
+            <Ionicons
+              name={visible ? 'eye-off-outline' : 'eye-outline'}
+              size={20}
+              color="#9CA3AF"
+            />
+          </TouchableOpacity>
+        )}
       </View>
       {!!errorMessage && <FieldError message={errorMessage} />}
     </View>
