@@ -1,15 +1,17 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
+  InteractionManager,
   type ImageSourcePropType,
-  Image,
   ScrollView,
   Text,
   useWindowDimensions,
   View,
 } from 'react-native';
+import { Image } from 'expo-image';
 
 import { loginStyles as styles } from '../../styles/screens/login.styles';
 import { spacing } from '../../styles/theme';
+import { SkeletonBlock, SkeletonGroup } from './Skeleton';
 
 type SafetySlide = {
   image: ImageSourcePropType;
@@ -18,6 +20,7 @@ type SafetySlide = {
 };
 
 const CARD_GAP = spacing.sm;
+const preparedImageIndexes = new Set<number>();
 
 const SAFETY_SLIDES: SafetySlide[] = [
   {
@@ -44,9 +47,40 @@ const SAFETY_SLIDES: SafetySlide[] = [
 
 export default function LoginSafetyCarousel() {
   const { width } = useWindowDimensions();
+  const [loadedImageIndexes, setLoadedImageIndexes] = useState<number[]>(() =>
+    Array.from(preparedImageIndexes),
+  );
   // Two cards stay fully visible while the next card invites the user to swipe.
   const cardWidth = Math.round((width - spacing.lg * 2) * 0.44);
   const snapInterval = cardWidth + CARD_GAP;
+
+  useEffect(() => {
+    if (preparedImageIndexes.size > 0) return;
+
+    // Let the sign-in form and keyboard render before decoding the two visible photos.
+    const task = InteractionManager.runAfterInteractions(() => {
+      preparedImageIndexes.add(0);
+      preparedImageIndexes.add(1);
+      setLoadedImageIndexes([0, 1]);
+    });
+    return () => task.cancel();
+  }, []);
+
+  function loadImagesNearSlide(slideIndex: number) {
+    setLoadedImageIndexes((previousIndexes) => {
+      const nextIndexes = new Set(previousIndexes);
+
+      [slideIndex - 1, slideIndex, slideIndex + 1].forEach((index) => {
+        if (index >= 0 && index < SAFETY_SLIDES.length) {
+          nextIndexes.add(index);
+          preparedImageIndexes.add(index);
+        }
+      });
+
+      if (nextIndexes.size === previousIndexes.length) return previousIndexes;
+      return Array.from(nextIndexes);
+    });
+  }
 
   return (
     <ScrollView
@@ -58,6 +92,10 @@ export default function LoginSafetyCarousel() {
       style={styles.safetyCarousel}
       contentContainerStyle={styles.safetyCarouselContent}
       accessibilityLabel="Community safety information"
+      onMomentumScrollEnd={(event) => {
+        const slideIndex = Math.round(event.nativeEvent.contentOffset.x / snapInterval);
+        loadImagesNearSlide(slideIndex);
+      }}
     >
       {SAFETY_SLIDES.map((slide, index) => (
         <View
@@ -68,7 +106,19 @@ export default function LoginSafetyCarousel() {
             index < SAFETY_SLIDES.length - 1 && { marginRight: CARD_GAP },
           ]}
         >
-          <Image source={slide.image} style={styles.safetyCarouselImage} resizeMode="cover" />
+          {loadedImageIndexes.includes(index) ? (
+            <Image
+              source={slide.image}
+              style={styles.safetyCarouselImage}
+              contentFit="cover"
+              cachePolicy="memory-disk"
+              transition={0}
+            />
+          ) : (
+            <SkeletonGroup>
+              <SkeletonBlock style={styles.safetyCarouselImage} />
+            </SkeletonGroup>
+          )}
           <View style={styles.safetyCarouselCopy}>
             <Text style={styles.safetyCarouselTitle} numberOfLines={1}>
               {slide.title}
