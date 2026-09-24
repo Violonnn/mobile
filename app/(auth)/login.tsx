@@ -1,5 +1,4 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useCallback, useRef, useState } from 'react';
 import {
@@ -24,7 +23,9 @@ import LoginSplashTransition from '../../components/ui/LoginSplashTransition';
 import NumericKeyboardAccessory, {
   LOGIN_NUMERIC_ACCESSORY_ID,
 } from '../../components/ui/NumericKeyboardAccessory';
+import { SkeletonBlock, SkeletonGroup } from '../../components/ui/Skeleton';
 import { useLoginFlow } from '../../hooks/useLoginFlow';
+import { takeResidentLoginIntro } from '../../lib/residentLoginIntro';
 import { loginColors, loginStyles as styles } from '../../styles/screens/login.styles';
 import { fonts } from '../../styles/theme';
 
@@ -38,11 +39,11 @@ export default function LoginScreen() {
   const [phoneFocused, setPhoneFocused] = useState(false);
   const [pinFocused, setPinFocused] = useState(false);
   const [pinVisible, setPinVisible] = useState(false);
-  const [signUpLoading, setSignUpLoading] = useState(false);
-  const [showLoginContent, setShowLoginContent] = useState(false);
-  const [loginContentOpacity] = useState(() => new Animated.Value(0));
-  const [loginLogoScale] = useState(() => new Animated.Value(1.2));
-  const [loginLogoTranslateY] = useState(() => new Animated.Value(-180));
+  const [playLoginIntro] = useState(() => takeResidentLoginIntro());
+  const [showLoginContent, setShowLoginContent] = useState(() => !playLoginIntro);
+  const [loginContentOpacity] = useState(() => new Animated.Value(playLoginIntro ? 0 : 1));
+  const [loginLogoScale] = useState(() => new Animated.Value(playLoginIntro ? 1.2 : 1));
+  const [loginLogoTranslateY] = useState(() => new Animated.Value(playLoginIntro ? -180 : 0));
 
   const {
     phoneDigits,
@@ -51,6 +52,7 @@ export default function LoginScreen() {
     pinError,
     submitting,
     phoneLocked,
+    phoneLoaded,
     hasSavedPhone,
     handlePhoneInput,
     clearPhoneForEdit,
@@ -60,12 +62,6 @@ export default function LoginScreen() {
     goToRegister,
     goToOfficialLogin,
   } = useLoginFlow();
-
-  useFocusEffect(
-    useCallback(() => {
-      setSignUpLoading(false);
-    }, []),
-  );
 
   function handleSavedPhonePress() {
     Alert.alert(
@@ -85,7 +81,6 @@ export default function LoginScreen() {
   }
 
   function handleSignUp() {
-    setSignUpLoading(true);
     Keyboard.dismiss();
     goToRegister();
   }
@@ -98,7 +93,7 @@ export default function LoginScreen() {
     handlePinChange(text);
   }
 
-  function handleSplashComplete() {
+  const handleSplashComplete = useCallback(() => {
     setShowLoginContent(true);
     Animated.timing(loginContentOpacity, {
       toValue: 1,
@@ -120,7 +115,7 @@ export default function LoginScreen() {
         useNativeDriver: true,
       }),
     ]).start();
-  }
+  }, [loginContentOpacity, loginLogoScale, loginLogoTranslateY]);
 
   const pinDisplayText =
     pin.length === 0 ? PLACEHOLDER_DOTS : pinVisible ? pin : '•'.repeat(pin.length);
@@ -129,7 +124,9 @@ export default function LoginScreen() {
     <View style={styles.container}>
       <StatusBar style="dark" />
       <DemoAuthBanner />
-      {!showLoginContent && <LoginSplashTransition onComplete={handleSplashComplete} />}
+      {playLoginIntro && !showLoginContent && (
+        <LoginSplashTransition onComplete={handleSplashComplete} />
+      )}
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -178,7 +175,11 @@ export default function LoginScreen() {
                   <View style={styles.phonePrefixBox}>
                     <Text style={styles.phonePrefixText}>+63</Text>
                   </View>
-                  {phoneLocked ? (
+                  {!phoneLoaded ? (
+                    <SkeletonGroup style={styles.phoneLoadingValue}>
+                      <SkeletonBlock style={styles.phoneLoadingBlock} />
+                    </SkeletonGroup>
+                  ) : phoneLocked ? (
                     <View style={styles.phoneLockedValue}>
                       <Text
                         style={[
@@ -203,6 +204,7 @@ export default function LoginScreen() {
                       maxLength={12}
                       returnKeyType="next"
                       inputAccessoryViewID={LOGIN_NUMERIC_ACCESSORY_ID}
+                      editable={!submitting}
                     />
                   )}
                 </Pressable>
@@ -248,6 +250,7 @@ export default function LoginScreen() {
                       inputAccessoryViewID={LOGIN_NUMERIC_ACCESSORY_ID}
                       returnKeyType="done"
                       onSubmitEditing={submitLogin}
+                      editable={phoneLoaded && !submitting}
                     />
                   </Pressable>
                   {pin.length > 0 && (
@@ -284,28 +287,18 @@ export default function LoginScreen() {
                 disabled={submitting}
                 activeOpacity={0.85}
               >
-                {submitting ? (
-                  <ActivityIndicator color={loginColors.white} />
-                ) : (
-                  <Text style={styles.loginButtonText}>Sign in</Text>
-                )}
+                {submitting && <ActivityIndicator color={loginColors.white} />}
+                <Text style={styles.loginButtonText}>{submitting ? 'Signing in…' : 'Sign in'}</Text>
               </TouchableOpacity>
 
               {/* ── Sign up row ── */}
               <TouchableOpacity
                 style={styles.signUpRow}
                 onPress={handleSignUp}
-                disabled={signUpLoading}
                 activeOpacity={0.7}
               >
-                {signUpLoading ? (
-                  <ActivityIndicator color={loginColors.primary} />
-                ) : (
-                  <>
-                    <Text style={styles.signUpPrompt}>Don&apos;t have an account?</Text>
-                    <Text style={styles.signUpLink}>Sign up</Text>
-                  </>
-                )}
+                <Text style={styles.signUpPrompt}>Don&apos;t have an account?</Text>
+                <Text style={styles.signUpLink}>Sign up</Text>
               </TouchableOpacity>
 
               {/* ── Official access (preserved from current design) ── */}

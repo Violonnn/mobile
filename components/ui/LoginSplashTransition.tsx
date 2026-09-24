@@ -41,38 +41,38 @@ export default function LoginSplashTransition({ onComplete }: LoginSplashTransit
       Animated.parallel([
         Animated.timing(logoTranslateY, {
           toValue: -30,
-          duration: 280,
+          duration: 220,
           easing: Easing.out(Easing.cubic),
           useNativeDriver: true,
         }),
-        Animated.timing(wordmarkOpacity, { toValue: 1, duration: 180, useNativeDriver: true }),
+        Animated.timing(wordmarkOpacity, { toValue: 1, duration: 150, useNativeDriver: true }),
       ]),
       Animated.sequence([
         Animated.timing(disasterTranslateX, {
           toValue: 0,
-          duration: 380,
+          duration: 300,
           easing: Easing.out(Easing.cubic),
           useNativeDriver: true,
         }),
         Animated.timing(linkTranslateX, {
           toValue: 0,
-          duration: 320,
+          duration: 260,
           easing: Easing.out(Easing.cubic),
           useNativeDriver: true,
         }),
       ]),
-      Animated.delay(450),
+      Animated.delay(280),
       Animated.parallel([
-        Animated.timing(wordmarkOpacity, { toValue: 0, duration: 220, useNativeDriver: true }),
+        Animated.timing(wordmarkOpacity, { toValue: 0, duration: 180, useNativeDriver: true }),
         Animated.timing(logoScale, {
           toValue: dimensions.exitLogoScale,
-          duration: 560,
+          duration: 420,
           easing: Easing.in(Easing.cubic),
           useNativeDriver: true,
         }),
         Animated.timing(logoTranslateY, {
           toValue: dimensions.exitLogoTranslateY,
-          duration: 560,
+          duration: 420,
           easing: Easing.in(Easing.cubic),
           useNativeDriver: true,
         }),

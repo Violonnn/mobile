@@ -139,6 +139,15 @@ export const loginStyles = StyleSheet.create({
     alignSelf: 'stretch',
     justifyContent: 'center',
   },
+  // Keeps the saved-phone lookup from changing the input's size after first paint.
+  phoneLoadingValue: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  phoneLoadingBlock: {
+    width: '58%',
+    height: fontSizes.lg,
+  },
   /* ── PIN field ── */
   pinIconBox: {
     paddingRight: spacing.sm,

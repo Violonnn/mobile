@@ -1,5 +1,6 @@
-import { useEffect } from 'react';
-import { Stack } from 'expo-router';
+import { useEffect, useState } from 'react';
+import { Stack, usePathname } from 'expo-router';
+import { Asset } from 'expo-asset';
 import { initialWindowMetrics, SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import * as SplashScreen from 'expo-splash-screen';
@@ -16,7 +17,11 @@ import { colors } from '../styles/theme';
 
 void SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
+const AUTH_BRAND_LOGO = require('../assets/images/splash_iconDL-transparent.png');
+
 export default function RootLayout() {
+  const pathname = usePathname();
+  const [brandAssetLoaded, setBrandAssetLoaded] = useState(false);
   const [fontsLoaded] = useFonts({
     Inter_400Regular,
     Inter_500Medium,
@@ -29,13 +34,34 @@ export default function RootLayout() {
   // Deep links (e.g. /invite?token=…) never mount index — hide splash here
   // or the native splash stays forever.
   useEffect(() => {
-    if (!fontsLoaded) return;
-    void hideNativeSplashOnce();
-  }, [fontsLoaded]);
+    let mounted = true;
+
+    // Warm the shared auth logo before any auth screen needs to paint it.
+    Asset.loadAsync(AUTH_BRAND_LOGO)
+      .catch(() => undefined)
+      .finally(() => {
+        if (mounted) setBrandAssetLoaded(true);
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!fontsLoaded || !brandAssetLoaded || !pathname || pathname === '/') return;
+
+    // Give the destination screen one frame to paint before releasing native splash.
+    const animationFrame = requestAnimationFrame(() => {
+      void hideNativeSplashOnce();
+    });
+
+    return () => cancelAnimationFrame(animationFrame);
+  }, [brandAssetLoaded, fontsLoaded, pathname]);
 
   // Keep the native splash up until the app font is ready so text never
   // flashes in the fallback system font.
-  if (!fontsLoaded) return null;
+  if (!fontsLoaded || !brandAssetLoaded) return null;
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
