@@ -156,7 +156,8 @@ export default function MdrrmoSettingsWorkspace({
             setLoggingOut(false);
             return;
           }
-          router.replace('/' as Href);
+          // Keep official logout in the official sign-in flow instead of the launch route.
+          router.replace('/(auth)/official-login' as Href);
         },
       },
     ]);

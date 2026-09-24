@@ -168,7 +168,8 @@ export default function ProfileScreen() {
       return;
     }
 
-    router.replace('/' as Href);
+    // Logout should return directly to sign-in, without replaying the launch-only splash.
+    router.replace('/(auth)/login' as Href);
   }
 
   function confirmLogout() {
