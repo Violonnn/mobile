@@ -161,18 +161,15 @@ export default function PhoneStep({
         disabled={getOtpDisabled}
         activeOpacity={0.8}
       >
-        {sendingOTP ? (
-          <ActivityIndicator color={registerColors.white} />
-        ) : (
-          <Text
-            style={[
-              styles.primaryButtonText,
-              !isValid && styles.primaryButtonTextDisabled,
-            ]}
-          >
-            GET OTP
-          </Text>
-        )}
+        {sendingOTP && <ActivityIndicator color={registerColors.white} />}
+        <Text
+          style={[
+            styles.primaryButtonText,
+            !isValid && styles.primaryButtonTextDisabled,
+          ]}
+        >
+          {sendingOTP ? 'SENDING OTP…' : 'GET OTP'}
+        </Text>
       </TouchableOpacity>
 
       {hasPendingOtp && (

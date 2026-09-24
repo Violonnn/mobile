@@ -60,11 +60,10 @@ export default function OTPStep({
         disabled={verifyingOTP}
         activeOpacity={0.8}
       >
-        {verifyingOTP ? (
-          <ActivityIndicator color={registerColors.white} />
-        ) : (
-          <Text style={styles.primaryButtonText}>VERIFY & PROCEED</Text>
-        )}
+        {verifyingOTP && <ActivityIndicator color={registerColors.white} />}
+        <Text style={styles.primaryButtonText}>
+          {verifyingOTP ? 'VERIFYING…' : 'VERIFY & PROCEED'}
+        </Text>
       </TouchableOpacity>
     </View>
   );

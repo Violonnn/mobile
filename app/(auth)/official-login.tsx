@@ -175,11 +175,10 @@ export default function OfficialLoginScreen() {
                   disabled={flow.submitting}
                   activeOpacity={0.85}
                 >
-                  {flow.submitting ? (
-                    <ActivityIndicator color={loginColors.white} />
-                  ) : (
-                    <Text style={styles.loginButtonText}>Sign in</Text>
-                  )}
+                  {flow.submitting && <ActivityIndicator color={loginColors.white} />}
+                  <Text style={styles.loginButtonText}>
+                    {flow.submitting ? 'Signing in…' : 'Sign in'}
+                  </Text>
                 </TouchableOpacity>
 
                 <LoginSafetyCarousel />

@@ -20,6 +20,7 @@ import { registerStyles as styles } from '../../styles/screens/register.styles';
 import PhoneStep from '../../components/register/PhoneStep';
 import OTPStep from '../../components/register/OTPStep';
 import PINStep from '../../components/register/PINStep';
+import AuthStepTransition from '../../components/ui/AuthStepTransition';
 import { colors } from '../../styles/theme';
 
 export default function ForgotPasswordScreen() {
@@ -80,7 +81,8 @@ function ForgotPasswordFlowScreen({ preview }: { preview?: ForgotPasswordPreview
   const isPinStep = step === 2;
   const showSettingsResetDesign = openedFromSettings && step === 0;
   const stepContent = (
-    <View style={styles.card}>
+    <AuthStepTransition key={step}>
+      <View style={styles.card}>
       {step === 0 && (
         <PhoneStep
           phoneDigits={phoneDigits}
@@ -129,7 +131,8 @@ function ForgotPasswordFlowScreen({ preview }: { preview?: ForgotPasswordPreview
           submitLabel="RESET PIN"
         />
       )}
-    </View>
+      </View>
+    </AuthStepTransition>
   );
 
   const centeredBody = (

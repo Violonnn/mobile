@@ -24,6 +24,7 @@ import PhoneStep from '../../components/register/PhoneStep';
 import OTPStep from '../../components/register/OTPStep';
 import DetailsStep from '../../components/register/DetailsStep';
 import PINStep from '../../components/register/PINStep';
+import AuthStepTransition from '../../components/ui/AuthStepTransition';
 
 const REGISTRATION_LOGO_SOURCE = require('../../assets/images/splash_iconDL-transparent.png');
 
@@ -108,7 +109,8 @@ function RegisterFlowScreen({ preview }: { preview?: RegistrationPreviewName }) 
   );
 
   const stepContent = (
-    <View style={styles.card}>
+    <AuthStepTransition key={step}>
+      <View style={styles.card}>
       {step === 0 && (
         <PhoneStep
           phoneDigits={phoneDigits}
@@ -159,7 +161,8 @@ function RegisterFlowScreen({ preview }: { preview?: RegistrationPreviewName }) 
           submitting={submittingRegistration}
         />
       )}
-    </View>
+      </View>
+    </AuthStepTransition>
   );
 
   return (

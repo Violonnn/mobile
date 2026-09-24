@@ -120,14 +120,11 @@ export default function PINStep({
         disabled={submitting}
         activeOpacity={0.8}
       >
-        {submitting ? (
-          <ActivityIndicator color={registerColors.white} />
-        ) : (
-          <>
-            <Text style={styles.primaryButtonText}>{submitLabel}</Text>
-            <Ionicons name="checkmark-circle-outline" size={20} color="#fff" />
-          </>
-        )}
+        {submitting && <ActivityIndicator color={registerColors.white} />}
+        <Text style={styles.primaryButtonText}>
+          {submitting ? (submitLabel === 'RESET PIN' ? 'RESETTING PIN…' : 'CREATING ACCOUNT…') : submitLabel}
+        </Text>
+        {!submitting && <Ionicons name="checkmark-circle-outline" size={20} color="#fff" />}
       </TouchableOpacity>
 
       <NumericKeyboardAccessory doneTextStyle={{ fontFamily: fonts.semibold }} />
