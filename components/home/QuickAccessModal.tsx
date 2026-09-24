@@ -1,11 +1,11 @@
-import React, { type ComponentProps } from 'react';
+import React from 'react';
 import {
   ScrollView,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 
 import {
   evacuationStatusLabel,
@@ -40,34 +40,43 @@ const TYPE_DETAILS = {
   hotlines: {
     title: 'Emergency hotlines',
     subtitle: 'Tap a number to call the correct response team.',
-    icon: 'call-outline' as const,
   },
   facilities: {
     title: 'Nearby facilities',
     subtitle: 'Open a facility to see its verified location on the map.',
-    icon: 'business-outline' as const,
   },
   evacuation: {
     title: 'Evacuation centers',
     subtitle: 'Check center status and open its exact map location.',
-    icon: 'exit-outline' as const,
   },
 };
 
-type ResourceIconName = ComponentProps<typeof Ionicons>['name'];
+const QUICK_ACCESS_ICON_COLORS = {
+  hotlines: '#C98585',
+  facilities: '#7897CC',
+  evacuation: '#7BA682',
+};
 
-function WashedResourceIcon({
-  name,
+// Match each modal row to the icon shown on its Help at hand shortcut.
+function QuickAccessResourceIcon({
+  type,
   color,
+  size = 25,
 }: {
-  name: ResourceIconName;
+  type: QuickAccessType;
   color: string;
+  size?: number;
 }) {
+  if (type === 'evacuation') {
+    return <MaterialCommunityIcons name="warehouse" size={size} color={color} />;
+  }
+
   return (
-    <View style={styles.washedResourceIcon} pointerEvents="none">
-      <Ionicons name={name} size={25} color={colors.text} />
-      <Ionicons name={name} size={20} color={color} style={styles.washedResourceIconFill} />
-    </View>
+    <Ionicons
+      name={type === 'hotlines' ? 'call-outline' : 'business-outline'}
+      size={size}
+      color={color}
+    />
   );
 }
 
@@ -122,7 +131,7 @@ export default function QuickAccessModal({
             </View>
           ) : isEmpty ? (
             <View style={styles.stateBlock}>
-              <Ionicons name={details.icon} size={25} color={colors.textMuted} />
+              <QuickAccessResourceIcon type={type} size={25} color={colors.textMuted} />
               <Text style={styles.stateText}>No active entries are available yet.</Text>
             </View>
           ) : (
@@ -135,7 +144,7 @@ export default function QuickAccessModal({
                 ? hotlines.map((hotline) => (
                     <View key={hotline.id} style={styles.resourceCard}>
                       <View style={[styles.cardIcon, styles.hotlineCardIcon]}>
-                        <WashedResourceIcon name="call" color="#C98585" />
+                        <QuickAccessResourceIcon type="hotlines" color={QUICK_ACCESS_ICON_COLORS.hotlines} />
                       </View>
                       <View style={styles.cardCopy}>
                         <Text style={styles.cardTitle}>{hotline.name}</Text>
@@ -169,7 +178,7 @@ export default function QuickAccessModal({
                       accessibilityLabel={`View ${facility.name} on the map`}
                     >
                       <View style={[styles.cardIcon, styles.facilityCardIcon]}>
-                        <WashedResourceIcon name="business" color="#D5B66B" />
+                        <QuickAccessResourceIcon type="facilities" color={QUICK_ACCESS_ICON_COLORS.facilities} />
                       </View>
                       <View style={styles.cardCopy}>
                         <Text style={styles.cardTitle}>{facility.name}</Text>
@@ -180,7 +189,7 @@ export default function QuickAccessModal({
                       </View>
                       <View style={styles.cardAction}>
                         <View style={[styles.viewActionIcon, styles.facilityViewActionIcon]}>
-                          <Ionicons name="location" size={18} color={colors.text} />
+                          <Ionicons name="location" size={18} color="#7897CC" />
                         </View>
                         <Text style={[styles.viewActionText, styles.facilityViewActionText]}>
                           View
@@ -201,7 +210,7 @@ export default function QuickAccessModal({
                       accessibilityLabel={`View ${center.name} on the map`}
                     >
                       <View style={[styles.cardIcon, styles.evacuationCardIcon]}>
-                        <WashedResourceIcon name="home" color="#7BA682" />
+                        <QuickAccessResourceIcon type="evacuation" color={QUICK_ACCESS_ICON_COLORS.evacuation} />
                       </View>
                       <View style={styles.cardCopy}>
                         <Text style={styles.cardTitle}>{center.name}</Text>

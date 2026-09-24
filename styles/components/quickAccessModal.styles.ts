@@ -76,15 +76,6 @@ export const quickAccessModalStyles = StyleSheet.create({
   evacuationCardIcon: {
     backgroundColor: 'transparent',
   },
-  washedResourceIcon: {
-    width: 28,
-    height: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  washedResourceIconFill: {
-    position: 'absolute',
-  },
   cardCopy: {
     flex: 1,
     minWidth: 0,
@@ -129,7 +120,7 @@ export const quickAccessModalStyles = StyleSheet.create({
     borderRadius: radius.full,
   },
   facilityViewActionIcon: {
-    backgroundColor: '#FAEDC9',
+    backgroundColor: '#E4ECF9',
   },
   evacuationViewActionIcon: {
     backgroundColor: '#6F9B75',
@@ -139,7 +130,7 @@ export const quickAccessModalStyles = StyleSheet.create({
     fontSize: fontSizes.xs,
   },
   facilityViewActionText: {
-    color: '#9A6B16',
+    color: '#7897CC',
   },
   evacuationViewActionText: {
     color: '#56805D',

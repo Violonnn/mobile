@@ -18,6 +18,7 @@ export const homeColors = {
   border: '#E1E5EC',
   clear: '#56865B',
   accentBlue: '#0F356B',
+  evacuation: '#7BA682',
 };
 
 export const homeStyles = StyleSheet.create({

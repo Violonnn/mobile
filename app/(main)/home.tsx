@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import OfficialUpdatesCarousel from '../../components/home/OfficialUpdatesCarousel';
@@ -436,7 +436,7 @@ export default function HomeScreen() {
                   accessibilityRole="button"
                   accessibilityLabel={`View ${centers.length} evacuation centers`}
                 >
-                  <Ionicons name="home-outline" size={28} color="#7BA682" />
+                  <MaterialCommunityIcons name="warehouse" size={29} color={homeColors.evacuation} />
                   <Text style={styles.quickAccessText}>Evacuation</Text>
                 </TouchableOpacity>
               </View>
