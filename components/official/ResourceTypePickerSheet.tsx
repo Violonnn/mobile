@@ -1,6 +1,6 @@
 import React from 'react';
 import { Modal, Pressable, Text, TouchableOpacity, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { mdrrmoCommandStyles as styles } from '../../styles/screens/mdrrmoCommand.styles';
 import { colors } from '../../styles/theme';
 
@@ -35,7 +35,11 @@ export default function ResourceTypePickerSheet({ visible, onClose, onSelect }: 
           {OPTIONS.map((option) => (
             <TouchableOpacity key={option.type} style={styles.pickerRow} onPress={() => onSelect(option.type)}>
               <View style={styles.pickerIcon}>
-                <Ionicons name={option.icon} size={34} color={option.color} />
+                {option.type === 'center' ? (
+                  <MaterialCommunityIcons name="warehouse" size={34} color={option.color} />
+                ) : (
+                  <Ionicons name={option.icon} size={34} color={option.color} />
+                )}
               </View>
               <View style={styles.pickerCopy}>
                 <Text style={styles.pickerTitle}>{option.title}</Text>

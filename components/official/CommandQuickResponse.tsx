@@ -1,6 +1,6 @@
 import React from 'react';
 import { Text, TouchableOpacity, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter, type Href } from 'expo-router';
 
 import { colors } from '../../styles/theme';
@@ -30,6 +30,7 @@ const QUICK_ACTIONS = [
   {
     label: 'Centers',
     icon: 'home-outline' as const,
+    iconFamily: 'material-community',
     route: '/official/resources?tab=centers&from=command',
   },
 ];
@@ -55,7 +56,11 @@ export default function CommandQuickResponse() {
             accessibilityRole="button"
             accessibilityLabel={action.label}
           >
-            <Ionicons name={action.icon} size={31} color={colors.navigationActive} />
+            {action.iconFamily === 'material-community' ? (
+              <MaterialCommunityIcons name="warehouse" size={31} color={colors.navigationActive} />
+            ) : (
+              <Ionicons name={action.icon} size={31} color={colors.navigationActive} />
+            )}
             <Text style={styles.quickResponseActionLabel}>{action.label}</Text>
           </TouchableOpacity>
         ))}
