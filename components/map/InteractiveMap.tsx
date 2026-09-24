@@ -12,7 +12,7 @@ import {
   View,
 } from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors, fonts, fontSizes, radius, spacing } from '../../styles/theme';
 import {
   getReportStatusPresentation,
@@ -557,7 +557,7 @@ function buildMapHtml(
         var markerColor = isPriority ? '#EAB308' : kind === 'facility' ? '#4B82B5' : '#3F7B6C';
         var icon = kind === 'facility'
           ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 6v12M6 12h12" stroke="#FFFFFF" stroke-width="2.7" stroke-linecap="round"/></svg>'
-          : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 11 8-6 8 6v8H4v-8Z" fill="#FFFFFF"/><path d="M10 19v-5h4v5" fill="#3F7B6C"/></svg>';
+          : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10h18v10H3zM2 10l5-5h10l5 5H2Z" fill="#FFFFFF"/><path d="M8 20v-6h8v6" fill="#3F7B6C"/></svg>';
         var markerHtml = '<div class="resource-pin ' + kind + extra + '">' + icon + '</div>';
         if (highlighted) {
           markerHtml = '<div class="resource-pin-highlighted"><span class="resource-highlight-pulse" style="background:' + markerColor + '"></span>' + markerHtml + '</div>';
@@ -1333,17 +1333,15 @@ export default function InteractiveMap({
                       onPress={() => selectSearchResult(result)}
                     >
                       <View style={mapStyles.searchResultIcon}>
-                        <Ionicons
-                          name={
-                            result.kind === 'report'
-                              ? 'warning-outline'
-                              : result.kind === 'facility'
-                                ? 'medical-outline'
-                                : 'home-outline'
-                          }
-                          size={17}
-                          color={colors.navigationActive}
-                        />
+                        {result.kind === 'evacuation' ? (
+                          <MaterialCommunityIcons name="warehouse" size={17} color={colors.navigationActive} />
+                        ) : (
+                          <Ionicons
+                            name={result.kind === 'report' ? 'warning-outline' : 'medical-outline'}
+                            size={17}
+                            color={colors.navigationActive}
+                          />
+                        )}
                       </View>
                       <View style={mapStyles.searchResultCopy}>
                         <Text style={mapStyles.searchResultTitle} numberOfLines={1}>{result.title}</Text>
@@ -1473,7 +1471,7 @@ export default function InteractiveMap({
             accessibilityRole="button"
             accessibilityLabel="Toggle evacuation centers layer"
           >
-            <Ionicons name="home-outline" size={compactLayerFilters ? 18 : 20} color={colors.navigationActive} />
+            <MaterialCommunityIcons name="warehouse" size={compactLayerFilters ? 18 : 20} color={colors.navigationActive} />
             <Text
               style={[
                 mapStyles.legendText,

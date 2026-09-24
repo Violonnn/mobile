@@ -20,7 +20,6 @@ import InteractiveMap, {
 } from '../../components/map/InteractiveMap';
 import HighlightedReportCallout from '../../components/map/HighlightedReportCallout';
 import ReportMapDetailSheet from '../../components/map/ReportMapDetailSheet';
-import ResourceMapDetailSheet from '../../components/map/ResourceMapDetailSheet';
 import YourContributionsPanel, {
   type ContributionPanelState,
 } from '../../components/map/YourContributionsPanel';
@@ -77,7 +76,7 @@ export default function MapScreen() {
   const [selectedReportIds, setSelectedReportIds] = useState<string[]>([]);
   const [fullReportVisible, setFullReportVisible] = useState(false);
   const [highlightedReportId, setHighlightedReportId] = useState<string | null>(null);
-  const [selectedResource, setSelectedResource] = useState<MapResourceMarker | null>(null);
+  const [highlightedResourceId, setHighlightedResourceId] = useState<string | null>(null);
   const [focusTarget, setFocusTarget] = useState<MapFocusTarget | null>(null);
   const [contributionPanelState, setContributionPanelState] =
     useState<ContributionPanelState>('collapsed');
@@ -137,7 +136,7 @@ export default function MapScreen() {
 
       handledRouteReportIdRef.current = requestedReportId;
       setLayers((current) => ({ ...current, reports: true }));
-      setSelectedResource(null);
+      setHighlightedResourceId(null);
       setFullReportVisible(false);
       setSelectedReportIds([]);
       setHighlightedReportId(requestedReport.id);
@@ -214,7 +213,8 @@ export default function MapScreen() {
       setHighlightedReportId(null);
       setSelectedReportIds([]);
       setFullReportVisible(false);
-      setSelectedResource(requestedResource);
+      // Match the MDRRMO flow: center and pulse the requested resource without a detail sheet.
+      setHighlightedResourceId(requestedResource.id);
       setLayers((current) => ({
         ...current,
         facilities: requestedResource.kind === 'facility' ? true : current.facilities,
@@ -261,7 +261,7 @@ export default function MapScreen() {
   }, [currentUserId, markers]);
 
   const openContribution = () => {
-    setSelectedResource(null);
+    setHighlightedResourceId(null);
     setFullReportVisible(false);
     setSelectedReportIds([]);
     setHighlightedReportId(null);
@@ -270,7 +270,7 @@ export default function MapScreen() {
 
   const showContributionOnMap = (report: MapReportMarker) => {
     setLayers((current) => ({ ...current, reports: true }));
-    setSelectedResource(null);
+    setHighlightedResourceId(null);
     setSelectedReportIds([]);
     setFullReportVisible(false);
     setHighlightedReportId(report.id);
@@ -361,7 +361,7 @@ export default function MapScreen() {
 
   const handleReportSelection = useCallback(
     (reportIds: string[]) => {
-      setSelectedResource(null);
+      setHighlightedResourceId(null);
       setFullReportVisible(false);
 
       if (reportIds.length === 1) {
@@ -500,13 +500,14 @@ export default function MapScreen() {
             }}
             focusTarget={focusTarget}
             highlightedReportId={highlightedReportId}
+            highlightedResourceId={highlightedResourceId}
             showHighlightedReportIncidentIcon
             onReportSelection={handleReportSelection}
             onResourceSelection={(resource) => {
               setSelectedReportIds([]);
               setFullReportVisible(false);
               setHighlightedReportId(null);
-              setSelectedResource(resource);
+              setHighlightedResourceId(resource.id);
             }}
           />
           {openedFromNotification ? (
@@ -591,11 +592,6 @@ export default function MapScreen() {
             setFullReportVisible(false);
             setSelectedReportIds([]);
           }}
-        />
-        <ResourceMapDetailSheet
-          visible={selectedResource != null}
-          resource={selectedResource}
-          onClose={() => setSelectedResource(null)}
         />
       </View>
     </ReportEngagementProvider>
