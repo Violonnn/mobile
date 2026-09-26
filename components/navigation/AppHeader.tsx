@@ -103,7 +103,6 @@ export default function AppHeader({
           <View style={styles.greetingTextWrap}>
             <Text
               style={[styles.greetingTitle, usesLightTone && styles.greetingTitleLight]}
-              numberOfLines={1}
             >
               Hi, {greetingName || 'there'}
             </Text>
@@ -122,7 +121,6 @@ export default function AppHeader({
                     styles.greetingLocationValue,
                     usesLightTone && styles.greetingLocationValueLight,
                   ]}
-                  numberOfLines={1}
                 >
                   {locationLabel}
                 </Text>

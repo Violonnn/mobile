@@ -53,6 +53,8 @@ type Props = {
   onComposerFocus?: () => void;
   /** Incremented when the opened post is pull-refreshed. */
   refreshSignal?: number;
+  /** The resident report sheet already shows a full-detail skeleton. */
+  showInitialLoader?: boolean;
   /** Passed only by an authorized official detail screen; never inferred here. */
   moderationMode?: 'none' | 'scoped';
 };
@@ -76,7 +78,7 @@ function CommentRow({
       <View style={styles.commentBodyWrap}>
         <View style={styles.commentBubble}>
           <View style={styles.commentHeaderRow}>
-            <Text style={styles.commentAuthor} numberOfLines={1}>
+            <Text style={styles.commentAuthor}>
               {formatReporterName(comment.author)}
             </Text>
             <Text style={styles.commentTime}>
@@ -114,6 +116,7 @@ export default function CommentsSection({
   onCommentAdded,
   onComposerFocus,
   refreshSignal = 0,
+  showInitialLoader = true,
   moderationMode = 'none',
 }: Props) {
   const targetId = announcementId ?? reportId ?? null;
@@ -230,9 +233,11 @@ export default function CommentsSection({
       <Text style={styles.sectionTitle}>Comments</Text>
 
       {loading && comments.length === 0 ? (
-        <View style={styles.stateBlock}>
-          <ActivityIndicator color={colors.themeSoft} />
-        </View>
+        showInitialLoader ? (
+          <View style={styles.stateBlock}>
+            <ActivityIndicator color={colors.themeSoft} />
+          </View>
+        ) : null
       ) : error ? (
         <View style={styles.stateBlock}>
           <Ionicons name="cloud-offline-outline" size={20} color={colors.textMuted} />
@@ -274,7 +279,7 @@ export default function CommentsSection({
                     replyCount === 1 ? 'reply' : 'replies'
                   }`}
                 >
-                  <Ionicons name="return-down-forward" size={14} color={colors.themeSoft} />
+                  <Ionicons name="return-down-forward" size={14} color={colors.navigationActive} />
                   <Text style={styles.threadActionText}>
                     Show {replyCount} {replyCount === 1 ? 'reply' : 'replies'}
                   </Text>
@@ -348,7 +353,7 @@ export default function CommentsSection({
 
       {replyTo ? (
         <View style={styles.replyingBar}>
-          <Text style={styles.replyingText} numberOfLines={1}>
+          <Text style={styles.replyingText}>
             Replying to {formatReporterName(replyTo.author)}
           </Text>
           <TouchableOpacity
@@ -448,7 +453,7 @@ const styles = StyleSheet.create({
   threadActionText: {
     fontFamily: fonts.semibold,
     fontSize: fontSizes.xs,
-    color: colors.themeSoft,
+    color: colors.navigationActive,
   },
   replyActionsRow: {
     flexDirection: 'row',
@@ -481,7 +486,7 @@ const styles = StyleSheet.create({
   commentRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: spacing.sm,
+    gap: spacing.xs,
   },
   commentReplyRow: {
     marginLeft: spacing.xl,
@@ -494,15 +499,15 @@ const styles = StyleSheet.create({
   commentBubble: {
     backgroundColor: colors.background,
     borderRadius: radius.lg,
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: spacing.sm,
     paddingVertical: spacing.sm,
     gap: 2,
   },
   commentHeaderRow: {
     flexDirection: 'row',
-    alignItems: 'baseline',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
+    alignItems: 'center',
+    gap: spacing.xs,
+    flexWrap: 'wrap',
   },
   commentAuthor: {
     flexShrink: 1,
@@ -535,11 +540,11 @@ const styles = StyleSheet.create({
   replyButtonText: {
     fontFamily: fonts.semibold,
     fontSize: fontSizes.xs,
-    color: colors.themeSoft,
+    color: colors.navigationActive,
   },
   replyingBar: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
     gap: spacing.sm,
     paddingHorizontal: spacing.md,
@@ -568,6 +573,8 @@ const styles = StyleSheet.create({
     maxHeight: 120,
     minHeight: 44,
     borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
     backgroundColor: colors.background,
     paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,
@@ -580,11 +587,11 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: radius.full,
-    backgroundColor: colors.primary,
+    backgroundColor: colors.navigationActive,
     alignItems: 'center',
     justifyContent: 'center',
   },
   sendButtonDisabled: {
-    backgroundColor: colors.themeSoft,
+    backgroundColor: colors.navigationActive,
   },
 });

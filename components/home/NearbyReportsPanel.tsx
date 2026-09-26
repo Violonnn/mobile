@@ -12,6 +12,7 @@ import {
 } from '../../lib/reports';
 import { homeStyles as styles } from '../../styles/screens/home.styles';
 import { colors } from '../../styles/theme';
+import { useAccessibilityLayout } from '../../hooks/useAccessibilityLayout';
 import ReportStatusTimeline from '../report/ReportStatusTimeline';
 
 type NearbyReportsPanelProps = {
@@ -90,6 +91,7 @@ export default function NearbyReportsPanel({
   onRetry,
   onGestureActiveChange,
 }: NearbyReportsPanelProps) {
+  const { isLargeText } = useAccessibilityLayout();
   const [activeIndex, setActiveIndex] = useState(0);
   const [referenceTime, setReferenceTime] = useState(() => Date.now());
   const maximumActiveIndex = Math.max(0, reports.length - 1);
@@ -206,20 +208,28 @@ export default function NearbyReportsPanel({
         </View>
       ) : activeReport && activeStatus ? (
         <View style={styles.nearbyActiveReportCard}>
-          <View style={styles.nearbyActiveReportTopRow}>
+          <View
+            style={[
+              styles.nearbyActiveReportTopRow,
+              isLargeText && styles.nearbyActiveReportTopRowLargeText,
+            ]}
+          >
             <View style={styles.nearbyActiveReportCopy}>
               <Text style={[styles.nearbyActiveReportEyebrow, { color: activeStatus.color }]}>
                 {activeStatus.label.toLocaleUpperCase()} · {formatElapsedLabel(activeReport.created_at, referenceTime)}
               </Text>
-              <Text style={styles.nearbyActiveReportTitle} numberOfLines={2}>
+              <Text style={styles.nearbyActiveReportTitle}>
                 {activeReport.title || incidentLabel(activeReport)}
               </Text>
-              <Text style={styles.nearbyActiveReportMeta} numberOfLines={1}>
+              <Text style={styles.nearbyActiveReportMeta}>
                 {incidentLabel(activeReport)} · {formatReportLocation(activeReport)}
               </Text>
             </View>
             <TouchableOpacity
-              style={styles.nearbyOpenReportAction}
+              style={[
+                styles.nearbyOpenReportAction,
+                isLargeText && styles.nearbyOpenReportActionLargeText,
+              ]}
               onPress={() => onOpenReport(activeReport.id)}
               accessibilityRole="button"
               accessibilityLabel={`Open nearby report: ${activeReport.title || incidentLabel(activeReport)}`}
@@ -235,10 +245,10 @@ export default function NearbyReportsPanel({
             <View style={[styles.nearbyActiveReportQuoteAccent, { backgroundColor: activeStatus.color }]} />
             <Text style={[styles.nearbyActiveReportQuoteMark, { color: activeStatus.color }]}>“</Text>
             <View style={styles.nearbyActiveReportQuoteCopy}>
-              <Text style={styles.nearbyActiveReportQuoteText} numberOfLines={3}>
+              <Text style={styles.nearbyActiveReportQuoteText}>
                 {activeReport.description || 'No additional report details were provided.'}
               </Text>
-              <Text style={styles.nearbyActiveReportQuoteSource} numberOfLines={1}>
+              <Text style={styles.nearbyActiveReportQuoteSource}>
                 {reporterName(activeReport)} · {formatTimelineTime(activeReport.created_at)}
               </Text>
             </View>

@@ -226,7 +226,7 @@ export default function YourContributionsPanel({
               accessibilityLabel="Resize report details"
             >
               <Text style={styles.eyebrow}>REPORT DETAILS</Text>
-              <Text style={styles.headerSubtitle} numberOfLines={1}>
+              <Text style={styles.headerSubtitle}>
                 {formatContributionTitle(selectedReport.title)}
               </Text>
             </TouchableOpacity>
@@ -345,11 +345,11 @@ export default function YourContributionsPanel({
                           />
                           <View style={styles.metadataRow}>
                             <Ionicons name="location-outline" size={15} color={colors.textMuted} />
-                            <Text style={styles.metadataText} numberOfLines={1}>
+                            <Text style={styles.metadataText}>
                               {formatContributionTime(report.created_at)} • {formatReportLocation(report)}
                             </Text>
                           </View>
-                          <Text style={styles.description} numberOfLines={isLatest ? 3 : 2}>
+                          <Text style={styles.description}>
                             {report.description || 'No description provided.'}
                           </Text>
                         </View>

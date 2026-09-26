@@ -120,10 +120,10 @@ export default function LoginSafetyCarousel() {
             </SkeletonGroup>
           )}
           <View style={styles.safetyCarouselCopy}>
-            <Text style={styles.safetyCarouselTitle} numberOfLines={1}>
+            <Text style={styles.safetyCarouselTitle}>
               {slide.title}
             </Text>
-            <Text style={styles.safetyCarouselDescription} numberOfLines={2}>
+            <Text style={styles.safetyCarouselDescription}>
               {slide.description}
             </Text>
           </View>

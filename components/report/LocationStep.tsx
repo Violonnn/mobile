@@ -14,6 +14,7 @@ import {
   reportColors,
   reportStyles as styles,
 } from '../../styles/screens/report.styles';
+import { useAccessibilityLayout } from '../../hooks/useAccessibilityLayout';
 import ReportMapPreview from './ReportMapPreview';
 
 type Props = {
@@ -96,6 +97,7 @@ export default function LocationStep({
   onContinue,
   residentLayout = false,
 }: Props) {
+  const { isLargeText } = useAccessibilityLayout();
   const [draftPosition, setDraftPosition] = useState<GpsPosition | null>(position);
   const showError = !loading && !position && Boolean(error);
   const locationReady = !loading && Boolean(position);
@@ -176,10 +178,10 @@ export default function LocationStep({
                     <Ionicons name="location" size={29} color={reportColors.white} />
                   </View>
                   <View style={styles.residentAddressCopy}>
-                    <Text style={styles.residentAddressPrimary} numberOfLines={1}>
+                    <Text style={styles.residentAddressPrimary}>
                       {address?.barangay ?? 'Incident location'}
                     </Text>
-                    <Text style={styles.residentAddressSecondary} numberOfLines={1}>
+                    <Text style={styles.residentAddressSecondary}>
                       {address ? `${address.municipality}, Cebu` : 'Location captured'}
                     </Text>
                   </View>
@@ -189,9 +191,18 @@ export default function LocationStep({
             </View>
 
             {adjustingPin ? (
-              <View style={styles.residentPinAdjustmentActions}>
+              <View
+                style={[
+                  styles.residentPinAdjustmentActions,
+                  isLargeText && styles.residentPinAdjustmentActionsLargeText,
+                ]}
+              >
                 <TouchableOpacity
-                  style={[styles.secondaryButton, styles.residentPinAdjustmentButton]}
+                  style={[
+                    styles.secondaryButton,
+                    styles.residentPinAdjustmentButton,
+                    isLargeText && styles.residentPinAdjustmentButtonLargeText,
+                  ]}
                   onPress={onCancelPinAdjustment}
                   accessibilityRole="button"
                   accessibilityLabel="Cancel pin adjustment"
@@ -199,7 +210,11 @@ export default function LocationStep({
                   <Text style={styles.secondaryButtonText}>Cancel</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.primaryButton, styles.residentPinAdjustmentButton]}
+                  style={[
+                    styles.primaryButton,
+                    styles.residentPinAdjustmentButton,
+                    isLargeText && styles.residentPinAdjustmentButtonLargeText,
+                  ]}
                   onPress={confirmAdjustedPin}
                   accessibilityRole="button"
                   accessibilityLabel="Confirm adjusted incident pin"

@@ -6,10 +6,11 @@ import {
   Switch,
   Text,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurTargetView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter, type Href } from 'expo-router';
@@ -34,6 +35,7 @@ import {
 } from '../../lib/profile';
 import { formatNameWithMiddleInitial } from '../../lib/validation/name';
 import { profileStyles as styles } from '../../styles/screens/profile.styles';
+import { getResidentBottomNavigationHeight } from '../../styles/components/bottomNav.styles';
 import { colors } from '../../styles/theme';
 
 type LegalDocument = 'privacy' | 'terms' | null;
@@ -106,6 +108,10 @@ function SettingsRow({
 
 export default function ProfileScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const { fontScale } = useWindowDimensions();
+  const bottomNavigationPadding =
+    getResidentBottomNavigationHeight(fontScale) + insets.bottom + 16;
   const blurTargetRef = useRef<View>(null);
   const {
     profile,
@@ -207,7 +213,13 @@ export default function ProfileScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar style="dark" />
       <BlurTargetView ref={blurTargetRef} style={styles.blurTarget}>
-        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingBottom: bottomNavigationPadding },
+          ]}
+          showsVerticalScrollIndicator={false}
+        >
         <Text style={styles.screenTitle}>Settings</Text>
 
         {profileInitialLoading ? (
@@ -236,7 +248,7 @@ export default function ProfileScreen() {
                 accessibilityLabel="Your profile picture"
               />
               <View style={styles.identityCopy}>
-                <Text style={styles.identityName} numberOfLines={2}>
+                <Text style={styles.identityName}>
                   {formatNameWithMiddleInitial(
                     profile.first_name,
                     profile.middle_name,

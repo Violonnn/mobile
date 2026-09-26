@@ -63,7 +63,7 @@ export const homeStyles = StyleSheet.create({
   greetingRow: {
     minHeight: 58,
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
     gap: spacing.md,
   },
@@ -80,7 +80,7 @@ export const homeStyles = StyleSheet.create({
   },
   locationRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: 5,
     marginTop: 3,
   },
@@ -228,6 +228,9 @@ export const homeStyles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: spacing.md,
   },
+  nearbyActiveReportTopRowLargeText: {
+    flexDirection: 'column',
+  },
   nearbyActiveReportCopy: {
     flex: 1,
     flexShrink: 1,
@@ -255,6 +258,12 @@ export const homeStyles = StyleSheet.create({
     width: 62,
     alignItems: 'center',
     gap: 3,
+  },
+  nearbyOpenReportActionLargeText: {
+    width: '100%',
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
+    paddingVertical: spacing.xs,
   },
   nearbyOpenReportCircle: {
     width: 40,
@@ -387,6 +396,10 @@ export const homeStyles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: '#D9E1EC',
   },
+  quickAccessRowLargeText: {
+    flexDirection: 'column',
+    gap: 0,
+  },
   quickAccessCard: {
     minWidth: 0,
     flex: 1,
@@ -395,9 +408,24 @@ export const homeStyles = StyleSheet.create({
     gap: 2,
     paddingHorizontal: 2,
   },
+  quickAccessCardLargeText: {
+    width: '100%',
+    flex: 0,
+    minHeight: 52,
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
+  },
   quickAccessCardBorder: {
     borderRightWidth: StyleSheet.hairlineWidth,
     borderRightColor: '#D9E1EC',
+  },
+  quickAccessCardLargeTextBorder: {
+    borderRightWidth: 0,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#D9E1EC',
   },
   quickAccessText: {
     fontFamily: homeFonts.semibold,
@@ -405,6 +433,12 @@ export const homeStyles = StyleSheet.create({
     lineHeight: 15,
     color: homeColors.ink,
     textAlign: 'center',
+  },
+  quickAccessTextLargeText: {
+    flex: 1,
+    fontSize: fontSizes.md,
+    lineHeight: 20,
+    textAlign: 'left',
   },
 
   // Rotating preparedness reminders shown below Quick Access.
@@ -728,6 +762,9 @@ export const homeStyles = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 7,
     elevation: 2,
+  },
+  reminderForYouCardLargeText: {
+    width: 260,
   },
   reminderForYouImage: {
     width: '100%',

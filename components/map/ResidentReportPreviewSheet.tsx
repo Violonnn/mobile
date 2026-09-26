@@ -8,12 +8,13 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
+import { useAccessibilityLayout } from '../../hooks/useAccessibilityLayout';
+import { formatIncidentType } from '../../lib/incidentTypes';
 import {
   formatReportLocation,
   getReportStatusPresentation,
   type MapReportMarker,
 } from '../../lib/reports';
-import { formatIncidentType } from '../../lib/incidentTypes';
 import { colors, fonts, fontSizes, radius, spacing } from '../../styles/theme';
 import { CollageCellContent } from '../report/ReportDetailCard';
 import ReportStatusTimeline, {
@@ -84,6 +85,7 @@ export function ResidentReportPreviewContent({
   onOpenFullReport,
   primaryActionLabel = 'Open full report',
 }: ResidentReportPreviewContentProps) {
+  const { isLargeText } = useAccessibilityLayout();
   const status = useMemo(
     () => getReportStatusPresentation(report.status),
     [report.status],
@@ -98,8 +100,8 @@ export function ResidentReportPreviewContent({
         bounces
       >
         <Text style={styles.reportCode}>{`REPORT #${formatReportCode(report.id)}`}</Text>
-        <View style={styles.titleRow}>
-          <Text style={styles.title} numberOfLines={2}>
+        <View style={[styles.titleRow, isLargeText && styles.titleRowLargeText]}>
+          <Text style={[styles.title, isLargeText && styles.titleLargeText]}>
             {report.title || 'Untitled report'}
           </Text>
           <View
@@ -119,24 +121,24 @@ export function ResidentReportPreviewContent({
 
         <ReportMediaStrip report={report} />
 
-        <View style={styles.metadataGrid}>
-          <View style={styles.metadataItem}>
+        <View style={[styles.metadataGrid, isLargeText && styles.metadataGridLargeText]}>
+          <View style={[styles.metadataItem, isLargeText && styles.metadataItemLargeText]}>
             <Ionicons name="location-outline" size={18} color={colors.navigationActive} />
-            <Text style={styles.metadataText} numberOfLines={2}>
+            <Text style={styles.metadataText}>
               {formatReportLocation(report)}
             </Text>
           </View>
-          <View style={styles.metadataItem}>
+          <View style={[styles.metadataItem, isLargeText && styles.metadataItemLargeText]}>
             <Ionicons name="calendar-outline" size={18} color={colors.navigationActive} />
             <Text style={styles.metadataText}>{formatMapDateTime(report.created_at)}</Text>
           </View>
-          <View style={styles.metadataItem}>
+          <View style={[styles.metadataItem, isLargeText && styles.metadataItemLargeText]}>
             <Ionicons name="warning-outline" size={18} color={colors.navigationActive} />
-            <Text style={styles.metadataText} numberOfLines={1}>
+            <Text style={styles.metadataText}>
               {formatIncidentType(report.incidentType, report.incidentTypeOther)}
             </Text>
           </View>
-          <View style={styles.metadataItem}>
+          <View style={[styles.metadataItem, isLargeText && styles.metadataItemLargeText]}>
             <Ionicons name="person-outline" size={18} color={colors.navigationActive} />
             <Text style={styles.metadataText}>Community report</Text>
           </View>
@@ -199,6 +201,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
   },
+  titleRowLargeText: {
+    alignItems: 'flex-start',
+    flexDirection: 'column',
+    paddingVertical: spacing.xs,
+  },
   title: {
     flex: 1,
     minWidth: 0,
@@ -206,6 +213,10 @@ const styles = StyleSheet.create({
     fontSize: 22,
     lineHeight: 28,
     color: colors.navigationActive,
+  },
+  titleLargeText: {
+    width: '100%',
+    flex: 0,
   },
   statusPill: {
     marginLeft: 'auto',
@@ -284,6 +295,9 @@ const styles = StyleSheet.create({
     rowGap: 12,
     marginTop: spacing.md,
   },
+  metadataGridLargeText: {
+    flexDirection: 'column',
+  },
   metadataItem: {
     width: '50%',
     minHeight: 24,
@@ -291,6 +305,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
     paddingRight: spacing.sm,
+  },
+  metadataItemLargeText: {
+    width: '100%',
+    alignItems: 'flex-start',
   },
   metadataText: {
     flex: 1,

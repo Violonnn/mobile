@@ -429,8 +429,10 @@ export const reportStyles = StyleSheet.create({
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 3 },
     elevation: 4,
+    maxWidth: '82%',
   },
   residentAccuracyPillText: {
+    flexShrink: 1,
     fontFamily: fonts.semibold,
     fontSize: 10,
     color: reportColors.primary,
@@ -442,7 +444,7 @@ export const reportStyles = StyleSheet.create({
     bottom: 10,
     minHeight: 84,
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: 10,
     paddingHorizontal: 15,
     paddingVertical: 13,
@@ -464,6 +466,7 @@ export const reportStyles = StyleSheet.create({
   },
   residentAddressCopy: {
     flex: 1,
+    minWidth: 0,
     gap: 2,
   },
   residentAddressPrimary: {
@@ -616,11 +619,18 @@ export const reportStyles = StyleSheet.create({
     gap: spacing.sm,
     marginTop: spacing.sm,
   },
+  residentPinAdjustmentActionsLargeText: {
+    flexDirection: 'column',
+  },
   residentPinAdjustmentButton: {
     flex: 1,
     minHeight: 48,
     paddingHorizontal: spacing.sm,
     paddingVertical: 0,
+  },
+  residentPinAdjustmentButtonLargeText: {
+    width: '100%',
+    flex: 0,
   },
   residentAdjustButton: {
     minHeight: 46,
@@ -778,10 +788,13 @@ export const reportStyles = StyleSheet.create({
     flexDirection: 'row',
     gap: 7,
   },
+  residentIncidentTypeGridLargeText: {
+    flexDirection: 'column',
+  },
   residentIncidentTypeOption: {
     flex: 1,
     minWidth: 0,
-    height: 61,
+    minHeight: 61,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 3,
@@ -789,6 +802,14 @@ export const reportStyles = StyleSheet.create({
     borderColor: '#D8E2F0',
     borderRadius: 8,
     backgroundColor: colors.white,
+  },
+  residentIncidentTypeOptionLargeText: {
+    width: '100%',
+    flex: 0,
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
   },
   residentIncidentTypeOptionSelected: {
     borderColor: reportColors.primary,
@@ -806,6 +827,11 @@ export const reportStyles = StyleSheet.create({
     fontSize: 10,
     lineHeight: 12,
     color: reportColors.text,
+  },
+  residentIncidentTypeTextLargeText: {
+    flex: 1,
+    maxWidth: undefined,
+    textAlign: 'left',
   },
   residentIncidentTypeTextSelected: {
     color: reportColors.white,
@@ -941,11 +967,13 @@ export const reportStyles = StyleSheet.create({
     color: reportColors.text,
   },
   residentVideoAction: {
-    height: 49,
+    minHeight: 49,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 9,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
     marginBottom: 12,
     borderRadius: 8,
     backgroundColor: '#EAF2FF',
@@ -959,9 +987,11 @@ export const reportStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    flexWrap: 'wrap',
     marginBottom: 6,
   },
   residentEvidenceTitle: {
+    flexShrink: 1,
     fontFamily: fonts.bold,
     fontSize: 13,
     color: reportColors.text,
@@ -1117,6 +1147,10 @@ export const reportStyles = StyleSheet.create({
     minHeight: 20,
     marginBottom: 5,
   },
+  reviewSectionHeaderLargeText: {
+    alignItems: 'flex-start',
+    flexDirection: 'column',
+  },
   reviewSectionTitle: {
     fontFamily: fonts.semibold,
     fontSize: 13,
@@ -1127,6 +1161,12 @@ export const reportStyles = StyleSheet.create({
     fontFamily: fonts.semibold,
     fontSize: 11,
     color: '#0D63E5',
+  },
+  reviewEditButton: {
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.sm,
+    marginHorizontal: -spacing.sm,
   },
   reviewTypeText: {
     alignSelf: 'flex-start',
@@ -1160,6 +1200,9 @@ export const reportStyles = StyleSheet.create({
     alignItems: 'flex-start',
     justifyContent: 'space-between',
     gap: 10,
+  },
+  reviewLocationRowLargeText: {
+    flexDirection: 'column',
   },
   reviewLocationCopy: {
     flex: 1,
@@ -1197,7 +1240,7 @@ export const reportStyles = StyleSheet.create({
   },
   reviewAccuracyNotice: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: spacing.sm,
     borderRadius: radius.md,
     backgroundColor: reportColors.primaryLight,

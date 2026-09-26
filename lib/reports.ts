@@ -55,6 +55,8 @@ export type MapReportMarker = {
   created_at: string;
   /** Creation or the newest qualifying status/official-comment activity. */
   latestActivityAt?: string;
+  /** Most recent status transition, excluding comments and the initial report creation. */
+  latestStatusUpdateAt?: string;
   reporter: MapReportReporter;
   media: ReportMediaAttachment[];
   /** Populated when private attachment rows or signed URLs cannot be read. */
@@ -156,6 +158,7 @@ function chunkItems<Item>(items: Item[], batchSize: number): Item[][] {
 type ReportActivityRow = {
   report_id: unknown;
   created_at: unknown;
+  from_status?: unknown;
 };
 
 function recordNewestActivity(
@@ -177,9 +180,11 @@ function recordNewestActivity(
 
 export async function fetchLatestReportActivity(reportIds: string[]): Promise<{
   latestActivityByReport: Map<string, string>;
+  latestStatusUpdateByReport: Map<string, string>;
   error: string | null;
 }> {
   const latestActivityByReport = new Map<string, string>();
+  const latestStatusUpdateByReport = new Map<string, string>();
 
   const fetchStatusChanges = async () => {
     for (const reportIdBatch of chunkItems(reportIds, REPORT_ACTIVITY_BATCH_SIZE)) {
@@ -187,7 +192,7 @@ export async function fetchLatestReportActivity(reportIds: string[]): Promise<{
       while (true) {
         const result = await supabase
           .from('report_status_history')
-          .select('report_id, created_at')
+          .select('report_id, created_at, from_status')
           .in('report_id', reportIdBatch)
           .eq('event_type', 'status_change')
           .order('created_at', { ascending: false })
@@ -197,6 +202,11 @@ export async function fetchLatestReportActivity(reportIds: string[]): Promise<{
         const rows = (result.data ?? []) as ReportActivityRow[];
         if (rows.length === 0) break;
         recordNewestActivity(latestActivityByReport, rows);
+        // The initial history row has no previous status, so it is not an update.
+        recordNewestActivity(
+          latestStatusUpdateByReport,
+          rows.filter((row) => row.from_status != null),
+        );
         pageStart += rows.length;
       }
     }
@@ -234,6 +244,7 @@ export async function fetchLatestReportActivity(reportIds: string[]): Promise<{
 
   return {
     latestActivityByReport,
+    latestStatusUpdateByReport,
     error: statusError ?? commentError,
   };
 }
@@ -339,6 +350,7 @@ export async function fetchMapReports(options?: {
     ? fetchLatestReportActivity(reportIds)
     : Promise.resolve({
         latestActivityByReport: new Map<string, string>(),
+        latestStatusUpdateByReport: new Map<string, string>(),
         error: null,
       });
   const mediaByReport = new Map<string, ReportMediaAttachment[]>();
@@ -453,9 +465,10 @@ export async function fetchMapReports(options?: {
     addressText: row.address_text ? String(row.address_text) : null,
     barangay_id: row.barangay_id ? String(row.barangay_id) : null,
     created_at: String(row.created_at ?? ''),
-    latestActivityAt:
-      activityResult.latestActivityByReport.get(String(row.id)) ??
+      latestActivityAt:
+        activityResult.latestActivityByReport.get(String(row.id)) ??
       String(row.created_at ?? ''),
+    latestStatusUpdateAt: activityResult.latestStatusUpdateByReport.get(String(row.id)),
     reporter: {
       id: String(row.reporter_id ?? ''),
       firstName: String(row.reporter_first_name ?? ''),
@@ -566,6 +579,7 @@ export async function fetchMapReportById(
     return { report: null, error: 'This report has an invalid location.' };
   }
 
+  const activityPromise = fetchLatestReportActivity([reportId]);
   const media: ReportMediaAttachment[] = [];
   let mediaResult = await supabase
     .from('report_media')
@@ -651,6 +665,8 @@ export async function fetchMapReportById(
     });
   }
 
+  const activityResult = await activityPromise;
+
   return {
     report: {
       id: String(row.id),
@@ -666,6 +682,9 @@ export async function fetchMapReportById(
       addressText: row.address_text ? String(row.address_text) : null,
       barangay_id: row.barangay_id ? String(row.barangay_id) : null,
       created_at: String(row.created_at ?? ''),
+      latestStatusUpdateAt: activityResult.error
+        ? undefined
+        : activityResult.latestStatusUpdateByReport.get(reportId),
       reporter: {
         id: String(row.reporter_id ?? ''),
         firstName: String(row.reporter_first_name ?? ''),

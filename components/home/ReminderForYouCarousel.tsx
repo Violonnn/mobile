@@ -7,6 +7,7 @@ import {
 } from 'react-native';
 import { Image } from 'expo-image';
 
+import { useAccessibilityLayout } from '../../hooks/useAccessibilityLayout';
 import { homeStyles as styles } from '../../styles/screens/home.styles';
 
 type ReminderCard = {
@@ -34,6 +35,8 @@ const REMINDERS: ReminderCard[] = [
 ];
 
 export default function ReminderForYouCarousel() {
+  const { isLargeText } = useAccessibilityLayout();
+
   return (
     <ScrollView
       horizontal
@@ -42,7 +45,13 @@ export default function ReminderForYouCarousel() {
       style={styles.reminderForYouCarousel}
     >
       {REMINDERS.map((reminder) => (
-        <View key={reminder.title} style={styles.reminderForYouCard}>
+        <View
+          key={reminder.title}
+          style={[
+            styles.reminderForYouCard,
+            isLargeText && styles.reminderForYouCardLargeText,
+          ]}
+        >
           <Image
             source={reminder.image}
             style={styles.reminderForYouImage}
@@ -51,10 +60,10 @@ export default function ReminderForYouCarousel() {
             accessibilityLabel={reminder.title}
           />
           <View style={styles.reminderForYouCopy}>
-            <Text style={styles.reminderForYouTitle} numberOfLines={1}>
+            <Text style={styles.reminderForYouTitle}>
               {reminder.title}
             </Text>
-            <Text style={styles.reminderForYouDescription} numberOfLines={2}>
+            <Text style={styles.reminderForYouDescription}>
               {reminder.description}
             </Text>
           </View>

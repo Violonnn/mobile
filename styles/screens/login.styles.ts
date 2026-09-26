@@ -224,7 +224,7 @@ export const loginStyles = StyleSheet.create({
     paddingRight: spacing.sm,
   },
   safetyCarouselCard: {
-    height: 188,
+    minHeight: 188,
     overflow: 'hidden',
     backgroundColor: loginColors.white,
     borderRadius: radius.md,

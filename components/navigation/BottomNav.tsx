@@ -1,14 +1,19 @@
 // components/navigation/BottomNav.tsx
-// Floating white bottom navigation bar with labels.
+// Floating white bottom navigation bar.
 //
 // Interaction design:
-//  - Tabs use the reference's simple icon + label treatment. Active items turn
-//    blue without adding a second shape behind the icon.
+//  - Tabs use a simple icon-only treatment. Active items turn blue without
+//    adding a second shape behind the icon.
 //  - The center Report control is a large blue location action above the bar.
 // No animations — static highlight for best performance on low-end devices.
 
 import React, { useCallback, useEffect, useState, memo } from 'react';
-import { ActivityIndicator, Animated, View, Text, Pressable } from 'react-native';
+import {
+  ActivityIndicator,
+  Animated,
+  Pressable,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -38,18 +43,23 @@ type TabConfig = {
 // Bar layout, left → right. The center is the Report action button (not a tab).
 const LEFT_TABS: TabConfig[] = [
   { name: 'home', label: 'Home', activeIcon: 'home', inactiveIcon: 'home-outline' },
-  { name: 'feed', label: 'Community', activeIcon: 'reader', inactiveIcon: 'reader-outline' },
+  { name: 'feed', label: 'Feed', activeIcon: 'reader', inactiveIcon: 'reader-outline' },
 ];
 const RIGHT_TABS: TabConfig[] = [
   { name: 'map', label: 'Map', activeIcon: 'map', inactiveIcon: 'map-outline' },
-  { name: 'profile', label: 'Profile', activeIcon: 'person', inactiveIcon: 'person-outline' },
+  {
+    name: 'profile',
+    label: 'Profile',
+    activeIcon: 'ellipsis-horizontal',
+    inactiveIcon: 'ellipsis-horizontal-outline',
+  },
 ];
 
 function triggerHaptic() {
   Haptics.selectionAsync().catch(() => {});
 }
 
-/** A resident tab with a vertically centered icon and label. */
+/** A resident tab represented by an icon. */
 const NavItem = memo(function NavItem({
   config,
   focused,
@@ -76,9 +86,6 @@ const NavItem = memo(function NavItem({
             color={focused ? navColors.iconActive : navColors.iconInactive}
           />
         </View>
-        <Text style={[styles.label, focused && styles.labelActive]} numberOfLines={1}>
-          {config.label}
-        </Text>
       </View>
     </Pressable>
   );
@@ -135,11 +142,6 @@ const ReportButton = memo(function ReportButton({
     onPress();
   }, [buttonScale, onPress, waveOpacity, waveScale]);
 
-  const reportLabel = deliveryState === 'sending'
-    ? 'Sending'
-    : deliveryState === 'not-sent'
-      ? 'Not sent'
-      : 'Report';
   const accessibilityLabel = deliveryState === 'sending'
     ? 'Report an emergency. A report is sending.'
     : deliveryState === 'not-sent'
@@ -183,22 +185,13 @@ const ReportButton = memo(function ReportButton({
           </Pressable>
         </Animated.View>
       </View>
-      <Text
-        style={[
-          styles.reportLabel,
-          deliveryState === 'not-sent' && styles.reportLabelNotSent,
-        ]}
-        numberOfLines={1}
-        pointerEvents="none"
-      >
-        {reportLabel}
-      </Text>
     </View>
   );
 });
 
 export default function BottomNav({ state, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
+  const barHeight = navMetrics.barHeight;
   const currentRouteName = state.routes[state.index]?.name;
   const [reportOpen, setReportOpen] = useState(false);
   const [reportDeliveryState, setReportDeliveryState] =
@@ -282,7 +275,7 @@ export default function BottomNav({ state, navigation }: BottomTabBarProps) {
           styles.wrapper,
           {
             bottom: 0,
-            height: navMetrics.barHeight + insets.bottom,
+            height: barHeight + insets.bottom,
           },
         ]}
         pointerEvents="box-none"
@@ -290,10 +283,10 @@ export default function BottomNav({ state, navigation }: BottomTabBarProps) {
         <View
           style={[
             styles.bar,
-            { height: navMetrics.barHeight + insets.bottom },
+            { height: barHeight + insets.bottom },
           ]}
         >
-          <View style={styles.row}>
+          <View style={[styles.row, { height: barHeight }]}>
             {LEFT_TABS.map((tab) => (
               <NavItem
                 key={tab.name}

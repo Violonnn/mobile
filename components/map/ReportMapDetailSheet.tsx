@@ -61,7 +61,7 @@ function ShrunkReportCard({
       <View style={styles.listTopRow}>
         <View style={styles.listLocationInline}>
           <Ionicons name="location-sharp" size={14} color={colors.themeSoft} />
-          <Text style={styles.listLocation} numberOfLines={1}>
+          <Text style={styles.listLocation}>
             {formatReportLocation(report)}
           </Text>
         </View>
@@ -76,10 +76,10 @@ function ShrunkReportCard({
             <ReporterAvatar reporter={report.reporter} size={36} />
             <View style={styles.listIdentityText}>
               <View style={styles.listNameTitleRow}>
-                <Text style={styles.listReporter} numberOfLines={1}>
+                <Text style={styles.listReporter}>
                   {formatReporterName(report.reporter)}
                 </Text>
-                <Text style={styles.listTitle} numberOfLines={1}>
+                <Text style={styles.listTitle}>
                   {report.title || 'Untitled report'}
                 </Text>
               </View>
@@ -88,7 +88,7 @@ function ShrunkReportCard({
                 incidentType={report.incidentType}
                 incidentTypeOther={report.incidentTypeOther}
               />
-              <Text style={styles.listDescription} numberOfLines={2} ellipsizeMode="tail">
+              <Text style={styles.listDescription}>
                 {report.description || 'No description provided.'}
               </Text>
             </View>
@@ -449,6 +449,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.sm,
+    flexWrap: 'wrap',
     paddingHorizontal: spacing.xs,
   },
   headerTitle: {
@@ -526,13 +527,13 @@ const styles = StyleSheet.create({
   },
   listTopRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
     gap: spacing.sm,
   },
   listBodyRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: spacing.sm,
   },
   listLeftCol: {
@@ -573,7 +574,7 @@ const styles = StyleSheet.create({
   listLocationInline: {
     flex: 1,
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: 4,
     minWidth: 0,
   },

@@ -11,6 +11,8 @@ import { supabase } from '../lib/supabase';
 import { useRealtimeChannelName } from './useRealtimeChannelName';
 
 type UseReportsOptions = {
+  /** Avoid loading an inactive resident feed tab until the resident opens it. */
+  enabled?: boolean;
   /** Subscribe to live database changes. Defaults to true (used by the map). */
   realtime?: boolean;
   /** Restrict map loading and Realtime to one barangay when an official is scoped. */
@@ -30,6 +32,7 @@ type UseReportsOptions = {
 };
 
 export function useReports({
+  enabled = true,
   realtime = true,
   barangayId = null,
   includePending = true,
@@ -59,6 +62,7 @@ export function useReports({
   }, [reports]);
 
   const load = useCallback(async () => {
+    if (!enabled) return;
     if (loadRequestRef.current) return loadRequestRef.current;
 
     const request = (async () => {
@@ -85,10 +89,10 @@ export function useReports({
 
     loadRequestRef.current = request;
     return request;
-  }, [barangayId, includeLatestActivity, includeMediaSummaries, includePending, limit, loadAll]);
+  }, [barangayId, enabled, includeLatestActivity, includeMediaSummaries, includePending, limit, loadAll]);
 
   const loadMore = useCallback(async () => {
-    if (!limit || loadAll || loadingMore || !hasMore) return;
+    if (!enabled || !limit || loadAll || loadingMore || !hasMore) return;
     setLoadingMore(true);
     const serverReportCount = reportsRef.current.filter((report) => !report.isPending).length;
     const result = await fetchMapReports({
@@ -110,7 +114,7 @@ export function useReports({
       result.reports.forEach((report) => byId.set(report.id, report));
       return [...byId.values()];
     });
-  }, [barangayId, hasMore, includeLatestActivity, includeMediaSummaries, limit, loadAll, loadingMore]);
+  }, [barangayId, enabled, hasMore, includeLatestActivity, includeMediaSummaries, limit, loadAll, loadingMore]);
 
   // Decide how to react to a live `reports` change. Inserts, deletes, and edits
   // to pin-relevant fields (title/description/status) trigger a full reload
@@ -178,16 +182,20 @@ export function useReports({
 
   useFocusEffect(
     useCallback(() => {
+      if (!enabled) return;
       const dataIsFresh = lastUpdatedAt != null && Date.now() - lastUpdatedAt < staleTimeMs;
       if (!dataIsFresh) void load();
-    }, [lastUpdatedAt, load, staleTimeMs]),
+    }, [enabled, lastUpdatedAt, load, staleTimeMs]),
   );
 
   // Refresh when a local report is queued or finishes uploading.
-  useEffect(() => onReportQueueChange(() => void load()), [load]);
+  useEffect(() => {
+    if (!enabled) return;
+    return onReportQueueChange(() => void load());
+  }, [enabled, load]);
 
   useEffect(() => {
-    if (!realtime) return;
+    if (!enabled || !realtime) return;
 
     const channel = supabase
       .channel(channelName)
@@ -206,7 +214,7 @@ export function useReports({
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [realtime, channelName, handleRealtimeChange, barangayId]);
+  }, [enabled, realtime, channelName, handleRealtimeChange, barangayId]);
 
   return {
     reports,

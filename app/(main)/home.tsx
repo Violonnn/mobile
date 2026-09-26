@@ -30,6 +30,7 @@ import WelcomeModal from '../../components/ui/WelcomeModal';
 import { useNotifications } from '../../context/NotificationsContext';
 import { useResidentData } from '../../context/ResidentDataContext';
 import { useAnnouncements } from '../../hooks/useAnnouncements';
+import { useAccessibilityLayout } from '../../hooks/useAccessibilityLayout';
 import { useReports } from '../../hooks/useReports';
 import { getNearbyReportsGpsWithTimeout, type GpsPosition } from '../../lib/location';
 import {
@@ -37,6 +38,7 @@ import {
   NEARBY_REPORT_RADIUS_METERS,
 } from '../../lib/reportProximity';
 import { homeColors, homeStyles as styles } from '../../styles/screens/home.styles';
+import { getResidentBottomNavigationHeight } from '../../styles/components/bottomNav.styles';
 import { colors, spacing } from '../../styles/theme';
 
 const RESIDENT_HEADER_HEIGHT = 74;
@@ -44,7 +46,11 @@ const RESIDENT_HEADER_HEIGHT = 74;
 export default function HomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { width: windowWidth } = useWindowDimensions();
+  const { width: windowWidth, fontScale } = useWindowDimensions();
+  const { isLargeText } = useAccessibilityLayout();
+  const [residentHeaderHeight, setResidentHeaderHeight] = useState(
+    insets.top + RESIDENT_HEADER_HEIGHT,
+  );
   const { welcome } = useLocalSearchParams<{ welcome?: string }>();
   const homeScrollRef = useRef<ScrollView>(null);
   const locationRequestIdRef = useRef(0);
@@ -292,6 +298,14 @@ export default function HomeScreen() {
               styles.residentHeaderContent,
               { paddingTop: insets.top + spacing.sm },
             ]}
+            onLayout={(event) => {
+              // The sticky header can grow when system text wraps, so the
+              // scroll content must start below its measured height.
+              const measuredHeight = Math.ceil(event.nativeEvent.layout.height);
+              setResidentHeaderHeight((currentHeight) =>
+                currentHeight === measuredHeight ? currentHeight : measuredHeight,
+              );
+            }}
           >
             {isHeaderCollapsed ? (
               <View style={styles.compactHeaderRow}>
@@ -314,12 +328,12 @@ export default function HomeScreen() {
             ) : (
               <View style={styles.greetingRow}>
                 <View style={styles.greetingCopy}>
-                  <Text style={styles.greetingTitle} numberOfLines={1}>
+                  <Text style={styles.greetingTitle}>
                     Hi, {firstName || 'there'}
                   </Text>
                   <View style={styles.locationRow}>
                     <Ionicons name="location-outline" size={21} color={homeColors.ink} />
-                    <Text style={styles.locationText} numberOfLines={1}>
+                    <Text style={styles.locationText}>
                       {locationValue}
                     </Text>
                   </View>
@@ -366,7 +380,11 @@ export default function HomeScreen() {
         style={styles.homeScrollView}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingTop: insets.top + RESIDENT_HEADER_HEIGHT },
+          {
+            paddingTop: residentHeaderHeight,
+            paddingBottom:
+              getResidentBottomNavigationHeight(fontScale) + insets.bottom + spacing.lg,
+          },
         ]}
         showsVerticalScrollIndicator={false}
         scrollEnabled={!isNearbyMapGestureActive}
@@ -406,38 +424,74 @@ export default function HomeScreen() {
               <View style={styles.quickAccessHeader}>
                 <Text style={styles.quickAccessTitle}>Help at hand</Text>
               </View>
-              <View style={styles.quickAccessRow}>
+              <View
+                style={[
+                  styles.quickAccessRow,
+                  isLargeText && styles.quickAccessRowLargeText,
+                ]}
+              >
                 <TouchableOpacity
-                  style={[styles.quickAccessCard, styles.quickAccessCardBorder]}
+                  style={[
+                    styles.quickAccessCard,
+                    styles.quickAccessCardBorder,
+                    isLargeText && styles.quickAccessCardLargeText,
+                    isLargeText && styles.quickAccessCardLargeTextBorder,
+                  ]}
                   activeOpacity={0.82}
                   onPress={() => setQuickAccessType('hotlines')}
                   accessibilityRole="button"
                   accessibilityLabel="Go to hotlines"
                 >
                   <Ionicons name="call-outline" size={28} color="#C98585" />
-                  <Text style={styles.quickAccessText}>Hotlines</Text>
+                  <Text
+                    style={[
+                      styles.quickAccessText,
+                      isLargeText && styles.quickAccessTextLargeText,
+                    ]}
+                  >
+                    Hotlines
+                  </Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  style={[styles.quickAccessCard, styles.quickAccessCardBorder]}
+                  style={[
+                    styles.quickAccessCard,
+                    styles.quickAccessCardBorder,
+                    isLargeText && styles.quickAccessCardLargeText,
+                    isLargeText && styles.quickAccessCardLargeTextBorder,
+                  ]}
                   activeOpacity={0.82}
                   onPress={() => setQuickAccessType('facilities')}
                   accessibilityRole="button"
                   accessibilityLabel="Go to facilities"
                 >
                   <Ionicons name="business-outline" size={28} color="#7897CC" />
-                  <Text style={styles.quickAccessText}>Facilities</Text>
+                  <Text
+                    style={[
+                      styles.quickAccessText,
+                      isLargeText && styles.quickAccessTextLargeText,
+                    ]}
+                  >
+                    Facilities
+                  </Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  style={styles.quickAccessCard}
+                  style={[styles.quickAccessCard, isLargeText && styles.quickAccessCardLargeText]}
                   activeOpacity={0.82}
                   onPress={() => setQuickAccessType('evacuation')}
                   accessibilityRole="button"
                   accessibilityLabel={`View ${centers.length} evacuation centers`}
                 >
                   <MaterialCommunityIcons name="warehouse" size={29} color={homeColors.evacuation} />
-                  <Text style={styles.quickAccessText}>Evacuation</Text>
+                  <Text
+                    style={[
+                      styles.quickAccessText,
+                      isLargeText && styles.quickAccessTextLargeText,
+                    ]}
+                  >
+                    Evacuation
+                  </Text>
                 </TouchableOpacity>
               </View>
             </View>

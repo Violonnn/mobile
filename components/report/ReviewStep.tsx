@@ -14,6 +14,7 @@ import {
   reportColors,
   reportStyles as styles,
 } from '../../styles/screens/report.styles';
+import { useAccessibilityLayout } from '../../hooks/useAccessibilityLayout';
 import ReportMapPreview from './ReportMapPreview';
 
 type Props = {
@@ -45,15 +46,26 @@ function ReviewSection({
   onEdit: () => void;
   children: React.ReactNode;
 }) {
+  const { isLargeText } = useAccessibilityLayout();
+
   return (
     <View style={styles.reviewSection}>
       <View style={styles.reviewTimelineIcon}>
         <Ionicons name={icon} size={18} color={reportColors.white} />
       </View>
       <View style={styles.reviewSectionBody}>
-        <View style={styles.reviewSectionHeader}>
+        <View
+          style={[
+            styles.reviewSectionHeader,
+            isLargeText && styles.reviewSectionHeaderLargeText,
+          ]}
+        >
           <Text style={styles.reviewSectionTitle}>{title}</Text>
-          <TouchableOpacity onPress={onEdit} hitSlop={8} accessibilityRole="button">
+          <TouchableOpacity
+            style={styles.reviewEditButton}
+            onPress={onEdit}
+            accessibilityRole="button"
+          >
             <Text style={styles.reviewEditText}>Edit</Text>
           </TouchableOpacity>
         </View>
@@ -80,6 +92,8 @@ export default function ReviewStep({
   onEditDetails,
   onSubmit,
 }: Props) {
+  const { isLargeText } = useAccessibilityLayout();
+
   return (
     <View style={styles.stepContent}>
       <Text style={styles.residentStepTitle}>Check it once,{`\n`}then send</Text>
@@ -90,7 +104,12 @@ export default function ReviewStep({
       <View style={styles.reviewTimeline}>
         <View style={styles.reviewTimelineLine} />
         <ReviewSection icon="location" title="Location" onEdit={onEditLocation}>
-          <View style={styles.reviewLocationRow}>
+          <View
+            style={[
+              styles.reviewLocationRow,
+              isLargeText && styles.reviewLocationRowLargeText,
+            ]}
+          >
             <View style={styles.reviewLocationCopy}>
               <Text style={styles.reviewPrimaryText}>
                 {address?.barangay ?? 'Incident location'}

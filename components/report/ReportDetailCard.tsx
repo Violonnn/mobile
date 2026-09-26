@@ -31,6 +31,7 @@ import {
 } from '../../lib/reports';
 import { colors, fonts, fontSizes, radius, spacing } from '../../styles/theme';
 import ResidentBottomSheet from '../ui/ResidentBottomSheet';
+import { ReportDetailSheetSkeleton } from '../ui/ResidentScreenSkeletons';
 import RemoteMediaImage from '../media/RemoteMediaImage';
 import CommentsSection from './CommentsSection';
 import { useReportEngagement } from './ReportEngagementProvider';
@@ -58,10 +59,13 @@ function residentStatusLabel(status: string): string {
   return 'Under review';
 }
 
-function formatLatestActivityAt(iso: string): string {
-  const activityLabel = formatPublishedAt(iso);
-  const isShortRelativeTime = /^\d+(s|m|hr)$/.test(activityLabel);
-  return `Updated ${activityLabel}${isShortRelativeTime ? ' ago' : ''}`;
+/** Keep the resident feed's incident label as easy to scan as its status label. */
+function residentIncidentTypeColor(incidentType: MapReportMarker['incidentType']): string {
+  if (incidentType === 'fire') return '#DC2626';
+  if (incidentType === 'flood') return '#2563EB';
+  if (incidentType === 'road_crash') return '#D97706';
+  if (incidentType === 'medical') return '#7C3AED';
+  return colors.textMuted;
 }
 
 export function statusStyle(status: string) {
@@ -69,6 +73,24 @@ export function statusStyle(status: string) {
   if (status === 'escalated') return reportDetailStyles.statusEscalated;
   if (status === 'resolved') return reportDetailStyles.statusResolved;
   return reportDetailStyles.statusUnverified;
+}
+
+function formatReportDateTime(timestamp: string): string {
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) return '---';
+
+  return date.toLocaleString('en-US', {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  });
+}
+
+function hasReportUpdate(report: MapReportMarker): boolean {
+  return Number.isFinite(Date.parse(report.latestStatusUpdateAt ?? ''));
 }
 
 function RemoteVideoPreview({ uri }: { uri: string }) {
@@ -435,23 +457,34 @@ function PostOverflowMenu() {
 function ReportMetaHeader({
   report,
   showStatus = false,
+  showReporterMetadata = true,
+  centerReporterName = false,
 }: {
   report: MapReportMarker;
   showStatus?: boolean;
+  showReporterMetadata?: boolean;
+  centerReporterName?: boolean;
 }) {
   return (
     <View style={reportDetailStyles.metaBlock}>
-      <View style={reportDetailStyles.reporterRow}>
+      <View
+        style={[
+          reportDetailStyles.reporterRow,
+          centerReporterName && reportDetailStyles.reporterRowCentered,
+        ]}
+      >
         <ReporterAvatar reporter={report.reporter} size={40} />
         <View style={reportDetailStyles.reporterTextWrap}>
           <View style={reportDetailStyles.nameDateRow}>
-            <Text style={reportDetailStyles.reporterName} numberOfLines={1}>
+            <Text style={reportDetailStyles.reporterName}>
               {formatReporterName(report.reporter)}
             </Text>
-            <Text style={reportDetailStyles.publishedDate}>
-              {formatPublishedAt(report.created_at)}
-            </Text>
-            {showStatus ? (
+            {showReporterMetadata ? (
+              <Text style={reportDetailStyles.publishedDate}>
+                {formatPublishedAt(report.created_at)}
+              </Text>
+            ) : null}
+            {showStatus && showReporterMetadata ? (
               <View
                 style={[
                   reportDetailStyles.statusPillSmall,
@@ -465,9 +498,11 @@ function ReportMetaHeader({
             ) : null}
           </View>
           {/* Full location — wraps to more lines instead of truncating. */}
-          <Text style={reportDetailStyles.reporterLocation}>
-            {formatReportLocation(report)}
-          </Text>
+          {showReporterMetadata ? (
+            <Text style={reportDetailStyles.reporterLocation}>
+              {formatReportLocation(report)}
+            </Text>
+          ) : null}
         </View>
         <PostOverflowMenu />
       </View>
@@ -558,6 +593,14 @@ type ReportDetailContentProps = {
   onRequestComments?: () => void;
   /** Show the report status pill beside the published date (official community). */
   showStatus?: boolean;
+  /** Hide the incident type pill when a parent needs a title-only detail card. */
+  showIncidentType?: boolean;
+  /** Hide the report date/time and location beneath the resident name. */
+  showReporterMetadata?: boolean;
+  /** Vertically align a metadata-free resident name with its avatar. */
+  centerReporterName?: boolean;
+  /** Show posted and latest official activity timestamps above the attachments. */
+  showActivityDates?: boolean;
 };
 
 /**
@@ -574,6 +617,10 @@ export function ReportDetailContent({
   onRequestExpand,
   onRequestComments,
   showStatus = false,
+  showIncidentType = true,
+  showReporterMetadata = true,
+  centerReporterName = false,
+  showActivityDates = false,
 }: ReportDetailContentProps) {
   const [internalShowingAllMedia, setInternalShowingAllMedia] = useState(false);
   const showingAllMedia = controlledShowingAllMedia ?? internalShowingAllMedia;
@@ -584,7 +631,27 @@ export function ReportDetailContent({
 
   return (
     <View style={reportDetailStyles.detailBody}>
-      <ReportMetaHeader report={report} showStatus={showStatus} />
+      <ReportMetaHeader
+        report={report}
+        showStatus={showStatus}
+        showReporterMetadata={showReporterMetadata}
+        centerReporterName={centerReporterName}
+      />
+
+      {showActivityDates ? (
+        <View style={reportDetailStyles.activityDates}>
+          <Text style={reportDetailStyles.activityDateText}>
+            Posted {formatReportDateTime(report.created_at)}
+          </Text>
+          {hasReportUpdate(report) ? (
+            <Text style={reportDetailStyles.activityDateText}>
+              Updated {formatReportDateTime(report.latestStatusUpdateAt ?? '')}
+            </Text>
+          ) : (
+            <Text style={reportDetailStyles.activityDateText}>Updated at —</Text>
+          )}
+        </View>
+      ) : null}
 
       {report.media.length > 0 ? (
         showingAllMedia ? (
@@ -607,12 +674,14 @@ export function ReportDetailContent({
       <EngagementActions report={report} onCommentPress={onRequestComments} />
 
       <View style={reportDetailStyles.detailCard}>
-        <View style={reportDetailStyles.incidentTypePill}>
-          <Ionicons name="warning-outline" size={14} color={colors.navigationActive} />
-          <Text style={reportDetailStyles.incidentTypeText}>
-            {formatIncidentType(report.incidentType, report.incidentTypeOther)}
-          </Text>
-        </View>
+        {showIncidentType ? (
+          <View style={reportDetailStyles.incidentTypePill}>
+            <Ionicons name="warning-outline" size={14} color={colors.navigationActive} />
+            <Text style={reportDetailStyles.incidentTypeText}>
+              {formatIncidentType(report.incidentType, report.incidentTypeOther)}
+            </Text>
+          </View>
+        ) : null}
         <Text style={reportDetailStyles.detailTitle}>
           {report.title || 'Untitled report'}
         </Text>
@@ -628,14 +697,12 @@ export function ReportDetailContent({
 
 export function ResidentFeedReportContent({
   report,
-  distanceLabel,
   onRequestExpand,
   onRequestComments,
   onShareReport,
 }: {
   report: MapReportMarker;
-  distanceLabel?: string;
-  onRequestExpand: () => void;
+  onRequestExpand?: () => void;
   onRequestComments: () => void;
   onShareReport: () => void;
 }) {
@@ -650,6 +717,7 @@ export function ResidentFeedReportContent({
         : report.status === 'escalated'
           ? colors.escalated
           : '#A16207';
+  const incidentTypeColor = residentIncidentTypeColor(report.incidentType);
 
   return (
     <View style={residentFeedStyles.reportContent}>
@@ -657,41 +725,32 @@ export function ResidentFeedReportContent({
         <ReporterAvatar reporter={report.reporter} size={40} />
         <View style={residentFeedStyles.reporterDetails}>
           <View style={residentFeedStyles.reporterNameRow}>
-            <Text style={residentFeedStyles.reporterName} numberOfLines={1}>
+            <Text style={residentFeedStyles.reporterName}>
               {formatReporterName(report.reporter)}
             </Text>
-            {report.created_at ? (
-              <Text style={residentFeedStyles.createdAtText} numberOfLines={1}>
-                · {formatPublishedAt(report.created_at)}
-              </Text>
-            ) : null}
           </View>
-          <View style={residentFeedStyles.reportMetaRow}>
-            <Ionicons name="location-sharp" size={12} color={colors.textMuted} />
-            <Text style={residentFeedStyles.metaText} numberOfLines={1}>
-              {formatReportLocation(report)}
-              {distanceLabel ? `  ·  ${distanceLabel}` : ''}
+          {report.created_at ? (
+            <Text style={residentFeedStyles.createdAtText}>
+              {formatPublishedAt(report.created_at)}
             </Text>
-          </View>
+          ) : null}
         </View>
-        <TouchableOpacity
-          style={residentFeedStyles.moreButton}
-          onPress={onRequestExpand}
-          accessibilityRole="button"
-          accessibilityLabel="Open report details"
-        >
-          <Ionicons name="ellipsis-horizontal" size={21} color={colors.textMuted} />
-        </TouchableOpacity>
+        {onRequestExpand ? (
+          <TouchableOpacity
+            style={residentFeedStyles.moreButton}
+            onPress={onRequestExpand}
+            accessibilityRole="button"
+            accessibilityLabel="Open report details"
+          >
+            <Ionicons name="ellipsis-horizontal" size={21} color={colors.textMuted} />
+          </TouchableOpacity>
+        ) : null}
       </View>
 
-      <View style={residentFeedStyles.statusRow}>
-        <View style={[residentFeedStyles.statusPill, { borderColor: statusColor }]}>
-          <Text style={[residentFeedStyles.statusText, { color: statusColor }]}>
-            {residentStatusLabel(report.status)}
-          </Text>
-        </View>
-        <Text style={residentFeedStyles.typeText} numberOfLines={1}>
-          {formatIncidentType(report.incidentType, report.incidentTypeOther)}
+      <View style={residentFeedStyles.copyBlock}>
+        <Text style={residentFeedStyles.reportTitle}>{report.title || 'Untitled report'}</Text>
+        <Text style={residentFeedStyles.reportDescription}>
+          {report.description || 'No description provided.'}
         </Text>
       </View>
 
@@ -718,20 +777,23 @@ export function ResidentFeedReportContent({
         </View>
       )}
 
-      <View style={residentFeedStyles.copyBlock}>
-        <Text style={residentFeedStyles.activityText}>
-          {formatLatestActivityAt(report.latestActivityAt ?? report.created_at)}
-        </Text>
-        <Text style={residentFeedStyles.reportTitle}>{report.title || 'Untitled report'}</Text>
-        <Text style={residentFeedStyles.reportDescription} numberOfLines={3}>
-          {report.description || 'No description provided.'}
-        </Text>
+      <View style={residentFeedStyles.statusRow}>
+        <View style={[residentFeedStyles.statusPill, { borderColor: statusColor }]}>
+          <Text style={[residentFeedStyles.statusText, { color: statusColor }]}>
+            {residentStatusLabel(report.status)}
+          </Text>
+        </View>
+        <View style={[residentFeedStyles.statusPill, { borderColor: incidentTypeColor }]}>
+          <Text style={[residentFeedStyles.statusText, { color: incidentTypeColor }]}>
+            {formatIncidentType(report.incidentType, report.incidentTypeOther)}
+          </Text>
+        </View>
       </View>
 
       <View style={residentFeedStyles.actionRow}>
         <View style={residentFeedStyles.engagementActions}>
           <TouchableOpacity
-            style={residentFeedStyles.confirmationAction}
+            style={residentFeedStyles.iconAction}
             onPress={(event) => {
               event.stopPropagation?.();
               toggleUpvote(report);
@@ -743,14 +805,16 @@ export function ResidentFeedReportContent({
               size={21}
               color={hasUpvoted ? colors.primary : colors.text}
             />
-            <Text
-              style={[
-                residentFeedStyles.actionText,
-                hasUpvoted && residentFeedStyles.actionTextActive,
-              ]}
-            >
-              {upvoteCount} confirmation{upvoteCount === 1 ? '' : 's'}
-            </Text>
+            {upvoteCount > 0 ? (
+              <Text
+                style={[
+                  residentFeedStyles.actionText,
+                  hasUpvoted && residentFeedStyles.actionTextActive,
+                ]}
+              >
+                {upvoteCount}
+              </Text>
+            ) : null}
           </TouchableOpacity>
           <TouchableOpacity
             style={residentFeedStyles.iconAction}
@@ -761,7 +825,9 @@ export function ResidentFeedReportContent({
             accessibilityLabel="View report comments"
           >
             <Ionicons name="chatbubble-outline" size={21} color={colors.text} />
-            <Text style={residentFeedStyles.actionText}>{commentCount}</Text>
+            {commentCount > 0 ? (
+              <Text style={residentFeedStyles.actionText}>{commentCount}</Text>
+            ) : null}
           </TouchableOpacity>
           <TouchableOpacity
             style={residentFeedStyles.iconAction}
@@ -790,14 +856,15 @@ export function ReportDetailCard({
   report,
   isLast = false,
   variant = 'default',
-  distanceLabel,
+  detailCacheScope,
   openRequestKey,
   onViewOnMap,
 }: {
   report: MapReportMarker;
   isLast?: boolean;
   variant?: 'default' | 'residentFeed';
-  distanceLabel?: string;
+  /** Scopes short-lived detail caching to one signed-in resident. */
+  detailCacheScope?: string | null;
   openRequestKey?: string;
   onViewOnMap?: (reportId: string) => void;
 }) {
@@ -811,7 +878,7 @@ export function ReportDetailCard({
     refreshError,
     refreshVersion,
     refresh: refreshDetail,
-  } = useReportDetail(expanded ? report : null);
+  } = useReportDetail(expanded ? report : null, { cacheScope: detailCacheScope });
 
   const modalScrollRef = useRef<ScrollView>(null);
   // While true, every content-size change (media, then comments loading in)
@@ -824,6 +891,14 @@ export function ReportDetailCard({
   // lifts itself above the keyboard and shrinks to the remaining space.
   const keyboardHeight = useKeyboardHeight(expanded);
   const keyboardOpen = keyboardHeight > 0;
+  // Feed rows contain thumbnail media only. Wait for the one-report request
+  // before mounting full media and comments, which keeps sheet animation work
+  // separate from image signing and the comments query.
+  const isDetailLoading =
+    expanded &&
+    !detailReport?.isPending &&
+    !detailReport?.mediaDetailLoaded &&
+    !refreshError;
 
   // Once the keyboard is up the viewport shrinks — re-pin the composer so it
   // is never left hidden behind the keyboard.
@@ -885,8 +960,6 @@ export function ReportDetailCard({
         {variant === 'residentFeed' ? (
           <ResidentFeedReportContent
             report={report}
-            distanceLabel={distanceLabel}
-            onRequestExpand={() => openExpanded(false)}
             onRequestComments={() => openExpanded(true)}
             onShareReport={shareReport}
           />
@@ -900,6 +973,7 @@ export function ReportDetailCard({
       </Pressable>
 
       {/* Full-post sheet: matches the map screen's report-details sheet format. */}
+      {expanded ? (
       <ResidentBottomSheet
         visible={expanded}
         onClose={closeExpanded}
@@ -909,29 +983,8 @@ export function ReportDetailCard({
         sheetStyle={reportDetailStyles.postModalSheet}
         handleAccessibilityLabel="Resize community report"
         showCloseButton={false}
+        animationType="slide"
       >
-            <View style={reportDetailStyles.postModalHeader}>
-              <View style={reportDetailStyles.postModalHeaderButton} />
-
-              <View style={reportDetailStyles.postModalTitleWrap}>
-                <Text style={reportDetailStyles.postModalTitle} numberOfLines={1}>
-                  Report details
-                </Text>
-                <View
-                  style={[
-                    reportDetailStyles.statusPillHeader,
-                    statusStyle(detailReport?.status ?? report.status),
-                  ]}
-                >
-                  <Text style={reportDetailStyles.statusTextHeader}>
-                    {statusLabel(detailReport?.status ?? report.status)}
-                  </Text>
-                </View>
-              </View>
-
-              <View style={reportDetailStyles.postModalHeaderButton} />
-            </View>
-
             <ScrollView
               ref={modalScrollRef}
               style={reportDetailStyles.postModalScroll}
@@ -958,14 +1011,20 @@ export function ReportDetailCard({
                 pendingScrollToComments.current = false;
               }}
             >
-              {/* showingAllMedia is pinned on so the sheet lists every attachment. */}
-              {detailReport ? (
+              {isDetailLoading ? <ReportDetailSheetSkeleton /> : null}
+
+              {/* Full media and comments mount only after the detail request settles. */}
+              {!isDetailLoading && detailReport ? (
                 <>
                   <ReportDetailContent
                     report={detailReport}
                     showingAllMedia
                     onShowingAllMediaChange={() => {}}
                     onRequestComments={jumpToComments}
+                    showIncidentType={false}
+                    showReporterMetadata={false}
+                    centerReporterName
+                    showActivityDates
                   />
 
                   {refreshError ? (
@@ -998,6 +1057,7 @@ export function ReportDetailCard({
                       autoFocus={focusComments}
                       highlighted={focusComments}
                       refreshSignal={refreshVersion}
+                      showInitialLoader={false}
                       onCommentAdded={notifyCommentAdded}
                       onComposerFocus={() =>
                         modalScrollRef.current?.scrollToEnd({ animated: true })
@@ -1008,6 +1068,7 @@ export function ReportDetailCard({
               ) : null}
             </ScrollView>
       </ResidentBottomSheet>
+      ) : null}
     </>
   );
 }
@@ -1042,6 +1103,7 @@ const residentFeedStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
+    flexWrap: 'wrap',
   },
   createdAtText: {
     flexShrink: 0,
@@ -1049,23 +1111,11 @@ const residentFeedStyles = StyleSheet.create({
     fontSize: 11,
     color: colors.textMuted,
   },
-  reportMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-  },
-  metaText: {
-    flex: 1,
-    minWidth: 0,
-    fontFamily: fonts.regular,
-    fontSize: 11,
-    lineHeight: 16,
-    color: colors.textMuted,
-  },
   statusRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
+    flexWrap: 'wrap',
   },
   statusPill: {
     paddingHorizontal: 10,
@@ -1076,12 +1126,6 @@ const residentFeedStyles = StyleSheet.create({
   statusText: {
     fontFamily: fonts.medium,
     fontSize: 11,
-  },
-  typeText: {
-    flex: 1,
-    fontFamily: fonts.regular,
-    fontSize: 11,
-    color: colors.textMuted,
   },
   heroMedia: {
     position: 'relative',
@@ -1122,11 +1166,6 @@ const residentFeedStyles = StyleSheet.create({
   copyBlock: {
     gap: 3,
   },
-  activityText: {
-    fontFamily: fonts.medium,
-    fontSize: fontSizes.xs,
-    color: colors.textMuted,
-  },
   reportTitle: {
     fontFamily: fonts.bold,
     fontSize: fontSizes.lg,
@@ -1144,6 +1183,7 @@ const residentFeedStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
+    flexWrap: 'wrap',
   },
   engagementActions: {
     flexShrink: 1,
@@ -1151,12 +1191,7 @@ const residentFeedStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-  },
-  confirmationAction: {
-    minHeight: 40,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
+    flexWrap: 'wrap',
   },
   iconAction: {
     minWidth: 38,
@@ -1188,6 +1223,14 @@ export const reportDetailStyles = StyleSheet.create({
   },
   detailBody: {
     gap: spacing.md,
+  },
+  activityDates: {
+    gap: 2,
+  },
+  activityDateText: {
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.sm,
+    color: colors.textMuted,
   },
   detailCard: {
     gap: spacing.xs,
@@ -1264,43 +1307,6 @@ export const reportDetailStyles = StyleSheet.create({
       },
     }),
   },
-  postModalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.sm,
-    paddingBottom: spacing.xs,
-  },
-  postModalHeaderButton: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  postModalTitleWrap: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.xs,
-  },
-  postModalTitle: {
-    fontFamily: fonts.semibold,
-    fontSize: fontSizes.lg,
-    color: colors.text,
-    flexShrink: 1,
-  },
-  statusPillHeader: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 3,
-    borderRadius: radius.full,
-    flexShrink: 0,
-  },
-  statusTextHeader: {
-    fontFamily: fonts.semibold,
-    fontSize: fontSizes.xs,
-    color: colors.text,
-  },
   postModalScroll: {
     flex: 1,
     minHeight: 0,
@@ -1324,8 +1330,11 @@ export const reportDetailStyles = StyleSheet.create({
   },
   reporterRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: spacing.sm,
+  },
+  reporterRowCentered: {
+    alignItems: 'center',
   },
   reporterTextWrap: {
     flex: 1,

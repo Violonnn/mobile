@@ -10,11 +10,13 @@ import { supabase } from '../lib/supabase';
 import { useRealtimeChannelName } from './useRealtimeChannelName';
 
 export function useAnnouncements(options?: {
+  enabled?: boolean;
   limit?: number;
   realtime?: boolean;
   staleTimeMs?: number;
 }) {
   const limit = options?.limit ?? 50;
+  const enabled = options?.enabled ?? true;
   const realtime = options?.realtime ?? true;
   const staleTimeMs = options?.staleTimeMs ?? 2 * 60_000;
   const [announcements, setAnnouncements] = useState<AnnouncementRecord[]>([]);
@@ -35,6 +37,7 @@ export function useAnnouncements(options?: {
   const channelName = useRealtimeChannelName('announcements');
 
   const load = useCallback(async () => {
+    if (!enabled) return;
     if (loadRequestRef.current) return loadRequestRef.current;
 
     const request = (async () => {
@@ -53,10 +56,10 @@ export function useAnnouncements(options?: {
 
     loadRequestRef.current = request;
     return request;
-  }, [limit]);
+  }, [enabled, limit]);
 
   const loadMore = useCallback(async () => {
-    if (loadingMore || !hasMore) return;
+    if (!enabled || loadingMore || !hasMore) return;
     setLoadingMore(true);
     const result = await fetchRankedAnnouncements({
       limit,
@@ -73,7 +76,7 @@ export function useAnnouncements(options?: {
       result.announcements.forEach((announcement) => byId.set(announcement.id, announcement));
       return [...byId.values()];
     });
-  }, [hasMore, limit, loadingMore]);
+  }, [enabled, hasMore, limit, loadingMore]);
 
   const refresh = useCallback(async () => {
     setRefreshing(true);
@@ -83,15 +86,16 @@ export function useAnnouncements(options?: {
 
   useFocusEffect(
     useCallback(() => {
+      if (!enabled) return;
       // Preserve the current feed while checking for newer announcements.
       if (!hasLoadedRef.current) setLoading(true);
       const dataIsFresh = Date.now() - lastLoadedAtRef.current < staleTimeMs;
       if (!dataIsFresh) void load();
-    }, [load, staleTimeMs]),
+    }, [enabled, load, staleTimeMs]),
   );
 
   useEffect(() => {
-    if (!realtime) return;
+    if (!enabled || !realtime) return;
 
     const channel = supabase
       .channel(channelName)
@@ -107,7 +111,7 @@ export function useAnnouncements(options?: {
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [channelName, load, realtime]);
+  }, [channelName, enabled, load, realtime]);
 
   return {
     announcements,

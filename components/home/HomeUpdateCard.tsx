@@ -93,10 +93,10 @@ export default function HomeUpdateCard({
       </TouchableOpacity>
 
       <View style={styles.officialUpdateCardCopy}>
-        <Text style={styles.officialUpdateTitle} numberOfLines={2}>
+        <Text style={styles.officialUpdateTitle}>
           {title}
         </Text>
-        <Text style={styles.officialUpdateBody} numberOfLines={3} ellipsizeMode="tail">
+        <Text style={styles.officialUpdateBody}>
           {body}
         </Text>
         <TouchableOpacity

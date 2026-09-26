@@ -9,6 +9,7 @@ import {
   type MapReportMarker,
 } from '../../lib/reports';
 import { colors, fonts, fontSizes, radius, spacing } from '../../styles/theme';
+import { useAccessibilityLayout } from '../../hooks/useAccessibilityLayout';
 import { CollageCellContent } from '../report/ReportDetailCard';
 
 type Props = {
@@ -25,6 +26,7 @@ export default function HighlightedReportCallout({
   onClose,
   onOpenDetails,
 }: Props) {
+  const { isLargeText } = useAccessibilityLayout();
   const previewMedia = report.media[0] ?? null;
   const status = getReportStatusPresentation(report.status);
 
@@ -33,7 +35,13 @@ export default function HighlightedReportCallout({
       pointerEvents="box-none"
       style={[styles.positioner, { bottom: bottomOffset }]}
     >
-      <View style={[styles.container, { borderColor: status.backgroundColor }]}>
+      <View
+        style={[
+          styles.container,
+          isLargeText && styles.containerLargeText,
+          { borderColor: status.backgroundColor },
+        ]}
+      >
         <View style={[styles.iconBadge, { backgroundColor: status.color }]}>
           <Ionicons name="warning" size={18} color={colors.white} />
         </View>
@@ -43,15 +51,15 @@ export default function HighlightedReportCallout({
             <Text style={[styles.eyebrow, { color: status.color }]}>SELECTED REPORT</Text>
             <Text style={[styles.status, { color: status.color }]}>{status.label}</Text>
           </View>
-          <Text style={styles.title} numberOfLines={1}>
+          <Text style={styles.title}>
             {report.title || 'Untitled report'}
           </Text>
-          <Text style={styles.description} numberOfLines={2}>
+          <Text style={styles.description}>
             {report.description || 'No description provided.'}
           </Text>
           <View style={styles.metaRow}>
             <Ionicons name="location-outline" size={14} color={colors.textMuted} />
-            <Text style={styles.metaText} numberOfLines={1}>
+            <Text style={styles.metaText}>
               {formatReportLocation(report)} · {formatPublishedAt(report.created_at)}
             </Text>
           </View>
@@ -113,6 +121,10 @@ const styles = StyleSheet.create({
     shadowRadius: 18,
     elevation: 10,
   },
+  containerLargeText: {
+    alignItems: 'flex-start',
+    flexDirection: 'column',
+  },
   iconBadge: {
     width: 36,
     height: 36,
@@ -131,6 +143,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
+    flexWrap: 'wrap',
   },
   eyebrow: {
     fontFamily: fonts.bold,
@@ -156,7 +169,7 @@ const styles = StyleSheet.create({
   },
   metaRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: 4,
   },
   metaText: {

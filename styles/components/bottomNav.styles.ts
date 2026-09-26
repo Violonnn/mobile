@@ -1,17 +1,14 @@
 import { StyleSheet } from 'react-native';
 
-import { colors, fonts } from '../theme';
+import { colors } from '../theme';
 
 export const navMetrics = {
-  barHeight: 78,
+  barHeight: 68,
   barRadius: 24,
   barMarginHorizontal: 8,
   barBottomGap: 0,
-  itemWidth: 62,
   iconSize: 25,
   activeIconSize: 27,
-  labelGap: 5,
-  labelLineHeight: 14,
   hlWidth: 38,
   hlHeight: 32,
   reportSize: 64,
@@ -20,24 +17,23 @@ export const navMetrics = {
   carveGap: 7,
 };
 
+/**
+ * Resident screens use this value to keep content above the custom tab bar.
+ * The font-scale parameter remains for compatibility with existing callers;
+ * icon-only navigation has a fixed height.
+ */
+export function getResidentBottomNavigationHeight(_fontScale: number): number {
+  return navMetrics.barHeight;
+}
+
 export const navColors = {
   bar: '#FFFFFF',
   iconInactive: '#20252C',
   iconActive: colors.navigationActive,
-  labelInactive: '#20252C',
-  labelActive: colors.navigationActive,
   report: colors.navigationActive,
   reportIcon: '#FFFFFF',
   carve: '#EAF3FC',
 };
-
-const ITEM_CONTENT_HEIGHT =
-  navMetrics.hlHeight + navMetrics.labelGap + navMetrics.labelLineHeight;
-const SIDE_LABEL_TOP =
-  (navMetrics.barHeight - ITEM_CONTENT_HEIGHT) / 2 +
-  navMetrics.hlHeight +
-  navMetrics.labelGap;
-const REPORT_LABEL_TOP = navMetrics.reportLift + SIDE_LABEL_TOP;
 
 export const bottomNavStyles = StyleSheet.create({
   wrapper: {
@@ -62,14 +58,14 @@ export const bottomNavStyles = StyleSheet.create({
     elevation: 7,
   },
   row: {
-    height: navMetrics.barHeight,
     flexDirection: 'row',
     alignItems: 'stretch',
     justifyContent: 'space-around',
     overflow: 'visible',
   },
   item: {
-    width: navMetrics.itemWidth,
+    flex: 1,
+    minWidth: 0,
     height: '100%',
     zIndex: 1,
   },
@@ -83,17 +79,6 @@ export const bottomNavStyles = StyleSheet.create({
     height: navMetrics.hlHeight,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  label: {
-    marginTop: navMetrics.labelGap,
-    fontFamily: fonts.regular,
-    fontSize: 11,
-    lineHeight: navMetrics.labelLineHeight,
-    color: navColors.labelInactive,
-  },
-  labelActive: {
-    fontFamily: fonts.medium,
-    color: navColors.labelActive,
   },
   centerSlot: {
     width: navMetrics.reportSize + 16,
@@ -149,19 +134,5 @@ export const bottomNavStyles = StyleSheet.create({
   reportButtonNotSent: {
     backgroundColor: '#D15A3A',
     shadowColor: '#D15A3A',
-  },
-  reportLabel: {
-    position: 'absolute',
-    top: REPORT_LABEL_TOP,
-    left: 0,
-    right: 0,
-    textAlign: 'center',
-    fontFamily: fonts.medium,
-    fontSize: 11,
-    lineHeight: navMetrics.labelLineHeight,
-    color: navColors.labelActive,
-  },
-  reportLabelNotSent: {
-    color: '#B4432A',
   },
 });

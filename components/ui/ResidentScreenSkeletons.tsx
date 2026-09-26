@@ -114,6 +114,46 @@ export function HomeUpdateSkeleton() {
   );
 }
 
+/**
+ * Reserves the report-detail sheet layout while full media URLs are prepared.
+ * Keeping these dimensions close to the final content prevents the sheet from
+ * jumping as images and comments become available.
+ */
+export function ReportDetailSheetSkeleton() {
+  return (
+    <SkeletonGroup style={styles.reportDetailSheet}>
+      <View style={styles.reportDetailAuthorRow}>
+        <SkeletonBlock style={styles.smallAvatar} />
+        <View style={styles.reportDetailAuthorCopy}>
+          <SkeletonBlock style={styles.lineMedium} />
+          <SkeletonBlock style={styles.reportDetailMetaLine} />
+        </View>
+      </View>
+      <SkeletonBlock style={styles.reportDetailMedia} />
+      <View style={styles.reportDetailActionRow}>
+        <SkeletonBlock style={styles.reportDetailAction} />
+        <SkeletonBlock style={styles.reportDetailAction} />
+        <SkeletonBlock style={styles.reportDetailAction} />
+      </View>
+      <SkeletonBlock style={styles.reportDetailTitle} />
+      <SkeletonBlock style={styles.reportDetailBodyLine} />
+      <SkeletonBlock style={styles.reportDetailBodyLineShort} />
+      <View style={styles.reportDetailComments}>
+        <SkeletonBlock style={styles.sectionTitle} />
+        {[0, 1].map((comment) => (
+          <View key={comment} style={styles.reportDetailCommentRow}>
+            <SkeletonBlock style={styles.reportDetailCommentAvatar} />
+            <View style={styles.reportDetailCommentCopy}>
+              <SkeletonBlock style={styles.reportDetailCommentName} />
+              <SkeletonBlock style={styles.reportDetailCommentBody} />
+            </View>
+          </View>
+        ))}
+      </View>
+    </SkeletonGroup>
+  );
+}
+
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
@@ -177,4 +217,25 @@ const styles = StyleSheet.create({
   },
   homeUpdateSkeleton: { gap: spacing.md, paddingVertical: spacing.md },
   homeUpdateMedia: { width: '100%', height: 160, borderRadius: radius.xl },
+  reportDetailSheet: { gap: spacing.md, paddingVertical: spacing.xs },
+  reportDetailAuthorRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  reportDetailAuthorCopy: { flex: 1, gap: spacing.sm },
+  reportDetailMetaLine: { width: '38%', height: 11 },
+  reportDetailMedia: { width: '100%', height: 250, borderRadius: radius.lg },
+  reportDetailActionRow: { flexDirection: 'row', gap: spacing.md },
+  reportDetailAction: { width: 52, height: 26, borderRadius: radius.full },
+  reportDetailTitle: { width: '64%', height: 20 },
+  reportDetailBodyLine: { width: '100%', height: 14 },
+  reportDetailBodyLineShort: { width: '76%', height: 14 },
+  reportDetailComments: {
+    gap: spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
+    paddingTop: spacing.md,
+  },
+  reportDetailCommentRow: { flexDirection: 'row', gap: spacing.sm },
+  reportDetailCommentAvatar: { width: 34, height: 34, borderRadius: radius.full },
+  reportDetailCommentCopy: { flex: 1, gap: spacing.sm },
+  reportDetailCommentName: { width: '32%', height: 12 },
+  reportDetailCommentBody: { width: '84%', height: 28 },
 });

@@ -8,6 +8,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -34,12 +35,9 @@ import {
   type CommunityReportSort,
   type CommunityReportStatusFilter,
 } from '../../lib/communityReportFeed';
-import {
-  formatDistance,
-  normalizeSearchText,
-  type Coordinate,
-} from '../../lib/reportProximity';
+import { normalizeSearchText, type Coordinate } from '../../lib/reportProximity';
 import { feedStyles as styles } from '../../styles/screens/feed.styles';
+import { getResidentBottomNavigationHeight } from '../../styles/components/bottomNav.styles';
 import { colors } from '../../styles/theme';
 
 type FeedTab = 'official' | 'community';
@@ -79,6 +77,9 @@ function getCommunitySectionCopy(
 export default function FeedScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { fontScale } = useWindowDimensions();
+  const bottomNavigationPadding =
+    getResidentBottomNavigationHeight(fontScale) + insets.bottom + 16;
   const { reportId, openRequest, tab } = useLocalSearchParams<{
     reportId?: string | string[];
     openRequest?: string | string[];
@@ -87,6 +88,9 @@ export default function FeedScreen() {
   const requestedReportId = Array.isArray(reportId) ? reportId[0] : reportId;
   const requestedOpenKey = Array.isArray(openRequest) ? openRequest[0] : openRequest;
   const requestedTab = Array.isArray(tab) ? tab[0] : tab;
+  const [activeTab, setActiveTab] = useState<FeedTab>(
+    requestedTab === 'official' ? 'official' : 'community',
+  );
   const handledRequestedScopeKey = useRef<string | undefined>(undefined);
   const { profile, barangays, profileInitialLoading, refreshProfile } = useResidentData();
   const {
@@ -98,6 +102,7 @@ export default function FeedScreen() {
     reload,
     loadMore: loadMoreReports,
   } = useReports({
+    enabled: activeTab === 'community',
     realtime: false,
     limit: 15,
     includeMediaSummaries: true,
@@ -111,9 +116,11 @@ export default function FeedScreen() {
     hasMore: hasMoreAnnouncements,
     loadMore: loadMoreAnnouncements,
     refresh: refreshAnnouncements,
-  } = useAnnouncements({ limit: 15, realtime: false });
-
-  const [activeTab, setActiveTab] = useState<FeedTab>('community');
+  } = useAnnouncements({
+    enabled: activeTab === 'official',
+    limit: 15,
+    realtime: false,
+  });
   const municipality = profile?.municipality || 'Minglanilla';
   const barangay = profile?.barangay || 'your area';
   const matchingBarangay = useMemo(() => {
@@ -243,8 +250,15 @@ export default function FeedScreen() {
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([reload(), refreshAnnouncements()]);
-    setRefreshing(false);
+    try {
+      if (activeTab === 'community') {
+        await reload();
+      } else {
+        await refreshAnnouncements();
+      }
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   const openReportOnMap = useCallback(
@@ -393,7 +407,7 @@ export default function FeedScreen() {
               style={styles.scrollView}
               contentContainerStyle={[
                 styles.communityListContent,
-                { paddingBottom: insets.bottom + 118 },
+                { paddingBottom: bottomNavigationPadding },
               ]}
               sections={initialLoading || activeError ? [] : displayedCommunitySections}
               keyExtractor={(item) => item.report.id}
@@ -487,9 +501,7 @@ export default function FeedScreen() {
                   report={item.report}
                   isLast={index === section.data.length - 1}
                   variant="residentFeed"
-                  distanceLabel={
-                    item.distance == null ? undefined : formatDistance(item.distance)
-                  }
+                  detailCacheScope={profile?.id}
                   openRequestKey={
                     item.report.id === requestedReportId
                       ? requestedOpenKey ?? requestedReportId
@@ -506,7 +518,7 @@ export default function FeedScreen() {
                 styles.scrollContent,
                 styles.contentInner,
                 styles.officialContentInner,
-                { paddingBottom: insets.bottom + 118 },
+                { paddingBottom: bottomNavigationPadding },
               ]}
               data={initialLoading || activeError ? [] : filteredAnnouncements}
               keyExtractor={(announcement) => announcement.id}

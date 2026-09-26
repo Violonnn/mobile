@@ -31,7 +31,7 @@ import { getResidentMapTheme, type ResidentMapTheme } from '../../lib/mapPrefere
 import { createMutableNumber } from '../../lib/mutableNumber';
 import type { MapReportMarker } from '../../lib/reports';
 import { evacuationStatusLabel, facilityTypeLabel } from '../../lib/resources';
-import { navMetrics } from '../../styles/components/bottomNav.styles';
+import { getResidentBottomNavigationHeight } from '../../styles/components/bottomNav.styles';
 import { residentMapStyles as styles } from '../../styles/screens/residentMap.styles';
 import { colors, spacing } from '../../styles/theme';
 
@@ -46,7 +46,8 @@ const CONTRIBUTION_PANEL_STATES: ContributionPanelState[] = [
 export default function MapScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const { width: windowWidth, height: windowHeight, fontScale } = useWindowDimensions();
+  const bottomNavigationHeight = getResidentBottomNavigationHeight(fontScale);
   const { reportId, resourceId, resourceKind, fromNotification } = useLocalSearchParams<{
     reportId?: string | string[];
     resourceId?: string | string[];
@@ -286,10 +287,10 @@ export default function MapScreen() {
     ? Math.max(240, Math.min(windowHeight * 0.7, 430))
     : Math.max(300, Math.min(windowHeight * 0.46, 520));
   const contributionFullHeight = Math.max(300, windowHeight - insets.top);
-  const contributionBottomInset = navMetrics.barHeight + insets.bottom + 24;
+  const contributionBottomInset = bottomNavigationHeight + insets.bottom + 24;
   const contributionHiddenOffset = Math.max(
     0,
-    contributionFullHeight - navMetrics.barHeight - insets.bottom,
+    contributionFullHeight - bottomNavigationHeight - insets.bottom,
   );
   const contributionOffsets = useMemo(
     () => ({
@@ -301,13 +302,13 @@ export default function MapScreen() {
       collapsed: Math.max(
         0,
         contributionFullHeight -
-          navMetrics.barHeight -
+          bottomNavigationHeight -
           insets.bottom -
           COLLAPSED_HEADER_HEIGHT -
           RESTING_CONTRIBUTION_LIFT,
       ),
     }),
-    [contributionFullHeight, contributionMediumHeight, insets.bottom],
+    [bottomNavigationHeight, contributionFullHeight, contributionMediumHeight, insets.bottom],
   );
 
   const settleContributions = useCallback(
@@ -538,7 +539,7 @@ export default function MapScreen() {
         {highlightedReport ? (
             <HighlightedReportCallout
               report={highlightedReport}
-              bottomOffset={navMetrics.barHeight + insets.bottom + spacing.md}
+              bottomOffset={bottomNavigationHeight + insets.bottom + spacing.md}
               onClose={clearHighlightedReport}
               onOpenDetails={openHighlightedReportDetails}
             />

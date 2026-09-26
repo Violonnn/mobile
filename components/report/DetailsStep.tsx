@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { reportStyles as styles, reportColors } from '../../styles/screens/report.styles';
+import { useAccessibilityLayout } from '../../hooks/useAccessibilityLayout';
 import type { ReadableAddress } from '../../lib/location';
 import type { BarangayOption } from '../../lib/barangays';
 import {
@@ -73,6 +74,8 @@ export default function DetailsStep({
   submitLabel = 'Review report',
   residentLayout = false,
 }: Props) {
+  const { isLargeText } = useAccessibilityLayout();
+
   if (residentLayout) {
     return (
       <View style={styles.stepContent}>
@@ -82,7 +85,12 @@ export default function DetailsStep({
         </Text>
 
         <Text style={styles.residentFieldLabel}>Incident type</Text>
-        <View style={styles.residentIncidentTypeGrid}>
+        <View
+          style={[
+            styles.residentIncidentTypeGrid,
+            isLargeText && styles.residentIncidentTypeGridLargeText,
+          ]}
+        >
           {INCIDENT_TYPE_OPTIONS.map((option) => {
             const selected = incidentType === option.value;
             return (
@@ -91,6 +99,7 @@ export default function DetailsStep({
                 style={[
                   styles.residentIncidentTypeOption,
                   selected && styles.residentIncidentTypeOptionSelected,
+                  isLargeText && styles.residentIncidentTypeOptionLargeText,
                 ]}
                 onPress={() => onChangeIncidentType(option.value)}
                 disabled={submitting}
@@ -107,8 +116,8 @@ export default function DetailsStep({
                   style={[
                     styles.residentIncidentTypeText,
                     selected && styles.residentIncidentTypeTextSelected,
+                    isLargeText && styles.residentIncidentTypeTextLargeText,
                   ]}
-                  numberOfLines={2}
                 >
                   {option.label}
                 </Text>
