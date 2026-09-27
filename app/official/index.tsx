@@ -30,6 +30,7 @@ import MdrrmoHeader from '../../components/official/MdrrmoHeader';
 import EvacuationSummarySection from '../../components/official/EvacuationSummarySection';
 import MayorDashboard from '../../components/official/MayorDashboard';
 import MdrrmoCommandDashboard from '../../components/official/MdrrmoCommandDashboard';
+import BdrrmoCommandDashboard from '../../components/official/BdrrmoCommandDashboard';
 import {
   fetchMyOfficialPublicProfile,
   type OfficialPublicProfile,
@@ -38,7 +39,10 @@ import { formatPublishedAt } from '../../lib/formatTime';
 import type { OfficialReportQueueItem, ReportStatus } from '../../lib/officialReports';
 import IncidentTypeBadge from '../../components/report/IncidentTypeBadge';
 import ProfileAvatar from '../../components/profile/ProfileAvatar';
-import { OfficialShellSkeleton } from '../../components/ui/OfficialScreenSkeletons';
+import {
+  CommandScreenSkeleton,
+  OfficialShellSkeleton,
+} from '../../components/ui/OfficialScreenSkeletons';
 
 function officialDisplayName(profile: OfficialPublicProfile | null): string | null {
   if (!profile) return null;
@@ -229,13 +233,27 @@ export default function OfficialCommandScreen() {
     );
   }
 
+  if (officialKind === 'BDRRMO') {
+    return (
+      <BdrrmoCommandDashboard
+        reports={reports}
+        reportsError={error}
+        reportsLoading={loading}
+        reportsRefreshing={refreshing}
+        assignedBarangayId={scope.barangay_id}
+        assignedBarangay={scope.barangay_name}
+        refreshReports={refresh}
+        reloadReports={reload}
+      />
+    );
+  }
+
   if (isOperationalCommand) {
     const isBdrrmo = officialKind === 'BDRRMO';
     const profileName = officialDisplayName(profile);
     const statusCards: { status: ReportStatus; label: string; count: number }[] = [
       { status: 'unverified', label: 'Unverified', count: counts.unverified },
       { status: 'verified', label: 'Verified', count: counts.verified },
-      { status: 'escalated', label: 'Escalated', count: counts.escalated },
       { status: 'resolved', label: 'Resolved', count: counts.resolved },
     ];
     // Card width tracks the device: leave side padding, and leave a peek of the
@@ -303,7 +321,7 @@ export default function OfficialCommandScreen() {
                     />
                   ) : (
                     <Text style={styles.commandRoleBadgeText}>
-                      MDRRMO
+                      BDRRMO
                     </Text>
                   )}
                 </TouchableOpacity>
@@ -321,9 +339,23 @@ export default function OfficialCommandScreen() {
           ) : null}
 
           <View style={styles.section}>
-            {loading ? (
-              <View style={styles.stateBox}><ActivityIndicator color={colors.themeSoft} /></View>
-            ) : null}
+            <Text style={styles.sectionTitle}>Assigned barangay intake</Text>
+            <Text style={styles.screenSubtitle}>{scopeLabelFromAccess(scope)}</Text>
+            <TouchableOpacity
+              style={styles.primaryAction}
+              onPress={() =>
+                router.push('/official/incidents?status=unverified&from=command' as Href)
+              }
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel="Review unverified reports"
+            >
+              <Text style={styles.primaryActionText}>Review reports</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.section}>
+            {loading && reports.length === 0 ? <CommandScreenSkeleton /> : null}
             {!loading && error ? (
               <View style={styles.stateBox}>
                 <Text style={styles.stateTitle}>Could not load reports</Text>

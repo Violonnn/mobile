@@ -22,6 +22,13 @@ function fullNameFromProfile(profile: OfficialPublicProfile | null): string | nu
     .trim() || null;
 }
 
+function displayFirstName(firstName: string | null | undefined, fallback: string): string {
+  const trimmedFirstName = firstName?.trim();
+  if (!trimmedFirstName) return fallback;
+
+  return `${trimmedFirstName.charAt(0).toLocaleUpperCase()}${trimmedFirstName.slice(1)}`;
+}
+
 type MdrrmoHeaderProps = {
   /** Bold navigation title (e.g. Command, Community). */
   title: string;
@@ -35,6 +42,8 @@ type MdrrmoHeaderProps = {
   variant?: 'default' | 'mayorHero';
   /** Replaces the seal with a back button for a Command extension screen. */
   showCommandBack?: boolean;
+  /** Replaces the usual officer identity line below the title when provided. */
+  subtitleOverride?: string | null;
 };
 
 export default function MdrrmoHeader({
@@ -44,6 +53,7 @@ export default function MdrrmoHeader({
   tone = 'default',
   variant = 'default',
   showCommandBack = false,
+  subtitleOverride,
 }: MdrrmoHeaderProps) {
   const router = useRouter();
   const { officialKind, scope } = useOfficialPortal();
@@ -74,15 +84,21 @@ export default function MdrrmoHeader({
       : officialKind || 'MDRRMO';
   const isMdrrmoCommand = title === 'Command' && officialKind === 'MDRRMO';
   const isMdrrmoCommunity = title === 'Community' && officialKind === 'MDRRMO';
-  const commandGreeting = profile?.first_name?.trim() || 'there';
+  const isBdrrmoCommand = title === 'Command' && officialKind === 'BDRRMO';
+  const isBdrrmoCommunity = title === 'Community' && officialKind === 'BDRRMO';
+  const isOperationalCommand = isMdrrmoCommand || isBdrrmoCommand;
+  const isOperationalCommunity = isMdrrmoCommunity || isBdrrmoCommunity;
+  const commandGreeting = displayFirstName(profile?.first_name, 'there');
   // The MDRRMO Command dashboard is personal to the signed-in officer.
   // Community already identifies its workspace, so it does not repeat the officer name.
   const identityLine =
-    isMdrrmoCommand || isMdrrmoCommunity
+    isOperationalCommand || isOperationalCommunity
       ? null
       : name
         ? `${name} · ${roleLabel}`
         : roleLabel;
+  const headerSubtitle =
+    subtitleOverride === undefined ? identityLine : subtitleOverride;
 
   const isOverlay = tone === 'overlay';
 
@@ -96,7 +112,7 @@ export default function MdrrmoHeader({
   }
 
   if (variant === 'mayorHero') {
-    const mayorFirstName = profile?.first_name?.trim() || 'Dee';
+    const mayorFirstName = displayFirstName(profile?.first_name, 'Dee');
 
     return (
       <>
@@ -195,7 +211,7 @@ export default function MdrrmoHeader({
   return (
     <>
       <View style={styles.headerRow}>
-        {isMdrrmoCommand ? (
+        {isOperationalCommand ? (
           <View style={styles.headerIdentity}>
             <View style={styles.brandMark}>
               <Image
@@ -215,7 +231,9 @@ export default function MdrrmoHeader({
                 style={[styles.commandIdentitySubtitle, isOverlay && styles.screenSubtitleOverlay]}
                 numberOfLines={1}
               >
-                MDRRMO Minglanilla
+                {officialKind === 'BDRRMO'
+                  ? `BDRRMO · ${scope?.barangay_name || 'Assigned barangay'}`
+                  : 'MDRRMO Minglanilla'}
               </Text>
             </View>
           </View>
@@ -250,12 +268,12 @@ export default function MdrrmoHeader({
               >
                 {title}
               </Text>
-              {identityLine ? (
+              {headerSubtitle ? (
                 <Text
                   style={[styles.screenSubtitle, isOverlay && styles.screenSubtitleOverlay]}
                   numberOfLines={1}
                 >
-                  {identityLine}
+                  {headerSubtitle}
                 </Text>
               ) : null}
             </View>

@@ -1,11 +1,10 @@
 // components/navigation/OfficialBottomNav.tsx
 // Role-aware official portal bottom bar.
-// BDRRMO: Command, Community, centered Reports, Map, Settings
-// MDRRMO: Command, Community, Map, Settings
+// BDRRMO/MDRRMO: Command, Community, Map, Settings
 // Mayor: Brief, Situations, Community, Map, Settings
 
-import React, { useCallback, memo, useMemo, useState } from 'react';
-import { Animated, View, Text, Pressable } from 'react-native';
+import React, { useCallback, memo, useMemo } from 'react';
+import { View, Text, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -125,51 +124,6 @@ const NavItem = memo(function NavItem({
   );
 });
 
-function IncidentCenterButton({ onPress, label = 'Incidents' }: { onPress: () => void; label?: string }) {
-  const [buttonScale] = useState(() => new Animated.Value(1));
-  const [waveScale] = useState(() => new Animated.Value(0.85));
-  const [waveOpacity] = useState(() => new Animated.Value(0));
-
-  const handlePress = useCallback(() => {
-    waveOpacity.setValue(0.3);
-    waveScale.setValue(0.85);
-    Animated.parallel([
-      Animated.sequence([
-        Animated.timing(buttonScale, { toValue: 1.08, duration: 100, useNativeDriver: true }),
-        Animated.spring(buttonScale, { toValue: 1, damping: 12, stiffness: 220, mass: 0.6, useNativeDriver: true }),
-      ]),
-      Animated.timing(waveScale, { toValue: 1.45, duration: 380, useNativeDriver: true }),
-      Animated.timing(waveOpacity, { toValue: 0, duration: 380, useNativeDriver: true }),
-    ]).start();
-    onPress();
-  }, [buttonScale, onPress, waveOpacity, waveScale]);
-
-  return (
-    <View style={styles.incidentButtonWrap} pointerEvents="box-none">
-      <View style={styles.incidentButtonStage}>
-        <View style={styles.incidentCarve} pointerEvents="none" />
-        <Animated.View pointerEvents="none" style={[styles.incidentWave, { opacity: waveOpacity, transform: [{ scale: waveScale }] }]} />
-        <Animated.View style={{ transform: [{ scale: buttonScale }] }}>
-          <Pressable
-            style={styles.incidentButton}
-            onPress={handlePress}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel={`Open ${label.toLowerCase()}`}
-          >
-            <Ionicons
-              name="alert-circle"
-              size={officialNavMetrics.incidentIconSize}
-              color={officialNavColors.incidentIcon}
-            />
-          </Pressable>
-        </Animated.View>
-      </View>
-      <Text style={styles.incidentLabel} pointerEvents="none">{label}</Text>
-    </View>
-  );
-}
-
 export default function OfficialBottomNav({
   state,
   navigation,
@@ -177,16 +131,15 @@ export default function OfficialBottomNav({
   const insets = useSafeAreaInsets();
   const { officialKind } = useOfficialPortal();
   const isMayor = officialKind === 'Mayor';
-  const isMdrrmo = officialKind === 'MDRRMO';
   const isBdrrmo = officialKind === 'BDRRMO';
-  const usesOperationalNavigation = isBdrrmo || isMdrrmo;
+  const usesOperationalNavigation = isBdrrmo || officialKind === 'MDRRMO';
   const tabs = useMemo(() => tabsForRole(isMayor), [isMayor]);
   const currentRouteName = state.routes[state.index]?.name;
-  // MDRRMO manages reports from Command, just like its resource quick tools.
+  // Operational roles manage reports from Command, just like resource quick tools.
   const commandSectionActive =
     currentRouteName === 'index' ||
     currentRouteName === 'resources' ||
-    (isMdrrmo && currentRouteName === 'incidents');
+    (usesOperationalNavigation && currentRouteName === 'incidents');
 
   const navigateTo = useCallback(
     (routeName: string) => {
@@ -229,7 +182,7 @@ export default function OfficialBottomNav({
       >
         <View style={[styles.bar, { height: officialNavMetrics.barHeight + insets.bottom }]}>
           <View style={styles.row}>
-            {(isMdrrmo ? MDRRMO_TABS : OPERATIONAL_LEFT_TABS).map((tab) => (
+            {MDRRMO_TABS.map((tab) => (
               <NavItem
                 key={tab.name}
                 config={tab}
@@ -240,21 +193,7 @@ export default function OfficialBottomNav({
                 onPress={() => navigateTo(tab.name)}
               />
             ))}
-            {isBdrrmo ? <View style={styles.centerSlot} /> : null}
-            {isBdrrmo
-              ? OPERATIONAL_RIGHT_TABS.map((tab) => (
-                  <NavItem
-                    key={tab.name}
-                    config={tab}
-                    focused={currentRouteName === tab.name}
-                    onPress={() => navigateTo(tab.name)}
-                  />
-                ))
-              : null}
           </View>
-          {isBdrrmo ? (
-            <IncidentCenterButton onPress={() => navigateTo('incidents')} label="Report" />
-          ) : null}
         </View>
       </View>
     );
