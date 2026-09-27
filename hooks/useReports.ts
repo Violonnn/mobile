@@ -156,6 +156,15 @@ export function useReports({
         nextLatitude !== existing.latitude ||
         nextLongitude !== existing.longitude;
       if (pinFieldsChanged) {
+        // Patch status immediately so role-specific surfaces can hide a handed-off
+        // report even if the following authorized refresh is slow or offline.
+        if (next.status != null && String(next.status) !== existing.status) {
+          setReports((current) =>
+            current.map((report) =>
+              report.id === id ? { ...report, status: String(next.status) } : report,
+            ),
+          );
+        }
         void load();
         return;
       }

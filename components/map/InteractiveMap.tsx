@@ -84,12 +84,20 @@ type Props = {
   dismissSearchSignal?: number;
   /** Adds resident-facing workflow statuses beneath the Reports layer. */
   showReportStatusFilters?: boolean;
+  /** Limits report-status chips to statuses the current role can access. */
+  reportStatusOptions?: readonly ReportStatusFilter[];
   /** Keeps resident layer controls clear of the device status bar. */
   layerFiltersTopInset?: number;
   /** Reduces vertical spacing for filters shown over a full-screen map. */
   compactLayerFilters?: boolean;
   /** Adds the resident search field and filter-panel control from the map design. */
   showSearchBar?: boolean;
+  /** Hides map-overlay filter controls when the screen provides them in its header. */
+  showLayerPanelToggle?: boolean;
+  /** Positions the expanded filter panel for screens whose trigger lives on the right. */
+  layerPanelAlign?: 'left' | 'right';
+  /** Lets a screen rely on its own search-close control instead of an in-field clear action. */
+  showSearchClearButton?: boolean;
   searchBarTopInset?: number;
   userLocation?: MapUserLocation | null;
   onLayerVisibilityChange?: (next: MapLayerVisibility) => void;
@@ -139,6 +147,8 @@ const REPORT_STATUS_OPTIONS: {
   { value: 'escalated', label: 'Escalated' },
   { value: 'resolved', label: 'Resolved' },
 ];
+
+const ALL_REPORT_STATUS_FILTERS = REPORT_STATUS_OPTIONS.map((option) => option.value);
 
 function buildMapHtml(
   showZoomControls: boolean,
@@ -961,9 +971,13 @@ export default function InteractiveMap({
   onLayerPanelVisibilityChange,
   dismissSearchSignal = 0,
   showReportStatusFilters = false,
+  reportStatusOptions = ALL_REPORT_STATUS_FILTERS,
   layerFiltersTopInset = spacing.md,
   compactLayerFilters = false,
   showSearchBar = false,
+  showLayerPanelToggle = true,
+  layerPanelAlign = 'left',
+  showSearchClearButton = true,
   searchBarTopInset = spacing.md,
   userLocation = null,
   onLayerVisibilityChange,
@@ -1029,6 +1043,11 @@ export default function InteractiveMap({
   const [reportStatusFilter, setReportStatusFilter] =
     useState<ReportStatusFilter>('all');
   const isLayerPanelVisible = layerPanelVisible ?? uncontrolledLayerPanelVisible;
+
+  useEffect(() => {
+    if (reportStatusOptions.includes(reportStatusFilter)) return;
+    setReportStatusFilter('all');
+  }, [reportStatusFilter, reportStatusOptions]);
 
   useEffect(() => {
     // The screen owns navigation focus, while the map keeps its WebView and viewport mounted.
@@ -1290,13 +1309,14 @@ export default function InteractiveMap({
               style={mapStyles.searchInput}
               returnKeyType="search"
               autoCorrect={false}
+              autoFocus
               onSubmitEditing={() => {
                 const firstResult = searchResults[0];
                 if (firstResult) selectSearchResult(firstResult);
               }}
               accessibilityLabel="Search reports or places"
             />
-            {searchQuery ? (
+            {showSearchClearButton && searchQuery ? (
               <Pressable
                 style={mapStyles.searchAction}
                 onPress={() => setSearchQuery('')}
@@ -1306,20 +1326,22 @@ export default function InteractiveMap({
                 <Ionicons name="close" size={19} color={colors.textMuted} />
               </Pressable>
             ) : null}
-            <Pressable
-              style={mapStyles.searchAction}
-              onPress={() => {
-                // Keep the filter card clear of any open search suggestions.
-                Keyboard.dismiss();
-                setSearchFocused(false);
-                setLayerPanelVisibility(!isLayerPanelVisible);
-              }}
-              accessibilityRole="button"
-              accessibilityLabel="Show or hide map layers"
-              accessibilityState={{ expanded: isLayerPanelVisible }}
-            >
-              <Ionicons name="options-outline" size={22} color={colors.navigationActive} />
-            </Pressable>
+            {showLayerPanelToggle ? (
+              <Pressable
+                style={mapStyles.searchAction}
+                onPress={() => {
+                  // Keep the filter card clear of any open search suggestions.
+                  Keyboard.dismiss();
+                  setSearchFocused(false);
+                  setLayerPanelVisibility(!isLayerPanelVisible);
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Show or hide map layers"
+                accessibilityState={{ expanded: isLayerPanelVisible }}
+              >
+                <Ionicons name="options-outline" size={22} color={colors.navigationActive} />
+              </Pressable>
+            ) : null}
           </View>
 
           {searchFocused && normalizedSearchQuery.length >= 2 ? (
@@ -1364,6 +1386,7 @@ export default function InteractiveMap({
             mapStyles.legend,
             compactLayerFilters && mapStyles.legendCompact,
             showSearchBar && mapStyles.legendBelowSearch,
+            layerPanelAlign === 'right' && mapStyles.legendRight,
             { top: showSearchBar ? searchBarTopInset + 60 : layerFiltersTopInset },
           ]}
           pointerEvents="box-none"
@@ -1409,7 +1432,9 @@ export default function InteractiveMap({
             <View style={mapStyles.statusFilterWrap}>
               <Text style={mapStyles.statusFilterLabel}>Report status</Text>
               <View style={mapStyles.statusFilterGrid}>
-                {REPORT_STATUS_OPTIONS.map((option) => {
+            {REPORT_STATUS_OPTIONS.filter((option) =>
+              reportStatusOptions.includes(option.value),
+            ).map((option) => {
                   const selected = reportStatusFilter === option.value;
                   return (
                     <Pressable
@@ -1497,7 +1522,7 @@ export default function InteractiveMap({
         </View>
       ) : null}
 
-      {showLayerFilters && collapsibleLayerFilters && !isLayerPanelVisible && !showSearchBar ? (
+      {showLayerFilters && collapsibleLayerFilters && !isLayerPanelVisible && !showSearchBar && showLayerPanelToggle ? (
         <Pressable
           style={[mapStyles.legendOpenButton, { top: layerFiltersTopInset }]}
           onPress={() => setLayerPanelVisibility(true)}
@@ -1557,6 +1582,10 @@ const mapStyles = StyleSheet.create({
   legendBelowSearch: {
     left: undefined,
     right: 20,
+  },
+  legendRight: {
+    left: undefined,
+    right: spacing.md,
   },
   legendHeader: {
     width: '100%',

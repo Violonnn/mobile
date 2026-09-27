@@ -7,9 +7,11 @@ import {
   PanResponder,
   View,
   Text,
+  TouchableOpacity,
   StyleSheet,
   useWindowDimensions,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useFocusEffect, useLocalSearchParams, useRouter, type Href } from 'expo-router';
@@ -42,6 +44,7 @@ import { createMutableNumber } from '../../lib/mutableNumber';
 import { MapScreenSkeleton } from '../../components/ui/OfficialScreenSkeletons';
 
 const COLLAPSED_PANEL_HEADER_HEIGHT = 88;
+const BDRRMO_MAP_REPORT_STATUS_OPTIONS = ['all', 'unverified', 'verified', 'resolved'] as const;
 
 export default function OfficialMapScreen() {
   const router = useRouter();
@@ -81,6 +84,7 @@ export default function OfficialMapScreen() {
     evacuationCenters: true,
   });
   const [layerPanelVisible, setLayerPanelVisible] = useState(false);
+  const [mapSearchVisible, setMapSearchVisible] = useState(false);
   const [dismissMapSearchSignal, setDismissMapSearchSignal] = useState(0);
   const [escalatedPanelCollapsed, setEscalatedPanelCollapsed] = useState(false);
   const [escalatedPanelTranslateY] = useState(() => new Animated.Value(0));
@@ -92,7 +96,8 @@ export default function OfficialMapScreen() {
       return markers;
     }
     return markers.filter(
-      (marker) => marker.barangay_id === scopeBarangayId,
+      (marker) =>
+        marker.barangay_id === scopeBarangayId && marker.status !== 'escalated',
     );
   }, [markers, officialKind, scopeBarangayId]);
 
@@ -153,6 +158,12 @@ export default function OfficialMapScreen() {
     () => scopedMarkers.find((marker) => marker.id === highlightedReportId) ?? null,
     [highlightedReportId, scopedMarkers],
   );
+  const bdrrmoFocusTarget = useMemo(() => {
+    if (!focusTarget?.reportId) return focusTarget;
+    return scopedMarkers.some((marker) => marker.id === focusTarget.reportId)
+      ? focusTarget
+      : null;
+  }, [focusTarget, scopedMarkers]);
 
   const escalatedReports = useMemo(
     () =>
@@ -164,8 +175,24 @@ export default function OfficialMapScreen() {
         ),
     [scopedMarkers],
   );
+  const bdrrmoResponseReports = useMemo(
+    () =>
+      scopedMarkers
+        .filter(
+          (marker) =>
+            marker.status === 'unverified' || marker.status === 'verified',
+        )
+        .sort((first, second) => {
+          // New reports need verification before already-verified reports need a disposition.
+          const firstPriority = first.status === 'unverified' ? 0 : 1;
+          const secondPriority = second.status === 'unverified' ? 0 : 1;
+          if (firstPriority !== secondPriority) return firstPriority - secondPriority;
+          return new Date(second.created_at).getTime() - new Date(first.created_at).getTime();
+        }),
+    [scopedMarkers],
+  );
 
-  const openEscalatedReport = (report: MapReportMarker) => {
+  const openOperationalReport = (report: MapReportMarker) => {
     setLayers((current) => ({ ...current, reports: true }));
     setSelectedReportIds([]);
     setHighlightedReportId(report.id);
@@ -212,6 +239,7 @@ export default function OfficialMapScreen() {
     useCallback(() => {
       // Preserve layer choices and map position while dismissing focus-only UI.
       setLayerPanelVisible(false);
+      setMapSearchVisible(false);
       setDismissMapSearchSignal((current) => current + 1);
       setSelectedReportIds([]);
       setHighlightedReportId(null);
@@ -461,7 +489,7 @@ export default function OfficialMapScreen() {
               error={error}
               bottomInset={escalatedPanelBottomInset}
               collapsed={escalatedPanelCollapsed}
-              onLocateReport={openEscalatedReport}
+              onLocateReport={openOperationalReport}
               onRetry={() => void reload()}
               onToggleCollapsed={() => settleEscalatedPanel(!escalatedPanelCollapsed)}
               dragHandlePanHandlers={escalatedPanelPanResponder.panHandlers}
@@ -559,7 +587,7 @@ export default function OfficialMapScreen() {
               error={error}
               bottomInset={escalatedPanelBottomInset}
               collapsed={escalatedPanelCollapsed}
-              onLocateReport={openEscalatedReport}
+              onLocateReport={openOperationalReport}
               onReviewReport={(report) =>
                 router.push(`/official/${report.id}` as Href)
               }
@@ -586,6 +614,149 @@ export default function OfficialMapScreen() {
             onClose={() => setSelectedReportIds([])}
           />
         </View>
+      </ReportEngagementProvider>
+    );
+  }
+
+  if (officialKind === 'BDRRMO') {
+    return (
+      <ReportEngagementProvider reports={scopedMarkers}>
+        <SafeAreaView style={officialStyles.container} edges={['top']}>
+          <StatusBar style="dark" />
+          <View style={localStyles.header}>
+            <MdrrmoHeader
+              title="Map"
+              subtitleOverride={null}
+              right={
+                <>
+                  <TouchableOpacity
+                    style={localStyles.headerAction}
+                    onPress={() => {
+                      setLayerPanelVisible(false);
+                      setMapSearchVisible((current) => !current);
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel={mapSearchVisible ? 'Close map search' : 'Search map'}
+                  >
+                    <Ionicons
+                      name={mapSearchVisible ? 'close' : 'search'}
+                      size={25}
+                      color={colors.text}
+                    />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={localStyles.headerAction}
+                    onPress={() => {
+                      setMapSearchVisible(false);
+                      setLayerPanelVisible((current) => !current);
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel="Show or hide map filters"
+                    accessibilityState={{ expanded: layerPanelVisible }}
+                  >
+                    <Ionicons name="options-outline" size={25} color={colors.text} />
+                  </TouchableOpacity>
+                </>
+              }
+            />
+          </View>
+          <View style={localStyles.mapFill}>
+            <InteractiveMap
+              markers={scopedMarkers}
+              facilities={facilityMarkers}
+              evacuationCenters={centerMarkers}
+              layerVisibility={layers}
+              showLayerFilters
+              collapsibleLayerFilters
+              layerPanelVisible={layerPanelVisible}
+              onLayerPanelVisibilityChange={setLayerPanelVisible}
+              dismissSearchSignal={dismissMapSearchSignal}
+              showReportStatusFilters
+              reportStatusOptions={BDRRMO_MAP_REPORT_STATUS_OPTIONS}
+              showSearchBar={mapSearchVisible}
+              showLayerPanelToggle={false}
+              layerPanelAlign="right"
+              showSearchClearButton={false}
+              compactLayerFilters
+              searchBarTopInset={spacing.md}
+              layerFiltersTopInset={error || focusError ? 64 : spacing.md}
+              showZoomControls={false}
+              onLayerVisibilityChange={handleLayerVisibilityChange}
+              onReportSelection={handleMapReportSelection}
+              onResourceSelection={(resource) => {
+                setSelectedReportIds([]);
+                setHighlightedReportId(null);
+                setHighlightedResourceId(resource.id);
+                setFocusTarget({
+                  resourceId: resource.id,
+                  latitude: resource.latitude,
+                  longitude: resource.longitude,
+                });
+              }}
+              focusTarget={bdrrmoFocusTarget}
+              highlightedReportId={highlightedReport?.id ?? null}
+              highlightedResourceId={highlightedResourceId}
+            />
+            {error || focusError ? (
+              <View style={localStyles.banner} pointerEvents="none">
+                <Text style={localStyles.bannerText}>{error || focusError}</Text>
+              </View>
+            ) : null}
+
+            <Animated.View
+              style={[
+                residentMapStyles.contributionSheet,
+                {
+                  height: escalatedPanelHeight,
+                  transform: [
+                    {
+                      translateY: Animated.add(
+                        escalatedPanelTranslateY,
+                        highlightedReportTranslateY,
+                      ),
+                    },
+                  ],
+                },
+              ]}
+            >
+              <EscalatedReportsPanel
+                reports={bdrrmoResponseReports}
+                loading={loading}
+                error={error}
+                bottomInset={escalatedPanelBottomInset}
+                collapsed={escalatedPanelCollapsed}
+                onLocateReport={openOperationalReport}
+                onReviewReport={(report) => router.push(`/official/${report.id}` as Href)}
+                onRetry={() => void reload()}
+                onToggleCollapsed={() => settleEscalatedPanel(!escalatedPanelCollapsed)}
+                dragHandlePanHandlers={escalatedPanelPanResponder.panHandlers}
+                queueTitle="LOCAL RESPONSE QUEUE"
+                emptyTitle="No local reports awaiting action"
+                emptyBody="Unverified and verified reports in your barangay appear here automatically."
+                loadingLabel="Loading local reports…"
+                reviewActionLabel="Manage report"
+                reviewAccessibilityVerb="Manage"
+                summaryText={(count) => `${count} awaiting BDRRMO action`}
+                summaryColor={colors.unverified}
+              />
+            </Animated.View>
+          </View>
+
+          {highlightedReport ? (
+            <HighlightedReportCallout
+              report={highlightedReport}
+              bottomOffset={officialNavMetrics.barHeight + insets.bottom + spacing.md}
+              onClose={() => setHighlightedReportId(null)}
+              onOpenDetails={openHighlightedReportDetails}
+            />
+          ) : null}
+
+          <ReportMapDetailSheet
+            visible={selectedReports.length > 0}
+            reports={selectedReports}
+            onClose={() => setSelectedReportIds([])}
+          />
+        </SafeAreaView>
       </ReportEngagementProvider>
     );
   }
@@ -627,8 +798,8 @@ export default function OfficialMapScreen() {
                 longitude: resource.longitude,
               });
             }}
-            focusTarget={focusTarget}
-            highlightedReportId={highlightedReportId}
+            focusTarget={bdrrmoFocusTarget}
+            highlightedReportId={highlightedReport?.id ?? null}
             highlightedResourceId={highlightedResourceId}
           />
           {error || focusError ? (
@@ -663,6 +834,12 @@ const localStyles = StyleSheet.create({
     paddingTop: spacing.sm,
     paddingBottom: spacing.sm,
     backgroundColor: colors.background,
+  },
+  headerAction: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   mapFill: {
     flex: 1,
