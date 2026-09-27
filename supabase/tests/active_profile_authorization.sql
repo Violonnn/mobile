@@ -1,6 +1,6 @@
 begin;
 
-select plan(43);
+select plan(52);
 
 -- Isolated identity, barangay, and content fixtures for RLS verification.
 insert into auth.users (
@@ -50,6 +50,23 @@ insert into public.reports (
 values
   ('e3000000-0000-4000-8000-000000000001', 'e1000000-0000-4000-8000-000000000001', 'Local report', 'Local BDRRMO report.', extensions.st_setsrid(extensions.st_makepoint(123.80, 10.25), 4326)::extensions.geography, 'e2000000-0000-4000-8000-000000000001'),
   ('e3000000-0000-4000-8000-000000000002', 'e1000000-0000-4000-8000-000000000002', 'Other report', 'Other BDRRMO report.', extensions.st_setsrid(extensions.st_makepoint(123.81, 10.26), 4326)::extensions.geography, 'e2000000-0000-4000-8000-000000000002');
+
+insert into public.report_media (id, report_id, type, storage_path, position)
+values (
+  'e8000000-0000-4000-8000-000000000010',
+  'e3000000-0000-4000-8000-000000000001',
+  'photo',
+  'permission-tests/local-report.jpg',
+  0
+);
+
+insert into public.comments (id, report_id, user_id, body)
+values (
+  'e9000000-0000-4000-8000-000000000001',
+  'e3000000-0000-4000-8000-000000000001',
+  'e1000000-0000-4000-8000-000000000007',
+  'Permission test comment.'
+);
 
 insert into public.hotlines (id, name, number, category, barangay_id)
 values
@@ -209,6 +226,23 @@ select lives_ok(
   $$select public.transition_report_status('e3000000-0000-4000-8000-000000000001', 'escalated', 'Needs municipal support')$$,
   'BDRRMO can escalate a locally verified report'
 );
+select is((select count(*) from public.reports where id = 'e3000000-0000-4000-8000-000000000001'), 0::bigint, 'BDRRMO cannot select an escalated report');
+select is((select count(*) from public.reports_map where id = 'e3000000-0000-4000-8000-000000000001'), 0::bigint, 'BDRRMO map projection hides an escalated report');
+select is((select count(*) from public.report_media where report_id = 'e3000000-0000-4000-8000-000000000001'), 0::bigint, 'BDRRMO cannot read escalated report media');
+select is((select count(*) from public.report_status_history where report_id = 'e3000000-0000-4000-8000-000000000001'), 0::bigint, 'BDRRMO cannot read escalated report history');
+select is((select count(*) from public.comments where report_id = 'e3000000-0000-4000-8000-000000000001'), 0::bigint, 'BDRRMO cannot read escalated report comments');
+select is(public.can_read_report_id('e3000000-0000-4000-8000-000000000001'), false, 'copied escalated report ids are denied to BDRRMO');
+select is(public.can_moderate_report_comment('e3000000-0000-4000-8000-000000000001'), false, 'BDRRMO cannot moderate comments after escalation');
+select is((select count(*) from public.get_report_location_verification('e3000000-0000-4000-8000-000000000001')), 0::bigint, 'BDRRMO cannot read location verification after escalation');
+set local role service_role;
+select throws_ok(
+  $$select public.correct_report_incident_location('e1000000-0000-4000-8000-000000000001', 'e3000000-0000-4000-8000-000000000001', 10.25, 123.80, 'Stale BDRRMO edit', 'e2000000-0000-4000-8000-000000000001', 'Attempt after handoff')$$,
+  '42501',
+  'This report has already been handed off to MDRRMO.',
+  'trusted BDRRMO mutations are rejected after escalation'
+);
+set local role authenticated;
+select set_config('request.jwt.claim.sub', 'e1000000-0000-4000-8000-000000000001', true);
 select set_config('request.jwt.claim.sub', 'e1000000-0000-4000-8000-000000000004', true);
 select lives_ok(
   $$select public.transition_report_status('e3000000-0000-4000-8000-000000000001', 'verified', 'Municipality reverified')$$,
