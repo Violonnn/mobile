@@ -24,6 +24,7 @@ import NumericKeyboardAccessory, {
   LOGIN_NUMERIC_ACCESSORY_ID,
 } from '../../components/ui/NumericKeyboardAccessory';
 import { SkeletonBlock, SkeletonGroup } from '../../components/ui/Skeleton';
+import { useAccessSwitch } from '../../hooks/useAccessSwitch';
 import { useLoginFlow } from '../../hooks/useLoginFlow';
 import { takeResidentLoginIntro } from '../../lib/residentLoginIntro';
 import { loginColors, loginStyles as styles } from '../../styles/screens/login.styles';
@@ -62,6 +63,7 @@ export default function LoginScreen() {
     goToRegister,
     goToOfficialLogin,
   } = useLoginFlow();
+  const { isSwitchingAccess, switchAccess } = useAccessSwitch(goToOfficialLogin);
 
   function handleSavedPhonePress() {
     Alert.alert(
@@ -151,7 +153,12 @@ export default function LoginScreen() {
                   { transform: [{ translateY: loginLogoTranslateY }, { scale: loginLogoScale }] },
                 ]}
               >
-                <Image source={LOGIN_LOGO_SOURCE} style={styles.loginLogo} resizeMode="contain" />
+                <Image
+                  source={LOGIN_LOGO_SOURCE}
+                  style={styles.loginLogo}
+                  resizeMode="contain"
+                  fadeDuration={0}
+                />
               </Animated.View>
               <View style={styles.content}>
                 <Text style={styles.sectionLabel}>Welcome back</Text>
@@ -319,7 +326,11 @@ export default function LoginScreen() {
         pointerEvents={showLoginContent ? 'auto' : 'none'}
         style={[styles.officialSection, { opacity: loginContentOpacity }]}
       >
-        <TouchableOpacity onPress={goToOfficialLogin} activeOpacity={0.7}>
+        <TouchableOpacity
+          onPress={switchAccess}
+          disabled={isSwitchingAccess}
+          activeOpacity={0.7}
+        >
           <View style={styles.officialLoginContent}>
             <Text style={styles.officialLoginTitle}>Official Access</Text>
             <Ionicons

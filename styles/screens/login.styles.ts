@@ -44,6 +44,8 @@ export const loginStyles = StyleSheet.create({
   loginMainContent: {
     flex: 1,
     justifyContent: 'center',
+    // Bottom space raises the vertically centered form slightly for easier reach.
+    paddingBottom: layout.isSmallScreen ? spacing.md : spacing.xl,
   },
 
   /* ── Login content ── */
@@ -214,42 +216,6 @@ export const loginStyles = StyleSheet.create({
     fontSize: fontSizes.xl,
     color: loginColors.white,
     letterSpacing: 0.2,
-  },
-  /* ── Community safety carousel ── */
-  safetyCarousel: {
-    marginTop: spacing.sm,
-    width: '100%',
-  },
-  safetyCarouselContent: {
-    paddingRight: spacing.sm,
-  },
-  safetyCarouselCard: {
-    minHeight: 188,
-    overflow: 'hidden',
-    backgroundColor: loginColors.white,
-    borderRadius: radius.md,
-  },
-  safetyCarouselImage: {
-    width: '100%',
-    height: 96,
-  },
-  safetyCarouselCopy: {
-    flex: 1,
-    paddingHorizontal: spacing.sm + 2,
-    paddingTop: spacing.sm + 2,
-    paddingBottom: spacing.sm,
-  },
-  safetyCarouselTitle: {
-    fontFamily: fonts.bold,
-    fontSize: fontSizes.md,
-    color: loginColors.text,
-    marginBottom: spacing.xs,
-  },
-  safetyCarouselDescription: {
-    fontFamily: fonts.regular,
-    fontSize: fontSizes.sm,
-    color: loginColors.textMuted,
-    lineHeight: fontSizes.sm + 4,
   },
   /* ── Sign up row ── */
   signUpRow: {

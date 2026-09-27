@@ -1,7 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
   ActivityIndicator,
-  Animated,
   Image,
   Keyboard,
   KeyboardAvoidingView,
@@ -17,7 +16,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import FieldError from '../../components/register/FieldError';
-import LoginSafetyCarousel from '../../components/ui/LoginSafetyCarousel';
+import { useAccessSwitch } from '../../hooks/useAccessSwitch';
 import { useOfficialLoginFlow } from '../../hooks/useOfficialLoginFlow';
 import { loginColors, loginStyles as styles } from '../../styles/screens/login.styles';
 
@@ -25,21 +24,8 @@ import { loginColors, loginStyles as styles } from '../../styles/screens/login.s
 export default function OfficialLoginScreen() {
   const [emailFocused, setEmailFocused] = useState(false);
   const [passwordFocused, setPasswordFocused] = useState(false);
-  const [sealTranslateY] = useState(() => new Animated.Value(-80));
   const flow = useOfficialLoginFlow();
-
-  useEffect(() => {
-    // The seal enters once from above, then settles into its resting position.
-    const bounceAnimation = Animated.spring(sealTranslateY, {
-      toValue: 0,
-      friction: 5,
-      tension: 85,
-      useNativeDriver: true,
-    });
-
-    bounceAnimation.start();
-    return () => bounceAnimation.stop();
-  }, [sealTranslateY]);
+  const { isSwitchingAccess, switchAccess } = useAccessSwitch(flow.goBack);
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
@@ -47,16 +33,6 @@ export default function OfficialLoginScreen() {
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <TouchableOpacity
-          style={localStyles.backButton}
-          onPress={flow.goBack}
-          activeOpacity={0.8}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-        >
-          <Ionicons name="arrow-back" size={24} color={loginColors.text} />
-        </TouchableOpacity>
-
         <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
           <ScrollView
             contentContainerStyle={styles.scrollContent}
@@ -66,16 +42,15 @@ export default function OfficialLoginScreen() {
             automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
           >
             <View style={localStyles.loginMainContent}>
-              <Animated.View
-                style={[localStyles.sealWrap, { transform: [{ translateY: sealTranslateY }] }]}
-              >
+              <View style={localStyles.sealWrap}>
                 <Image
                   source={require('../../assets/images/mingla.png')}
                   style={localStyles.seal}
                   resizeMode="contain"
+                  fadeDuration={0}
                   accessibilityLabel="Municipality of Minglanilla official seal"
                 />
-              </Animated.View>
+              </View>
 
               <View style={localStyles.content}>
                 <Text style={styles.sectionLabel}>Good to see you again.</Text>
@@ -181,31 +156,41 @@ export default function OfficialLoginScreen() {
                   </Text>
                 </TouchableOpacity>
 
-                <LoginSafetyCarousel />
-
               </View>
             </View>
           </ScrollView>
         </TouchableWithoutFeedback>
       </KeyboardAvoidingView>
+
+      <View style={styles.officialSection}>
+        <TouchableOpacity
+          onPress={switchAccess}
+          disabled={isSwitchingAccess}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Go to resident access"
+        >
+          <View style={styles.officialLoginContent}>
+            <Ionicons
+              name="arrow-back"
+              size={18}
+              color={loginColors.text}
+              style={localStyles.residentAccessArrow}
+            />
+            <Text style={styles.officialLoginTitle}>Resident Access</Text>
+          </View>
+        </TouchableOpacity>
+      </View>
     </SafeAreaView>
   );
 }
 
 const localStyles = StyleSheet.create({
-  backButton: {
-    position: 'absolute',
-    top: 8,
-    left: 16,
-    zIndex: 10,
-    width: 40,
-    height: 44,
-    alignItems: 'flex-start',
-    justifyContent: 'center',
-  },
   loginMainContent: {
     flex: 1,
     justifyContent: 'center',
+    // Bottom space raises the vertically centered form slightly for easier reach.
+    paddingBottom: 32,
   },
   sealWrap: {
     alignItems: 'center',
@@ -213,8 +198,8 @@ const localStyles = StyleSheet.create({
     paddingTop: 32,
   },
   seal: {
-    width: 144,
-    height: 144,
+    width: 168,
+    height: 168,
   },
   content: {
     paddingHorizontal: 24,
@@ -238,5 +223,8 @@ const localStyles = StyleSheet.create({
     paddingVertical: 4,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  residentAccessArrow: {
+    marginRight: 8,
   },
 });

@@ -17,7 +17,10 @@ import { colors } from '../styles/theme';
 
 void SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
-const AUTH_BRAND_LOGO = require('../assets/images/splash_iconDL-transparent.png');
+const AUTH_LOGOS = [
+  require('../assets/images/splash_iconDL-transparent.png'),
+  require('../assets/images/mingla.png'),
+];
 
 export default function RootLayout() {
   const pathname = usePathname();
@@ -36,8 +39,8 @@ export default function RootLayout() {
   useEffect(() => {
     let mounted = true;
 
-    // Warm the shared auth logo before any auth screen needs to paint it.
-    Asset.loadAsync(AUTH_BRAND_LOGO)
+    // Warm both auth logos before either login screen needs to paint them.
+    Asset.loadAsync(AUTH_LOGOS)
       .catch(() => undefined)
       .finally(() => {
         if (mounted) setBrandAssetLoaded(true);
@@ -87,6 +90,14 @@ export default function RootLayout() {
                 animation: openedFromSettings ? 'slide_from_right' : 'none',
                 gestureEnabled: openedFromSettings,
               };
+            }}
+          />
+          <Stack.Screen
+            name="(auth)/official-login"
+            options={{
+              // The native shared-axis transition makes the access-mode change clear
+              // without adding JavaScript-driven work during navigation.
+              animation: 'slide_from_right',
             }}
           />
         </Stack>
