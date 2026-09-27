@@ -325,7 +325,9 @@ export async function fetchOfficialReportQueue(
 
     // BDRRMO only sees its barangay; MDRRMO and Mayor are municipality-wide.
     if (kind === 'BDRRMO' && scope.barangay_id) {
-      queueQuery = queueQuery.eq('barangay_id', scope.barangay_id);
+      queueQuery = queueQuery
+        .eq('barangay_id', scope.barangay_id)
+        .neq('status', 'escalated');
     }
     return queueQuery;
   };
@@ -411,7 +413,9 @@ export async function fetchOfficialReportQueue(
 
   let statusQuery = supabase.from('reports_map').select('status');
   if (kind === 'BDRRMO' && scope.barangay_id) {
-    statusQuery = statusQuery.eq('barangay_id', scope.barangay_id);
+    statusQuery = statusQuery
+      .eq('barangay_id', scope.barangay_id)
+      .neq('status', 'escalated');
   }
   const statusResult = await statusQuery;
   const allStatusRows = (statusResult.data ?? []).map((row) => ({
@@ -702,7 +706,9 @@ export async function fetchOfficialReportDetail(
     if (!scope.barangay_id) {
       return { detail: null, error: 'Barangay scope is missing for this account.' };
     }
-    reportQuery = reportQuery.eq('barangay_id', scope.barangay_id);
+    reportQuery = reportQuery
+      .eq('barangay_id', scope.barangay_id)
+      .neq('status', 'escalated');
   }
 
   const { data: row, error } = await reportQuery.maybeSingle();

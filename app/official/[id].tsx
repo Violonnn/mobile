@@ -175,6 +175,11 @@ export default function OfficialReportDetailScreen() {
         return;
       }
       setNote('');
+      if (target === 'escalated' && kind === 'BDRRMO') {
+        // A successful handoff ends BDRRMO access immediately.
+        router.replace('/official/incidents?status=unverified' as never);
+        return;
+      }
       await reload();
     } finally {
       setActionBusy(false);
@@ -296,6 +301,34 @@ export default function OfficialReportDetailScreen() {
               activeOpacity={0.85}
             >
               <Text style={styles.retryButtonText}>Back</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (
+    !loading &&
+    kind === 'BDRRMO' &&
+    !detail &&
+    error === 'Report not found in your scope.'
+  ) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+        <StatusBar style="dark" />
+        <View style={[styles.scrollContent, { flex: 1, justifyContent: 'center' }]}>
+          <View style={styles.stateBox}>
+            <Text style={styles.stateTitle}>Report unavailable</Text>
+            <Text style={styles.stateBody}>
+              This report is no longer available in your BDRRMO workspace.
+            </Text>
+            <TouchableOpacity
+              style={styles.retryButton}
+              onPress={() => router.replace('/official/incidents?status=unverified' as never)}
+              accessibilityRole="button"
+            >
+              <Text style={styles.retryButtonText}>Back to reports</Text>
             </TouchableOpacity>
           </View>
         </View>

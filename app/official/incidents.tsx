@@ -27,6 +27,7 @@ import { formatPublishedAt } from '../../lib/formatTime';
 import type { ReportStatus } from '../../lib/officialReports';
 import MayorSituations from '../../components/official/MayorSituations';
 import MdrrmoReportsWorkspace from '../../components/official/MdrrmoReportsWorkspace';
+import BdrrmoReportsWorkspace from '../../components/official/BdrrmoReportsWorkspace';
 import { OfficialShellSkeleton } from '../../components/ui/OfficialScreenSkeletons';
 
 type StatusFilter = ReportStatus | 'all';
@@ -50,6 +51,13 @@ function routeStatus(value: string | string[] | undefined): StatusFilter | null 
     return candidate;
   }
   return null;
+}
+
+function bdrrmoRouteStatus(
+  value: string | string[] | undefined,
+): Exclude<StatusFilter, 'escalated'> | null {
+  const parsedStatus = routeStatus(value);
+  return parsedStatus === 'escalated' ? null : parsedStatus;
 }
 
 function statusPillStyle(status: ReportStatus) {
@@ -189,6 +197,22 @@ export default function OfficialIncidentsScreen() {
         refreshing={refreshing}
         initialStatus={routeStatus(status)}
         showCommandBack={openedFromCommand}
+        onRefresh={refresh}
+        onReload={reload}
+      />
+    );
+  }
+
+  if (officialKind === 'BDRRMO') {
+    return (
+      <BdrrmoReportsWorkspace
+        reports={reports}
+        error={error}
+        loading={loading}
+        refreshing={refreshing}
+        initialStatus={bdrrmoRouteStatus(status)}
+        showCommandBack={openedFromCommand}
+        assignedBarangay={scope.barangay_name}
         onRefresh={refresh}
         onReload={reload}
       />

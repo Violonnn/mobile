@@ -3,6 +3,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
+import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js';
 import type { OfficialAccessScope } from '../lib/officialRegistration';
 import {
   fetchOfficialReportDetail,
@@ -89,6 +90,31 @@ export function useOfficialReportQueue(scope: OfficialAccessScope | null) {
     setRefreshing(false);
   }, [load]);
 
+  const handleRealtimeChange = useCallback(
+    (payload: RealtimePostgresChangesPayload<Record<string, unknown>>) => {
+      const isBdrrmo = scope?.role === 'officer' && Boolean(scope.barangay_id);
+      const nextReport = payload.new as Record<string, unknown>;
+      const reportId = nextReport.id ? String(nextReport.id) : null;
+      const becameEscalated = nextReport.status === 'escalated';
+
+      if (isBdrrmo && reportId && becameEscalated) {
+        const removedReport = reportsRef.current.find((report) => report.id === reportId);
+        setReports((current) => current.filter((report) => report.id !== reportId));
+        if (removedReport) {
+          setCounts((current) => ({
+            ...current,
+            [removedReport.status]: Math.max(0, current[removedReport.status] - 1),
+            total: Math.max(0, current.total - 1),
+            escalated: 0,
+          }));
+        }
+      }
+
+      void load();
+    },
+    [load, scope],
+  );
+
   useFocusEffect(
     useCallback(() => {
       // Keep existing cards and maps mounted while fresh data loads in the background.
@@ -116,16 +142,14 @@ export function useOfficialReportQueue(scope: OfficialAccessScope | null) {
           table: 'reports',
           ...(filter ? { filter } : {}),
         },
-        () => {
-          void load();
-        },
+        handleRealtimeChange,
       )
       .subscribe();
 
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [scope, channelName, load]);
+  }, [scope, channelName, handleRealtimeChange]);
 
   return {
     reports,
