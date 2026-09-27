@@ -1,7 +1,6 @@
 // Resources (BDRRMO/MDRRMO) / Priority (Mayor): compact, scoped directory management.
 import React, { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   RefreshControl,
   ScrollView,
@@ -230,6 +229,7 @@ export function ResourceManagementContent({ header }: { header?: ReactNode }) {
   const isMayor = officialKind === 'Mayor';
   const isBdrrmo = officialKind === 'BDRRMO';
   const isMdrrmo = officialKind === 'MDRRMO';
+  const usesOptimizedDirectoryControls = isBdrrmo || isMdrrmo;
   const canManageDirectory = isBdrrmo || isMdrrmo;
   const scopeBarangayId = scope?.barangay_id ?? null;
   const scopeBarangayName = scope?.barangay_name ?? null;
@@ -394,7 +394,7 @@ export function ResourceManagementContent({ header }: { header?: ReactNode }) {
   const activeRecords = tab === 'hotlines' ? hotlines.length : tab === 'facilities' ? facilities.length : centers.length;
   const currentError = tab === 'hotlines' ? hotlinesError : tab === 'facilities' ? facilitiesError : centersError;
   const currentLoading = tab === 'centers' ? centersLoading : resourcesLoading;
-  const shouldShowSearch = isMdrrmo || activeRecords > 5;
+  const shouldShowSearch = usesOptimizedDirectoryControls || activeRecords > 5;
 
   function canEditDirectoryRecord(recordBarangayId: string | null): boolean {
     if (isMdrrmo) return true;
@@ -520,7 +520,7 @@ export function ResourceManagementContent({ header }: { header?: ReactNode }) {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {header ?? (isMdrrmo ? (
+        {header ?? (usesOptimizedDirectoryControls ? (
           <View style={styles.resourceDirectoryHeader}>
             <TouchableOpacity
               style={styles.resourceDirectoryBack}
@@ -541,9 +541,11 @@ export function ResourceManagementContent({ header }: { header?: ReactNode }) {
               <Text style={styles.screenTitle}>Resource directory</Text>
               <Text style={styles.screenSubtitle}>Manage resident-facing emergency information</Text>
             </View>
-            <TouchableOpacity style={styles.resourceDirectoryAdd} onPress={() => setPickerVisible(true)} accessibilityLabel="Add resource">
-              <Ionicons name="add" size={32} color={colors.navigationActive} />
-            </TouchableOpacity>
+            {isMdrrmo ? (
+              <TouchableOpacity style={styles.resourceDirectoryAdd} onPress={() => setPickerVisible(true)} accessibilityLabel="Add resource">
+                <Ionicons name="add" size={32} color={colors.navigationActive} />
+              </TouchableOpacity>
+            ) : null}
           </View>
         ) : (
           <View style={styles.headerTextGroup}>
@@ -556,16 +558,16 @@ export function ResourceManagementContent({ header }: { header?: ReactNode }) {
         ))}
 
         {!isMayor ? (
-          <View style={[styles.resourceTabRow, isMdrrmo && styles.resourceDirectoryTabs]}>
+          <View style={[styles.resourceTabRow, usesOptimizedDirectoryControls && styles.resourceDirectoryTabs]}>
             {(['hotlines', 'facilities', 'centers'] as TabKey[]).map((item) => {
               const active = tab === item;
               const count = item === 'hotlines' ? hotlines.length : item === 'facilities' ? facilities.length : centers.length;
-              return <TouchableOpacity key={item} style={[isMdrrmo ? styles.resourceDirectoryTab : styles.resourceTabChip, active && (isMdrrmo ? styles.resourceDirectoryTabActive : styles.resourceTabChipActive)]} onPress={() => { setTab(item); setSearch(''); setStatusFilter('all'); }} accessibilityRole="button" accessibilityState={{ selected: active }}><Text style={[isMdrrmo ? styles.resourceDirectoryTabText : styles.resourceTabChipText, active && (isMdrrmo ? styles.resourceDirectoryTabTextActive : styles.resourceTabChipTextActive)]}>{item.charAt(0).toUpperCase() + item.slice(1)}{isMdrrmo ? `  ${String(count).padStart(2, '0')}` : ''}</Text></TouchableOpacity>;
+              return <TouchableOpacity key={item} style={[usesOptimizedDirectoryControls ? styles.resourceDirectoryTab : styles.resourceTabChip, active && (usesOptimizedDirectoryControls ? styles.resourceDirectoryTabActive : styles.resourceTabChipActive)]} onPress={() => { setTab(item); setSearch(''); setStatusFilter('all'); }} accessibilityRole="button" accessibilityState={{ selected: active }}><Text style={[usesOptimizedDirectoryControls ? styles.resourceDirectoryTabText : styles.resourceTabChipText, active && (usesOptimizedDirectoryControls ? styles.resourceDirectoryTabTextActive : styles.resourceTabChipTextActive)]}>{item.charAt(0).toUpperCase() + item.slice(1)}{usesOptimizedDirectoryControls ? `  ${String(count).padStart(2, '0')}` : ''}</Text></TouchableOpacity>;
             })}
           </View>
         ) : null}
 
-        {shouldShowSearch ? (isMdrrmo ? <>
+        {shouldShowSearch ? (usesOptimizedDirectoryControls ? <>
           <View style={styles.resourceSearchRow}>
             <View style={styles.resourceSearchField}>
               <Ionicons name="search-outline" size={23} color={colors.textMuted} />
@@ -582,12 +584,12 @@ export function ResourceManagementContent({ header }: { header?: ReactNode }) {
         {!currentLoading && currentError ? <View style={styles.stateBox}><Text style={styles.stateTitle}>Could not load {tab}</Text><Text style={styles.stateBody}>{currentError}</Text><TouchableOpacity style={styles.retryButton} onPress={() => tab === 'centers' ? void reloadCenters() : void reloadResources()}><Text style={styles.retryButtonText}>Try again</Text></TouchableOpacity></View> : null}
 
         {!currentLoading && !currentError && tab === 'hotlines' && !isMayor ? (
-          <View style={[styles.section, isMdrrmo && styles.resourceDirectorySection]}>
-            {!isMdrrmo ? <ResourceSectionHeader title="Hotlines" count={hotlines.length} canAdd={canManageDirectory} onAdd={() => openHotlineEditor(null)} /> : null}
-            {visibleHotlines.length === 0 ? <View style={isMdrrmo && hotlines.length > 0 ? styles.stateBoxBorderless : styles.stateBox}><Text style={styles.stateTitle}>{hotlines.length === 0 ? 'No hotlines yet' : 'No matching hotlines'}</Text><Text style={styles.stateBody}>{hotlines.length === 0 ? 'Use the add button to create the first directory number.' : 'Try a different search term.'}</Text></View> : visibleHotlines.map((hotline) => {
+          <View style={[styles.section, usesOptimizedDirectoryControls && styles.resourceDirectorySection]}>
+            {!usesOptimizedDirectoryControls ? <ResourceSectionHeader title="Hotlines" count={hotlines.length} canAdd={canManageDirectory} onAdd={() => openHotlineEditor(null)} /> : null}
+            {visibleHotlines.length === 0 ? <View style={usesOptimizedDirectoryControls && hotlines.length > 0 ? styles.stateBoxBorderless : styles.stateBox}><Text style={styles.stateTitle}>{hotlines.length === 0 ? 'No hotlines yet' : 'No matching hotlines'}</Text><Text style={styles.stateBody}>{hotlines.length === 0 ? 'Use the add button to create the first directory number.' : 'Try a different search term.'}</Text></View> : visibleHotlines.map((hotline) => {
               const linkedFacility = hotline.facilityId ? facilityById.get(hotline.facilityId) : null;
               const editable = canEditDirectoryRecord(hotline.barangayId) && (hotline.category !== 'national_emergency' || isMdrrmo);
-              if (isMdrrmo) {
+              if (usesOptimizedDirectoryControls) {
                 const actions: DirectoryMenuAction[] = [
                   { label: 'View details', icon: 'eye-outline', onPress: () => setDetail({ kind: 'hotline', record: hotline }) },
                 ];
@@ -628,12 +630,12 @@ export function ResourceManagementContent({ header }: { header?: ReactNode }) {
         ) : null}
 
         {!currentLoading && !currentError && tab === 'facilities' && !isMayor ? (
-          <View style={[styles.section, isMdrrmo && styles.resourceDirectorySection]}>
-            {!isMdrrmo ? <ResourceSectionHeader title="Facilities" count={facilities.length} canAdd={canManageDirectory} onAdd={() => openFacilityEditor(null)} /> : null}
+          <View style={[styles.section, usesOptimizedDirectoryControls && styles.resourceDirectorySection]}>
+            {!usesOptimizedDirectoryControls ? <ResourceSectionHeader title="Facilities" count={facilities.length} canAdd={canManageDirectory} onAdd={() => openFacilityEditor(null)} /> : null}
             {visibleFacilities.length === 0 ? <View style={styles.stateBox}><Text style={styles.stateTitle}>{facilities.length === 0 ? 'No facilities yet' : 'No matching facilities'}</Text><Text style={styles.stateBody}>{facilities.length === 0 ? 'Use the add button to create the first facility.' : 'Try a different search term.'}</Text></View> : visibleFacilities.map((facility) => {
               const linkedHotlines = hotlines.filter((hotline) => hotline.facilityId === facility.id);
               const editable = canEditDirectoryRecord(facility.barangayId);
-              if (isMdrrmo) {
+              if (usesOptimizedDirectoryControls) {
                 const actions: DirectoryMenuAction[] = [
                   { label: 'View details', icon: 'eye-outline', onPress: () => setDetail({ kind: 'facility', record: facility }) },
                   { label: 'View on map', icon: 'location-outline', onPress: () => openMap(facility.id) },
@@ -676,22 +678,28 @@ export function ResourceManagementContent({ header }: { header?: ReactNode }) {
         ) : null}
 
         {!currentLoading && !currentError && (tab === 'centers' || isMayor) ? (
-          <View style={[styles.section, isMdrrmo && styles.resourceDirectorySection]}>
-            {!isMdrrmo ? <ResourceSectionHeader title={isMayor ? 'Priority centers' : 'Evacuation centers'} count={centers.length} canAdd={isMdrrmo} onAdd={() => openCenterEditor(null)} /> : null}
+          <View style={[styles.section, usesOptimizedDirectoryControls && styles.resourceDirectorySection]}>
+            {!usesOptimizedDirectoryControls ? <ResourceSectionHeader title={isMayor ? 'Priority centers' : 'Evacuation centers'} count={centers.length} canAdd={isMdrrmo} onAdd={() => openCenterEditor(null)} /> : null}
             {barangaysError && isMdrrmo ? <Text style={styles.stateBody}>Barangays could not load: {barangaysError}</Text> : null}
             {visibleCenters.length === 0 ? <View style={styles.stateBox}><Text style={styles.stateTitle}>{centers.length === 0 ? 'No centers yet' : 'No matching centers'}</Text><Text style={styles.stateBody}>{centers.length === 0 ? 'MDRRMO can add a center and assign its responsible barangay.' : 'Try a different search term.'}</Text></View> : visibleCenters.map((center) => {
               const canSetStatus = (isMdrrmo || isBdrrmo) && (!isBdrrmo || center.barangayId === scope.barangay_id);
               const canSetPriority = isMdrrmo || isMayor;
               const savingCenter = isSaving(`center:${center.id}`);
-              if (isMdrrmo) {
+              if (usesOptimizedDirectoryControls) {
                 const actions: DirectoryMenuAction[] = [
                   { label: 'View details', icon: 'eye-outline', onPress: () => setDetail({ kind: 'center', record: center }) },
                   { label: 'View on map', icon: 'location-outline', onPress: () => openMap(center.id) },
-                  { label: 'Edit record', icon: 'create-outline', onPress: () => openCenterEditor(center) },
-                  { label: 'Change status', icon: 'refresh-outline', onPress: () => chooseCenterStatus(center) },
-                  { label: center.isPriority ? 'Remove priority' : 'Mark priority', icon: 'flag-outline', onPress: () => void runRecordAction(`center:${center.id}`, () => updateEvacuationCenter(center.id, { isPriority: !center.isPriority })) },
-                  { label: 'Manage location', icon: 'navigate-outline', onPress: () => openCenterEditor(center) },
                 ];
+                if (isMdrrmo) {
+                  actions.push(
+                    { label: 'Edit record', icon: 'create-outline', onPress: () => openCenterEditor(center) },
+                    { label: 'Change status', icon: 'refresh-outline', onPress: () => chooseCenterStatus(center) },
+                    { label: center.isPriority ? 'Remove priority' : 'Mark priority', icon: 'flag-outline', onPress: () => void runRecordAction(`center:${center.id}`, () => updateEvacuationCenter(center.id, { isPriority: !center.isPriority })) },
+                    { label: 'Manage location', icon: 'navigate-outline', onPress: () => openCenterEditor(center) },
+                  );
+                } else if (canSetStatus) {
+                  actions.push({ label: 'Change status', icon: 'refresh-outline', onPress: () => chooseCenterStatus(center) });
+                }
                 return <DirectoryRecord
                   key={center.id}
                   title={center.name}
@@ -737,32 +745,17 @@ export function ResourceManagementContent({ header }: { header?: ReactNode }) {
 
 export default function OfficialResourcesScreen() {
   const router = useRouter();
-  const { tab } = useLocalSearchParams<{ tab?: string | string[] }>();
   const { officialKind } = useOfficialPortal();
 
-  const redirectsToCommunityResources = officialKind === 'BDRRMO';
   const redirectsMayorToSituations = officialKind === 'Mayor';
-  const requestedTab = Array.isArray(tab) ? tab[0] : tab;
-  const preservedTab =
-    requestedTab === 'hotlines' ||
-    requestedTab === 'facilities' ||
-    requestedTab === 'centers'
-      ? `&tab=${requestedTab}`
-      : '';
 
   useEffect(() => {
-    if (redirectsToCommunityResources) {
-      router.replace(
-        `/official/community?section=resources${preservedTab}` as Href,
-      );
-      return;
-    }
     if (redirectsMayorToSituations) {
       router.replace('/official/incidents?section=priority' as Href);
     }
-  }, [preservedTab, redirectsMayorToSituations, redirectsToCommunityResources, router]);
+  }, [redirectsMayorToSituations, router]);
 
-  if (redirectsToCommunityResources || redirectsMayorToSituations) {
+  if (redirectsMayorToSituations) {
     return <SafeAreaView style={styles.container} edges={['top', 'bottom']}><StatusBar style="dark" /><OfficialShellSkeleton /></SafeAreaView>;
   }
 

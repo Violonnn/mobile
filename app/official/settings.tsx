@@ -25,10 +25,13 @@ import LegalModal, {
 } from '../../components/register/LegalModal';
 import MdrrmoHeader from '../../components/official/MdrrmoHeader';
 import MdrrmoSettingsWorkspace from '../../components/official/MdrrmoSettingsWorkspace';
+import BdrrmoSettingsWorkspace from '../../components/official/BdrrmoSettingsWorkspace';
+import OfficialPasswordModal from '../../components/official/OfficialPasswordModal';
 import ProfileAvatar from '../../components/profile/ProfileAvatar';
 import ProfilePhotoModal from '../../components/profile/ProfilePhotoModal';
 import { officialStyles as styles } from '../../styles/screens/official.styles';
 import { colors } from '../../styles/theme';
+import { changeOfficialPassword } from '../../lib/officialPassword';
 import { OfficialShellSkeleton, SettingsScreenSkeleton } from '../../components/ui/OfficialScreenSkeletons';
 
 type LegalDocument = 'privacy' | 'terms' | null;
@@ -62,6 +65,9 @@ export default function OfficialSettingsScreen() {
   const [loggingOut, setLoggingOut] = useState(false);
   const [legalDocument, setLegalDocument] = useState<LegalDocument>(null);
   const [profilePhotoVisible, setProfilePhotoVisible] = useState(false);
+  const [securityVisible, setSecurityVisible] = useState(false);
+  const [passwordSubmitting, setPasswordSubmitting] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
 
   const loadProfile = useCallback(async () => {
     setProfileLoading(true);
@@ -124,6 +130,28 @@ export default function OfficialSettingsScreen() {
     );
   }
 
+  async function submitPasswordChange(input: {
+    currentPassword: string;
+    newPassword: string;
+    confirmPassword: string;
+  }) {
+    if (passwordSubmitting) return;
+    setPasswordSubmitting(true);
+    setPasswordError(null);
+    const result = await changeOfficialPassword(input);
+    setPasswordSubmitting(false);
+    if (result.error) {
+      setPasswordError(result.error);
+      return;
+    }
+    setSecurityVisible(false);
+    Alert.alert(
+      'Password changed',
+      result.warning || 'Sign in again using your new official-account password.',
+    );
+    router.replace('/(auth)/official-login' as Href);
+  }
+
   function showEmergencyDisclaimer() {
     Alert.alert(
       'Emergency disclaimer',
@@ -172,6 +200,23 @@ export default function OfficialSettingsScreen() {
           );
         }}
         roleVariant={officialKind === 'Mayor' ? 'mayor' : 'mdrrmo'}
+      />
+    );
+  }
+
+  if (officialKind === 'BDRRMO') {
+    return (
+      <BdrrmoSettingsWorkspace
+        profile={profile}
+        profileError={profileError}
+        profileLoading={profileLoading}
+        assignedBarangay={scope?.barangay_name ?? null}
+        onRetryProfile={() => void loadProfile()}
+        onAvatarChanged={(avatarPath) => {
+          setProfile((currentProfile) =>
+            currentProfile ? { ...currentProfile, avatar_path: avatarPath } : currentProfile,
+          );
+        }}
       />
     );
   }
@@ -244,7 +289,7 @@ export default function OfficialSettingsScreen() {
 
         {profile ? (
           <View style={styles.settingsSection}>
-            <Text style={styles.sectionTitle}>Account</Text>
+            <Text style={styles.sectionTitle}>Account and coverage</Text>
             <View style={styles.card}>
               <TouchableOpacity
                 style={styles.settingsAction}
@@ -260,9 +305,55 @@ export default function OfficialSettingsScreen() {
                 </View>
                 <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
               </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.settingsAction}
+                onPress={() => {
+                  setPasswordError(null);
+                  setSecurityVisible(true);
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Change password and access"
+              >
+                <View style={styles.settingsActionCopy}>
+                  <Text style={styles.settingsActionTitle}>Password & access</Text>
+                  <Text style={styles.settingsActionMeta}>Change your official account password</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+              </TouchableOpacity>
+              <View style={styles.settingsAction}>
+                <View style={styles.settingsActionCopy}>
+                  <Text style={styles.settingsActionTitle}>Official coverage</Text>
+                  <Text style={styles.settingsActionMeta}>
+                    {scope?.barangay_name || 'Assigned barangay unavailable'} · Read-only
+                  </Text>
+                </View>
+                <Ionicons name="location-outline" size={20} color={colors.textMuted} />
+              </View>
             </View>
           </View>
         ) : null}
+
+        <View style={styles.settingsSection}>
+          <Text style={styles.sectionTitle}>BDRRMO workspace</Text>
+          <View style={styles.card}>
+            <View style={styles.settingsAction}>
+              <View style={styles.settingsActionCopy}>
+                <Text style={styles.settingsActionTitle}>Local report intake</Text>
+                <Text style={styles.settingsActionMeta}>
+                  Review, verify, resolve locally, or hand off to MDRRMO
+                </Text>
+              </View>
+              <Ionicons name="shield-checkmark-outline" size={20} color={colors.textMuted} />
+            </View>
+            <View style={styles.settingsAction}>
+              <View style={styles.settingsActionCopy}>
+                <Text style={styles.settingsActionTitle}>Map & resources</Text>
+                <Text style={styles.settingsActionMeta}>Limited to your assigned barangay</Text>
+              </View>
+              <Ionicons name="map-outline" size={20} color={colors.textMuted} />
+            </View>
+          </View>
+        </View>
 
         <View style={styles.settingsSection}>
           <Text style={styles.sectionTitle}>Help and legal</Text>
@@ -347,6 +438,16 @@ export default function OfficialSettingsScreen() {
         requireRead={false}
         onAccept={() => setLegalDocument(null)}
         onClose={() => setLegalDocument(null)}
+      />
+      <OfficialPasswordModal
+        visible={securityVisible}
+        submitting={passwordSubmitting}
+        error={passwordError}
+        onClose={() => {
+          setPasswordError(null);
+          setSecurityVisible(false);
+        }}
+        onSubmit={(input) => void submitPasswordChange(input)}
       />
       {profile ? (
         <ProfilePhotoModal
