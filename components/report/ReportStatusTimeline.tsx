@@ -1,6 +1,7 @@
 import React, { type ComponentProps, useMemo } from 'react';
 import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 
 import { getReportStatusPresentation } from '../../lib/reports';
 import { colors, fonts, radius } from '../../styles/theme';
@@ -15,12 +16,14 @@ type TimelineStep = {
   name: string;
   complete: boolean;
   current: boolean;
-  lineToNextColor: string | null;
+  color: string;
 };
 
 type ReportStatusTimelineProps = {
   status: string;
   barangayLabel?: string;
+  /** Uses full status colors for completed resident workflow stages. */
+  useStatusProgressColors?: boolean;
   style?: StyleProp<ViewStyle>;
 };
 
@@ -39,32 +42,32 @@ function timelineIconName(label: string): TimelineIconName {
   return 'checkmark';
 }
 
-function buildTimeline(
-  status: string,
-  barangayLabel: string,
-  activeColor: string,
-): TimelineStep[] {
+function buildTimeline(status: string, barangayLabel: string): TimelineStep[] {
   const normalizedStatus = status.trim().toLocaleLowerCase();
+  const underReviewColor = getReportStatusPresentation('unverified').color;
+  const confirmedColor = getReportStatusPresentation('verified').color;
+  const municipalReviewColor = getReportStatusPresentation('escalated').color;
+  const resolvedColor = getReportStatusPresentation('resolved').color;
   const underReviewStep: TimelineStep = {
     label: 'Under review',
     name: barangayLabel,
     complete: false,
     current: true,
-    lineToNextColor: colors.unverified,
+    color: underReviewColor,
   };
   const confirmedStep: TimelineStep = {
     label: 'Confirmed',
     name: 'Response ongoing',
     complete: false,
     current: false,
-    lineToNextColor: null,
+    color: confirmedColor,
   };
   const resolvedStep: TimelineStep = {
     label: 'Resolved',
     name: 'Awaiting response',
     complete: false,
     current: false,
-    lineToNextColor: null,
+    color: resolvedColor,
   };
 
   if (normalizedStatus === 'verified') {
@@ -73,13 +76,11 @@ function buildTimeline(
         ...underReviewStep,
         complete: true,
         current: false,
-        lineToNextColor: COMPLETED_TIMELINE_COLOR,
       },
       {
         ...confirmedStep,
         complete: true,
         current: true,
-        lineToNextColor: activeColor,
       },
       resolvedStep,
     ];
@@ -91,20 +92,18 @@ function buildTimeline(
         ...underReviewStep,
         complete: true,
         current: false,
-        lineToNextColor: COMPLETED_TIMELINE_COLOR,
       },
       {
         ...confirmedStep,
         complete: true,
         current: false,
-        lineToNextColor: COMPLETED_TIMELINE_COLOR,
       },
       {
         label: 'Municipal review',
         name: 'Requiring Municipal Assistance',
         complete: false,
         current: true,
-        lineToNextColor: colors.escalated,
+        color: municipalReviewColor,
       },
       resolvedStep,
     ];
@@ -116,13 +115,11 @@ function buildTimeline(
         ...underReviewStep,
         complete: true,
         current: false,
-        lineToNextColor: COMPLETED_TIMELINE_COLOR,
       },
       {
         ...confirmedStep,
         complete: true,
         current: false,
-        lineToNextColor: COMPLETED_TIMELINE_COLOR,
       },
       {
         ...resolvedStep,
@@ -135,46 +132,90 @@ function buildTimeline(
   return [underReviewStep, confirmedStep];
 }
 
+function blendTimelineColors(startColor: string, endColor: string): string {
+  const startMatch = startColor.match(/^#([\da-f]{6})$/i);
+  const endMatch = endColor.match(/^#([\da-f]{6})$/i);
+
+  if (!startMatch || !endMatch) return endColor;
+
+  const startValue = Number.parseInt(startMatch[1], 16);
+  const endValue = Number.parseInt(endMatch[1], 16);
+  const red = Math.round((((startValue >> 16) & 255) + ((endValue >> 16) & 255)) / 2);
+  const green = Math.round((((startValue >> 8) & 255) + ((endValue >> 8) & 255)) / 2);
+  const blue = Math.round(((startValue & 255) + (endValue & 255)) / 2);
+
+  return `rgb(${red}, ${green}, ${blue})`;
+}
+
+function getStageDisplayColor(
+  step: TimelineStep | undefined,
+  useStatusProgressColors: boolean,
+): string {
+  if (!step || (!step.complete && !step.current)) return PENDING_TIMELINE_COLOR;
+  if (useStatusProgressColors || step.current) return step.color;
+  return COMPLETED_TIMELINE_COLOR;
+}
+
 export default function ReportStatusTimeline({
   status,
   barangayLabel = 'Barangay review',
+  useStatusProgressColors = false,
   style,
 }: ReportStatusTimelineProps) {
-  const statusPresentation = useMemo(() => getReportStatusPresentation(status), [status]);
-  const timeline = useMemo(
-    () => buildTimeline(status, barangayLabel, statusPresentation.color),
-    [barangayLabel, status, statusPresentation.color],
-  );
+  const timeline = useMemo(() => buildTimeline(status, barangayLabel), [barangayLabel, status]);
   const currentTimelineIndex = timeline.findIndex((step) => step.current);
 
   return (
     <View style={[styles.timeline, style]}>
       {timeline.map((step, index) => {
         const previousStep = timeline[index - 1];
-        const previousLineColor = previousStep?.lineToNextColor ?? PENDING_TIMELINE_COLOR;
-        const nextLineColor = step.lineToNextColor ?? PENDING_TIMELINE_COLOR;
+        const nextStep = timeline[index + 1];
+        const isReached = step.complete || step.current;
+        const previousColor = getStageDisplayColor(previousStep, useStatusProgressColors);
+        const currentColor = getStageDisplayColor(step, useStatusProgressColors);
+        const nextColor = getStageDisplayColor(nextStep, useStatusProgressColors);
+        const shouldUseStageColor = isReached && (useStatusProgressColors || step.current);
         const isNextTimelineStep = index === currentTimelineIndex + 1;
 
         return (
           <View key={step.label} style={styles.step}>
             <View style={styles.markerRow}>
               {index > 0 ? (
-                <View style={[styles.connector, { backgroundColor: previousLineColor }]} />
+                useStatusProgressColors ? (
+                  <LinearGradient
+                    colors={[blendTimelineColors(previousColor, currentColor), currentColor]}
+                    start={{ x: 0, y: 0.5 }}
+                    end={{ x: 1, y: 0.5 }}
+                    style={styles.connector}
+                  />
+                ) : (
+                  <View style={[styles.connector, { backgroundColor: previousColor }]} />
+                )
               ) : (
                 <View style={styles.connectorSpacer} />
               )}
               <View
                 style={[
                   styles.dot,
-                  step.complete && styles.dotComplete,
-                  !step.complete && styles.dotPending,
-                  step.current && { backgroundColor: statusPresentation.color },
+                  isReached
+                    ? { backgroundColor: currentColor }
+                    : styles.dotPending,
                 ]}
               >
                 <Ionicons name={timelineIconName(step.label)} size={13} color={colors.white} />
               </View>
               {index < timeline.length - 1 ? (
-                <View style={[styles.connector, { backgroundColor: nextLineColor }]} />
+                useStatusProgressColors ? (
+                  <LinearGradient
+                    // Each connector is split around a node so neighboring halves share one blended midpoint.
+                    colors={[currentColor, blendTimelineColors(currentColor, nextColor)]}
+                    start={{ x: 0, y: 0.5 }}
+                    end={{ x: 1, y: 0.5 }}
+                    style={styles.connector}
+                  />
+                ) : (
+                  <View style={[styles.connector, { backgroundColor: currentColor }]} />
+                )
               ) : (
                 <View style={styles.connectorSpacer} />
               )}
@@ -182,8 +223,7 @@ export default function ReportStatusTimeline({
             <Text
               style={[
                 styles.label,
-                step.complete && !step.current && styles.completeText,
-                step.current && { color: statusPresentation.color },
+                shouldUseStageColor ? { color: step.color } : step.complete && styles.completeText,
               ]}
             >
               {step.label}
@@ -192,7 +232,7 @@ export default function ReportStatusTimeline({
               <Text
                 style={[
                   styles.name,
-                  step.complete && !step.current && styles.completeText,
+                  shouldUseStageColor ? { color: step.color } : step.complete && styles.completeText,
                 ]}
                 numberOfLines={2}
               >
@@ -238,9 +278,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: radius.full,
     backgroundColor: PENDING_TIMELINE_COLOR,
-  },
-  dotComplete: {
-    backgroundColor: 'rgba(15, 32, 68, 0.22)',
   },
   dotPending: {
     backgroundColor: PENDING_TIMELINE_COLOR,

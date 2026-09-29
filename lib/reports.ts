@@ -142,7 +142,6 @@ const REPORT_MEDIA_BUCKET = 'report-media';
 const REPORT_PAGE_SIZE = 200;
 const REPORT_MEDIA_BATCH_SIZE = 100;
 const REPORT_ACTIVITY_BATCH_SIZE = 100;
-const REPORT_ACTIVITY_PAGE_SIZE = 1_000;
 const REPORTS_MAP_LEGACY_SELECT =
   'id, title, description, incident_type, incident_type_other, status, latitude, longitude, barangay_id, created_at, address_text, upvote_count, comment_count, reporter_id, reporter_first_name, reporter_last_name, reporter_middle_name';
 const REPORTS_MAP_SELECT = `${REPORTS_MAP_LEGACY_SELECT}, reporter_avatar_path`;
@@ -155,26 +154,25 @@ function chunkItems<Item>(items: Item[], batchSize: number): Item[][] {
   return batches;
 }
 
-type ReportActivityRow = {
+type ReportFeedActivityRow = {
   report_id: unknown;
-  created_at: unknown;
-  from_status?: unknown;
+  latest_status_activity_at: unknown;
+  latest_status_update_at: unknown;
+  latest_official_comment_at: unknown;
 };
 
-function recordNewestActivity(
+function recordLatestActivity(
   latestActivityByReport: Map<string, string>,
-  rows: ReportActivityRow[],
+  reportId: string,
+  timestamp: unknown,
 ): void {
-  for (const row of rows) {
-    const reportId = String(row.report_id ?? '');
-    const createdAt = String(row.created_at ?? '');
-    const createdAtTime = Date.parse(createdAt);
-    if (!reportId || !Number.isFinite(createdAtTime)) continue;
+  const value = String(timestamp ?? '');
+  const valueTime = Date.parse(value);
+  if (!reportId || !Number.isFinite(valueTime)) return;
 
-    const currentTime = Date.parse(latestActivityByReport.get(reportId) ?? '');
-    if (!Number.isFinite(currentTime) || createdAtTime > currentTime) {
-      latestActivityByReport.set(reportId, createdAt);
-    }
+  const currentTime = Date.parse(latestActivityByReport.get(reportId) ?? '');
+  if (!Number.isFinite(currentTime) || valueTime > currentTime) {
+    latestActivityByReport.set(reportId, value);
   }
 }
 
@@ -186,66 +184,46 @@ export async function fetchLatestReportActivity(reportIds: string[]): Promise<{
   const latestActivityByReport = new Map<string, string>();
   const latestStatusUpdateByReport = new Map<string, string>();
 
-  const fetchStatusChanges = async () => {
-    for (const reportIdBatch of chunkItems(reportIds, REPORT_ACTIVITY_BATCH_SIZE)) {
-      let pageStart = 0;
-      while (true) {
-        const result = await supabase
-          .from('report_status_history')
-          .select('report_id, created_at, from_status')
-          .in('report_id', reportIdBatch)
-          .eq('event_type', 'status_change')
-          .order('created_at', { ascending: false })
-          .range(pageStart, pageStart + REPORT_ACTIVITY_PAGE_SIZE - 1);
-        if (result.error) return result.error.message;
+  for (const reportIdBatch of chunkItems(reportIds, REPORT_ACTIVITY_BATCH_SIZE)) {
+    const result = await supabase
+      .from('report_feed_activity')
+      .select(
+        'report_id, latest_status_activity_at, latest_status_update_at, latest_official_comment_at',
+      )
+      .in('report_id', reportIdBatch);
+    if (result.error) {
+      return {
+        latestActivityByReport,
+        latestStatusUpdateByReport,
+        error: result.error.message,
+      };
+    }
 
-        const rows = (result.data ?? []) as ReportActivityRow[];
-        if (rows.length === 0) break;
-        recordNewestActivity(latestActivityByReport, rows);
-        // The initial history row has no previous status, so it is not an update.
-        recordNewestActivity(
-          latestStatusUpdateByReport,
-          rows.filter((row) => row.from_status != null),
-        );
-        pageStart += rows.length;
+    const rows = (result.data ?? []) as ReportFeedActivityRow[];
+    for (const row of rows) {
+      const reportId = String(row.report_id ?? '');
+      recordLatestActivity(
+        latestActivityByReport,
+        reportId,
+        row.latest_status_activity_at,
+      );
+      recordLatestActivity(
+        latestActivityByReport,
+        reportId,
+        row.latest_official_comment_at,
+      );
+
+      const statusUpdate = String(row.latest_status_update_at ?? '');
+      if (reportId && Number.isFinite(Date.parse(statusUpdate))) {
+        latestStatusUpdateByReport.set(reportId, statusUpdate);
       }
     }
-    return null;
-  };
-
-  const fetchOfficialComments = async () => {
-    for (const reportIdBatch of chunkItems(reportIds, REPORT_ACTIVITY_BATCH_SIZE)) {
-      let pageStart = 0;
-      while (true) {
-        const result = await supabase
-          .from('report_comments')
-          .select('report_id, created_at')
-          .in('report_id', reportIdBatch)
-          .in('author_role', ['officer', 'mayor'])
-          .eq('is_hidden', false)
-          .order('created_at', { ascending: false })
-          .range(pageStart, pageStart + REPORT_ACTIVITY_PAGE_SIZE - 1);
-        if (result.error) return result.error.message;
-
-        const rows = (result.data ?? []) as ReportActivityRow[];
-        if (rows.length === 0) break;
-        recordNewestActivity(latestActivityByReport, rows);
-        pageStart += rows.length;
-      }
-    }
-    return null;
-  };
-
-  // BDRRMO and MDRRMO accounts both use the officer role; mayor is separate.
-  const [statusError, commentError] = await Promise.all([
-    fetchStatusChanges(),
-    fetchOfficialComments(),
-  ]);
+  }
 
   return {
     latestActivityByReport,
     latestStatusUpdateByReport,
-    error: statusError ?? commentError,
+    error: null,
   };
 }
 

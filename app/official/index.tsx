@@ -55,7 +55,7 @@ function officialDisplayName(profile: OfficialPublicProfile | null): string | nu
 function escalationOverlayLabel(report: OfficialReportQueueItem): string {
   const barangay = report.barangayName?.trim() || 'unknown barangay';
   const when = formatPublishedAt(report.escalatedAt || report.createdAt);
-  return `Escalated from ${barangay} Â· ${when}`;
+  return `Escalated from ${barangay} - ${when}`;
 }
 
 function unverifiedOverlayLabel(report: OfficialReportQueueItem): string {
@@ -536,8 +536,8 @@ export default function OfficialCommandScreen() {
 
   if (officialKind === 'Mayor') {
     return (
-      <SafeAreaView style={styles.container} edges={['bottom']}>
-        <StatusBar style="light" />
+      <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+        <StatusBar style="dark" />
         <MayorDashboard
           centers={centers}
           centersError={centersError}

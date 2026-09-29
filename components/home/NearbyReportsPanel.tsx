@@ -226,22 +226,21 @@ export default function NearbyReportsPanel({
               </Text>
             </View>
             <TouchableOpacity
-              style={[
-                styles.nearbyOpenReportAction,
-                isLargeText && styles.nearbyOpenReportActionLargeText,
-              ]}
+              style={styles.nearbyOpenReportAction}
               onPress={() => onOpenReport(activeReport.id)}
               accessibilityRole="button"
               accessibilityLabel={`Open nearby report: ${activeReport.title || incidentLabel(activeReport)}`}
             >
-              <View style={styles.nearbyOpenReportCircle}>
-                <Ionicons name="arrow-forward" size={19} color={colors.white} />
-              </View>
-              <Text style={styles.nearbyOpenReportLabel}>Open report</Text>
+              <Ionicons name="arrow-forward" size={22} color={colors.text} />
             </TouchableOpacity>
           </View>
 
-          <View style={styles.nearbyActiveReportQuote}>
+          <View
+            style={[
+              styles.nearbyActiveReportQuote,
+              { backgroundColor: activeStatus.backgroundColor },
+            ]}
+          >
             <View style={[styles.nearbyActiveReportQuoteAccent, { backgroundColor: activeStatus.color }]} />
             <Text style={[styles.nearbyActiveReportQuoteMark, { color: activeStatus.color }]}>“</Text>
             <View style={styles.nearbyActiveReportQuoteCopy}>
@@ -257,6 +256,7 @@ export default function NearbyReportsPanel({
           <ReportStatusTimeline
             status={activeReport.status}
             barangayLabel={reportBarangayLabel(activeReport, barangayNamesById)}
+            useStatusProgressColors
           />
         </View>
       ) : (

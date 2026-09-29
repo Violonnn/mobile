@@ -134,7 +134,7 @@ export default function MayorMapPanel({
                   incidentTypeOther={report.incidentTypeOther}
                 />
                 <Text style={styles.reportMeta} numberOfLines={1}>
-                  {report.addressText || 'Location on map'} · {formatPublishedAt(report.created_at)}
+                  {report.addressText || 'Location on map'} - {formatPublishedAt(report.created_at)}
                 </Text>
               </View>
               <View style={styles.locateButton}>

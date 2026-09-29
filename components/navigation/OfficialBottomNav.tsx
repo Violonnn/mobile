@@ -1,7 +1,7 @@
 // components/navigation/OfficialBottomNav.tsx
 // Role-aware official portal bottom bar.
 // BDRRMO/MDRRMO: Command, Community, Map, Settings
-// Mayor: Brief, Situations, Community, Map, Settings
+// Mayor: Brief, Community, Map, Settings
 
 import React, { useCallback, memo, useMemo } from 'react';
 import { View, Text, Pressable } from 'react-native';
@@ -33,12 +33,16 @@ function tabsForRole(isMayor: boolean): TabConfig[] {
       activeIcon: 'grid',
       inactiveIcon: 'grid-outline',
     },
-    {
-      name: 'incidents',
-      label: isMayor ? 'Situations' : 'Incidents',
-      activeIcon: 'alert-circle',
-      inactiveIcon: 'alert-circle-outline',
-    },
+    // Situations remains accessible from the Mayor Brief, without taking up
+    // a persistent navigation slot in the executive workspace.
+    ...(!isMayor
+      ? [{
+          name: 'incidents',
+          label: 'Incidents',
+          activeIcon: 'alert-circle' as IoniconName,
+          inactiveIcon: 'alert-circle-outline' as IoniconName,
+        }]
+      : []),
     {
       name: 'community',
       label: 'Community',

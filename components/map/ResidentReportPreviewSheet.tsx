@@ -48,10 +48,14 @@ function ReportMediaStrip({ report }: { report: MapReportMarker }) {
   const hiddenCount = Math.max(0, report.media.length - 2);
 
   if (visibleMedia.length === 0) {
+    const emptyMediaLabel = report.mediaDetailLoaded
+      ? 'No attachments'
+      : 'Attachments load in the full report';
+
     return (
       <View style={styles.emptyMedia}>
         <Ionicons name="image-outline" size={28} color={colors.textMuted} />
-        <Text style={styles.emptyMediaText}>No attachments</Text>
+        <Text style={styles.emptyMediaText}>{emptyMediaLabel}</Text>
       </View>
     );
   }
@@ -144,7 +148,11 @@ export function ResidentReportPreviewContent({
           </View>
         </View>
 
-        <ReportStatusTimeline status={report.status} style={styles.timeline} />
+        <ReportStatusTimeline
+          status={report.status}
+          useStatusProgressColors
+          style={styles.timeline}
+        />
 
         <Text style={styles.updatedText}>
           Status updates are synchronized across response teams

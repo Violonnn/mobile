@@ -4,8 +4,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   ImageBackground,
-  Modal,
-  Pressable,
   RefreshControl,
   ScrollView,
   Text,
@@ -13,23 +11,24 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, type Href } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import InteractiveMap from '../map/InteractiveMap';
 import MdrrmoHeader from './MdrrmoHeader';
+import ReportStatusTimeline from '../report/ReportStatusTimeline';
 import { useMayorAnalytics } from '../../hooks/useMayorAnalytics';
 import { useReports } from '../../hooks/useReports';
-import {
-  reduceMayorActivityTotals,
-  type MayorBarangayFilter,
-  type MayorStatusFilter,
-} from '../../lib/mayorAnalytics';
+import { formatIncidentType } from '../../lib/incidentTypes';
+import { type MayorStatusFilter } from '../../lib/mayorAnalytics';
 import type { EvacuationCenterRecord } from '../../lib/resources';
+import { formatReportLocation, getReportStatusPresentation, type MapReportMarker } from '../../lib/reports';
 import { officialNavMetrics } from '../../styles/components/officialBottomNav.styles';
+import { mdrrmoCommandStyles as commandStyles } from '../../styles/screens/mdrrmoCommand.styles';
 import { mayorBriefStyles as styles } from '../../styles/screens/mayorBrief.styles';
+import { officialStyles } from '../../styles/screens/official.styles';
 import { colors } from '../../styles/theme';
 
 type MayorDashboardProps = {
@@ -40,29 +39,6 @@ type MayorDashboardProps = {
 
 type IoniconName = keyof typeof Ionicons.glyphMap;
 type QuickViewTone = 'primary' | 'blue' | 'slate' | 'mint';
-
-const STATUS_OPTIONS: { value: MayorStatusFilter; label: string }[] = [
-  { value: 'all', label: 'All statuses' },
-  { value: 'unverified', label: 'Unverified' },
-  { value: 'verified', label: 'Verified' },
-  { value: 'escalated', label: 'Escalated' },
-  { value: 'resolved', label: 'Resolved' },
-];
-
-function statusLabel(value: MayorStatusFilter): string {
-  return STATUS_OPTIONS.find((option) => option.value === value)?.label ?? 'All statuses';
-}
-
-function formatUpdatedTime(value: string): string {
-  const date = new Date(value);
-  if (!Number.isFinite(date.getTime())) return 'Updated just now';
-
-  return `Updated ${date.toLocaleTimeString('en-PH', {
-    hour: 'numeric',
-    minute: '2-digit',
-    timeZone: 'Asia/Manila',
-  })}`;
-}
 
 function formatBriefingTime(value: string): string {
   const date = new Date(value);
@@ -75,69 +51,98 @@ function formatBriefingTime(value: string): string {
   })}`;
 }
 
+function formatElapsedLabel(value: string, referenceTime: number): string {
+  const timestamp = new Date(value).getTime();
+  if (Number.isNaN(timestamp)) return 'NOW';
+
+  const ageMinutes = Math.max(1, Math.floor((referenceTime - timestamp) / 60_000));
+  if (ageMinutes < 60) return `${ageMinutes} MIN`;
+
+  const ageHours = Math.floor(ageMinutes / 60);
+  if (ageHours < 24) return `${ageHours} HR`;
+
+  return `${Math.floor(ageHours / 24)} DAY`;
+}
+
+function formatTimelineTime(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '--';
+
+  return date
+    .toLocaleTimeString('en-PH', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    })
+    .replace(' ', '');
+}
+
+function reporterName(report: MapReportMarker): string {
+  const fullName = [report.reporter.firstName, report.reporter.lastName]
+    .filter(Boolean)
+    .join(' ')
+    .trim();
+
+  return fullName || 'Resident';
+}
+
+function incidentLabel(report: MapReportMarker): string {
+  if (!report.incidentType) return 'Report';
+  if (report.incidentType === 'other') {
+    return report.incidentTypeOther?.trim() || 'Other incident';
+  }
+
+  return formatIncidentType(report.incidentType);
+}
+
 function QuickViewCard({
   icon,
+  iconFamily = 'ionicons',
   label,
   subtitle,
   tone,
   badge,
+  showDivider,
   onPress,
 }: {
-  icon: IoniconName;
+  icon: IoniconName | keyof typeof MaterialCommunityIcons.glyphMap;
+  iconFamily?: 'ionicons' | 'material-community';
   label: string;
   subtitle?: string;
   tone: QuickViewTone;
   badge?: number;
+  showDivider?: boolean;
   onPress: () => void;
 }) {
-  const isPrimary = tone === 'primary';
-  const cardToneStyle = tone === 'primary'
-    ? styles.quickViewCardPrimary
-    : tone === 'blue'
-      ? styles.quickViewCardBlue
-      : tone === 'mint'
-        ? styles.quickViewCardMint
-        : styles.quickViewCardSlate;
-  const iconColor = isPrimary ? colors.white : tone === 'mint' ? '#237768' : '#284D74';
+  const iconColor = tone === 'mint' ? '#237768' : tone === 'slate' ? '#526078' : colors.navigationActive;
 
   return (
     <TouchableOpacity
-      style={[styles.quickViewCard, cardToneStyle, isPrimary && styles.quickViewCardWide]}
+      style={[styles.quickViewCard, showDivider && styles.quickViewCardDivider]}
       onPress={onPress}
       activeOpacity={0.8}
       accessibilityRole="button"
       accessibilityLabel={`${label}${subtitle ? `. ${subtitle}` : ''}${badge ? `. ${badge} need attention` : ''}`}
     >
-      <View style={styles.quickViewTopRow}>
-        <View style={styles.quickViewIconWrap}>
-          <Ionicons name={icon} size={24} color={iconColor} />
-          {badge ? (
-            <View style={styles.quickViewBadge}>
-              <Text style={styles.quickViewBadgeText}>{badge > 99 ? '99+' : badge}</Text>
-            </View>
-          ) : null}
-        </View>
-        <Ionicons
-          name="chevron-forward"
-          size={15}
-          color={isPrimary ? colors.white : '#49677D'}
-          style={styles.quickViewChevron}
-        />
+      <View style={styles.quickViewIconWrap}>
+        {iconFamily === 'material-community' ? (
+          <MaterialCommunityIcons
+            name={icon as keyof typeof MaterialCommunityIcons.glyphMap}
+            size={23}
+            color={iconColor}
+          />
+        ) : (
+          <Ionicons name={icon as IoniconName} size={23} color={iconColor} />
+        )}
+        {badge ? (
+          <View style={styles.quickViewBadge}>
+            <Text style={styles.quickViewBadgeText}>{badge > 99 ? '99+' : badge}</Text>
+          </View>
+        ) : null}
       </View>
-      <Text
-        style={[styles.quickViewLabel, isPrimary && styles.quickViewTextLight]}
-        numberOfLines={1}
-      >
+      <Text style={styles.quickViewLabel} numberOfLines={2}>
         {label}
       </Text>
-      {subtitle ? (
-        <Text
-          style={[styles.quickViewSubtitle, isPrimary && styles.quickViewSubtitleLight]}
-          numberOfLines={2}
-        >
-          {subtitle}
-        </Text>
-      ) : null}
     </TouchableOpacity>
   );
 }
@@ -149,12 +154,11 @@ export default function MayorDashboard({
 }: MayorDashboardProps) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { height, width } = useWindowDimensions();
+  const { width } = useWindowDimensions();
   const scrollRef = useRef<ScrollView>(null);
   const mapUnlockTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [barangayId, setBarangayId] = useState<MayorBarangayFilter>('all');
-  const [status, setStatus] = useState<MayorStatusFilter>('all');
-  const [scopeVisible, setScopeVisible] = useState(false);
+  const [activeMapReportIndex, setActiveMapReportIndex] = useState(0);
+  const [referenceTime, setReferenceTime] = useState(() => Date.now());
   const { reports: mapReports, error: mapError } = useReports({
     realtime: true,
     includePending: false,
@@ -163,14 +167,11 @@ export default function MayorDashboard({
   // Keep the dashboard totals municipal-wide while the hero filters control its map and count.
   const {
     snapshot,
-    barangays,
     error,
     barangayError,
-    activityError,
-    recentActivitySeries,
     loading,
-    refreshing,
     reload,
+    refreshing,
     refresh,
   } = useMayorAnalytics({
     enabled: true,
@@ -179,54 +180,38 @@ export default function MayorDashboard({
     activityRange: 'today',
   });
 
-  const selectedBarangayName = barangayId === 'all'
-    ? 'All barangays'
-    : barangays.find((barangay) => barangay.id === barangayId)?.name ?? 'All barangays';
-  const selectedBarangayTotal = barangayId === 'all'
-    ? null
-    : snapshot?.barangayTotals.find((barangay) => barangay.barangayId === barangayId) ?? null;
-  const municipalReportTotal = !snapshot
-    ? 0
-    : selectedBarangayTotal
-      ? status === 'all'
-        ? selectedBarangayTotal.total
-        : selectedBarangayTotal.statusCounts[status]
-      : status === 'all'
-        ? snapshot.matchingTotal
-        : snapshot.statusCounts[status];
-  const municipalBarangayCount = !snapshot
-    ? 0
-    : barangayId !== 'all'
-      ? municipalReportTotal > 0 ? 1 : 0
-      : snapshot.barangayTotals.filter((barangay) => {
-          return status === 'all' ? barangay.total > 0 : barangay.statusCounts[status] > 0;
-        }).length;
   // A barangay requires attention only when it has an unverified or escalated report.
   const affectedBarangayCount = snapshot?.barangayTotals.filter((barangay) => {
     return barangay.statusCounts.unverified > 0 || barangay.statusCounts.escalated > 0;
   }).length ?? 0;
-  const activityTotal = reduceMayorActivityTotals(recentActivitySeries).reduce(
-    (total, point) => total + point.count,
-    0,
-  );
   const openCenters = centers.filter((center) => center.status === 'open').length;
   const unverifiedCount = snapshot?.statusCounts.unverified ?? 0;
   const briefingCardWidth = Math.min(228, Math.max(188, width * 0.54));
-  const mapHeroHeight = Math.min(420, Math.max(380, Math.min(width * 1.04, height * 0.49)));
-  const mapFrameTop = insets.top + 146;
-
-  const visibleMapReports = useMemo(() => {
-    return mapReports.filter((report) => {
-      if (barangayId !== 'all' && report.barangay_id !== barangayId) return false;
-      if (status !== 'all' && report.status !== status) return false;
-      return true;
-    });
-  }, [barangayId, mapReports, status]);
+  // Keep resolved reports out of the command-style map while every active report remains visible.
+  const activeMapReports = useMemo(
+    () => mapReports.filter((report) => report.status !== 'resolved'),
+    [mapReports],
+  );
+  const maximumActiveMapReportIndex = Math.max(0, activeMapReports.length - 1);
+  const safeActiveMapReportIndex = Math.min(activeMapReportIndex, maximumActiveMapReportIndex);
+  const activeMapReport = activeMapReports[safeActiveMapReportIndex] ?? null;
+  const activeMapFocus = activeMapReport
+    ? {
+        reportId: activeMapReport.id,
+        latitude: activeMapReport.latitude,
+        longitude: activeMapReport.longitude,
+      }
+    : null;
 
   useEffect(() => {
     return () => {
       if (mapUnlockTimer.current) clearTimeout(mapUnlockTimer.current);
     };
+  }, []);
+
+  useEffect(() => {
+    const elapsedTimer = setInterval(() => setReferenceTime(Date.now()), 60_000);
+    return () => clearInterval(elapsedTimer);
   }, []);
 
   const handleMapGestureActiveChange = useCallback((active: boolean) => {
@@ -251,30 +236,25 @@ export default function MayorDashboard({
     await Promise.all([refresh(), onRefreshCenters()]);
   }
 
-  function openSituations(
-    nextStatus: MayorStatusFilter = status,
-    nextBarangayId: MayorBarangayFilter = barangayId,
-  ) {
+  function openSituations(nextStatus: MayorStatusFilter = 'all') {
     const params = new URLSearchParams();
     if (nextStatus !== 'all') params.set('status', nextStatus);
-    if (nextBarangayId !== 'all') params.set('barangayId', nextBarangayId);
     const query = params.toString();
     router.push(`/official/incidents${query ? `?${query}` : ''}` as Href);
   }
 
-  const activityTitle = activityError
-    ? 'Recent activity is unavailable'
-    : activityTotal === 0
-      ? 'No new reports today'
-      : `${activityTotal.toLocaleString()} new report${activityTotal === 1 ? '' : 's'} today`;
-  const activitySubtitle = activityError
-    ? 'Pull down to try again.'
-    : activityTotal === 0
-      ? 'All clear for now.'
-      : 'Review today\'s latest activity.';
+  function moveActiveMapReport(direction: -1 | 1) {
+    if (activeMapReports.length < 2) return;
+    setActiveMapReportIndex((currentIndex) => (
+      (currentIndex + direction + activeMapReports.length) % activeMapReports.length
+    ));
+  }
 
   return (
     <>
+      <View style={styles.briefStickyHeader}>
+        <MdrrmoHeader title="Brief" showDefaultControls />
+      </View>
       <ScrollView
         ref={scrollRef}
         nestedScrollEnabled
@@ -288,123 +268,89 @@ export default function MayorDashboard({
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            tintColor={colors.white}
+            tintColor={colors.primary}
             progressViewOffset={insets.top}
           />
         )}
         showsVerticalScrollIndicator={false}
       >
-        <View style={[styles.mapHero, { height: mapHeroHeight }]}>
-          <View collapsable={false} style={styles.heroMapFill}>
+        <View style={styles.mapHero}>
+          {/* The Brief uses a visual map preview; report paging below controls its highlighted report. */}
+          <View collapsable={false} pointerEvents="none" style={styles.mapFill}>
             <InteractiveMap
-              markers={visibleMapReports}
+              markers={activeMapReports}
+              facilities={[]}
+              evacuationCenters={[]}
               showZoomControls={false}
-              showMapDetails
-              tone="dark"
-              unblurredViewportFrame={{
-                top: mapFrameTop,
-                right: 16,
-                bottom: 14,
-                left: 16,
-                borderRadius: 17,
-              }}
+              focusZoomLevel={15}
+              stickyFocus
+              focusTarget={activeMapFocus}
+              highlightedReportId={activeMapReport?.id ?? null}
               onGestureActiveChange={handleMapGestureActiveChange}
-              layerVisibility={{ reports: true, facilities: false, evacuationCenters: false }}
+              onReportSelection={(reportIds) => {
+                const selectedIndex = activeMapReports.findIndex((report) => reportIds.includes(report.id));
+                if (selectedIndex >= 0) setActiveMapReportIndex(selectedIndex);
+              }}
             />
           </View>
-          <LinearGradient
-            colors={[
-              'rgba(3, 20, 39, 0.58)',
-              'rgba(4, 30, 54, 0.32)',
-              'rgba(4, 34, 61, 0.12)',
-              'rgba(4, 34, 61, 0)',
-            ]}
-            locations={[0, 0.38, 0.72, 1]}
-            style={[styles.heroTopBlueFade, { height: mapFrameTop + 32 }]}
-            pointerEvents="none"
-          />
-          <View
-            style={[styles.heroContent, { paddingTop: insets.top + 8 }]}
-            pointerEvents="box-none"
+          <TouchableOpacity
+            style={styles.mapReportBadge}
+            onPress={() => openSituations()}
+            accessibilityRole="button"
+            accessibilityLabel={`View ${activeMapReports.length} active reports`}
           >
-            <MdrrmoHeader title="Brief" variant="mayorHero" />
+            <View style={styles.mapReportBadgeDot} />
+            <Text style={styles.mapReportBadgeText}>
+              {activeMapReports.length} ACTIVE
+            </Text>
+            <Ionicons name="chevron-forward" size={15} color={colors.text} />
+          </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.heroScopeCard}
-              onPress={() => setScopeVisible(true)}
-              activeOpacity={0.82}
-              accessibilityRole="button"
-              accessibilityLabel={`Filter municipal situation. ${selectedBarangayName}, ${statusLabel(status)}`}
-            >
-              <View style={styles.scopeSegment}>
-                <Ionicons name="location-outline" size={20} color={colors.white} />
-                <Text style={styles.scopeValue} numberOfLines={1}>{selectedBarangayName}</Text>
-                <Ionicons name="chevron-down" size={17} color={colors.white} />
-              </View>
-              <View style={styles.scopeDivider} />
-              <View style={styles.scopeSegment}>
-                <Ionicons name="layers-outline" size={19} color={colors.white} />
-                <Text style={styles.scopeValue} numberOfLines={1}>{statusLabel(status)}</Text>
-                <Ionicons name="chevron-down" size={17} color={colors.white} />
-              </View>
-            </TouchableOpacity>
-
-            <View style={styles.mapFrame} pointerEvents="box-none">
-              <View style={styles.heroSituation} pointerEvents="box-none">
-                {loading && !snapshot ? (
-                  <View style={styles.heroLoadingRow}>
-                    <ActivityIndicator color={colors.white} />
-                    <Text style={styles.heroLoadingText}>Preparing the municipal brief...</Text>
-                  </View>
-                ) : null}
-
-                {!loading && !snapshot && error ? (
-                  <View style={styles.heroError}>
-                    <Text style={styles.heroLoadingText}>Municipal figures are unavailable</Text>
-                    <TouchableOpacity onPress={() => void reload()} accessibilityRole="button">
-                      <Text style={styles.heroRetryText}>Try again</Text>
-                    </TouchableOpacity>
-                  </View>
-                ) : null}
-
-                {snapshot ? (
-                  <>
-                    <View style={styles.situationHeadingRow}>
-                      <View style={styles.situationAccent} />
-                      <Text style={styles.situationLabel}>Municipal situation</Text>
-                    </View>
-                    <Text style={styles.situationCount}>{municipalReportTotal.toLocaleString()}</Text>
-                    <Text style={styles.situationCaption}>active reports</Text>
-                    <View style={styles.barangayPill}>
-                      <Ionicons name="location" size={14} color={colors.white} />
-                      <Text style={styles.barangayPillText}>
-                        {municipalBarangayCount.toLocaleString()} barangay{municipalBarangayCount === 1 ? '' : 's'}
-                      </Text>
-                    </View>
-                    <View style={styles.situationFooter}>
-                      <View style={styles.updatedRow}>
-                        <Ionicons name="time-outline" size={15} color="rgba(255,255,255,0.86)" />
-                        <Text style={styles.situationUpdated}>{formatUpdatedTime(snapshot.fetchedAt)}</Text>
-                      </View>
-                      <TouchableOpacity
-                        style={styles.situationButton}
-                        onPress={() => openSituations()}
-                        activeOpacity={0.84}
-                        accessibilityRole="button"
-                        accessibilityLabel="View municipal situation"
-                      >
-                        <Text style={styles.situationButtonText}>View situation</Text>
-                        <Ionicons name="arrow-forward" size={18} color={colors.white} />
-                      </TouchableOpacity>
-                    </View>
-                  </>
-                ) : null}
-              </View>
+          {activeMapReports.length > 0 ? (
+            <View style={styles.mapPager}>
+              <TouchableOpacity
+                style={styles.mapPagerButton}
+                onPress={() => moveActiveMapReport(-1)}
+                disabled={activeMapReports.length < 2}
+                accessibilityRole="button"
+                accessibilityLabel="Previous active report"
+              >
+                <Ionicons name="chevron-back" size={17} color={colors.text} />
+              </TouchableOpacity>
+              <Text style={styles.mapPagerText}>
+                {safeActiveMapReportIndex + 1} of {activeMapReports.length}
+              </Text>
+              <TouchableOpacity
+                style={styles.mapPagerButton}
+                onPress={() => moveActiveMapReport(1)}
+                disabled={activeMapReports.length < 2}
+                accessibilityRole="button"
+                accessibilityLabel="Next active report"
+              >
+                <Ionicons name="chevron-forward" size={17} color={colors.text} />
+              </TouchableOpacity>
             </View>
-          </View>
+          ) : null}
         </View>
 
         <View style={styles.dashboardBody}>
+          {loading && !snapshot ? (
+            <View style={[officialStyles.stateBox, styles.stateBox]}>
+              <ActivityIndicator color={colors.primary} />
+              <Text style={officialStyles.stateBody}>Preparing the municipal brief...</Text>
+            </View>
+          ) : null}
+
+          {!loading && !snapshot && error ? (
+            <View style={[officialStyles.stateBox, styles.stateBox]}>
+              <Text style={officialStyles.stateTitle}>Municipal figures are unavailable</Text>
+              <Text style={officialStyles.stateBody}>{error}</Text>
+              <TouchableOpacity style={officialStyles.retryButton} onPress={() => void reload()}>
+                <Text style={officialStyles.retryButtonText}>Try again</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
+
           {snapshot ? (
             <>
               {error || barangayError || mapError || centersError ? (
@@ -416,53 +362,69 @@ export default function MayorDashboard({
                 </View>
               ) : null}
 
-              <View style={styles.verificationBanner}>
-                <View style={styles.verificationCountCircle}>
-                  <Text style={styles.verificationCount}>{unverifiedCount.toLocaleString()}</Text>
-                </View>
-                <View style={styles.verificationDivider} />
-                <View style={styles.verificationCopy}>
-                  <Text style={styles.verificationTitle}>Reports need verification</Text>
-                  <Text style={styles.verificationSubtitle} numberOfLines={2}>
-                    Resident submissions awaiting review
-                  </Text>
-                </View>
-                <TouchableOpacity
-                  style={styles.verificationButton}
-                  onPress={() => openSituations('unverified', 'all')}
-                  activeOpacity={0.84}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Review ${unverifiedCount} unverified reports`}
-                >
-                  <Text style={styles.verificationButtonText}>Review</Text>
-                </TouchableOpacity>
-              </View>
+              {activeMapReport ? (
+                <View style={commandStyles.activeIncidentCard}>
+                  <View style={commandStyles.activeIncidentTopRow}>
+                    <View style={commandStyles.activeIncidentCopy}>
+                      <Text
+                        style={[
+                          commandStyles.activeIncidentEyebrow,
+                          { color: getReportStatusPresentation(activeMapReport.status).color },
+                        ]}
+                      >
+                        {getReportStatusPresentation(activeMapReport.status).label.toLocaleUpperCase()} - {formatElapsedLabel(activeMapReport.created_at, referenceTime)}
+                      </Text>
+                      <Text style={commandStyles.activeIncidentTitle} numberOfLines={2}>
+                        {activeMapReport.title.trim() || incidentLabel(activeMapReport)}
+                      </Text>
+                      <Text style={commandStyles.activeIncidentMeta} numberOfLines={1}>
+                        {incidentLabel(activeMapReport)} - {formatReportLocation(activeMapReport)}
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      style={commandStyles.openIncidentAction}
+                      onPress={() => router.push(`/official/${activeMapReport.id}` as Href)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Open highlighted report: ${activeMapReport.title || 'Untitled report'}`}
+                    >
+                      <View style={commandStyles.openIncidentCircle}>
+                        <Ionicons name="arrow-forward" size={19} color={colors.white} />
+                      </View>
+                      <Text style={commandStyles.openIncidentLabel}>Open report</Text>
+                    </TouchableOpacity>
+                  </View>
 
-              <TouchableOpacity
-                style={styles.activityCard}
-                onPress={() => openSituations('all', 'all')}
-                activeOpacity={0.82}
-                accessibilityRole="button"
-                accessibilityLabel={`${activityTitle}. View activity.`}
-              >
-                <View style={styles.activityIconWrap}>
-                  <Ionicons
-                    name={activityTotal === 0 ? 'checkmark' : 'stats-chart'}
-                    size={19}
-                    color={colors.white}
+                  <View style={commandStyles.activeIncidentQuote}>
+                    <View
+                      style={[
+                        commandStyles.activeIncidentQuoteAccent,
+                        { backgroundColor: getReportStatusPresentation(activeMapReport.status).color },
+                      ]}
+                    />
+                    <Text
+                      style={[
+                        commandStyles.activeIncidentQuoteMark,
+                        { color: getReportStatusPresentation(activeMapReport.status).color },
+                      ]}
+                    >
+                      &quot;
+                    </Text>
+                    <View style={commandStyles.activeIncidentQuoteCopy}>
+                      <Text style={commandStyles.activeIncidentQuoteText}>
+                        {activeMapReport.description.trim() || 'No additional report details were provided.'}
+                      </Text>
+                      <Text style={commandStyles.activeIncidentQuoteSource} numberOfLines={1}>
+                        {reporterName(activeMapReport)} - {formatTimelineTime(activeMapReport.created_at)}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <ReportStatusTimeline
+                    status={activeMapReport.status}
+                    barangayLabel="Barangay review"
                   />
                 </View>
-                <View style={styles.activityCopy}>
-                  <Text style={styles.activityTitle} numberOfLines={1}>{activityTitle}</Text>
-                  {activityTotal > 0 || activityError ? (
-                    <Text style={styles.activitySubtitle} numberOfLines={1}>{activitySubtitle}</Text>
-                  ) : null}
-                </View>
-                <View style={styles.activityLinkRow}>
-                  <Text style={styles.linkText}>View activity</Text>
-                  <Ionicons name="arrow-forward" size={17} color={colors.primary} />
-                </View>
-              </TouchableOpacity>
+              ) : null}
 
               <View style={styles.dashboardSection}>
                 <View style={styles.sectionHeader}>
@@ -470,30 +432,41 @@ export default function MayorDashboard({
                 </View>
                 <View style={styles.quickViewRow}>
                   <QuickViewCard
-                    icon="document-text-outline"
+                    icon="location-outline"
                     label="Reports"
                     subtitle="Manage submission"
                     tone="primary"
                     badge={unverifiedCount}
-                    onPress={() => openSituations('all', 'all')}
+                    showDivider
+                    onPress={() => openSituations('all')}
                   />
                   <QuickViewCard
-                    icon="location-outline"
-                    label="Areas"
-                    tone="blue"
-                    onPress={() => router.push('/official/map' as Href)}
+                    icon="call-outline"
+                    label="Hotlines"
+                    tone="mint"
+                    showDivider
+                    onPress={() => router.push('/official/resources?tab=hotlines' as Href)}
                   />
                   <QuickViewCard
                     icon="business-outline"
+                    label="Facilities"
+                    tone="blue"
+                    showDivider
+                    onPress={() => router.push('/official/resources?tab=facilities' as Href)}
+                  />
+                  <QuickViewCard
+                    icon="warehouse"
+                    iconFamily="material-community"
                     label="Centers"
                     tone="slate"
-                    onPress={() => router.push('/official/map' as Href)}
+                    showDivider
+                    onPress={() => router.push('/official/resources?tab=centers' as Href)}
                   />
                   <QuickViewCard
                     icon="calendar-outline"
                     label="Activity"
                     tone="mint"
-                    onPress={() => openSituations('all', 'all')}
+                    onPress={() => openSituations('all')}
                   />
                 </View>
               </View>
@@ -506,7 +479,7 @@ export default function MayorDashboard({
                   </View>
                   <TouchableOpacity
                     style={styles.sectionLink}
-                    onPress={() => openSituations('all', 'all')}
+                    onPress={() => openSituations('all')}
                     accessibilityRole="button"
                     accessibilityLabel="See all briefings"
                   >
@@ -522,7 +495,7 @@ export default function MayorDashboard({
                 >
                   <TouchableOpacity
                     style={[styles.briefingCard, { width: briefingCardWidth }]}
-                    onPress={() => openSituations('all', 'all')}
+                    onPress={() => openSituations('all')}
                     activeOpacity={0.84}
                     accessibilityRole="button"
                     accessibilityLabel="Open situation summary"
@@ -611,84 +584,6 @@ export default function MayorDashboard({
         </View>
       </ScrollView>
 
-      <Modal
-        visible={scopeVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setScopeVisible(false)}
-      >
-        <View style={styles.modalRoot}>
-          <Pressable style={styles.modalBackdrop} onPress={() => setScopeVisible(false)} />
-          <View style={[styles.scopeSheet, { paddingBottom: insets.bottom + 20 }]}>
-            <View style={styles.sheetHandle} />
-            <View style={styles.sheetHeader}>
-              <View style={styles.sheetHeaderCopy}>
-                <Text style={styles.sheetEyebrow}>MUNICIPAL SITUATION</Text>
-                <Text style={styles.sheetTitle}>Choose what appears on the map</Text>
-              </View>
-              <TouchableOpacity
-                style={styles.sheetClose}
-                onPress={() => setScopeVisible(false)}
-                accessibilityRole="button"
-                accessibilityLabel="Close filters"
-              >
-                <Ionicons name="close" size={25} color={colors.text} />
-              </TouchableOpacity>
-            </View>
-
-            <Text style={styles.sheetLabel}>Report status</Text>
-            <View style={styles.chipWrap}>
-              {STATUS_OPTIONS.map((option) => {
-                const active = status === option.value;
-                return (
-                  <TouchableOpacity
-                    key={option.value}
-                    style={[styles.filterChip, active && styles.filterChipActive]}
-                    onPress={() => setStatus(option.value)}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: active }}
-                  >
-                    <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>
-                      {option.label}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-
-            <Text style={styles.sheetLabel}>Barangay</Text>
-            <ScrollView style={styles.barangayList} showsVerticalScrollIndicator={false}>
-              {[{ id: 'all', name: 'All barangays' }, ...barangays].map((barangay) => {
-                const active = barangayId === barangay.id;
-                return (
-                  <TouchableOpacity
-                    key={barangay.id}
-                    style={styles.sheetOption}
-                    onPress={() => setBarangayId(barangay.id)}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: active }}
-                  >
-                    <Text style={[styles.sheetOptionText, active && styles.sheetOptionTextActive]}>
-                      {barangay.name}
-                    </Text>
-                    {active ? (
-                      <Ionicons name="checkmark-circle" size={22} color={colors.primary} />
-                    ) : null}
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-
-            <TouchableOpacity
-              style={styles.applyButton}
-              onPress={() => setScopeVisible(false)}
-              accessibilityRole="button"
-            >
-              <Text style={styles.applyButtonText}>Apply to municipal situation</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
     </>
   );
 }

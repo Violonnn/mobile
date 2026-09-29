@@ -14,7 +14,7 @@ export const navMetrics = {
   reportSize: 64,
   reportIconSize: 31,
   reportLift: 19,
-  carveGap: 7,
+  carveGap: 5,
 };
 
 /**

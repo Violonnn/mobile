@@ -31,7 +31,10 @@ import { getResidentMapTheme, type ResidentMapTheme } from '../../lib/mapPrefere
 import { createMutableNumber } from '../../lib/mutableNumber';
 import type { MapReportMarker } from '../../lib/reports';
 import { evacuationStatusLabel, facilityTypeLabel } from '../../lib/resources';
-import { getResidentBottomNavigationHeight } from '../../styles/components/bottomNav.styles';
+import {
+  getResidentBottomNavigationHeight,
+  navMetrics,
+} from '../../styles/components/bottomNav.styles';
 import { residentMapStyles as styles } from '../../styles/screens/residentMap.styles';
 import { colors, spacing } from '../../styles/theme';
 
@@ -62,7 +65,13 @@ export default function MapScreen() {
     error,
     loading: reportsLoading,
     reload,
-  } = useReports({ realtime: true, staleTimeMs: 5 * 60_000 });
+  } = useReports({
+    realtime: true,
+    // Pins only need coordinates and incident metadata. Attachment thumbnails
+    // are loaded for one report after the resident opens it.
+    includeMediaSummaries: false,
+    staleTimeMs: 5 * 60_000,
+  });
   const {
     profile,
     profileInitialLoading,
@@ -288,6 +297,10 @@ export default function MapScreen() {
     : Math.max(300, Math.min(windowHeight * 0.46, 520));
   const contributionFullHeight = Math.max(300, windowHeight - insets.top);
   const contributionBottomInset = bottomNavigationHeight + insets.bottom + 24;
+  // The center Report action rises above the tab bar. Keep the selected-report
+  // callout entirely above that raised control instead of behind it.
+  const highlightedReportBottomOffset =
+    bottomNavigationHeight + insets.bottom + navMetrics.reportLift + spacing.xs;
   const contributionHiddenOffset = Math.max(
     0,
     contributionFullHeight - bottomNavigationHeight - insets.bottom,
@@ -539,7 +552,7 @@ export default function MapScreen() {
         {highlightedReport ? (
             <HighlightedReportCallout
               report={highlightedReport}
-              bottomOffset={bottomNavigationHeight + insets.bottom + spacing.md}
+              bottomOffset={highlightedReportBottomOffset}
               onClose={clearHighlightedReport}
               onOpenDetails={openHighlightedReportDetails}
             />
@@ -587,6 +600,7 @@ export default function MapScreen() {
         <ReportMapDetailSheet
           visible={selectedReports.length > 1 || fullReportVisible}
           reports={selectedReports}
+          detailCacheScope={currentUserId}
           commentMode="prioritizedReadOnly"
           onOpenCommunityReport={openReportInCommunity}
           onClose={() => {

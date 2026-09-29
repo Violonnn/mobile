@@ -3,6 +3,7 @@ import {
   View,
   Text,
   TouchableOpacity,
+  FlatList,
   ScrollView,
   RefreshControl,
   StyleSheet,
@@ -17,12 +18,11 @@ import {
 } from '../../lib/reports';
 import { formatPublishedAt } from '../../lib/formatTime';
 import {
+  CommunityReportTags,
   CollageCellContent,
   EngagementActions,
   ReportDetailContent,
   reportDetailStyles,
-  statusLabel,
-  statusStyle,
 } from '../report/ReportDetailCard';
 import { ReporterAvatar } from '../report/ReporterAvatar';
 import CommentsSection from '../report/CommentsSection';
@@ -30,13 +30,15 @@ import { useReportEngagement } from '../report/ReportEngagementProvider';
 import { useKeyboardHeight } from '../../hooks/useKeyboardHeight';
 import { useReportDetail } from '../../hooks/useReportDetail';
 import ResidentBottomSheet from '../ui/ResidentBottomSheet';
+import { ReportDetailSheetSkeleton } from '../ui/ResidentScreenSkeletons';
 import MapRelevantComments from './MapRelevantComments';
-import IncidentTypeBadge from '../report/IncidentTypeBadge';
 
 type Props = {
   reports: MapReportMarker[];
   visible: boolean;
   onClose: () => void;
+  /** Shared with the resident feed so an opened report is not fetched twice. */
+  detailCacheScope?: string | null;
   commentMode?: 'interactive' | 'prioritizedReadOnly';
   onOpenCommunityReport?: (reportId: string) => void;
 };
@@ -54,19 +56,22 @@ function ShrunkReportCard({
   onCommentPress: () => void;
 }) {
   const firstMedia = report.media[0] ?? null;
-  const extraCount = Math.max(0, report.media.length - 1);
+  const secondMedia = report.media[1] ?? null;
+  const mediaCount = report.media.length;
+  // Older video records can exist without a stored thumbnail. Treat them like
+  // attachment-less reports so the compact list never shows a blank preview.
+  const firstThumbnailUrl = firstMedia?.thumbnailUrl ??
+    (firstMedia?.type === 'photo' ? firstMedia.url : null);
+  const remainingMediaCount = Math.max(0, mediaCount - 2);
 
   return (
     <TouchableOpacity style={styles.listCard} onPress={onPress} activeOpacity={0.85}>
       <View style={styles.listTopRow}>
         <View style={styles.listLocationInline}>
-          <Ionicons name="location-sharp" size={14} color={colors.themeSoft} />
+          <Ionicons name="location-sharp" size={14} color={colors.navigationActive} />
           <Text style={styles.listLocation}>
             {formatReportLocation(report)}
           </Text>
-        </View>
-        <View style={[reportDetailStyles.statusPillSmall, statusStyle(report.status)]}>
-          <Text style={reportDetailStyles.statusTextSmall}>{statusLabel(report.status)}</Text>
         </View>
       </View>
 
@@ -84,10 +89,7 @@ function ShrunkReportCard({
                 </Text>
               </View>
               <Text style={styles.listDate}>{formatPublishedAt(report.created_at)}</Text>
-              <IncidentTypeBadge
-                incidentType={report.incidentType}
-                incidentTypeOther={report.incidentTypeOther}
-              />
+              <CommunityReportTags report={report} />
               <Text style={styles.listDescription}>
                 {report.description || 'No description provided.'}
               </Text>
@@ -101,23 +103,26 @@ function ShrunkReportCard({
           />
         </View>
 
-        {firstMedia ? (
-          <View style={styles.listMediaPreview}>
-            <View style={styles.listMediaThumb}>
+        {firstMedia && firstThumbnailUrl ? (
+          <View style={styles.listMediaPreview} accessibilityLabel={`Showing ${mediaCount} attachments`}>
+            {secondMedia ? (
+              <View style={styles.listMediaBackCard}>
+                <CollageCellContent item={secondMedia} />
+              </View>
+            ) : null}
+            <View style={[styles.listMediaThumb, styles.listMediaFrontCard]}>
               <CollageCellContent item={firstMedia} />
+              {remainingMediaCount > 0 ? (
+                <Text style={styles.listMediaCountText}>+{remainingMediaCount}</Text>
+              ) : null}
               {firstMedia.type === 'video' ? (
                 <View style={reportDetailStyles.videoBadge}>
                   <Ionicons name="play" size={11} color={colors.white} />
                 </View>
               ) : null}
             </View>
-            {extraCount > 0 ? (
-              <Text style={styles.listMediaExtra}>+{extraCount}</Text>
-            ) : null}
           </View>
-        ) : (
-          <View style={styles.listMediaPreview} />
-        )}
+        ) : null}
       </View>
     </TouchableOpacity>
   );
@@ -127,6 +132,7 @@ export default function ReportMapDetailSheet({
   reports,
   visible,
   onClose,
+  detailCacheScope,
   commentMode = 'interactive',
   onOpenCommunityReport,
 }: Props) {
@@ -181,7 +187,7 @@ export default function ReportMapDetailSheet({
     refreshError,
     refreshVersion,
     refresh: refreshDetail,
-  } = useReportDetail(selected);
+  } = useReportDetail(selected, { cacheScope: detailCacheScope });
 
   const showList = sorted.length > 1 && !detailReport;
   const canGoBackToList = Boolean(detailReport && sorted.length > 1);
@@ -193,6 +199,14 @@ export default function ReportMapDetailSheet({
   const autoShowAllMedia = (detailReport?.media.length ?? 0) >= 4;
   const visibleListReports = sorted.slice(0, listVisibleCount);
   const hasMoreListReports = listVisibleCount < sorted.length;
+  // Match the feed: reserve the final layout while one opened report resolves
+  // its media URLs and metadata, instead of flashing an attachment-empty card.
+  const isDetailLoading = Boolean(
+    selected &&
+      !selected.isPending &&
+      !detailReport?.mediaDetailLoaded &&
+      !refreshError,
+  );
 
   if (visible !== previousVisible) {
     setPreviousVisible(visible);
@@ -265,6 +279,7 @@ export default function ReportMapDetailSheet({
       sheetStyle={styles.sheet}
       handleAccessibilityLabel="Resize report details"
       showCloseButton={false}
+      animationType="slide"
     >
           <View style={styles.headerRow}>
             {showBackButton ? (
@@ -287,13 +302,6 @@ export default function ReportMapDetailSheet({
                   ? `${sorted.length} reports here`
                   : 'Report details'}
               </Text>
-              {!showList && detailReport ? (
-                <View style={[styles.statusPillHeader, statusStyle(detailReport.status)]}>
-                  <Text style={styles.statusTextHeader}>
-                    {statusLabel(detailReport.status)}
-                  </Text>
-                </View>
-              ) : null}
             </View>
 
             <View style={styles.headerButton} />
@@ -301,44 +309,46 @@ export default function ReportMapDetailSheet({
 
           {showList ? (
             <View style={styles.listSection}>
-              <ScrollView
+              <FlatList
                 style={styles.listScroll}
                 contentContainerStyle={styles.listScrollContent}
+                data={visibleListReports}
+                keyExtractor={(report) => report.id}
+                initialNumToRender={LIST_INITIAL_COUNT}
+                maxToRenderPerBatch={LIST_PAGE_SIZE}
+                windowSize={5}
                 showsVerticalScrollIndicator
                 nestedScrollEnabled
                 bounces={false}
-              >
-                {visibleListReports.map((report, index) => (
-                  <React.Fragment key={report.id}>
-                    <ShrunkReportCard
-                      report={report}
-                      onPress={() => {
-                        setShowingAllMedia(false);
-                        setSelectedId(report.id);
-                      }}
-                      onCommentPress={() => openReportComments(report.id)}
-                    />
-                    {index < visibleListReports.length - 1 ? (
-                      <View style={styles.listSeparator} />
-                    ) : null}
-                  </React.Fragment>
-                ))}
-
-                {hasMoreListReports ? (
-                  <TouchableOpacity
-                    style={styles.listFooterAction}
-                    onPress={handleSeeMore}
-                    accessibilityRole="button"
-                    accessibilityLabel="See more reports"
-                  >
-                    <Text style={styles.listFooterActionText}>See More</Text>
-                  </TouchableOpacity>
-                ) : (
-                  <Text style={styles.listFooterNote}>
-                    That&apos;s all for the reports within this area
-                  </Text>
+                keyboardShouldPersistTaps="handled"
+                ItemSeparatorComponent={() => <View style={styles.listSeparator} />}
+                renderItem={({ item: report }) => (
+                  <ShrunkReportCard
+                    report={report}
+                    onPress={() => {
+                      setShowingAllMedia(false);
+                      setSelectedId(report.id);
+                    }}
+                    onCommentPress={() => openReportComments(report.id)}
+                  />
                 )}
-              </ScrollView>
+                ListFooterComponent={
+                  hasMoreListReports ? (
+                    <TouchableOpacity
+                      style={styles.listFooterAction}
+                      onPress={handleSeeMore}
+                      accessibilityRole="button"
+                      accessibilityLabel="See more reports"
+                    >
+                      <Text style={styles.listFooterActionText}>See More</Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <Text style={styles.listFooterNote}>
+                      That&apos;s all for the reports within this area
+                    </Text>
+                  )
+                }
+              />
             </View>
           ) : (
             <ScrollView
@@ -367,13 +377,16 @@ export default function ReportMapDetailSheet({
                 pendingScrollToComments.current = false;
               }}
             >
-              {detailReport ? (
+              {isDetailLoading ? <ReportDetailSheetSkeleton /> : null}
+
+              {!isDetailLoading && detailReport ? (
                 <>
                   <ReportDetailContent
                     report={detailReport}
                     showingAllMedia={showingAllMedia || autoShowAllMedia}
                     onShowingAllMediaChange={setShowingAllMedia}
                     onRequestComments={jumpToComments}
+                    showCommunityTags
                   />
 
                   {refreshError ? (
@@ -398,6 +411,7 @@ export default function ReportMapDetailSheet({
                         autoFocus={focusComments}
                         highlighted={focusComments}
                         refreshSignal={refreshVersion}
+                        showInitialLoader={false}
                         onCommentAdded={notifyCommentAdded}
                         onComposerFocus={() =>
                           detailScrollRef.current?.scrollToEnd({ animated: true })
@@ -457,17 +471,6 @@ const styles = StyleSheet.create({
     fontSize: fontSizes.lg,
     color: colors.text,
     flexShrink: 1,
-  },
-  statusPillHeader: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 3,
-    borderRadius: radius.full,
-    flexShrink: 0,
-  },
-  statusTextHeader: {
-    fontFamily: fonts.semibold,
-    fontSize: fontSizes.xs,
-    color: colors.text,
   },
   scroll: {
     flex: 1,
@@ -597,25 +600,43 @@ const styles = StyleSheet.create({
   },
   // Fixed slot on the right — centered, not flush to the edge.
   listMediaPreview: {
-    width: 72,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
+    width: 76,
+    height: 76,
+    position: 'relative',
     flexShrink: 0,
-    marginRight: spacing.sm,
   },
   listMediaThumb: {
-    width: 52,
-    height: 52,
+    width: 64,
+    height: 64,
     borderRadius: radius.md,
     overflow: 'hidden',
     backgroundColor: colors.border,
     position: 'relative',
   },
-  listMediaExtra: {
+  listMediaFrontCard: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    zIndex: 3,
+  },
+  listMediaBackCard: {
+    position: 'absolute',
+    left: 5,
+    bottom: 5,
+    width: 64,
+    height: 64,
+    borderRadius: radius.md,
+    overflow: 'hidden',
+    backgroundColor: colors.border,
+    zIndex: 2,
+  },
+  listMediaCountText: {
+    position: 'absolute',
+    top: 4,
+    right: 5,
+    zIndex: 1,
     fontFamily: fonts.semibold,
-    fontSize: fontSizes.xs,
-    color: colors.textMuted,
+    fontSize: 10,
+    color: colors.navigationActive,
   },
 });

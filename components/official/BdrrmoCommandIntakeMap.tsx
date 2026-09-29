@@ -11,6 +11,10 @@ import { colors } from '../../styles/theme';
 import { mdrrmoCommandStyles as styles } from '../../styles/screens/mdrrmoCommand.styles';
 
 type LocalResponseStatus = Extract<ReportStatus, 'unverified' | 'verified'>;
+type LocatedOfficialReportQueueItem = OfficialReportQueueItem & {
+  latitude: number;
+  longitude: number;
+};
 
 const LOCAL_RESPONSE_STATES: {
   status: LocalResponseStatus;
@@ -21,7 +25,7 @@ const LOCAL_RESPONSE_STATES: {
   { status: 'verified', label: 'Verified', color: colors.success },
 ];
 
-function hasValidLocation(report: OfficialReportQueueItem): boolean {
+function hasValidLocation(report: OfficialReportQueueItem): report is LocatedOfficialReportQueueItem {
   return (
     Number.isFinite(report.latitude) &&
     Number.isFinite(report.longitude) &&
@@ -219,11 +223,11 @@ export default function BdrrmoCommandIntakeMap({
           <View style={styles.activeIncidentTopRow}>
             <View style={styles.activeIncidentCopy}>
               <Text style={[styles.activeIncidentEyebrow, { color: activeState.color }]}>
-                {activeState.label.toUpperCase()} · {elapsedLabel(activeReport.createdAt, referenceTime)}
+                {activeState.label.toUpperCase()} - {elapsedLabel(activeReport.createdAt, referenceTime)}
               </Text>
-              <Text style={styles.activeIncidentTitle}>{typeLabel} · {placeLabel}</Text>
+              <Text style={styles.activeIncidentTitle}>{typeLabel} - {placeLabel}</Text>
               <Text style={styles.activeIncidentMeta}>
-                {assignedBarangay || 'Assigned barangay'} · {activeReport.mediaCount} media
+                {assignedBarangay || 'Assigned barangay'} - {activeReport.mediaCount} media
               </Text>
             </View>
             <TouchableOpacity
@@ -253,7 +257,7 @@ export default function BdrrmoCommandIntakeMap({
             ]}
           >
             <View style={[styles.activeIncidentQuoteAccent, { backgroundColor: activeState.color }]} />
-            <Text style={[styles.activeIncidentQuoteMark, { color: activeState.color }]}>“</Text>
+            <Text style={[styles.activeIncidentQuoteMark, { color: activeState.color }]}>&quot;</Text>
             <View style={styles.activeIncidentQuoteCopy}>
               <Text style={styles.activeIncidentQuoteText}>
                 {activeReport.description.trim() || 'No report description was provided.'}

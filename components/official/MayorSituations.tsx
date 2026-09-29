@@ -145,7 +145,7 @@ function MayorPrioritySection() {
           <Text style={styles.summaryValue}>{centers.length}</Text>
           <Text style={styles.summaryLabel}>evacuation centers</Text>
           <Text style={styles.summaryMeta}>
-            {priorityCenters.length} priority · {missingCapacity} missing capacity details
+            {priorityCenters.length} priority - {missingCapacity} missing capacity details
           </Text>
         </View>
 
@@ -186,7 +186,7 @@ function MayorPrioritySection() {
                   ? 'Open'
                   : center.status === 'full'
                     ? 'Full'
-                    : 'Temporarily closed'} · Priority
+                    : 'Temporarily closed'} - Priority
               </Text>
               <Text style={styles.priorityMeta}>Capacity {center.capacity?.toLocaleString() ?? 'not declared'}</Text>
             </View>
@@ -409,7 +409,8 @@ function MayorSituationsList() {
             accessibilityRole="button"
             accessibilityLabel="Open municipal map"
           >
-            <Text style={styles.openMapText}>OPEN MAP ↗</Text>
+            <Text style={styles.openMapText}>OPEN MAP</Text>
+            <Ionicons name="open-outline" size={16} color={colors.primary} />
           </TouchableOpacity>
           {mapError ? <Text style={styles.mapError}>Map pins could not fully refresh.</Text> : null}
         </View>
@@ -474,13 +475,13 @@ function MayorSituationsList() {
           {search !== debouncedSearch ? (
             <View style={styles.searchingRow}>
               <ActivityIndicator size="small" color={colors.primary} />
-              <Text style={styles.stateText}>Updating search results…</Text>
+              <Text style={styles.stateText}>Updating search results...</Text>
             </View>
           ) : null}
           {loading ? (
             <View style={styles.stateCard}>
               <ActivityIndicator color={colors.primary} />
-              <Text style={styles.stateText}>Loading matching reports…</Text>
+              <Text style={styles.stateText}>Loading matching reports...</Text>
             </View>
           ) : null}
           {!loading && error ? (
@@ -636,7 +637,7 @@ function MayorSituationRow({
           incidentTypeOther={marker?.incidentTypeOther}
         />
         <Text style={styles.reportDescription} numberOfLines={1}>{report.description.trim() || 'No description provided.'}</Text>
-        <Text style={styles.reportMeta} numberOfLines={1}>{report.barangayName} · {report.reporterName}</Text>
+        <Text style={styles.reportMeta} numberOfLines={1}>{report.barangayName} - {report.reporterName}</Text>
         <Text style={styles.reportMeta}>{report.createdAt ? formatPublishedAt(report.createdAt) : 'Date unavailable'}</Text>
         {report.addressText ? <Text style={styles.reportMeta} numberOfLines={1}>{report.addressText}</Text> : null}
       </View>

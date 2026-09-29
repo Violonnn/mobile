@@ -209,7 +209,7 @@ select throws_ok(
 select set_config('request.jwt.claim.sub', 'e1000000-0000-4000-8000-000000000006', true);
 select is(public.is_admin(), true, 'active admin retains the admin role helper');
 select set_config('request.jwt.claim.sub', 'e1000000-0000-4000-8000-000000000007', true);
-select is((select count(*) from public.announcements), 2::bigint, 'resident sees municipal and home-barangay announcements');
+select is((select count(*) from public.announcements), 3::bigint, 'resident can read official updates from every barangay');
 select is((select count(*) from public.report_totals_by_barangay), 0::bigint, 'resident receives no analytics rows');
 select throws_ok(
   $$select * from public.mayor_report_activity('today', null)$$,

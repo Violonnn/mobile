@@ -68,6 +68,34 @@ function residentIncidentTypeColor(incidentType: MapReportMarker['incidentType']
   return colors.textMuted;
 }
 
+/** Shared status and incident tags used by resident community report views. */
+export function CommunityReportTags({ report }: { report: MapReportMarker }) {
+  const statusColor =
+    report.status === 'resolved'
+      ? '#15805F'
+      : report.status === 'verified'
+        ? colors.primary
+        : report.status === 'escalated'
+          ? colors.escalated
+          : '#A16207';
+  const incidentTypeColor = residentIncidentTypeColor(report.incidentType);
+
+  return (
+    <View style={residentFeedStyles.statusRow}>
+      <View style={[residentFeedStyles.statusPill, { borderColor: statusColor }]}>
+        <Text style={[residentFeedStyles.statusText, { color: statusColor }]}>
+          {residentStatusLabel(report.status)}
+        </Text>
+      </View>
+      <View style={[residentFeedStyles.statusPill, { borderColor: incidentTypeColor }]}>
+        <Text style={[residentFeedStyles.statusText, { color: incidentTypeColor }]}>
+          {formatIncidentType(report.incidentType, report.incidentTypeOther)}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
 export function statusStyle(status: string) {
   if (status === 'verified') return reportDetailStyles.statusVerified;
   if (status === 'escalated') return reportDetailStyles.statusEscalated;
@@ -595,6 +623,8 @@ type ReportDetailContentProps = {
   showStatus?: boolean;
   /** Hide the incident type pill when a parent needs a title-only detail card. */
   showIncidentType?: boolean;
+  /** Uses the bordered status and incident tags from the resident Community feed. */
+  showCommunityTags?: boolean;
   /** Hide the report date/time and location beneath the resident name. */
   showReporterMetadata?: boolean;
   /** Vertically align a metadata-free resident name with its avatar. */
@@ -618,6 +648,7 @@ export function ReportDetailContent({
   onRequestComments,
   showStatus = false,
   showIncidentType = true,
+  showCommunityTags = false,
   showReporterMetadata = true,
   centerReporterName = false,
   showActivityDates = false,
@@ -674,7 +705,9 @@ export function ReportDetailContent({
       <EngagementActions report={report} onCommentPress={onRequestComments} />
 
       <View style={reportDetailStyles.detailCard}>
-        {showIncidentType ? (
+        {showCommunityTags ? (
+          <CommunityReportTags report={report} />
+        ) : showIncidentType ? (
           <View style={reportDetailStyles.incidentTypePill}>
             <Ionicons name="warning-outline" size={14} color={colors.navigationActive} />
             <Text style={reportDetailStyles.incidentTypeText}>
@@ -709,16 +742,6 @@ export function ResidentFeedReportContent({
   const { getState, toggleUpvote } = useReportEngagement();
   const { upvoteCount, commentCount, hasUpvoted } = getState(report);
   const firstMedia = report.media[0] ?? null;
-  const statusColor =
-    report.status === 'resolved'
-      ? '#15805F'
-      : report.status === 'verified'
-        ? colors.primary
-        : report.status === 'escalated'
-          ? colors.escalated
-          : '#A16207';
-  const incidentTypeColor = residentIncidentTypeColor(report.incidentType);
-
   return (
     <View style={residentFeedStyles.reportContent}>
       <View style={residentFeedStyles.reporterRow}>
@@ -777,18 +800,7 @@ export function ResidentFeedReportContent({
         </View>
       )}
 
-      <View style={residentFeedStyles.statusRow}>
-        <View style={[residentFeedStyles.statusPill, { borderColor: statusColor }]}>
-          <Text style={[residentFeedStyles.statusText, { color: statusColor }]}>
-            {residentStatusLabel(report.status)}
-          </Text>
-        </View>
-        <View style={[residentFeedStyles.statusPill, { borderColor: incidentTypeColor }]}>
-          <Text style={[residentFeedStyles.statusText, { color: incidentTypeColor }]}>
-            {formatIncidentType(report.incidentType, report.incidentTypeOther)}
-          </Text>
-        </View>
-      </View>
+      <CommunityReportTags report={report} />
 
       <View style={residentFeedStyles.actionRow}>
         <View style={residentFeedStyles.engagementActions}>

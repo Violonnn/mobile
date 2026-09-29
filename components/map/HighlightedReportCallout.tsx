@@ -49,7 +49,9 @@ export default function HighlightedReportCallout({
         <View style={styles.copy}>
           <View style={styles.eyebrowRow}>
             <Text style={[styles.eyebrow, { color: status.color }]}>SELECTED REPORT</Text>
-            <Text style={[styles.status, { color: status.color }]}>{status.label}</Text>
+            <View style={[styles.statusTag, { borderColor: status.color }]}>
+              <Text style={[styles.status, { color: status.color }]}>{status.label}</Text>
+            </View>
           </View>
           <Text style={styles.title}>
             {report.title || 'Untitled report'}
@@ -110,6 +112,8 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     padding: spacing.md,
     paddingTop: spacing.md,
+    // Reserve a clear top-right corner for the close control.
+    paddingRight: 48,
     borderWidth: 1,
     borderColor: 'rgba(179, 52, 67, 0.18)',
     borderTopLeftRadius: radius.xl,
@@ -151,6 +155,12 @@ const styles = StyleSheet.create({
     letterSpacing: 0.6,
     color: colors.danger,
   },
+  statusTag: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+    borderWidth: 1,
+    borderRadius: 6,
+  },
   status: {
     fontFamily: fonts.semibold,
     fontSize: 9,
@@ -188,9 +198,11 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   closeButton: {
+    position: 'absolute',
+    top: spacing.sm,
+    right: spacing.sm,
     width: 28,
     height: 28,
-    flexShrink: 0,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.full,

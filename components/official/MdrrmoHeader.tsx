@@ -141,7 +141,7 @@ export default function MdrrmoHeader({
             accessibilityRole="button"
             accessibilityLabel="Notifications"
           >
-            <Ionicons name="notifications-outline" size={29} color={colors.white} />
+            <Ionicons name="notifications-outline" size={29} color={colors.text} />
             {notificationUnreadCount > 0 ? (
               <View style={styles.mayorHeroNotificationDot} />
             ) : null}

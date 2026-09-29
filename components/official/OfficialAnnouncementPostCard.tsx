@@ -15,9 +15,9 @@ import {
     type ViewStyle,
 } from 'react-native';
 import { useKeyboardHeight } from '../../hooks/useKeyboardHeight';
+import { useAnnouncementDetail } from '../../hooks/useAnnouncementDetail';
 import { useShareSheetGuard } from '../../hooks/useShareSheetGuard';
 import {
-    fetchAnnouncementById,
     formatAnnouncementAuthorName,
     type AnnouncementMediaAttachment,
     type AnnouncementRecord,
@@ -36,6 +36,7 @@ import {
 } from '../report/ReportDetailCard';
 import { ReporterAvatar } from '../report/ReporterAvatar';
 import ResidentBottomSheet from '../ui/ResidentBottomSheet';
+import { ReportDetailSheetSkeleton } from '../ui/ResidentScreenSkeletons';
 import { useAnnouncementEngagement } from './AnnouncementEngagementProvider';
 import ResidentFeedFeaturedHero from './ResidentFeedFeaturedHero';
 
@@ -571,6 +572,7 @@ export default function OfficialAnnouncementPostCard({
   isUnread = false,
   officeLabel = '',
   onOpened,
+  detailCacheScope,
 }: {
   announcement: AnnouncementRecord;
   /** Official updates shown as onboarding-style fading slides on the LATEST card. */
@@ -582,19 +584,27 @@ export default function OfficialAnnouncementPostCard({
   isUnread?: boolean;
   officeLabel?: string;
   onOpened?: (announcementId: string) => void;
+  /** Scopes short-lived full-media caching to one signed-in resident. */
+  detailCacheScope?: string | null;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [focusComments, setFocusComments] = useState(false);
   const { shareSafely, canOpenCard } = useShareSheetGuard();
-  const [refreshSignal, setRefreshSignal] = useState(0);
-  const [refreshing, setRefreshing] = useState(false);
-  const [detailLoadError, setDetailLoadError] = useState<string | null>(null);
   const [featuredAnnouncement, setFeaturedAnnouncement] = useState(announcement);
-  const [detailAnnouncement, setDetailAnnouncement] = useState(announcement);
+  const [selectedAnnouncement, setSelectedAnnouncement] = useState(announcement);
   const [previousAnnouncementId, setPreviousAnnouncementId] = useState(announcement.id);
   const { notifyCommentAdded } = useAnnouncementEngagement();
   const modalScrollRef = useRef<ScrollView>(null);
   const pendingScrollToComments = useRef(false);
+  const {
+    announcement: detailAnnouncement,
+    refreshing: detailRefreshing,
+    refreshError: detailLoadError,
+    refreshVersion,
+    refresh: refreshDetail,
+  } = useAnnouncementDetail(expanded ? selectedAnnouncement : null, {
+    cacheScope: detailCacheScope,
+  });
 
   const keyboardHeight = useKeyboardHeight(expanded);
   const keyboardOpen = keyboardHeight > 0;
@@ -622,16 +632,10 @@ export default function OfficialAnnouncementPostCard({
     const target =
       variant === 'residentFeedFeatured' ? featuredAnnouncement : announcement;
     onOpened?.(target.id);
-    setDetailAnnouncement(target);
+    setSelectedAnnouncement(target);
     pendingScrollToComments.current = withComments;
     setFocusComments(withComments);
     setExpanded(true);
-    if (!target.mediaDetailLoaded) {
-      void fetchAnnouncementById(target.id).then((result) => {
-        if (result.announcement) setDetailAnnouncement(result.announcement);
-        setDetailLoadError(result.error);
-      });
-    }
   };
 
   const shareAnnouncement = (target: AnnouncementRecord) => {
@@ -650,6 +654,10 @@ export default function OfficialAnnouncementPostCard({
     setFocusComments(true);
     modalScrollRef.current?.scrollToEnd({ animated: true });
   };
+  const isDetailLoading =
+    expanded &&
+    !detailAnnouncement?.mediaDetailLoaded &&
+    !detailLoadError;
 
   return (
     <>
@@ -705,6 +713,7 @@ export default function OfficialAnnouncementPostCard({
         )}
       </Pressable>
 
+      {expanded ? (
       <ResidentBottomSheet
         visible={expanded}
         onClose={closeExpanded}
@@ -714,6 +723,7 @@ export default function OfficialAnnouncementPostCard({
         sheetStyle={reportDetailStyles.postModalSheet}
         handleAccessibilityLabel="Resize official update"
         showCloseButton={false}
+        animationType="slide"
       >
             <ScrollView
               ref={modalScrollRef}
@@ -725,19 +735,11 @@ export default function OfficialAnnouncementPostCard({
               keyboardShouldPersistTaps="handled"
               refreshControl={
                 <RefreshControl
-                  refreshing={refreshing}
-                  onRefresh={() => {
-                    setRefreshing(true);
-                    setRefreshSignal((current) => current + 1);
-                    void fetchAnnouncementById(detailAnnouncement.id).then((result) => {
-                      if (result.announcement) setDetailAnnouncement(result.announcement);
-                      setDetailLoadError(result.error);
-                      setRefreshing(false);
-                    });
-                  }}
+                  refreshing={detailRefreshing}
+                  onRefresh={refreshDetail}
                   tintColor={colors.themeSoft}
                   colors={[colors.themeSoft]}
-                  enabled={!keyboardOpen}
+                  enabled={Boolean(detailAnnouncement) && !keyboardOpen}
                 />
               }
               onContentSizeChange={() => {
@@ -749,31 +751,38 @@ export default function OfficialAnnouncementPostCard({
                 pendingScrollToComments.current = false;
               }}
             >
-              <AnnouncementDetailContent
-                announcement={detailAnnouncement}
-                showingAllMedia
-                onRequestComments={jumpToComments}
-              />
+              {isDetailLoading ? <ReportDetailSheetSkeleton /> : null}
 
-              {detailLoadError ? (
-                <Text style={reportDetailStyles.detailRefreshError}>
-                  {detailLoadError}
-                </Text>
+              {!isDetailLoading && detailAnnouncement ? (
+                <>
+                  <AnnouncementDetailContent
+                    announcement={detailAnnouncement}
+                    showingAllMedia
+                    onRequestComments={jumpToComments}
+                  />
+
+                  {detailLoadError ? (
+                    <Text style={reportDetailStyles.detailRefreshError}>
+                      {detailLoadError}
+                    </Text>
+                  ) : null}
+
+                  <CommentsSection
+                    announcementId={detailAnnouncement.id}
+                    autoFocus={focusComments}
+                    highlighted={focusComments}
+                    refreshSignal={refreshVersion}
+                    moderationMode={moderationMode}
+                    onCommentAdded={notifyCommentAdded}
+                    onComposerFocus={() =>
+                      modalScrollRef.current?.scrollToEnd({ animated: true })
+                    }
+                  />
+                </>
               ) : null}
-
-              <CommentsSection
-                announcementId={detailAnnouncement.id}
-                autoFocus={focusComments}
-                highlighted={focusComments}
-                refreshSignal={refreshSignal}
-                moderationMode={moderationMode}
-                onCommentAdded={notifyCommentAdded}
-                onComposerFocus={() =>
-                  modalScrollRef.current?.scrollToEnd({ animated: true })
-                }
-              />
             </ScrollView>
       </ResidentBottomSheet>
+      ) : null}
     </>
   );
 }

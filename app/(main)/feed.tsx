@@ -35,6 +35,10 @@ import {
   type CommunityReportSort,
   type CommunityReportStatusFilter,
 } from '../../lib/communityReportFeed';
+import {
+  buildOfficialUpdateFeed,
+  type OfficialUpdateFeedScope,
+} from '../../lib/officialAnnouncementFeed';
 import { normalizeSearchText, type Coordinate } from '../../lib/reportProximity';
 import { feedStyles as styles } from '../../styles/screens/feed.styles';
 import { getResidentBottomNavigationHeight } from '../../styles/components/bottomNav.styles';
@@ -42,9 +46,9 @@ import { colors } from '../../styles/theme';
 
 type FeedTab = 'official' | 'community';
 type FeedOrder = 'latest' | 'oldest';
-type OfficialFilter = 'all' | 'municipal' | 'barangay';
 
 const COMMUNITY_PAGE_SIZE = 6;
+const OFFICIAL_PAGE_SIZE = 6;
 
 function matchesAnnouncementSearch(
   announcement: AnnouncementRecord,
@@ -71,6 +75,25 @@ function getCommunitySectionCopy(
   return {
     title: `Across ${municipality}`,
     subtitle: `Reports from every barangay in ${municipality}`,
+  };
+}
+
+function getOfficialSectionCopy(
+  scope: OfficialUpdateFeedScope,
+  barangay: string,
+  municipality: string,
+): { title: string; subtitle: string } {
+  if (scope === 'all') {
+    return {
+      title: `Across ${municipality}`,
+      subtitle: `Official updates from the Mayor, MDRRMO, and every barangay in ${municipality}`,
+    };
+  }
+
+  const localOffice = barangay === 'your area' ? 'your barangay' : `Brgy. ${barangay}`;
+  return {
+    title: 'Priority updates',
+    subtitle: `Mayor, MDRRMO, then ${localOffice}. Newest updates appear first within each office.`,
   };
 }
 
@@ -141,9 +164,13 @@ export default function FeedScreen() {
   const [communityScope, setCommunityScope] = useState<CommunityReportScope>('barangay');
   const [communityOrder, setCommunityOrder] = useState<CommunityReportSort>('activity');
   const [statusFilter, setStatusFilter] = useState<CommunityReportStatusFilter>('all');
+  const [draftCommunityOrder, setDraftCommunityOrder] = useState<CommunityReportSort>('activity');
+  const [draftStatusFilter, setDraftStatusFilter] = useState<CommunityReportStatusFilter>('all');
   const [visibleCommunityLimit, setVisibleCommunityLimit] = useState(COMMUNITY_PAGE_SIZE);
-  const [officialFilter, setOfficialFilter] = useState<OfficialFilter>('all');
+  const [officialScope, setOfficialScope] = useState<OfficialUpdateFeedScope>('priority');
   const [officialOrder, setOfficialOrder] = useState<FeedOrder>('latest');
+  const [draftOfficialOrder, setDraftOfficialOrder] = useState<FeedOrder>('latest');
+  const [visibleOfficialLimit, setVisibleOfficialLimit] = useState(OFFICIAL_PAGE_SIZE);
   const [refreshing, setRefreshing] = useState(false);
 
   useFocusEffect(
@@ -234,19 +261,48 @@ export default function FeedScreen() {
   );
 
   const filteredAnnouncements = useMemo(() => {
-    return announcements
-      .filter((announcement) => {
-        if (!matchesAnnouncementSearch(announcement, normalizedQuery)) return false;
-        if (officialFilter === 'municipal') return announcement.scope === 'municipal';
-        if (officialFilter === 'barangay') return announcement.scope === 'barangay';
-        return true;
-      })
-      .sort((first, second) => {
-        const firstTime = new Date(first.createdAt).getTime();
-        const secondTime = new Date(second.createdAt).getTime();
-        return officialOrder === 'latest' ? secondTime - firstTime : firstTime - secondTime;
-      });
-  }, [announcements, normalizedQuery, officialFilter, officialOrder]);
+    const searchMatches = announcements.filter((announcement) =>
+      matchesAnnouncementSearch(announcement, normalizedQuery),
+    );
+
+    return buildOfficialUpdateFeed(searchMatches, {
+      residentBarangayId: barangayId,
+      scope: officialScope,
+      sort: officialOrder,
+    });
+  }, [announcements, barangayId, normalizedQuery, officialOrder, officialScope]);
+  const officialSectionCopy = getOfficialSectionCopy(
+    officialScope,
+    barangay,
+    municipality,
+  );
+  const displayedOfficialAnnouncements = useMemo(
+    () => filteredAnnouncements.slice(0, visibleOfficialLimit),
+    [filteredAnnouncements, visibleOfficialLimit],
+  );
+  const hasMoreOfficialAnnouncements =
+    visibleOfficialLimit < filteredAnnouncements.length || hasMoreAnnouncements;
+
+  useEffect(() => {
+    if (
+      activeTab !== 'official' ||
+      filteredAnnouncements.length > 0 ||
+      !hasMoreAnnouncements ||
+      announcementsLoadingMore
+    ) {
+      return;
+    }
+
+    // Ranked server pages can contain only other barangays before the
+    // resident's priority updates. Continue until a visible update is found.
+    void loadMoreAnnouncements();
+  }, [
+    activeTab,
+    announcementsLoadingMore,
+    filteredAnnouncements.length,
+    hasMoreAnnouncements,
+    loadMoreAnnouncements,
+  ]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -259,6 +315,27 @@ export default function FeedScreen() {
     } finally {
       setRefreshing(false);
     }
+  };
+
+  const openFeedFilters = () => {
+    // Keep selections temporary until the visitor chooses Show results.
+    setDraftCommunityOrder(communityOrder);
+    setDraftStatusFilter(statusFilter);
+    setDraftOfficialOrder(officialOrder);
+    setFilterVisible(true);
+  };
+
+  const applyFeedFilters = () => {
+    if (activeTab === 'community') {
+      setCommunityOrder(draftCommunityOrder);
+      setStatusFilter(draftStatusFilter);
+      setVisibleCommunityLimit(COMMUNITY_PAGE_SIZE);
+    } else {
+      setOfficialOrder(draftOfficialOrder);
+      setVisibleOfficialLimit(OFFICIAL_PAGE_SIZE);
+    }
+
+    setFilterVisible(false);
   };
 
   const openReportOnMap = useCallback(
@@ -293,6 +370,30 @@ export default function FeedScreen() {
               switchingToMunicipality ? 'municipality' : 'barangay',
             );
             setVisibleCommunityLimit(COMMUNITY_PAGE_SIZE);
+          },
+        },
+      ],
+    );
+  };
+
+  const confirmOfficialScopeChange = () => {
+    const switchingToAllUpdates = officialScope === 'priority';
+    const destination = switchingToAllUpdates
+      ? `all barangays in ${municipality}`
+      : 'your priority updates';
+
+    Alert.alert(
+      `Switch to ${destination}?`,
+      switchingToAllUpdates
+        ? `Your feed will show official updates from every barangay in ${municipality}.`
+        : 'Your feed will prioritize Mayor, MDRRMO, then updates from your barangay.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Switch feed',
+          onPress: () => {
+            setOfficialScope(switchingToAllUpdates ? 'all' : 'priority');
+            setVisibleOfficialLimit(OFFICIAL_PAGE_SIZE);
           },
         },
       ],
@@ -339,7 +440,7 @@ export default function FeedScreen() {
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.iconButton}
-                  onPress={() => setFilterVisible(true)}
+                  onPress={openFeedFilters}
                   accessibilityRole="button"
                   accessibilityLabel="Filter feed"
                 >
@@ -357,6 +458,7 @@ export default function FeedScreen() {
                   onChangeText={(value) => {
                     setSearchQuery(value);
                     setVisibleCommunityLimit(COMMUNITY_PAGE_SIZE);
+                    setVisibleOfficialLimit(OFFICIAL_PAGE_SIZE);
                   }}
                   placeholder="Search updates and reports"
                   placeholderTextColor={colors.textMuted}
@@ -368,6 +470,7 @@ export default function FeedScreen() {
                     onPress={() => {
                       setSearchQuery('');
                       setVisibleCommunityLimit(COMMUNITY_PAGE_SIZE);
+                      setVisibleOfficialLimit(OFFICIAL_PAGE_SIZE);
                     }}
                   >
                     <Ionicons name="close-circle" size={20} color={colors.textMuted} />
@@ -520,17 +623,13 @@ export default function FeedScreen() {
                 styles.officialContentInner,
                 { paddingBottom: bottomNavigationPadding },
               ]}
-              data={initialLoading || activeError ? [] : filteredAnnouncements}
+              data={initialLoading || activeError ? [] : displayedOfficialAnnouncements}
               keyExtractor={(announcement) => announcement.id}
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
               initialNumToRender={5}
               maxToRenderPerBatch={5}
               windowSize={7}
-              onEndReached={() => {
-                if (hasMoreAnnouncements) void loadMoreAnnouncements();
-              }}
-              onEndReachedThreshold={0.4}
               refreshControl={
                 <RefreshControl
                   refreshing={refreshing}
@@ -539,20 +638,47 @@ export default function FeedScreen() {
                   colors={[colors.primary]}
                 />
               }
+              ListHeaderComponent={
+                !initialLoading && !activeError ? (
+                  <View style={styles.reportSectionHeader}>
+                    <View style={styles.reportSectionTitleRow}>
+                      <Text style={styles.reportSectionTitle}>
+                        {officialSectionCopy.title}
+                      </Text>
+                      <TouchableOpacity
+                        style={styles.feedScopeSwitch}
+                        onPress={confirmOfficialScopeChange}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Switch official updates to ${
+                          officialScope === 'priority'
+                            ? `all barangays in ${municipality}`
+                            : 'your priority updates'
+                        }`}
+                      >
+                        <Ionicons name="swap-horizontal" size={18} color={colors.primary} />
+                      </TouchableOpacity>
+                    </View>
+                    <Text style={styles.reportSectionSubtitle}>
+                      {officialSectionCopy.subtitle}
+                    </Text>
+                  </View>
+                ) : null
+              }
               renderItem={({ item: announcement, index }) => (
                 <OfficialAnnouncementPostCard
                   announcement={announcement}
                   variant="residentFeedPost"
                   officeLabel={formatAnnouncementOfficeLabel(announcement, municipality)}
+                  detailCacheScope={profile?.id}
                   cardStyle={
-                    index === filteredAnnouncements.length - 1
+                    index === displayedOfficialAnnouncements.length - 1
                       ? styles.feedPostLast
                       : undefined
                   }
                 />
               )}
               ListEmptyComponent={
-                initialLoading ? (
+                initialLoading || (announcementsLoadingMore && filteredAnnouncements.length === 0) ? (
                   <FeedScreenSkeleton />
                 ) : activeError ? (
                   <View style={styles.stateBlock}>
@@ -574,8 +700,26 @@ export default function FeedScreen() {
                 )
               }
               ListFooterComponent={
-                announcementsLoadingMore ? (
-                  <ActivityIndicator color={colors.primary} />
+                hasMoreOfficialAnnouncements ? (
+                  <TouchableOpacity
+                    style={styles.seeMoreButton}
+                    onPress={() => {
+                      const nextLimit = visibleOfficialLimit + OFFICIAL_PAGE_SIZE;
+                      setVisibleOfficialLimit(nextLimit);
+                      if (nextLimit >= filteredAnnouncements.length && hasMoreAnnouncements) {
+                        void loadMoreAnnouncements();
+                      }
+                    }}
+                    disabled={announcementsLoadingMore}
+                    accessibilityRole="button"
+                    accessibilityLabel="See more official updates"
+                  >
+                    {announcementsLoadingMore ? (
+                      <ActivityIndicator color={colors.primary} />
+                    ) : (
+                      <Ionicons name="add" size={21} color={colors.text} />
+                    )}
+                  </TouchableOpacity>
                 ) : null
               }
             />
@@ -588,6 +732,8 @@ export default function FeedScreen() {
             minimumHeight={420}
             sheetStyle={styles.filterSheet}
             handleAccessibilityLabel="Resize feed filters"
+            showCloseButton={false}
+            animationType="slide"
           >
                 <View style={styles.sheetHeader}>
                   <View>
@@ -611,13 +757,16 @@ export default function FeedScreen() {
                       ).map(([option, label]) => (
                         <TouchableOpacity
                           key={option}
-                          style={[styles.optionChip, communityOrder === option && styles.optionChipActive]}
-                          onPress={() => {
-                            setCommunityOrder(option);
-                            setVisibleCommunityLimit(COMMUNITY_PAGE_SIZE);
-                          }}
+                          style={[
+                            styles.optionChip,
+                            draftCommunityOrder === option && styles.optionChipActive,
+                          ]}
+                          onPress={() => setDraftCommunityOrder(option)}
                         >
-                          <Text style={[styles.optionText, communityOrder === option && styles.optionTextActive]}>
+                          <Text style={[
+                            styles.optionText,
+                            draftCommunityOrder === option && styles.optionTextActive,
+                          ]}>
                             {label}
                           </Text>
                         </TouchableOpacity>
@@ -640,13 +789,16 @@ export default function FeedScreen() {
                       ).map(([option, label]) => (
                         <TouchableOpacity
                           key={option}
-                          style={[styles.optionChip, statusFilter === option && styles.optionChipActive]}
-                          onPress={() => {
-                            setStatusFilter(option);
-                            setVisibleCommunityLimit(COMMUNITY_PAGE_SIZE);
-                          }}
+                          style={[
+                            styles.optionChip,
+                            draftStatusFilter === option && styles.optionChipActive,
+                          ]}
+                          onPress={() => setDraftStatusFilter(option)}
                         >
-                          <Text style={[styles.optionText, statusFilter === option && styles.optionTextActive]}>
+                          <Text style={[
+                            styles.optionText,
+                            draftStatusFilter === option && styles.optionTextActive,
+                          ]}>
                             {label}
                           </Text>
                         </TouchableOpacity>
@@ -660,24 +812,16 @@ export default function FeedScreen() {
                       {(['latest', 'oldest'] as FeedOrder[]).map((option) => (
                         <TouchableOpacity
                           key={option}
-                          style={[styles.optionChip, officialOrder === option && styles.optionChipActive]}
-                          onPress={() => setOfficialOrder(option)}
+                          style={[
+                            styles.optionChip,
+                            draftOfficialOrder === option && styles.optionChipActive,
+                          ]}
+                          onPress={() => setDraftOfficialOrder(option)}
                         >
-                          <Text style={[styles.optionText, officialOrder === option && styles.optionTextActive]}>
-                            {`${option[0].toUpperCase()}${option.slice(1)}`}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                    <Text style={styles.filterLabel}>Update scope</Text>
-                    <View style={styles.optionRow}>
-                      {(['all', 'municipal', 'barangay'] as OfficialFilter[]).map((option) => (
-                        <TouchableOpacity
-                          key={option}
-                          style={[styles.optionChip, officialFilter === option && styles.optionChipActive]}
-                          onPress={() => setOfficialFilter(option)}
-                        >
-                          <Text style={[styles.optionText, officialFilter === option && styles.optionTextActive]}>
+                          <Text style={[
+                            styles.optionText,
+                            draftOfficialOrder === option && styles.optionTextActive,
+                          ]}>
                             {`${option[0].toUpperCase()}${option.slice(1)}`}
                           </Text>
                         </TouchableOpacity>
@@ -686,7 +830,7 @@ export default function FeedScreen() {
                   </>
                 )}
 
-                <TouchableOpacity style={styles.applyButton} onPress={() => setFilterVisible(false)}>
+                <TouchableOpacity style={styles.applyButton} onPress={applyFeedFilters}>
                   <Text style={styles.applyButtonText}>Show results</Text>
                 </TouchableOpacity>
           </ResidentBottomSheet>
