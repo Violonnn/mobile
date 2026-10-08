@@ -68,10 +68,11 @@ export const reportStyles = StyleSheet.create({
   headerRowCompact: {
     marginBottom: 8,
   },
-  deliveredCloseButton: {
+  headerCloseButton: {
     width: 40,
     height: 40,
-    marginRight: -8,
+    marginTop: -10,
+    marginRight: -10,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -442,7 +443,7 @@ export const reportStyles = StyleSheet.create({
     left: 10,
     right: 10,
     bottom: 10,
-    minHeight: 84,
+    minHeight: 70,
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 10,
@@ -788,6 +789,12 @@ export const reportStyles = StyleSheet.create({
     flexDirection: 'row',
     gap: 7,
   },
+  residentIncidentTypeGridError: {
+    padding: 3,
+    borderWidth: 1,
+    borderColor: colors.unverified,
+    borderRadius: 11,
+  },
   residentIncidentTypeGridLargeText: {
     flexDirection: 'column',
   },
@@ -846,6 +853,20 @@ export const reportStyles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 19,
     color: reportColors.text,
+  },
+  residentInputError: {
+    borderWidth: 1,
+    borderColor: colors.unverified,
+  },
+  residentCharacterCount: {
+    marginTop: 3,
+    textAlign: 'right',
+    fontFamily: fonts.regular,
+    fontSize: 10,
+    color: reportColors.textLight,
+  },
+  residentCharacterCountAtLimit: {
+    color: colors.unverified,
   },
   residentTextArea: {
     minHeight: 74,
@@ -1108,7 +1129,7 @@ export const reportStyles = StyleSheet.create({
   // --- Review ---
   reviewTimeline: {
     position: 'relative',
-    gap: 14,
+    gap: 8,
     marginTop: 5,
     marginBottom: 8,
   },
@@ -1145,7 +1166,7 @@ export const reportStyles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: spacing.sm,
     minHeight: 20,
-    marginBottom: 5,
+    marginBottom: 2,
   },
   reviewSectionHeaderLargeText: {
     alignItems: 'flex-start',
@@ -1167,6 +1188,8 @@ export const reportStyles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: spacing.sm,
     marginHorizontal: -spacing.sm,
+    // Preserve a comfortable tap target without leaving extra layout space.
+    marginVertical: -6,
   },
   reviewTypeText: {
     alignSelf: 'flex-start',
@@ -1210,7 +1233,7 @@ export const reportStyles = StyleSheet.create({
   reviewMediaRow: {
     flexDirection: 'row',
     gap: 7,
-    marginTop: 5,
+    marginTop: 0,
   },
   reviewMediaThumb: {
     flex: 1,
@@ -1240,7 +1263,7 @@ export const reportStyles = StyleSheet.create({
   },
   reviewAccuracyNotice: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     gap: spacing.sm,
     borderRadius: radius.md,
     backgroundColor: reportColors.primaryLight,

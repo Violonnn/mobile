@@ -239,9 +239,6 @@ export default function BdrrmoCommandIntakeMap({
               <View style={styles.openIncidentCircle}>
                 <Ionicons name="arrow-forward" size={19} color={colors.white} />
               </View>
-              <Text style={styles.openIncidentLabel}>
-                {activeStatus === 'verified' ? 'Choose action' : 'Review report'}
-              </Text>
             </TouchableOpacity>
           </View>
 

@@ -1309,7 +1309,6 @@ export default function InteractiveMap({
               style={mapStyles.searchInput}
               returnKeyType="search"
               autoCorrect={false}
-              autoFocus
               onSubmitEditing={() => {
                 const firstResult = searchResults[0];
                 if (firstResult) selectSearchResult(firstResult);

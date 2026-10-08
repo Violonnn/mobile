@@ -579,7 +579,7 @@ export default function FeedScreen() {
               }
               ListEmptyComponent={
                 initialLoading ? (
-                  <FeedScreenSkeleton />
+                  <FeedScreenSkeleton variant="community" />
                 ) : activeError ? (
                   <View style={styles.stateBlock}>
                     <Ionicons name="cloud-offline-outline" size={28} color={colors.textMuted} />
@@ -679,7 +679,7 @@ export default function FeedScreen() {
               )}
               ListEmptyComponent={
                 initialLoading || (announcementsLoadingMore && filteredAnnouncements.length === 0) ? (
-                  <FeedScreenSkeleton />
+                  <FeedScreenSkeleton variant="official" />
                 ) : activeError ? (
                   <View style={styles.stateBlock}>
                     <Ionicons name="cloud-offline-outline" size={28} color={colors.textMuted} />

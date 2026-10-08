@@ -18,11 +18,15 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import InteractiveMap from '../map/InteractiveMap';
 import MdrrmoHeader from './MdrrmoHeader';
-import ReportStatusTimeline from '../report/ReportStatusTimeline';
 import { useMayorAnalytics } from '../../hooks/useMayorAnalytics';
 import { useReports } from '../../hooks/useReports';
 import { formatIncidentType } from '../../lib/incidentTypes';
-import { type MayorStatusFilter } from '../../lib/mayorAnalytics';
+import {
+  fetchMayorWatchlist,
+  type MayorWatchlistReport,
+  type MayorWatchlistSnapshot,
+} from '../../lib/mayorAnalytics';
+import { mayorReportStatusLabel } from '../../lib/mayorStatusLabels';
 import type { EvacuationCenterRecord } from '../../lib/resources';
 import { formatReportLocation, getReportStatusPresentation, type MapReportMarker } from '../../lib/reports';
 import { officialNavMetrics } from '../../styles/components/officialBottomNav.styles';
@@ -37,8 +41,9 @@ type MayorDashboardProps = {
   onRefreshCenters: () => Promise<void>;
 };
 
-type IoniconName = keyof typeof Ionicons.glyphMap;
 type QuickViewTone = 'primary' | 'blue' | 'slate' | 'mint';
+type IoniconName = keyof typeof Ionicons.glyphMap;
+type MayorBriefView = 'overview' | 'activity' | 'watchlist';
 
 function formatBriefingTime(value: string): string {
   const date = new Date(value);
@@ -112,18 +117,11 @@ function QuickViewCard({
   tone: QuickViewTone;
   badge?: number;
   showDivider?: boolean;
-  onPress: () => void;
+  onPress?: () => void;
 }) {
   const iconColor = tone === 'mint' ? '#237768' : tone === 'slate' ? '#526078' : colors.navigationActive;
-
-  return (
-    <TouchableOpacity
-      style={[styles.quickViewCard, showDivider && styles.quickViewCardDivider]}
-      onPress={onPress}
-      activeOpacity={0.8}
-      accessibilityRole="button"
-      accessibilityLabel={`${label}${subtitle ? `. ${subtitle}` : ''}${badge ? `. ${badge} need attention` : ''}`}
-    >
+  const content = (
+    <>
       <View style={styles.quickViewIconWrap}>
         {iconFamily === 'material-community' ? (
           <MaterialCommunityIcons
@@ -143,6 +141,114 @@ function QuickViewCard({
       <Text style={styles.quickViewLabel} numberOfLines={2}>
         {label}
       </Text>
+    </>
+  );
+
+  if (!onPress) {
+    return (
+      <View
+        style={[styles.quickViewCard, showDivider && styles.quickViewCardDivider]}
+        accessibilityLabel={label}
+      >
+        {content}
+      </View>
+    );
+  }
+
+  return (
+    <TouchableOpacity
+      style={[styles.quickViewCard, showDivider && styles.quickViewCardDivider]}
+      onPress={onPress}
+      activeOpacity={0.8}
+      accessibilityRole="button"
+      accessibilityLabel={`${label}${subtitle ? `. ${subtitle}` : ''}${badge ? `. ${badge} need attention` : ''}`}
+    >
+      {content}
+    </TouchableOpacity>
+  );
+}
+
+function BriefBackButton({ onPress }: { onPress: () => void }) {
+  return (
+    <TouchableOpacity
+      style={styles.briefBackButton}
+      onPress={onPress}
+      hitSlop={8}
+      accessibilityRole="button"
+      accessibilityLabel="Back to Brief"
+    >
+      <Ionicons name="arrow-back" size={24} color={colors.text} />
+    </TouchableOpacity>
+  );
+}
+
+function BriefActivityRow({
+  report,
+  barangayName,
+  referenceTime,
+  onPress,
+}: {
+  report: MapReportMarker;
+  barangayName: string | null;
+  referenceTime: number;
+  onPress: () => void;
+}) {
+  const activityTime = report.latestActivityAt ?? report.created_at;
+
+  return (
+    <TouchableOpacity
+      style={styles.briefActivityRow}
+      onPress={onPress}
+      activeOpacity={0.78}
+      accessibilityRole="button"
+      accessibilityLabel={`Open report ${report.title || 'untitled report'}`}
+    >
+      <View style={styles.briefActivityIcon}>
+        <Ionicons name="document-text-outline" size={20} color={colors.primary} />
+      </View>
+      <View style={styles.briefActivityCopy}>
+        <Text style={styles.briefActivityTitle} numberOfLines={2}>
+          {report.title.trim() || incidentLabel(report)}
+        </Text>
+        <Text style={styles.briefActivityMeta} numberOfLines={1}>
+          {mayorReportStatusLabel({ status: report.status, barangayName })}
+        </Text>
+        <Text style={styles.briefActivityTime}>
+          {formatElapsedLabel(activityTime, referenceTime)} AGO
+        </Text>
+      </View>
+      <Ionicons name="chevron-forward" size={22} color={colors.textMuted} />
+    </TouchableOpacity>
+  );
+}
+
+function BriefWatchlistReportRow({
+  report,
+  detail,
+  onPress,
+}: {
+  report: MayorWatchlistReport;
+  detail: string;
+  onPress: () => void;
+}) {
+  return (
+    <TouchableOpacity
+      style={styles.briefWatchlistReportRow}
+      onPress={onPress}
+      activeOpacity={0.78}
+      accessibilityRole="button"
+      accessibilityLabel={`Open report ${report.title || 'untitled report'}`}
+    >
+      <View style={styles.briefActivityIcon}>
+        <Ionicons name="flag-outline" size={20} color={colors.primary} />
+      </View>
+      <View style={styles.briefActivityCopy}>
+        <Text style={styles.briefActivityTitle} numberOfLines={2}>
+          {report.title.trim() || 'Untitled report'}
+        </Text>
+        <Text style={styles.briefActivityMeta} numberOfLines={2}>{detail}</Text>
+      </View>
+      <Ionicons name="chevron-forward" size={22} color={colors.textMuted} />
     </TouchableOpacity>
   );
 }
@@ -159,9 +265,16 @@ export default function MayorDashboard({
   const mapUnlockTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [activeMapReportIndex, setActiveMapReportIndex] = useState(0);
   const [referenceTime, setReferenceTime] = useState(() => Date.now());
+  const [briefView, setBriefView] = useState<MayorBriefView>('overview');
+  const [activityBarangayId, setActivityBarangayId] = useState<string | null>(null);
+  const [watchlist, setWatchlist] = useState<MayorWatchlistSnapshot | null>(null);
+  const [watchlistLoading, setWatchlistLoading] = useState(false);
+  const [watchlistRefreshing, setWatchlistRefreshing] = useState(false);
+  const [watchlistError, setWatchlistError] = useState<string | null>(null);
   const { reports: mapReports, error: mapError } = useReports({
     realtime: true,
     includePending: false,
+    includeLatestActivity: true,
   });
 
   // Keep the dashboard totals municipal-wide while the hero filters control its map and count.
@@ -195,6 +308,14 @@ export default function MayorDashboard({
   const maximumActiveMapReportIndex = Math.max(0, activeMapReports.length - 1);
   const safeActiveMapReportIndex = Math.min(activeMapReportIndex, maximumActiveMapReportIndex);
   const activeMapReport = activeMapReports[safeActiveMapReportIndex] ?? null;
+  const activeMapReportBarangayName = activeMapReport
+    ? snapshot?.barangayTotals.find(
+        (barangay) => barangay.barangayId === activeMapReport.barangay_id,
+      )?.barangayName ?? null
+    : null;
+  const activeMapReportColor = activeMapReport
+    ? getReportStatusPresentation(activeMapReport.status).color
+    : colors.escalated;
   const activeMapFocus = activeMapReport
     ? {
         reportId: activeMapReport.id,
@@ -202,6 +323,29 @@ export default function MayorDashboard({
         longitude: activeMapReport.longitude,
       }
     : null;
+
+  const activityReports = useMemo(
+    () => [...mapReports].sort((left, right) => {
+      const leftActivity = new Date(left.latestActivityAt ?? left.created_at).getTime();
+      const rightActivity = new Date(right.latestActivityAt ?? right.created_at).getTime();
+      return rightActivity - leftActivity;
+    }),
+    [mapReports],
+  );
+  const visibleActivityReports = activityBarangayId
+    ? activityReports.filter((report) => report.barangay_id === activityBarangayId)
+    : activityReports;
+  const activityBarangayName = activityBarangayId
+    ? snapshot?.barangayTotals.find((barangay) => barangay.barangayId === activityBarangayId)?.barangayName ?? 'Selected barangay'
+    : null;
+
+  const loadWatchlist = useCallback(async () => {
+    setWatchlistLoading(true);
+    const result = await fetchMayorWatchlist();
+    setWatchlist(result.snapshot);
+    setWatchlistError(result.error);
+    setWatchlistLoading(false);
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -213,6 +357,14 @@ export default function MayorDashboard({
     const elapsedTimer = setInterval(() => setReferenceTime(Date.now()), 60_000);
     return () => clearInterval(elapsedTimer);
   }, []);
+
+  useEffect(() => {
+    if (briefView !== 'watchlist') return;
+
+    // Defer the fetch so entering the Watchlist does not synchronously update state in this effect.
+    const watchlistLoadTimer = setTimeout(() => void loadWatchlist(), 0);
+    return () => clearTimeout(watchlistLoadTimer);
+  }, [briefView, loadWatchlist, mapReports]);
 
   const handleMapGestureActiveChange = useCallback((active: boolean) => {
     if (mapUnlockTimer.current) {
@@ -236,11 +388,20 @@ export default function MayorDashboard({
     await Promise.all([refresh(), onRefreshCenters()]);
   }
 
-  function openSituations(nextStatus: MayorStatusFilter = 'all') {
-    const params = new URLSearchParams();
-    if (nextStatus !== 'all') params.set('status', nextStatus);
-    const query = params.toString();
-    router.push(`/official/incidents${query ? `?${query}` : ''}` as Href);
+  async function handleWatchlistRefresh() {
+    setWatchlistRefreshing(true);
+    await loadWatchlist();
+    setWatchlistRefreshing(false);
+  }
+
+  function openActivity() {
+    setActivityBarangayId(null);
+    setBriefView('activity');
+  }
+
+  function openBarangayActivity(barangayId: string) {
+    setActivityBarangayId(barangayId);
+    setBriefView('activity');
   }
 
   function moveActiveMapReport(direction: -1 | 1) {
@@ -252,9 +413,12 @@ export default function MayorDashboard({
 
   return (
     <>
-      <View style={styles.briefStickyHeader}>
-        <MdrrmoHeader title="Brief" showDefaultControls />
-      </View>
+      {briefView !== 'watchlist' ? (
+        <View style={styles.briefStickyHeader}>
+          <MdrrmoHeader title="Brief" showDefaultControls />
+        </View>
+      ) : null}
+      {briefView === 'overview' ? (
       <ScrollView
         ref={scrollRef}
         nestedScrollEnabled
@@ -295,12 +459,12 @@ export default function MayorDashboard({
           </View>
           <TouchableOpacity
             style={styles.mapReportBadge}
-            onPress={() => openSituations()}
+            onPress={openActivity}
             accessibilityRole="button"
             accessibilityLabel={`View ${activeMapReports.length} active reports`}
           >
-            <View style={styles.mapReportBadgeDot} />
-            <Text style={styles.mapReportBadgeText}>
+            <View style={[styles.mapReportBadgeDot, { backgroundColor: activeMapReportColor }]} />
+            <Text style={[styles.mapReportBadgeText, { color: activeMapReportColor }]}>
               {activeMapReports.length} ACTIVE
             </Text>
             <Ionicons name="chevron-forward" size={15} color={colors.text} />
@@ -363,7 +527,7 @@ export default function MayorDashboard({
               ) : null}
 
               {activeMapReport ? (
-                <View style={commandStyles.activeIncidentCard}>
+                <View style={[commandStyles.activeIncidentCard, styles.briefIncidentCard]}>
                   <View style={commandStyles.activeIncidentTopRow}>
                     <View style={commandStyles.activeIncidentCopy}>
                       <Text
@@ -372,7 +536,10 @@ export default function MayorDashboard({
                           { color: getReportStatusPresentation(activeMapReport.status).color },
                         ]}
                       >
-                        {getReportStatusPresentation(activeMapReport.status).label.toLocaleUpperCase()} - {formatElapsedLabel(activeMapReport.created_at, referenceTime)}
+                        {mayorReportStatusLabel({
+                          status: activeMapReport.status,
+                          barangayName: activeMapReportBarangayName,
+                        }).toLocaleUpperCase()} - {formatElapsedLabel(activeMapReport.created_at, referenceTime)}
                       </Text>
                       <Text style={commandStyles.activeIncidentTitle} numberOfLines={2}>
                         {activeMapReport.title.trim() || incidentLabel(activeMapReport)}
@@ -390,11 +557,10 @@ export default function MayorDashboard({
                       <View style={commandStyles.openIncidentCircle}>
                         <Ionicons name="arrow-forward" size={19} color={colors.white} />
                       </View>
-                      <Text style={commandStyles.openIncidentLabel}>Open report</Text>
                     </TouchableOpacity>
                   </View>
 
-                  <View style={commandStyles.activeIncidentQuote}>
+                  <View style={[commandStyles.activeIncidentQuote, styles.briefIncidentQuote]}>
                     <View
                       style={[
                         commandStyles.activeIncidentQuoteAccent,
@@ -418,11 +584,6 @@ export default function MayorDashboard({
                       </Text>
                     </View>
                   </View>
-
-                  <ReportStatusTimeline
-                    status={activeMapReport.status}
-                    barangayLabel="Barangay review"
-                  />
                 </View>
               ) : null}
 
@@ -438,7 +599,7 @@ export default function MayorDashboard({
                     tone="primary"
                     badge={unverifiedCount}
                     showDivider
-                    onPress={() => openSituations('all')}
+                    onPress={openActivity}
                   />
                   <QuickViewCard
                     icon="call-outline"
@@ -466,7 +627,14 @@ export default function MayorDashboard({
                     icon="calendar-outline"
                     label="Activity"
                     tone="mint"
-                    onPress={() => openSituations('all')}
+                    showDivider
+                    onPress={openActivity}
+                  />
+                  <QuickViewCard
+                    icon="flag-outline"
+                    label="Watchlist"
+                    tone="primary"
+                    onPress={() => setBriefView('watchlist')}
                   />
                 </View>
               </View>
@@ -479,7 +647,7 @@ export default function MayorDashboard({
                   </View>
                   <TouchableOpacity
                     style={styles.sectionLink}
-                    onPress={() => openSituations('all')}
+                    onPress={openActivity}
                     accessibilityRole="button"
                     accessibilityLabel="See all briefings"
                   >
@@ -495,7 +663,7 @@ export default function MayorDashboard({
                 >
                   <TouchableOpacity
                     style={[styles.briefingCard, { width: briefingCardWidth }]}
-                    onPress={() => openSituations('all')}
+                    onPress={openActivity}
                     activeOpacity={0.84}
                     accessibilityRole="button"
                     accessibilityLabel="Open situation summary"
@@ -583,7 +751,167 @@ export default function MayorDashboard({
           ) : null}
         </View>
       </ScrollView>
+      ) : (
+        <ScrollView
+          contentContainerStyle={[
+            styles.briefDetailContent,
+            briefView === 'watchlist' && styles.briefWatchlistContent,
+            { paddingBottom: officialNavMetrics.barHeight + insets.bottom + 28 },
+          ]}
+          refreshControl={(
+            <RefreshControl
+              refreshing={briefView === 'watchlist' ? watchlistRefreshing : refreshing}
+              onRefresh={briefView === 'watchlist' ? handleWatchlistRefresh : handleRefresh}
+              tintColor={colors.primary}
+              progressViewOffset={insets.top}
+            />
+          )}
+          showsVerticalScrollIndicator={false}
+        >
+          {briefView === 'activity' ? (
+            <BriefBackButton onPress={() => setBriefView('overview')} />
+          ) : null}
 
+          {briefView === 'activity' ? (
+            <View style={styles.briefDetailSection}>
+              <Text style={styles.briefDetailTitle}>Activity</Text>
+              <Text style={styles.briefDetailSubtitle}>
+                {activityBarangayName
+                  ? `Recent updates from ${activityBarangayName}.`
+                  : 'Recent updates across municipal reports.'}
+              </Text>
+
+              {mapError ? (
+                <View style={styles.warningCard} accessibilityRole="alert">
+                  <Ionicons name="cloud-offline-outline" size={19} color={colors.unverified} />
+                  <Text style={styles.warningText}>Activity could not fully refresh. Pull down to try again.</Text>
+                </View>
+              ) : null}
+
+              {visibleActivityReports.length === 0 ? (
+                <View style={styles.briefEmptyState}>
+                  <Ionicons name="time-outline" size={30} color={colors.textMuted} />
+                  <Text style={styles.briefEmptyTitle}>No report activity yet</Text>
+                  <Text style={styles.briefEmptyText}>New report updates will appear here.</Text>
+                </View>
+              ) : visibleActivityReports.map((report) => {
+                const barangayName = snapshot?.barangayTotals.find(
+                  (barangay) => barangay.barangayId === report.barangay_id,
+                )?.barangayName ?? null;
+                return (
+                  <BriefActivityRow
+                    key={report.id}
+                    report={report}
+                    barangayName={barangayName}
+                    referenceTime={referenceTime}
+                    onPress={() => router.push(`/official/${report.id}` as Href)}
+                  />
+                );
+              })}
+            </View>
+          ) : (
+            <View style={styles.briefDetailSection}>
+              <View style={officialStyles.resourceDirectoryHeader}>
+                <TouchableOpacity
+                  style={officialStyles.resourceDirectoryBack}
+                  onPress={() => setBriefView('overview')}
+                  accessibilityRole="button"
+                  accessibilityLabel="Back to Brief"
+                >
+                  <Ionicons name="arrow-back" size={24} color={colors.text} />
+                </TouchableOpacity>
+                <View style={officialStyles.headerTextGroup}>
+                  <Text style={officialStyles.resourceDirectoryOverline}>BRIEF</Text>
+                  <Text style={officialStyles.screenTitle}>Watchlist</Text>
+                  <Text style={officialStyles.screenSubtitle}>
+                    Reports and backlogs that need a closer look.
+                  </Text>
+                </View>
+              </View>
+
+              {watchlistLoading && !watchlist ? (
+                <View style={styles.briefEmptyState}>
+                  <ActivityIndicator color={colors.primary} />
+                  <Text style={styles.briefEmptyText}>Checking municipal attention items...</Text>
+                </View>
+              ) : null}
+
+              {!watchlistLoading && watchlistError ? (
+                <View style={styles.briefEmptyState}>
+                  <Text style={styles.briefEmptyTitle}>Watchlist unavailable</Text>
+                  <Text style={styles.briefEmptyText}>{watchlistError}</Text>
+                  <TouchableOpacity style={officialStyles.retryButton} onPress={() => void loadWatchlist()}>
+                    <Text style={officialStyles.retryButtonText}>Try again</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : null}
+
+              {!watchlistError && watchlist ? (
+                <>
+                  <Text style={styles.briefWatchlistSectionTitle}>LONGEST-WAITING REVIEWS</Text>
+                  {watchlist.longestWaitingBdrrmoReport ? (
+                    <BriefWatchlistReportRow
+                      report={watchlist.longestWaitingBdrrmoReport}
+                      detail={`Awaiting barangay review for ${formatElapsedLabel(watchlist.longestWaitingBdrrmoReport.createdAt, referenceTime)}`}
+                      onPress={() => router.push(`/official/${watchlist.longestWaitingBdrrmoReport!.id}` as Href)}
+                    />
+                  ) : <Text style={styles.briefWatchlistEmpty}>No report is awaiting barangay review.</Text>}
+                  {watchlist.longestWaitingMdrrmoEscalation ? (
+                    <BriefWatchlistReportRow
+                      report={watchlist.longestWaitingMdrrmoEscalation}
+                      detail={`Awaiting municipal review for ${formatElapsedLabel(watchlist.longestWaitingMdrrmoEscalation.escalatedAt ?? watchlist.longestWaitingMdrrmoEscalation.createdAt, referenceTime)}`}
+                      onPress={() => router.push(`/official/${watchlist.longestWaitingMdrrmoEscalation!.id}` as Href)}
+                    />
+                  ) : <Text style={styles.briefWatchlistEmpty}>No report is awaiting municipal review.</Text>}
+
+                  <Text style={styles.briefWatchlistSectionTitle}>LARGEST ACTIVE BACKLOG</Text>
+                  {watchlist.largestActiveBacklog ? (
+                    <TouchableOpacity
+                      style={styles.briefBacklogRow}
+                      onPress={() => openBarangayActivity(watchlist.largestActiveBacklog!.barangayId)}
+                      activeOpacity={0.78}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Open activity for ${watchlist.largestActiveBacklog.barangayName}`}
+                    >
+                      <Text style={styles.briefBacklogCount}>{watchlist.largestActiveBacklog.activeCount}</Text>
+                      <View style={styles.briefActivityCopy}>
+                        <Text style={styles.briefActivityTitle}>{watchlist.largestActiveBacklog.barangayName}</Text>
+                        <Text style={styles.briefActivityMeta}>active reports across barangay and municipal review</Text>
+                      </View>
+                      <Ionicons name="arrow-forward" size={22} color={colors.primary} />
+                    </TouchableOpacity>
+                  ) : <Text style={styles.briefWatchlistEmpty}>No active barangay backlog.</Text>}
+
+                  <Text style={styles.briefWatchlistSectionTitle}>
+                    MISSING BARANGAY OR LOCATION {watchlist.missingContextCount ? `(${watchlist.missingContextCount})` : ''}
+                  </Text>
+                  {watchlist.missingContextReports.length > 0 ? watchlist.missingContextReports.map((report) => (
+                    <BriefWatchlistReportRow
+                      key={report.id}
+                      report={report}
+                      detail={`${report.barangayName === 'Unassigned' ? 'Barangay not assigned' : 'Location details missing'} - ${formatElapsedLabel(report.createdAt, referenceTime)} ago`}
+                      onPress={() => router.push(`/official/${report.id}` as Href)}
+                    />
+                  )) : <Text style={styles.briefWatchlistEmpty}>All active reports have barangay and location details.</Text>}
+
+                  <Text style={styles.briefWatchlistSectionTitle}>
+                    NO RECENT STATUS ACTIVITY {watchlist.inactiveStatusCount ? `(${watchlist.inactiveStatusCount})` : ''}
+                  </Text>
+                  <Text style={styles.briefWatchlistHint}>Active reports with no status change in the last 24 hours.</Text>
+                  {watchlist.inactiveStatusReports.length > 0 ? watchlist.inactiveStatusReports.map((report) => (
+                    <BriefWatchlistReportRow
+                      key={report.id}
+                      report={report}
+                      detail={`Last status activity ${formatElapsedLabel(report.latestStatusActivityAt ?? report.createdAt, referenceTime)} ago`}
+                      onPress={() => router.push(`/official/${report.id}` as Href)}
+                    />
+                  )) : <Text style={styles.briefWatchlistEmpty}>Every active report has recent status activity.</Text>}
+                </>
+              ) : null}
+            </View>
+          )}
+        </ScrollView>
+      )}
     </>
   );
 }

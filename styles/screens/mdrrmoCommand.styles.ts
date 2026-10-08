@@ -158,9 +158,8 @@ export const mdrrmoCommandStyles = StyleSheet.create({
     color: '#6D7B92',
   },
   openIncidentAction: {
-    width: 62,
+    width: 40,
     alignItems: 'center',
-    gap: 3,
   },
   openIncidentCircle: {
     width: 40,
@@ -174,12 +173,6 @@ export const mdrrmoCommandStyles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 7,
     elevation: 4,
-  },
-  openIncidentLabel: {
-    fontFamily: fonts.semibold,
-    fontSize: 9,
-    color: colors.navigationActive,
-    textAlign: 'center',
   },
   activeIncidentQuote: {
     flexDirection: 'row',

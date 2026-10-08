@@ -1,19 +1,19 @@
-/* RNGH and React Native Animated require stable imperative refs while configuring gestures. */
-/* eslint-disable react-hooks/refs */
 import React, { useRef, useState } from 'react';
-import { Animated, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import {
-  Gesture,
-  GestureDetector,
-  ScrollView as GestureHandlerScrollView,
-} from 'react-native-gesture-handler';
+  Animated,
+  Pressable,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+  Text,
+  View,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { ScrollView as GestureHandlerScrollView } from 'react-native-gesture-handler';
 
 import type { AnnouncementRecord } from '../../lib/announcements';
 import { homeColors, homeStyles as styles } from '../../styles/screens/home.styles';
 import HomeUpdateCard from './HomeUpdateCard';
 
-const SWIPE_TRIGGER_DISTANCE = 72;
 const CARD_GAP = 4;
 const INACTIVE_CARD_SCALE = 0.86;
 const INACTIVE_CARD_OPACITY = 0.78;
@@ -36,65 +36,33 @@ export default function OfficialUpdatesCarousel({
   onOpenAnnouncement,
   onRequestMore,
 }: OfficialUpdatesCarouselProps) {
-  const [swipeProgress] = useState(() => new Animated.Value(0));
   const [scrollOffset] = useState(() => new Animated.Value(0));
-  const isPromptOpeningRef = useRef(false);
-  const carouselScrollRef = useRef(null);
+  const hasOpenedEndPromptRef = useRef(false);
   const lastAnnouncement = announcements[announcements.length - 1];
-  const lastCardOffset = swipeProgress.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, -36],
-  });
 
-  function resetSwipeIndicator() {
-    Animated.timing(swipeProgress, {
-      toValue: 0,
-      duration: 180,
-      useNativeDriver: true,
-    }).start();
+  function openMoreUpdates() {
+    onRequestMore();
   }
 
-  function completeRightSwipe(translationX: number) {
-    const completedSwipe = translationX >= SWIPE_TRIGGER_DISTANCE * 0.8;
+  function handleScrollEnd(event: NativeSyntheticEvent<NativeScrollEvent>) {
+    const endControlOffset = announcements.length * (cardWidth + CARD_GAP);
+    const currentOffset = event.nativeEvent.contentOffset.x;
 
-    if (!completedSwipe || isPromptOpeningRef.current) {
-      resetSwipeIndicator();
+    if (currentOffset >= endControlOffset - CARD_GAP) {
+      if (hasOpenedEndPromptRef.current) return;
+      hasOpenedEndPromptRef.current = true;
+      openMoreUpdates();
       return;
     }
 
-    isPromptOpeningRef.current = true;
-    Animated.timing(swipeProgress, {
-      toValue: 1,
-      duration: 130,
-      useNativeDriver: true,
-    }).start(({ finished }) => {
-      if (finished) onRequestMore();
-      swipeProgress.setValue(0);
-      isPromptOpeningRef.current = false;
-    });
+    // Allow the prompt to open again after the resident moves back into the updates.
+    hasOpenedEndPromptRef.current = false;
   }
-
-  // The final card reserves the next leftward carousel swipe for the prompt.
-  const rightSwipeGesture = Gesture.Pan()
-    .activeOffsetX(-6)
-    .failOffsetY([-18, 18])
-    .blocksExternalGesture(carouselScrollRef)
-    .runOnJS(true)
-    .onUpdate((event) => {
-      if (event.translationX >= 0) return;
-      const progress = Math.min(1, -event.translationX / SWIPE_TRIGGER_DISTANCE);
-      swipeProgress.setValue(progress);
-    })
-    .onEnd((event) => completeRightSwipe(-event.translationX))
-    .onFinalize((_, success) => {
-      if (!success && !isPromptOpeningRef.current) resetSwipeIndicator();
-    });
 
   if (!lastAnnouncement) return null;
 
   return (
     <AnimatedCarouselScrollView
-      ref={carouselScrollRef}
       horizontal
       showsHorizontalScrollIndicator={false}
       contentContainerStyle={[
@@ -105,13 +73,13 @@ export default function OfficialUpdatesCarousel({
       decelerationRate="fast"
       snapToInterval={cardWidth + CARD_GAP}
       scrollEventThrottle={16}
+      onMomentumScrollEnd={handleScrollEnd}
       onScroll={Animated.event(
         [{ nativeEvent: { contentOffset: { x: scrollOffset } } }],
         { useNativeDriver: true },
       )}
     >
       {announcements.map((announcement, index) => {
-        const isLastAnnouncement = announcement.id === lastAnnouncement.id;
         const cardOffset = index * (cardWidth + CARD_GAP);
         const emphasisRange = [
           cardOffset - cardWidth - CARD_GAP,
@@ -141,55 +109,30 @@ export default function OfficialUpdatesCarousel({
                 },
               ]}
             >
-              <Animated.View
-                style={isLastAnnouncement ? { transform: [{ translateX: lastCardOffset }] } : undefined}
-              >
-                <HomeUpdateCard
-                  announcement={announcement}
-                  label={announcement.scope === 'municipal' ? 'Municipal update' : 'Barangay update'}
-                  onPress={onOpenAnnouncement}
-                />
-              </Animated.View>
+              <HomeUpdateCard
+                announcement={announcement}
+                label={announcement.scope === 'municipal' ? 'Municipal update' : 'Barangay update'}
+                onPress={onOpenAnnouncement}
+              />
             </Animated.View>
-
-            {isLastAnnouncement ? (
-              <Animated.View
-                pointerEvents="none"
-                style={[
-                  styles.officialUpdateSwipeArrow,
-                  {
-                    opacity: swipeProgress,
-                    transform: [
-                      {
-                        translateX: swipeProgress.interpolate({
-                          inputRange: [0, 1],
-                          outputRange: [18, 0],
-                        }),
-                      },
-                      {
-                        scale: swipeProgress.interpolate({
-                          inputRange: [0, 1],
-                          outputRange: [0.45, 1],
-                        }),
-                      },
-                    ],
-                  },
-                ]}
-              >
-                <Ionicons name="arrow-forward" size={25} color={homeColors.ink} />
-              </Animated.View>
-            ) : null}
           </View>
         );
 
-        return isLastAnnouncement ? (
-          <GestureDetector key={announcement.id} gesture={rightSwipeGesture}>
-            {card}
-          </GestureDetector>
-        ) : (
-          <View key={announcement.id}>{card}</View>
-        );
+        return <View key={announcement.id}>{card}</View>;
       })}
+      <View style={[styles.officialUpdatesEndControlWrap, { width: cardWidth }]}>
+        <Pressable
+          style={styles.officialUpdatesEndControl}
+          onPress={openMoreUpdates}
+          accessibilityRole="button"
+          accessibilityLabel="See all official updates"
+        >
+          <View style={styles.officialUpdatesEndControlIcon}>
+            <Ionicons name="arrow-forward" size={30} color={homeColors.ink} />
+          </View>
+          <Text style={styles.officialUpdatesEndControlText}>See all official updates</Text>
+        </Pressable>
+      </View>
     </AnimatedCarouselScrollView>
   );
 }

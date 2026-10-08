@@ -31,6 +31,13 @@ export type ReportStep =
   | 'review'
   | 'success';
 export type SyncStatus = 'syncing' | 'synced' | 'delayed' | 'failed';
+export type DetailsValidationField =
+  | 'incidentType'
+  | 'incidentTypeOther'
+  | 'barangay'
+  | 'title'
+  | 'description'
+  | null;
 
 // Progress checkpoints (deliberate jumps, not linear).
 const PROGRESS = {
@@ -93,6 +100,8 @@ export function useReportFlow(active: boolean) {
   const [media, setMedia] = useState<CapturedMedia[]>([]);
 
   const [error, setError] = useState<string | null>(null);
+  const [detailsValidationField, setDetailsValidationField] =
+    useState<DetailsValidationField>(null);
   const [submitting, setSubmitting] = useState(false);
   const [queuedReportId, setQueuedReportId] = useState<string | null>(null);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('syncing');
@@ -210,6 +219,7 @@ export function useReportFlow(active: boolean) {
     setIncidentTypeOther('');
     setMedia([]);
     setError(null);
+    setDetailsValidationField(null);
     setSubmitting(false);
     setQueuedReportId(null);
     setSyncStatus('syncing');
@@ -312,6 +322,8 @@ export function useReportFlow(active: boolean) {
     setAddress((prev) =>
       buildAddressFromBarangay(match, prev?.municipality ?? MUNICIPALITY_LABEL),
     );
+    setDetailsValidationField(null);
+    setError(null);
   }, []);
 
   const retryBarangays = useCallback(() => {
@@ -391,20 +403,63 @@ export function useReportFlow(active: boolean) {
     if (value !== 'other') {
       setIncidentTypeOther('');
     }
+    setDetailsValidationField(null);
     setError(null);
   }, []);
 
+  const clearDetailsValidationError = useCallback(
+    (field: Exclude<DetailsValidationField, null>) => {
+      if (detailsValidationField !== field) return;
+      setDetailsValidationField(null);
+      setError(null);
+    },
+    [detailsValidationField],
+  );
+
+  const updateTitle = useCallback(
+    (value: string) => {
+      setTitle(value);
+      clearDetailsValidationError('title');
+    },
+    [clearDetailsValidationError],
+  );
+
+  const updateDescription = useCallback(
+    (value: string) => {
+      setDescription(value);
+      clearDetailsValidationError('description');
+    },
+    [clearDetailsValidationError],
+  );
+
+  const updateIncidentTypeOther = useCallback(
+    (value: string) => {
+      setIncidentTypeOther(value);
+      clearDetailsValidationError('incidentTypeOther');
+    },
+    [clearDetailsValidationError],
+  );
+
+  const setDetailsValidationError = useCallback(
+    (field: Exclude<DetailsValidationField, null>, message: string) => {
+      setDetailsValidationField(field);
+      setError(message);
+    },
+    [],
+  );
+
   const validateDetails = useCallback((): boolean => {
     if (!incidentType) {
-      setError('Select an incident type.');
+      setDetailsValidationError('incidentType', 'Select an incident type.');
       return false;
     }
     if (incidentType === 'other' && !incidentTypeOther.trim()) {
-      setError('Specify the incident type.');
+      setDetailsValidationError('incidentTypeOther', 'Specify the incident type.');
       return false;
     }
     if (!selectedBarangayId) {
-      setError(
+      setDetailsValidationError(
+        'barangay',
         barangaysError
           ? 'Barangay list could not load. Retry before continuing.'
           : 'Select a barangay before continuing.',
@@ -412,19 +467,28 @@ export function useReportFlow(active: boolean) {
       return false;
     }
     if (barangaysError || barangays.length === 0) {
-      setError('Barangay list could not load. Retry before continuing.');
+      setDetailsValidationError(
+        'barangay',
+        'Barangay list could not load. Retry before continuing.',
+      );
       return false;
     }
     if (!barangays.some((item) => item.id === selectedBarangayId)) {
-      setError('The selected barangay is no longer available. Please select again.');
+      setDetailsValidationError(
+        'barangay',
+        'The selected barangay is no longer available. Please select again.',
+      );
       return false;
     }
     if (!title.trim()) {
-      setError('Title is required.');
+      setDetailsValidationError('title', 'Title is required.');
       return false;
     }
     if (!description.trim()) {
-      setError('Description of the report is required.');
+      setDetailsValidationError(
+        'description',
+        'Description of the report is required.',
+      );
       return false;
     }
     return true;
@@ -435,6 +499,7 @@ export function useReportFlow(active: boolean) {
     incidentType,
     incidentTypeOther,
     selectedBarangayId,
+    setDetailsValidationError,
     title,
   ]);
 
@@ -645,15 +710,16 @@ export function useReportFlow(active: boolean) {
     editEvidence,
     // details
     title,
-    setTitle,
+    setTitle: updateTitle,
     description,
-    setDescription,
+    setDescription: updateDescription,
     locationNote,
     setLocationNote,
     incidentType,
     setIncidentType,
     incidentTypeOther,
-    setIncidentTypeOther,
+    setIncidentTypeOther: updateIncidentTypeOther,
+    detailsValidationField,
     goToReview,
     editDetails,
     editLocation,

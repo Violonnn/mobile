@@ -420,6 +420,11 @@ export const officialStyles = StyleSheet.create({
     fontSize: fontSizes.sm,
     color: colors.themeSoft,
   },
+  incidentDetailLabel: {
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.sm,
+    color: colors.textMuted,
+  },
   screenTitle: {
     fontFamily: fonts.extrabold,
     fontSize: fontSizes.xl,
@@ -430,6 +435,115 @@ export const officialStyles = StyleSheet.create({
     fontFamily: fonts.regular,
     fontSize: fontSizes.sm,
     color: colors.textMuted,
+  },
+  reportOperationsInstruction: {
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.sm,
+    color: colors.text,
+    lineHeight: 18,
+  },
+  reporterIdentity: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  reporterIdentityCopy: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
+  },
+  reporterIdentityName: {
+    fontFamily: fonts.semibold,
+    fontSize: fontSizes.md,
+    color: colors.text,
+  },
+  reporterIdentityRole: {
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.sm,
+    color: colors.textMuted,
+  },
+  reportSummary: {
+    // Pull the description closer to the reporter row without changing other sections.
+    marginTop: -spacing.md,
+    gap: spacing.sm,
+  },
+  reportMetaTimeline: {
+    gap: spacing.sm,
+  },
+  reportMetaTimelineItem: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    gap: spacing.sm,
+  },
+  reportMetaTimelineItemCurrent: {
+    minHeight: 44,
+  },
+  reportMetaTimelineItemFollowsExtendedLine: {
+    paddingTop: spacing.sm,
+  },
+  reportMetaTimelineItemMuted: {
+    opacity: 0.48,
+  },
+  reportMetaTimelineMarker: {
+    width: 40,
+    alignItems: 'center',
+  },
+  reportMetaTimelineIcon: {
+    width: 28,
+    minHeight: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  reportMetaTimelineIconCurrent: {
+    width: 40,
+    minHeight: 40,
+  },
+  reportMetaTimelineLine: {
+    flex: 1,
+    width: 2,
+    marginTop: spacing.xs,
+    marginBottom: -spacing.sm,
+    backgroundColor: colors.navigationActive,
+  },
+  reportMetaTimelineLineToCurrent: {
+    marginBottom: -spacing.md,
+  },
+  reportMetaTimelineCopy: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
+    paddingTop: spacing.xs,
+  },
+  reportMetaTimelineCopyCurrent: {
+    paddingTop: 0,
+  },
+  reportMetaTimelineLabelCurrent: {
+    fontFamily: fonts.medium,
+    fontSize: fontSizes.lg,
+  },
+  timelineStatusAction: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+  },
+  timelineStatusActionConnector: {
+    width: 40,
+    alignItems: 'center',
+    paddingTop: spacing.sm,
+  },
+  reportMetaTimelineLabel: {
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.sm,
+    color: colors.text,
+  },
+  reportMetaTimelineValue: {
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.xs,
+    color: colors.textMuted,
+  },
+  reportMetaTimelineValueCurrent: {
+    fontSize: fontSizes.md,
   },
   screenTitleOverlay: {
     color: colors.white,
@@ -546,6 +660,9 @@ export const officialStyles = StyleSheet.create({
     borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  reportOperationsHeaderButton: {
+    borderWidth: 0,
   },
 
   // ---- Status counts ----
@@ -1112,12 +1229,11 @@ export const officialStyles = StyleSheet.create({
     borderRadius: radius.xl,
     padding: spacing.lg,
     gap: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
   },
-  // Status actions: same spacing as detail cards, no gray outline.
+  // The pending status action extends the report timeline without adding a card border.
   statusActionsCard: {
-    gap: spacing.md,
+    flex: 1,
+    gap: spacing.sm,
   },
   // Verification + Timeline sit side by side; each panel expands on tap.
   collapsibleRow: {
@@ -1130,8 +1246,6 @@ export const officialStyles = StyleSheet.create({
     minWidth: 0,
     backgroundColor: colors.white,
     borderRadius: radius.xl,
-    borderWidth: 1,
-    borderColor: colors.border,
     overflow: 'hidden',
   },
   collapsibleHeader: {
@@ -1152,8 +1266,6 @@ export const officialStyles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingBottom: spacing.md,
     gap: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
     paddingTop: spacing.md,
   },
   detailTitle: {
@@ -1242,12 +1354,6 @@ export const officialStyles = StyleSheet.create({
     backgroundColor: colors.white,
     textAlignVertical: 'top',
   },
-  noteHint: {
-    fontFamily: fonts.regular,
-    fontSize: fontSizes.xs,
-    color: colors.textMuted,
-  },
-
   actionColumn: {
     gap: spacing.sm,
   },

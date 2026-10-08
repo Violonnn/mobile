@@ -12,7 +12,6 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  useWindowDimensions,
   View,
   type ViewStyle,
 } from 'react-native';
@@ -125,7 +124,6 @@ export default function MdrrmoCommunityFeed({
 }: Props) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { width: windowWidth } = useWindowDimensions();
   const [activeTab, setActiveTab] = useState<FeedTab>(initialTab);
   const [previousInitialTab, setPreviousInitialTab] = useState(initialTab);
   const [searchVisible, setSearchVisible] = useState(false);
@@ -162,7 +160,6 @@ export default function MdrrmoCommunityFeed({
   );
 
   const normalizedQuery = normalizeSearchText(searchQuery);
-  const compactHeader = windowWidth < 360;
   const isMayor = roleVariant === 'mayor';
   const initials = [officialProfile?.first_name, officialProfile?.last_name]
     .filter((part) => part?.trim())
@@ -306,23 +303,6 @@ export default function MdrrmoCommunityFeed({
               >
                 <Ionicons name="options-outline" size={25} color={colors.text} />
               </TouchableOpacity>
-              {!compactHeader ? (
-                <TouchableOpacity
-                  onPress={() => router.push('/official/settings' as Href)}
-                  accessibilityRole="button"
-                  accessibilityLabel="Open settings"
-                >
-                  <ProfileAvatar
-                    avatarPath={officialProfile?.avatar_path}
-                    firstName={officialProfile?.first_name}
-                    lastName={officialProfile?.last_name}
-                    fallback={initials}
-                    size={42}
-                    style={styles.avatar}
-                    textStyle={styles.avatarText}
-                  />
-                </TouchableOpacity>
-              ) : null}
             </>
           }
         />

@@ -568,7 +568,7 @@ export default function HomeScreen() {
       <Modal
         transparent
         visible={officialUpdatesPromptVisible}
-        animationType="fade"
+        animationType="none"
         onRequestClose={() => setOfficialUpdatesPromptVisible(false)}
       >
         <View style={styles.officialUpdatesPromptOverlay}>

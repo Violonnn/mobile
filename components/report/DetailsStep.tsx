@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -9,12 +9,46 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { reportStyles as styles, reportColors } from '../../styles/screens/report.styles';
 import { useAccessibilityLayout } from '../../hooks/useAccessibilityLayout';
+import type { DetailsValidationField } from '../../hooks/useReportFlow';
 import type { ReadableAddress } from '../../lib/location';
 import type { BarangayOption } from '../../lib/barangays';
 import {
   INCIDENT_TYPE_OPTIONS,
   type IncidentType,
 } from '../../lib/incidentTypes';
+
+const RESIDENT_SHORT_TITLE_MAX_LENGTH = 60;
+const RESIDENT_OTHER_INCIDENT_MAX_LENGTH = 80;
+const RESIDENT_LANDMARK_MAX_LENGTH = 160;
+
+type ResidentCharacterField = 'otherIncident' | 'title' | 'landmark';
+
+type ResidentCharacterCountProps = {
+  visible: boolean;
+  value: string;
+  maximum: number;
+};
+
+function ResidentCharacterCount({
+  visible,
+  value,
+  maximum,
+}: ResidentCharacterCountProps) {
+  if (!visible) return null;
+
+  const hasReachedLimit = value.length >= maximum;
+
+  return (
+    <Text
+      style={[
+        styles.residentCharacterCount,
+        hasReachedLimit && styles.residentCharacterCountAtLimit,
+      ]}
+    >
+      {value.length}/{maximum} characters
+    </Text>
+  );
+}
 
 type Props = {
   title: string;
@@ -39,6 +73,7 @@ type Props = {
   onRetryBarangays: () => void;
   locationConfirmed: boolean;
   error: string | null;
+  validationField?: DetailsValidationField;
   submitting: boolean;
   onBack: () => void;
   onSubmit: () => void;
@@ -68,6 +103,7 @@ export default function DetailsStep({
   onRetryBarangays,
   locationConfirmed,
   error,
+  validationField = null,
   submitting,
   onBack,
   onSubmit,
@@ -75,6 +111,18 @@ export default function DetailsStep({
   residentLayout = false,
 }: Props) {
   const { isLargeText } = useAccessibilityLayout();
+  const [activeCharacterField, setActiveCharacterField] =
+    useState<ResidentCharacterField | null>(null);
+
+  const showCharacterCount = (field: ResidentCharacterField) => {
+    setActiveCharacterField(field);
+  };
+
+  const hideCharacterCount = (field: ResidentCharacterField) => {
+    setActiveCharacterField((activeField) =>
+      activeField === field ? null : activeField,
+    );
+  };
 
   if (residentLayout) {
     return (
@@ -88,6 +136,7 @@ export default function DetailsStep({
         <View
           style={[
             styles.residentIncidentTypeGrid,
+            validationField === 'incidentType' && styles.residentIncidentTypeGridError,
             isLargeText && styles.residentIncidentTypeGridLargeText,
           ]}
         >
@@ -130,31 +179,55 @@ export default function DetailsStep({
           <>
             <Text style={styles.residentFieldLabel}>Specify incident type</Text>
             <TextInput
-              style={styles.residentInput}
+              style={[
+                styles.residentInput,
+                validationField === 'incidentTypeOther' && styles.residentInputError,
+              ]}
               value={incidentTypeOther}
               onChangeText={onChangeIncidentTypeOther}
               placeholder="e.g. fallen electrical post"
               placeholderTextColor={reportColors.textLight}
-              maxLength={80}
+              maxLength={RESIDENT_OTHER_INCIDENT_MAX_LENGTH}
+              onFocus={() => showCharacterCount('otherIncident')}
+              onBlur={() => hideCharacterCount('otherIncident')}
               editable={!submitting}
+            />
+            <ResidentCharacterCount
+              visible={activeCharacterField === 'otherIncident'}
+              value={incidentTypeOther}
+              maximum={RESIDENT_OTHER_INCIDENT_MAX_LENGTH}
             />
           </>
         ) : null}
 
         <Text style={styles.residentFieldLabel}>Short title</Text>
         <TextInput
-          style={styles.residentInput}
+          style={[
+            styles.residentInput,
+            validationField === 'title' && styles.residentInputError,
+          ]}
           value={title}
           onChangeText={onChangeTitle}
           placeholder="What happened?"
           placeholderTextColor={reportColors.textLight}
-          maxLength={120}
+          maxLength={RESIDENT_SHORT_TITLE_MAX_LENGTH}
+          onFocus={() => showCharacterCount('title')}
+          onBlur={() => hideCharacterCount('title')}
           editable={!submitting}
+        />
+        <ResidentCharacterCount
+          visible={activeCharacterField === 'title'}
+          value={title}
+          maximum={RESIDENT_SHORT_TITLE_MAX_LENGTH}
         />
 
         <Text style={styles.residentFieldLabel}>Description</Text>
         <TextInput
-          style={[styles.residentInput, styles.residentTextArea]}
+          style={[
+            styles.residentInput,
+            styles.residentTextArea,
+            validationField === 'description' && styles.residentInputError,
+          ]}
           value={description}
           onChangeText={onChangeDescription}
           placeholder="Describe what responders should know"
@@ -174,8 +247,15 @@ export default function DetailsStep({
           onChangeText={onChangeLocationNote}
           placeholder="e.g. Shell Mobility, National Highway"
           placeholderTextColor={reportColors.textLight}
-          maxLength={160}
+          maxLength={RESIDENT_LANDMARK_MAX_LENGTH}
+          onFocus={() => showCharacterCount('landmark')}
+          onBlur={() => hideCharacterCount('landmark')}
           editable={!submitting}
+        />
+        <ResidentCharacterCount
+          visible={activeCharacterField === 'landmark'}
+          value={locationNote}
+          maximum={RESIDENT_LANDMARK_MAX_LENGTH}
         />
 
         {!selectedBarangayId || barangaysLoading || barangaysError ? (

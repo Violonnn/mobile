@@ -147,7 +147,7 @@ export default function ReportModal({ visible, onClose, onSubmitted }: Props) {
                 <Text style={styles.headerTitle}>Report incident</Text>
                 {canDismissDeliveredReport ? (
                   <TouchableOpacity
-                    style={styles.deliveredCloseButton}
+                    style={styles.headerCloseButton}
                     onPress={handleDone}
                     hitSlop={8}
                     accessibilityRole="button"
@@ -157,6 +157,7 @@ export default function ReportModal({ visible, onClose, onSubmitted }: Props) {
                   </TouchableOpacity>
                 ) : flow.step !== 'success' ? (
                   <TouchableOpacity
+                    style={styles.headerCloseButton}
                     onPress={requestClose}
                     hitSlop={8}
                     disabled={flow.submitting}
@@ -262,6 +263,7 @@ export default function ReportModal({ visible, onClose, onSubmitted }: Props) {
                       onRetryBarangays={flow.retryBarangays}
                       locationConfirmed={flow.locationConfirmed}
                       error={flow.error}
+                      validationField={flow.detailsValidationField}
                       submitting={flow.submitting}
                       onBack={flow.goBack}
                       onSubmit={flow.goToReview}

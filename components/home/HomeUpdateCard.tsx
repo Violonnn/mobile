@@ -6,6 +6,7 @@ import { CollageCellContent } from '../report/ReportDetailCard';
 import type { AnnouncementRecord } from '../../lib/announcements';
 import { formatPublishedAt } from '../../lib/formatTime';
 import type { ReportMediaAttachment } from '../../lib/reports';
+import { useAccessibilityLayout } from '../../hooks/useAccessibilityLayout';
 import { homeColors, homeStyles as styles } from '../../styles/screens/home.styles';
 import { colors } from '../../styles/theme';
 
@@ -50,6 +51,7 @@ export default function HomeUpdateCard({
   label,
   onPress,
 }: HomeUpdateCardProps) {
+  const { isLargeText } = useAccessibilityLayout();
   const title = announcement.title.trim() || 'Official update';
   const body = announcement.body.trim() || 'No announcement details provided.';
   const sourceLabel = announcementSourceLabel(announcement, label);
@@ -92,11 +94,24 @@ export default function HomeUpdateCard({
         </View>
       </TouchableOpacity>
 
-      <View style={styles.officialUpdateCardCopy}>
-        <Text style={styles.officialUpdateTitle}>
+      <View
+        style={[
+          styles.officialUpdateCardCopy,
+          isLargeText && styles.officialUpdateCardCopyLargeText,
+        ]}
+      >
+        <Text
+          style={styles.officialUpdateTitle}
+          numberOfLines={isLargeText ? 3 : 2}
+          ellipsizeMode="tail"
+        >
           {title}
         </Text>
-        <Text style={styles.officialUpdateBody}>
+        <Text
+          style={styles.officialUpdateBody}
+          numberOfLines={isLargeText ? 5 : 4}
+          ellipsizeMode="tail"
+        >
           {body}
         </Text>
         <TouchableOpacity

@@ -13,7 +13,7 @@ import {
   TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useLocalSearchParams, useRouter, type Href } from 'expo-router';
+import { Redirect, useLocalSearchParams, useRouter, type Href } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { officialStyles as styles } from '../../styles/screens/official.styles';
@@ -25,7 +25,6 @@ import { statusLabel } from '../../components/report/ReportDetailCard';
 import IncidentTypeBadge from '../../components/report/IncidentTypeBadge';
 import { formatPublishedAt } from '../../lib/formatTime';
 import type { ReportStatus } from '../../lib/officialReports';
-import MayorSituations from '../../components/official/MayorSituations';
 import MdrrmoReportsWorkspace from '../../components/official/MdrrmoReportsWorkspace';
 import BdrrmoReportsWorkspace from '../../components/official/BdrrmoReportsWorkspace';
 import { OfficialShellSkeleton } from '../../components/ui/OfficialScreenSkeletons';
@@ -185,7 +184,7 @@ export default function OfficialIncidentsScreen() {
   }
 
   if (officialKind === 'Mayor') {
-    return <MayorSituations />;
+    return <Redirect href="/official" />;
   }
 
   if (officialKind === 'MDRRMO') {

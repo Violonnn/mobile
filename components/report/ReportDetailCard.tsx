@@ -69,7 +69,11 @@ function residentIncidentTypeColor(incidentType: MapReportMarker['incidentType']
 }
 
 /** Shared status and incident tags used by resident community report views. */
-export function CommunityReportTags({ report }: { report: MapReportMarker }) {
+export function CommunityReportTags({
+  report,
+}: {
+  report: Pick<MapReportMarker, 'status' | 'incidentType' | 'incidentTypeOther'>;
+}) {
   const statusColor =
     report.status === 'resolved'
       ? '#15805F'

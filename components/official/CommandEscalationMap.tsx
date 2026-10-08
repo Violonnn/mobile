@@ -228,7 +228,6 @@ export default function CommandEscalationMap({
               <View style={styles.openIncidentCircle}>
                 <Ionicons name="arrow-forward" size={19} color={colors.white} />
               </View>
-              <Text style={styles.openIncidentLabel}>Open incident</Text>
             </TouchableOpacity>
           </View>
 

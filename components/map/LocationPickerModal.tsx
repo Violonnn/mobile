@@ -377,11 +377,6 @@ export function LocationPickerPanel({
 
       {referenceCoordinate && maximumDistanceMeters ? (
         <View style={localStyles.distanceRow}>
-          <Ionicons
-            name="shield-checkmark-outline"
-            size={17}
-            color={colors.navigationActive}
-          />
           <Text style={localStyles.distanceText}>
             Pin moved {Math.round(movedDistanceMeters)} m of{' '}
             {Math.round(maximumDistanceMeters)} m allowed
@@ -472,7 +467,7 @@ const localStyles = StyleSheet.create({
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   fallback: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.lg, gap: spacing.sm },
   fallbackText: { fontFamily: fonts.regular, fontSize: fontSizes.sm, color: colors.textMuted, textAlign: 'center', lineHeight: 20 },
-  distanceRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, borderRadius: radius.md, backgroundColor: colors.primaryLight, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
+  distanceRow: { flexDirection: 'row', alignItems: 'center', borderRadius: radius.md, backgroundColor: colors.primaryLight, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
   distanceText: { flex: 1, fontFamily: fonts.medium, fontSize: fontSizes.sm, color: colors.navigationActive },
   validationError: { fontFamily: fonts.medium, fontSize: fontSizes.sm, lineHeight: 19, color: colors.unverified },
   retryButton: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: radius.full, borderWidth: 1, borderColor: colors.border },

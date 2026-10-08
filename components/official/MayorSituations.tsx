@@ -24,15 +24,20 @@ import { formatPublishedAt } from '../../lib/formatTime';
 import {
   fetchMayorSituationPage,
   fetchMayorSituationStatusCounts,
+  fetchMayorWatchlist,
   MAYOR_SITUATION_INITIAL_PAGE_SIZE,
   MAYOR_SITUATION_PAGE_SIZE,
+  mayorSituationStatusLabel,
   normalizeMayorBarangayFilter,
   normalizeMayorStatusFilter,
   type MayorBarangayFilter,
   type MayorSituationItem,
   type MayorStatusCounts,
   type MayorStatusFilter,
+  type MayorWatchlistReport,
+  type MayorWatchlistSnapshot,
 } from '../../lib/mayorAnalytics';
+import { mayorStatusFilterLabel } from '../../lib/mayorStatusLabels';
 import type { MapReportMarker } from '../../lib/reports';
 import { supabase } from '../../lib/supabase';
 import { useEvacuationCenters } from '../../hooks/useEvacuationCenters';
@@ -45,9 +50,9 @@ import IncidentTypeBadge from '../report/IncidentTypeBadge';
 
 const STATUS_OPTIONS: { value: MayorStatusFilter; label: string }[] = [
   { value: 'all', label: 'All statuses' },
-  { value: 'unverified', label: 'Unverified' },
-  { value: 'verified', label: 'Verified' },
-  { value: 'escalated', label: 'Escalated' },
+  { value: 'unverified', label: 'Awaiting brgy. review' },
+  { value: 'verified', label: 'Response in progress' },
+  { value: 'escalated', label: 'Awaiting municipal review' },
   { value: 'resolved', label: 'Resolved' },
 ];
 
@@ -58,10 +63,10 @@ const EMPTY_STATUS_COUNTS: MayorStatusCounts = {
   resolved: 0,
 };
 
-type MayorSituationSection = 'situations' | 'priority';
+type MayorSituationSection = 'situations' | 'watchlist' | 'priority';
 
 function statusLabel(status: MayorStatusFilter): string {
-  return STATUS_OPTIONS.find((option) => option.value === status)?.label ?? 'All statuses';
+  return mayorStatusFilterLabel(status);
 }
 
 function statusColor(status: MayorSituationItem['status']): string {
@@ -90,9 +95,9 @@ function MayorSituationSectionSwitch({ activeSection }: { activeSection: MayorSi
   function selectSection(nextSection: MayorSituationSection) {
     if (nextSection === activeSection) return;
     router.replace(
-      (nextSection === 'priority'
-        ? '/official/incidents?section=priority'
-        : '/official/incidents') as Href,
+      (nextSection === 'situations'
+        ? '/official/incidents'
+        : `/official/incidents?section=${nextSection}`) as Href,
     );
   }
 
@@ -100,6 +105,7 @@ function MayorSituationSectionSwitch({ activeSection }: { activeSection: MayorSi
     <View style={styles.sectionSwitch} accessibilityRole="tablist">
       {([
         ['situations', 'SITUATIONS'],
+        ['watchlist', 'WATCHLIST'],
         ['priority', 'PRIORITY'],
       ] as const).map(([value, label]) => {
         const active = value === activeSection;
@@ -198,10 +204,224 @@ function MayorPrioritySection() {
   );
 }
 
+function watchlistDate(value: string | null): string {
+  if (!value || !Number.isFinite(new Date(value).getTime())) return 'Date unavailable';
+  return formatPublishedAt(value);
+}
+
+function WatchlistReportRow({
+  report,
+  detail,
+  onPress,
+}: {
+  report: MayorWatchlistReport;
+  detail: string;
+  onPress: () => void;
+}) {
+  return (
+    <TouchableOpacity
+      style={styles.watchlistReportRow}
+      onPress={onPress}
+      activeOpacity={0.78}
+      accessibilityRole="button"
+      accessibilityLabel={`Open report ${report.title || 'untitled'}`}
+    >
+      <View style={styles.watchlistReportIcon}>
+        <Ionicons name="document-text-outline" size={20} color={colors.primary} />
+      </View>
+      <View style={styles.flexCopy}>
+        <Text style={styles.watchlistReportTitle} numberOfLines={2}>
+          {report.title.trim() || 'Untitled report'}
+        </Text>
+        <Text style={styles.watchlistReportMeta} numberOfLines={2}>{detail}</Text>
+      </View>
+      <Ionicons name="chevron-forward" size={22} color={colors.textMuted} />
+    </TouchableOpacity>
+  );
+}
+
+function MayorWatchlistSection() {
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const [snapshot, setSnapshot] = useState<MayorWatchlistSnapshot | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const channelName = useRealtimeChannelName('mayor-watchlist');
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const result = await fetchMayorWatchlist();
+    setSnapshot(result.snapshot);
+    setError(result.error);
+    setLoading(false);
+  }, []);
+
+  useFocusEffect(useCallback(() => {
+    void load();
+  }, [load]));
+
+  useEffect(() => {
+    const channel = supabase
+      .channel(channelName)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'reports' }, () => {
+        void load();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'report_status_history' }, () => {
+        void load();
+      })
+      .subscribe();
+    return () => { void supabase.removeChannel(channel); };
+  }, [channelName, load]);
+
+  async function handleRefresh() {
+    setRefreshing(true);
+    await load();
+    setRefreshing(false);
+  }
+
+  function openReport(reportId: string) {
+    router.push(`/official/${reportId}` as Href);
+  }
+
+  function openBarangayBacklog(barangayId: string) {
+    router.push(`/official/incidents?barangayId=${barangayId}` as Href);
+  }
+
+  return (
+    <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
+      <StatusBar style="dark" />
+      <ScrollView
+        contentContainerStyle={[
+          styles.watchlistContent,
+          { paddingBottom: officialNavMetrics.barHeight + insets.bottom + 24 },
+        ]}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
+        showsVerticalScrollIndicator={false}
+      >
+        <MdrrmoHeader title="Situations" showDefaultControls />
+        <MayorSituationSectionSwitch activeSection="watchlist" />
+
+        <View style={styles.watchlistIntro}>
+          <View style={styles.watchlistIntroIcon}>
+            <Ionicons name="flag-outline" size={25} color={colors.primary} />
+          </View>
+          <View style={styles.flexCopy}>
+            <Text style={styles.eyebrow}>MUNICIPAL ATTENTION QUEUE</Text>
+            <Text style={styles.watchlistTitle}>Watchlist</Text>
+            <Text style={styles.watchlistIntroText}>
+              Reports and backlogs that need a closer look.
+            </Text>
+          </View>
+        </View>
+
+        {loading ? (
+          <View style={styles.stateCard}>
+            <ActivityIndicator color={colors.primary} />
+            <Text style={styles.stateText}>Checking municipal attention items...</Text>
+          </View>
+        ) : null}
+
+        {!loading && error ? (
+          <View style={styles.stateCard}>
+            <Text style={styles.stateTitle}>Could not load the watchlist</Text>
+            <Text style={styles.stateText}>{error}</Text>
+            <TouchableOpacity style={styles.retryButton} onPress={() => void load()}>
+              <Text style={styles.retryText}>Try again</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
+
+        {!loading && !error && snapshot ? (
+          <View style={styles.watchlistGroups}>
+            <View style={styles.watchlistGroup}>
+              <Text style={styles.watchlistGroupTitle}>LONGEST-WAITING REVIEWS</Text>
+              {snapshot.longestWaitingBdrrmoReport ? (
+                <WatchlistReportRow
+                  report={snapshot.longestWaitingBdrrmoReport}
+                  detail={`Awaiting barangay review since ${watchlistDate(snapshot.longestWaitingBdrrmoReport.createdAt)}`}
+                  onPress={() => openReport(snapshot.longestWaitingBdrrmoReport!.id)}
+                />
+              ) : (
+                <Text style={styles.watchlistEmptyText}>No report is awaiting barangay review.</Text>
+              )}
+              {snapshot.longestWaitingMdrrmoEscalation ? (
+                <WatchlistReportRow
+                  report={snapshot.longestWaitingMdrrmoEscalation}
+                  detail={`Awaiting municipal review since ${watchlistDate(snapshot.longestWaitingMdrrmoEscalation.escalatedAt ?? snapshot.longestWaitingMdrrmoEscalation.createdAt)}`}
+                  onPress={() => openReport(snapshot.longestWaitingMdrrmoEscalation!.id)}
+                />
+              ) : (
+                <Text style={styles.watchlistEmptyText}>No report is awaiting municipal review.</Text>
+              )}
+            </View>
+
+            <View style={styles.watchlistGroup}>
+              <Text style={styles.watchlistGroupTitle}>LARGEST ACTIVE BACKLOG</Text>
+              {snapshot.largestActiveBacklog ? (
+                <TouchableOpacity
+                  style={styles.watchlistBacklogRow}
+                  onPress={() => openBarangayBacklog(snapshot.largestActiveBacklog!.barangayId)}
+                  activeOpacity={0.78}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Open ${snapshot.largestActiveBacklog.barangayName} active backlog`}
+                >
+                  <View style={styles.watchlistBacklogCount}>
+                    <Text style={styles.watchlistBacklogCountText}>
+                      {snapshot.largestActiveBacklog.activeCount}
+                    </Text>
+                  </View>
+                  <View style={styles.flexCopy}>
+                    <Text style={styles.watchlistReportTitle}>{snapshot.largestActiveBacklog.barangayName}</Text>
+                    <Text style={styles.watchlistReportMeta}>active reports across barangay and municipal review</Text>
+                  </View>
+                  <Ionicons name="arrow-forward" size={22} color={colors.primary} />
+                </TouchableOpacity>
+              ) : (
+                <Text style={styles.watchlistEmptyText}>No active barangay backlog.</Text>
+              )}
+            </View>
+
+            <View style={styles.watchlistGroup}>
+              <Text style={styles.watchlistGroupTitle}>
+                MISSING BARANGAY OR LOCATION {snapshot.missingContextCount ? `(${snapshot.missingContextCount})` : ''}
+              </Text>
+              {snapshot.missingContextReports.length > 0 ? snapshot.missingContextReports.map((report) => (
+                <WatchlistReportRow
+                  key={report.id}
+                  report={report}
+                  detail={`${report.barangayName === 'Unassigned' ? 'Barangay not assigned' : 'Location details missing'} - submitted ${watchlistDate(report.createdAt)}`}
+                  onPress={() => openReport(report.id)}
+                />
+              )) : <Text style={styles.watchlistEmptyText}>All active reports have barangay and location details.</Text>}
+            </View>
+
+            <View style={styles.watchlistGroup}>
+              <Text style={styles.watchlistGroupTitle}>
+                NO RECENT STATUS ACTIVITY {snapshot.inactiveStatusCount ? `(${snapshot.inactiveStatusCount})` : ''}
+              </Text>
+              <Text style={styles.watchlistGroupDescription}>Active reports with no status change in the last 24 hours.</Text>
+              {snapshot.inactiveStatusReports.length > 0 ? snapshot.inactiveStatusReports.map((report) => (
+                <WatchlistReportRow
+                  key={report.id}
+                  report={report}
+                  detail={`Last status activity ${watchlistDate(report.latestStatusActivityAt ?? report.createdAt)}`}
+                  onPress={() => openReport(report.id)}
+                />
+              )) : <Text style={styles.watchlistEmptyText}>Every active report has recent status activity.</Text>}
+            </View>
+          </View>
+        ) : null}
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
 export default function MayorSituations() {
   const { section } = useLocalSearchParams<{ section?: string | string[] }>();
   const requestedSection = Array.isArray(section) ? section[0] : section;
   if (requestedSection === 'priority') return <MayorPrioritySection />;
+  if (requestedSection === 'watchlist') return <MayorWatchlistSection />;
   return <MayorSituationsList />;
 }
 
@@ -622,14 +842,16 @@ function MayorSituationRow({
       onPress={onPress}
       activeOpacity={0.72}
       accessibilityRole="button"
-      accessibilityLabel={`Open read-only ${statusLabel(report.status)} report ${report.title || 'untitled'}`}
+      accessibilityLabel={`Open read-only ${mayorSituationStatusLabel(report)} report ${report.title || 'untitled'}`}
     >
       <ReportLocationThumbnail report={report} marker={marker} />
       <View style={styles.reportCopy}>
         <View style={styles.reportTitleRow}>
           <Text style={styles.reportTitle} numberOfLines={1}>{report.title.trim() || 'Untitled report'}</Text>
           <View style={[styles.statusPill, { borderColor: statusColor(report.status) }]}>
-            <Text style={[styles.statusPillText, { color: statusColor(report.status) }]}>{statusLabel(report.status).toUpperCase()}</Text>
+            <Text style={[styles.statusPillText, { color: statusColor(report.status) }]}>
+              {mayorSituationStatusLabel(report).toUpperCase()}
+            </Text>
           </View>
         </View>
         <IncidentTypeBadge

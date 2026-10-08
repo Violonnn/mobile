@@ -1,6 +1,7 @@
 // Supabase-backed Mayor analytics and paginated read-only situation queries.
 
 import { supabase } from './supabase';
+import { mayorReportStatusLabel } from './mayorStatusLabels';
 import type { ReportStatus } from './officialReports';
 import type {
   MayorActivityRange,
@@ -45,6 +46,32 @@ export type MayorSituationItem = {
   addressText: string | null;
   createdAt: string;
   reporterName: string;
+  reverifiedAt: string | null;
+};
+
+export type MayorWatchlistReport = {
+  id: string;
+  title: string;
+  status: ReportStatus;
+  barangayName: string;
+  addressText: string | null;
+  createdAt: string;
+  escalatedAt: string | null;
+  latestStatusActivityAt: string | null;
+};
+
+export type MayorWatchlistSnapshot = {
+  longestWaitingBdrrmoReport: MayorWatchlistReport | null;
+  longestWaitingMdrrmoEscalation: MayorWatchlistReport | null;
+  largestActiveBacklog: {
+    barangayId: string;
+    barangayName: string;
+    activeCount: number;
+  } | null;
+  missingContextReports: MayorWatchlistReport[];
+  missingContextCount: number;
+  inactiveStatusReports: MayorWatchlistReport[];
+  inactiveStatusCount: number;
 };
 
 type MayorSituationRow = {
@@ -57,7 +84,23 @@ type MayorSituationRow = {
   address_text: string | null;
   created_at: string | null;
   reporter_name: string | null;
+  reverified_at: string | null;
   total_count: number | string | null;
+};
+
+type MayorWatchlistRow = {
+  item_key: unknown;
+  id: unknown;
+  title: unknown;
+  status: unknown;
+  barangay_id: unknown;
+  barangay_name: unknown;
+  address_text: unknown;
+  created_at: unknown;
+  escalated_at: unknown;
+  latest_status_activity_at: unknown;
+  active_backlog: number | string | null;
+  item_count: number | string | null;
 };
 
 const MAX_SEARCH_LENGTH = 200;
@@ -84,6 +127,37 @@ function asCount(value: number | string | null): number {
 function normalizedBarangayId(value: string | null | undefined): string | null {
   const id = value?.trim();
   return id ? id : null;
+}
+
+function emptyMayorWatchlistSnapshot(): MayorWatchlistSnapshot {
+  return {
+    longestWaitingBdrrmoReport: null,
+    longestWaitingMdrrmoEscalation: null,
+    largestActiveBacklog: null,
+    missingContextReports: [],
+    missingContextCount: 0,
+    inactiveStatusReports: [],
+    inactiveStatusCount: 0,
+  };
+}
+
+function asMayorWatchlistReport(row: MayorWatchlistRow): MayorWatchlistReport | null {
+  const status = asReportStatus(row.status);
+  const id = String(row.id ?? '').trim();
+  if (!status || !id) return null;
+
+  return {
+    id,
+    title: String(row.title ?? ''),
+    status,
+    barangayName: String(row.barangay_name ?? 'Unassigned'),
+    addressText: row.address_text ? String(row.address_text) : null,
+    createdAt: String(row.created_at ?? ''),
+    escalatedAt: row.escalated_at ? String(row.escalated_at) : null,
+    latestStatusActivityAt: row.latest_status_activity_at
+      ? String(row.latest_status_activity_at)
+      : null,
+  };
 }
 
 /** Fetch every compact aggregate row available to the signed-in official. */
@@ -156,6 +230,7 @@ export async function fetchMayorSituationPage(input: {
       addressText: row.address_text ? String(row.address_text) : null,
       createdAt: String(row.created_at ?? ''),
       reporterName: String(row.reporter_name ?? 'Resident'),
+      reverifiedAt: row.reverified_at ? String(row.reverified_at) : null,
     }];
   });
 
@@ -164,6 +239,48 @@ export async function fetchMayorSituationPage(input: {
     totalCount: rows.length > 0 ? asCount(rows[0].total_count) : 0,
     error: null,
   };
+}
+
+/** Fetch the Mayor's focused municipal attention items. Authorization is enforced in SQL. */
+export async function fetchMayorWatchlist(): Promise<{
+  snapshot: MayorWatchlistSnapshot;
+  error: string | null;
+}> {
+  const { data, error } = await supabase.rpc('list_mayor_watchlist');
+  const snapshot = emptyMayorWatchlistSnapshot();
+  if (error) return { snapshot, error: error.message };
+
+  for (const row of (data ?? []) as MayorWatchlistRow[]) {
+    const itemKey = String(row.item_key ?? '');
+    const report = asMayorWatchlistReport(row);
+    const itemCount = asCount(row.item_count);
+
+    if (itemKey === 'longest_waiting_bdrrmo' && report) {
+      snapshot.longestWaitingBdrrmoReport = report;
+    } else if (itemKey === 'longest_waiting_mdrrmo' && report) {
+      snapshot.longestWaitingMdrrmoEscalation = report;
+    } else if (itemKey === 'largest_active_backlog' && row.barangay_id) {
+      snapshot.largestActiveBacklog = {
+        barangayId: String(row.barangay_id),
+        barangayName: String(row.barangay_name ?? 'Unknown barangay'),
+        activeCount: asCount(row.active_backlog),
+      };
+    } else if (itemKey === 'missing_context' && report) {
+      snapshot.missingContextReports.push(report);
+      snapshot.missingContextCount = itemCount;
+    } else if (itemKey === 'inactive_status' && report) {
+      snapshot.inactiveStatusReports.push(report);
+      snapshot.inactiveStatusCount = itemCount;
+    }
+  }
+
+  return { snapshot, error: null };
+}
+
+export function mayorSituationStatusLabel(
+  report: Pick<MayorSituationItem, 'status' | 'barangayName' | 'reverifiedAt'>,
+): string {
+  return mayorReportStatusLabel(report);
 }
 
 /** Fetch accurate full-result status totals for the current Mayor filters. */

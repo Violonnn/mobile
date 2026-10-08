@@ -2,7 +2,7 @@
 // Official report detail: content, attribution, timeline, status actions,
 // and protected "Call reporter" (masked until confirmed).
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -22,11 +22,16 @@ import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { officialStyles as styles } from '../../styles/screens/official.styles';
 import { colors } from '../../styles/theme';
+import { fetchBarangays, type BarangayOption } from '../../lib/barangays';
+import { getReportLocationAdjustmentLimit, type GpsPosition } from '../../lib/location';
+import { mayorReportStatusLabel } from '../../lib/mayorStatusLabels';
 import { goBackOrReplace } from '../../lib/navigation';
 import { OfficialShellSkeleton } from '../../components/ui/OfficialScreenSkeletons';
 import { useOfficialPortal } from '../../context/OfficialPortalContext';
 import { useOfficialReportDetail } from '../../hooks/useOfficialReports';
 import {
+  CommunityReportTags,
+  MediaCollage,
   ReportMediaPreviewModal,
   statusLabel,
 } from '../../components/report/ReportDetailCard';
@@ -44,14 +49,10 @@ import {
   correctOfficialReportLocation,
   updateOfficialReport,
 } from '../../lib/officialReportSubmit';
-import CommentsSection from '../../components/report/CommentsSection';
 import IncidentTypeBadge from '../../components/report/IncidentTypeBadge';
-
-function routeFocus(value: string | string[] | undefined): string | null {
-  if (typeof value === 'string') return value;
-  if (Array.isArray(value) && typeof value[0] === 'string') return value[0];
-  return null;
-}
+import { ReporterAvatar } from '../../components/report/ReporterAvatar';
+import ReportBarangayPicker from '../../components/report/ReportBarangayPicker';
+import ReportLocationPicker from '../../components/report/ReportLocationPicker';
 
 function statusPillStyle(status: ReportStatus) {
   if (status === 'verified') return styles.statusVerified;
@@ -93,12 +94,17 @@ function timelineLabel(event: {
   return 'Status update';
 }
 
+function transitionConfirmationLabel(target: ReportStatus): string {
+  if (target === 'verified') return 'Yes, verify';
+  if (target === 'escalated') return 'Yes, escalate';
+  if (target === 'resolved') return 'Yes, resolve';
+  return 'Yes, update';
+}
+
 export default function OfficialReportDetailScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ id?: string; focus?: string | string[] }>();
+  const params = useLocalSearchParams<{ id?: string }>();
   const reportId = typeof params.id === 'string' ? params.id : undefined;
-  // Community chat icon opens Report operations focused on the comments block.
-  const focusComments = routeFocus(params.focus) === 'comments';
 
   const {
     scope,
@@ -106,6 +112,7 @@ export default function OfficialReportDetailScreen() {
     loading: scopeLoading,
     error: scopeError,
   } = useOfficialPortal();
+  const isResponseOfficial = kind === 'MDRRMO' || kind === 'BDRRMO';
   const [note, setNote] = useState('');
   const [actionBusy, setActionBusy] = useState(false);
   const [contactBusy, setContactBusy] = useState(false);
@@ -121,26 +128,76 @@ export default function OfficialReportDetailScreen() {
   const [verificationOpen, setVerificationOpen] = useState(false);
   const [timelineOpen, setTimelineOpen] = useState(false);
   const [mediaPreview, setMediaPreview] = useState<ReportMediaAttachment | null>(null);
-  const scrollRef = useRef<ScrollView>(null);
-  // Keep auto-scroll armed until the user drags, so late-loading comments still land in view.
-  const pendingScrollToComments = useRef(focusComments);
+  const [locationPickerVisible, setLocationPickerVisible] = useState(false);
+  const [barangayPickerVisible, setBarangayPickerVisible] = useState(false);
+  const [correctedPosition, setCorrectedPosition] = useState<GpsPosition | null>(null);
+  const [correctionBarangays, setCorrectionBarangays] = useState<BarangayOption[]>([]);
+  const [correctionBarangaysLoading, setCorrectionBarangaysLoading] = useState(false);
+  const [correctionBarangaysError, setCorrectionBarangaysError] = useState<string | null>(null);
+  const [selectedCorrectionBarangayId, setSelectedCorrectionBarangayId] = useState<string | null>(null);
+  const [locationCorrectionBusy, setLocationCorrectionBusy] = useState(false);
 
   const { detail, error, loading, refreshing, refresh, reload } =
     useOfficialReportDetail(reportId, scope);
-
-  useEffect(() => {
-    pendingScrollToComments.current = focusComments;
-  }, [focusComments, reportId]);
-
-  useEffect(() => {
-    if (!focusComments || loading || !detail) return;
-    const timer = setTimeout(() => {
-      if (pendingScrollToComments.current) {
-        scrollRef.current?.scrollToEnd({ animated: true });
-      }
-    }, Platform.OS === 'ios' ? 250 : 80);
-    return () => clearTimeout(timer);
-  }, [detail, focusComments, loading]);
+  // Verification begins the response timeline, which remains visible after resolution.
+  const hasResponseStarted = detail?.status !== 'unverified';
+  const isResolved = detail?.status === 'resolved';
+  const isEscalated = detail?.status === 'escalated';
+  const currentTimelineStep = isResolved
+    ? 'resolved'
+    : isEscalated
+      ? 'escalated'
+      : hasResponseStarted
+        ? 'status'
+        : 'review';
+  // Match the verification event first so a later re-verification note is not shown here.
+  const verificationEvent = detail?.timeline.find(
+    (event) => event.toStatus === 'verified' && event.createdAt === detail.verified.at,
+  );
+  const verificationNote =
+    verificationEvent?.note?.trim() ||
+    detail?.timeline.find((event) => event.toStatus === 'verified')?.note?.trim() ||
+    null;
+  const resolutionEvent = detail?.timeline.find(
+    (event) => event.toStatus === 'resolved' && event.createdAt === detail.resolved.at,
+  );
+  const resolutionNote =
+    resolutionEvent?.note?.trim() ||
+    detail?.timeline.find((event) => event.toStatus === 'resolved')?.note?.trim() ||
+    null;
+  const escalationEvent = detail?.timeline.find(
+    (event) => event.toStatus === 'escalated' && event.createdAt === detail.escalated.at,
+  );
+  const escalationNote =
+    escalationEvent?.note?.trim() ||
+    detail?.timeline.find((event) => event.toStatus === 'escalated')?.note?.trim() ||
+    null;
+  const correctionDevicePosition =
+    detail && detail.deviceLatitude != null && detail.deviceLongitude != null
+      ? {
+          latitude: detail.deviceLatitude,
+          longitude: detail.deviceLongitude,
+          accuracyMeters: detail.gpsAccuracyMeters,
+        }
+      : undefined;
+  const canCorrectTimelineLocation =
+    isResponseOfficial &&
+    detail?.canCorrectLocation === true &&
+    detail.status === 'unverified';
+  const correctionBarangayOptions =
+    kind === 'BDRRMO' && scope?.barangay_id
+      ? correctionBarangays.filter((barangay) => barangay.id === scope.barangay_id)
+      : correctionBarangays;
+  const locationWasUpdated = detail?.timeline.some(
+    (event) => event.eventType === 'location_change' || event.eventType === 'barangay_change',
+  );
+  const currentLocation = detail
+    ? detail.addressText?.trim() ||
+      `${detail.latitude.toFixed(5)}, ${detail.longitude.toFixed(5)}`
+    : 'Unknown location';
+  const currentLocationWithPin = detail?.addressText?.trim()
+    ? `${currentLocation} (${detail.latitude.toFixed(5)}, ${detail.longitude.toFixed(5)})`
+    : currentLocation;
 
   function confirmTransition(target: ReportStatus) {
     if (!detail || !kind || actionBusy) return;
@@ -151,13 +208,20 @@ export default function OfficialReportDetailScreen() {
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Confirm',
+          text: transitionConfirmationLabel(target),
           style: target === 'escalated' ? 'destructive' : 'default',
           onPress: () => {
             void runTransition(target);
           },
         },
       ],
+    );
+  }
+
+  function openReportOperationsHelp() {
+    Alert.alert(
+      'Report operations help',
+      'Review the report, contact the reporter if needed, then select the appropriate next status.',
     );
   }
 
@@ -198,12 +262,12 @@ export default function OfficialReportDetailScreen() {
     }
 
     Alert.alert(
-      'Call reporter',
-      'Use this number only to verify or coordinate this incident.',
+      'Call reporter?',
+      'Use this call only to confirm or coordinate this incident.',
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: 'No', style: 'cancel' },
         {
-          text: 'Continue',
+          text: 'Yes, call',
           onPress: () => {
             void runCallReporter();
           },
@@ -232,6 +296,60 @@ export default function OfficialReportDetailScreen() {
     } finally {
       setContactBusy(false);
     }
+  }
+
+  async function loadCorrectionBarangays() {
+    setCorrectionBarangaysLoading(true);
+    setCorrectionBarangaysError(null);
+    const result = await fetchBarangays();
+    setCorrectionBarangays(result.barangays);
+    setCorrectionBarangaysError(result.error);
+    setCorrectionBarangaysLoading(false);
+  }
+
+  function openTimelineLocationCorrection() {
+    if (!detail || !canCorrectTimelineLocation || locationCorrectionBusy) return;
+
+    setCorrectedPosition({
+      latitude: detail.latitude,
+      longitude: detail.longitude,
+      accuracyMeters: detail.gpsAccuracyMeters,
+    });
+    setSelectedCorrectionBarangayId(detail.barangayId);
+    setLocationPickerVisible(true);
+    void loadCorrectionBarangays();
+  }
+
+  function confirmCorrectedPin(position: GpsPosition) {
+    setCorrectedPosition(position);
+    setLocationPickerVisible(false);
+    setBarangayPickerVisible(true);
+  }
+
+  async function saveTimelineLocationCorrection(barangayId: string) {
+    if (!detail || !correctedPosition || locationCorrectionBusy) return;
+
+    const selectedBarangay = correctionBarangays.find(
+      (barangay) => barangay.id === barangayId,
+    );
+    setLocationCorrectionBusy(true);
+    const result = await correctOfficialReportLocation({
+      reportId: detail.id,
+      position: correctedPosition,
+      addressText: selectedBarangay
+        ? `${selectedBarangay.name}, Minglanilla, Cebu`
+        : detail.addressText ?? undefined,
+      barangayId,
+    });
+    setLocationCorrectionBusy(false);
+
+    if (result.error) {
+      Alert.alert('Could not update location', result.error);
+      return;
+    }
+
+    setCorrectedPosition(null);
+    await reload();
   }
 
   function beginEdit() {
@@ -344,37 +462,41 @@ export default function OfficialReportDetailScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <ScrollView
-          ref={scrollRef}
           contentContainerStyle={styles.scrollContent}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={refresh} />
           }
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
-          onContentSizeChange={() => {
-            if (pendingScrollToComments.current) {
-              scrollRef.current?.scrollToEnd({ animated: true });
-            }
-          }}
-          onScrollBeginDrag={() => {
-            pendingScrollToComments.current = false;
-          }}
         >
           <View style={styles.headerRow}>
             <TouchableOpacity
-              style={styles.backButton}
+              style={[styles.backButton, styles.reportOperationsHeaderButton]}
               onPress={() => goBackOrReplace(router, '/official/incidents')}
               accessibilityRole="button"
               accessibilityLabel="Back to queue"
             >
-              <Ionicons name="chevron-back" size={22} color={colors.text} />
+              <Ionicons name="arrow-back" size={22} color={colors.text} />
             </TouchableOpacity>
             <View style={styles.headerTextGroup}>
-              <Text style={styles.brandLabel}>Incident detail</Text>
+              <Text style={styles.incidentDetailLabel}>Incident detail</Text>
               <Text style={styles.screenTitle} numberOfLines={1}>
                 Report operations
               </Text>
+              {isResponseOfficial ? (
+                <Text style={styles.reportOperationsInstruction}>
+                  Review. Verify. Respond.
+                </Text>
+              ) : null}
             </View>
+            <TouchableOpacity
+              style={[styles.backButton, styles.reportOperationsHeaderButton]}
+              onPress={openReportOperationsHelp}
+              accessibilityRole="button"
+              accessibilityLabel="Report operations help"
+            >
+              <Ionicons name="help-circle-outline" size={23} color={colors.navigationActive} />
+            </TouchableOpacity>
           </View>
 
           {loading ? (
@@ -400,52 +522,484 @@ export default function OfficialReportDetailScreen() {
 
           {!loading && !error && detail ? (
             <>
-              <View style={styles.detailCard}>
-                <View style={styles.queueCardHeader}>
-                  <Text style={styles.detailTitle}>
-                    {detail.title.trim() || 'Untitled report'}
-                  </Text>
-                  <View
-                    style={[styles.statusPill, statusPillStyle(detail.status)]}
-                  >
-                    <Text style={styles.statusPillText}>
-                      {statusLabel(detail.status)}
+              {isResponseOfficial ? (
+                <View style={styles.reporterIdentity}>
+                  <ReporterAvatar reporter={detail.reporter} size={48} />
+                  <View style={styles.reporterIdentityCopy}>
+                    <Text style={styles.reporterIdentityName} numberOfLines={1}>
+                      {detail.reporterName}
                     </Text>
+                    <Text style={styles.reporterIdentityRole}>Reporter</Text>
                   </View>
                 </View>
+              ) : null}
 
-                <Text style={styles.detailBody}>
-                  {detail.description.trim() || 'No description provided.'}
-                </Text>
-
-                <IncidentTypeBadge
-                  incidentType={detail.incidentType}
-                  incidentTypeOther={detail.incidentTypeOther}
-                />
-
-                <View style={styles.metaRow}>
-                  <Text style={styles.metaLabel}>Reporter</Text>
-                  <Text style={styles.metaValue}>{detail.reporterName}</Text>
-                </View>
-
-                <View style={styles.metaRow}>
-                  <Text style={styles.metaLabel}>Location</Text>
-                  <Text style={styles.metaValue}>
-                    {detail.addressText?.trim() ||
-                      `${detail.latitude.toFixed(5)}, ${detail.longitude.toFixed(5)}`}
+              {isResponseOfficial ? (
+                <View style={styles.reportSummary}>
+                  <Text style={styles.detailBody}>
+                    {detail.description.trim() || 'No description provided.'}
                   </Text>
+                  {detail.media.length > 0 ? (
+                    <MediaCollage
+                      media={detail.media}
+                      onOpenPreview={setMediaPreview}
+                      onOpenGallery={() => setMediaPreview(detail.media[0])}
+                    />
+                  ) : null}
+                  <CommunityReportTags report={detail} />
+                  <View style={styles.reportMetaTimeline}>
+                    <View
+                      style={[
+                        styles.reportMetaTimelineItem,
+                        currentTimelineStep === 'review'
+                          ? styles.reportMetaTimelineItemCurrent
+                          : styles.reportMetaTimelineItemMuted,
+                      ]}
+                    >
+                      <View style={styles.reportMetaTimelineMarker}>
+                        {canCorrectTimelineLocation ? (
+                          <TouchableOpacity
+                            style={[
+                              styles.reportMetaTimelineIcon,
+                              currentTimelineStep === 'review' &&
+                                styles.reportMetaTimelineIconCurrent,
+                            ]}
+                            onPress={openTimelineLocationCorrection}
+                            disabled={locationCorrectionBusy}
+                            hitSlop={8}
+                            accessibilityRole="button"
+                            accessibilityLabel="Correct incident location"
+                          >
+                            <Ionicons
+                              name="location"
+                              size={currentTimelineStep === 'review' ? 24 : 18}
+                              color={colors.navigationActive}
+                            />
+                          </TouchableOpacity>
+                        ) : (
+                          <View
+                            style={[
+                              styles.reportMetaTimelineIcon,
+                              currentTimelineStep === 'review' &&
+                                styles.reportMetaTimelineIconCurrent,
+                            ]}
+                          >
+                            <Ionicons
+                              name="location"
+                              size={currentTimelineStep === 'review' ? 24 : 18}
+                              color={colors.navigationActive}
+                            />
+                          </View>
+                        )}
+                        <View
+                          style={[
+                            styles.reportMetaTimelineLine,
+                            currentTimelineStep === 'review' &&
+                              styles.reportMetaTimelineLineToCurrent,
+                          ]}
+                        />
+                      </View>
+                      <View
+                        style={[
+                          styles.reportMetaTimelineCopy,
+                          currentTimelineStep === 'review' && styles.reportMetaTimelineCopyCurrent,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.reportMetaTimelineLabel,
+                            currentTimelineStep === 'review' && styles.reportMetaTimelineLabelCurrent,
+                          ]}
+                        >
+                          Located and reported at
+                        </Text>
+                        <Text
+                          style={[
+                            styles.reportMetaTimelineValue,
+                            currentTimelineStep === 'review' && styles.reportMetaTimelineValueCurrent,
+                          ]}
+                        >
+                          {currentLocation}{' '}
+                          at {detail.createdAt ? formatPublishedAt(detail.createdAt) : 'Unknown'}
+                        </Text>
+                        {locationWasUpdated ? (
+                          <Text
+                            style={[
+                              styles.reportMetaTimelineValue,
+                              currentTimelineStep === 'review' &&
+                                styles.reportMetaTimelineValueCurrent,
+                            ]}
+                          >
+                            Updated location to {currentLocationWithPin}
+                          </Text>
+                        ) : null}
+                      </View>
+                    </View>
+                    <View
+                      style={[
+                        styles.reportMetaTimelineItem,
+                        currentTimelineStep === 'review'
+                          ? styles.reportMetaTimelineItemCurrent
+                          : styles.reportMetaTimelineItemMuted,
+                        currentTimelineStep === 'review' &&
+                          styles.reportMetaTimelineItemFollowsExtendedLine,
+                      ]}
+                    >
+                      <View style={styles.reportMetaTimelineMarker}>
+                        {detail.canContactReporter ? (
+                          <TouchableOpacity
+                            style={[
+                              styles.reportMetaTimelineIcon,
+                              currentTimelineStep === 'review' &&
+                                styles.reportMetaTimelineIconCurrent,
+                            ]}
+                            onPress={confirmCallReporter}
+                            disabled={contactBusy}
+                            hitSlop={8}
+                            accessibilityRole="button"
+                            accessibilityLabel="Call reporter to confirm this incident"
+                          >
+                            <Ionicons
+                              name="call"
+                              size={currentTimelineStep === 'review' ? 24 : 18}
+                              color={colors.navigationActive}
+                            />
+                          </TouchableOpacity>
+                        ) : (
+                          <View
+                            style={[
+                              styles.reportMetaTimelineIcon,
+                              currentTimelineStep === 'review' &&
+                                styles.reportMetaTimelineIconCurrent,
+                            ]}
+                          >
+                            <Ionicons
+                              name="call"
+                              size={currentTimelineStep === 'review' ? 24 : 18}
+                              color={colors.navigationActive}
+                            />
+                          </View>
+                        )}
+                        {hasResponseStarted ? (
+                          <View
+                            style={[
+                              styles.reportMetaTimelineLine,
+                              currentTimelineStep === 'status' &&
+                                styles.reportMetaTimelineLineToCurrent,
+                            ]}
+                          />
+                        ) : null}
+                      </View>
+                      <View
+                        style={[
+                          styles.reportMetaTimelineCopy,
+                          currentTimelineStep === 'review' && styles.reportMetaTimelineCopyCurrent,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.reportMetaTimelineLabel,
+                            currentTimelineStep === 'review' && styles.reportMetaTimelineLabelCurrent,
+                          ]}
+                        >
+                          Under review
+                        </Text>
+                        {/* Escalated and resolved reports have already completed verification. */}
+                        <Text
+                          style={[
+                            styles.reportMetaTimelineValue,
+                            currentTimelineStep === 'review' && styles.reportMetaTimelineValueCurrent,
+                          ]}
+                        >
+                          {detail.status !== 'unverified'
+                            ? `Confirmed by ${detail.verified.name ?? 'an official'} at ${
+                                detail.verified.at
+                                  ? formatPublishedAt(detail.verified.at)
+                                  : 'Unknown time'
+                              }`
+                            : 'Awaiting confirmation'}
+                        </Text>
+                        {detail.status !== 'unverified' && verificationNote ? (
+                          <Text
+                            style={[
+                              styles.reportMetaTimelineValue,
+                              currentTimelineStep === 'review' &&
+                                styles.reportMetaTimelineValueCurrent,
+                            ]}
+                          >
+                            {verificationNote}
+                          </Text>
+                        ) : null}
+                      </View>
+                    </View>
+                    {hasResponseStarted ? (
+                      <View
+                        style={[
+                          styles.reportMetaTimelineItem,
+                          currentTimelineStep === 'status'
+                            ? styles.reportMetaTimelineItemCurrent
+                            : styles.reportMetaTimelineItemMuted,
+                          currentTimelineStep === 'status' &&
+                            styles.reportMetaTimelineItemFollowsExtendedLine,
+                        ]}
+                      >
+                        <View style={styles.reportMetaTimelineMarker}>
+                          <View
+                            style={[
+                              styles.reportMetaTimelineIcon,
+                              currentTimelineStep === 'status' &&
+                                styles.reportMetaTimelineIconCurrent,
+                            ]}
+                          >
+                            <Ionicons
+                              name="chatbubbles"
+                              size={currentTimelineStep === 'status' ? 24 : 18}
+                              color={colors.navigationActive}
+                            />
+                          </View>
+                          {isResolved || isEscalated ? (
+                            <View style={[
+                              styles.reportMetaTimelineLine,
+                              styles.reportMetaTimelineLineToCurrent,
+                            ]} />
+                          ) : null}
+                        </View>
+                        <View
+                          style={[
+                            styles.reportMetaTimelineCopy,
+                            currentTimelineStep === 'status' && styles.reportMetaTimelineCopyCurrent,
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.reportMetaTimelineLabel,
+                              currentTimelineStep === 'status' && styles.reportMetaTimelineLabelCurrent,
+                            ]}
+                          >
+                            Status
+                          </Text>
+                          <Text
+                            style={[
+                              styles.reportMetaTimelineValue,
+                              currentTimelineStep === 'status' &&
+                                styles.reportMetaTimelineValueCurrent,
+                            ]}
+                          >
+                            Response ongoing
+                          </Text>
+                        </View>
+                      </View>
+                    ) : null}
+                    {isEscalated ? (
+                      <View
+                        style={[
+                          styles.reportMetaTimelineItem,
+                          styles.reportMetaTimelineItemCurrent,
+                          styles.reportMetaTimelineItemFollowsExtendedLine,
+                        ]}
+                      >
+                        <View style={styles.reportMetaTimelineMarker}>
+                          <View style={[styles.reportMetaTimelineIcon, styles.reportMetaTimelineIconCurrent]}>
+                            <Ionicons name="megaphone" size={24} color={colors.navigationActive} />
+                          </View>
+                        </View>
+                        <View style={[styles.reportMetaTimelineCopy, styles.reportMetaTimelineCopyCurrent]}>
+                          <Text style={[styles.reportMetaTimelineLabel, styles.reportMetaTimelineLabelCurrent]}>
+                            Requesting assistance
+                          </Text>
+                          <Text
+                            style={[styles.reportMetaTimelineValue, styles.reportMetaTimelineValueCurrent]}
+                          >
+                            {`Escalated by ${detail.escalated.name ?? 'an official'} at ${
+                              detail.escalated.at
+                                ? formatPublishedAt(detail.escalated.at)
+                                : 'Unknown time'
+                            }`}
+                          </Text>
+                          {escalationNote ? (
+                            <Text
+                              style={[
+                                styles.reportMetaTimelineValue,
+                                styles.reportMetaTimelineValueCurrent,
+                              ]}
+                            >
+                              {escalationNote}
+                            </Text>
+                          ) : null}
+                        </View>
+                      </View>
+                    ) : null}
+                    {isResolved ? (
+                      <View
+                        style={[
+                          styles.reportMetaTimelineItem,
+                          styles.reportMetaTimelineItemCurrent,
+                          styles.reportMetaTimelineItemFollowsExtendedLine,
+                        ]}
+                      >
+                        <View style={styles.reportMetaTimelineMarker}>
+                          <View style={[styles.reportMetaTimelineIcon, styles.reportMetaTimelineIconCurrent]}>
+                            <Ionicons name="checkmark-circle" size={24} color={colors.navigationActive} />
+                          </View>
+                        </View>
+                        <View style={[styles.reportMetaTimelineCopy, styles.reportMetaTimelineCopyCurrent]}>
+                          <Text style={[styles.reportMetaTimelineLabel, styles.reportMetaTimelineLabelCurrent]}>
+                            Resolved
+                          </Text>
+                          <Text
+                            style={[styles.reportMetaTimelineValue, styles.reportMetaTimelineValueCurrent]}
+                          >
+                            {`Resolved by ${detail.resolved.name ?? 'an official'} at ${
+                              detail.resolved.at
+                                ? formatPublishedAt(detail.resolved.at)
+                                : 'Unknown time'
+                            }`}
+                          </Text>
+                          {resolutionNote ? (
+                            <Text
+                              style={[
+                                styles.reportMetaTimelineValue,
+                                styles.reportMetaTimelineValueCurrent,
+                              ]}
+                            >
+                              {resolutionNote}
+                            </Text>
+                          ) : null}
+                        </View>
+                      </View>
+                    ) : null}
+                  </View>
+                  {detail.allowedTransitions.length > 0 ? (
+                    <View style={styles.timelineStatusAction}>
+                      <View style={styles.timelineStatusActionConnector}>
+                        <Ionicons
+                          name="return-down-forward-outline"
+                          size={24}
+                          color={colors.textMuted}
+                        />
+                      </View>
+                      <View style={styles.statusActionsCard}>
+                        <TextInput
+                          style={styles.noteInput}
+                          value={note}
+                          onChangeText={setNote}
+                          placeholder="Add a short note for the timeline (500 characters)"
+                          placeholderTextColor={colors.textMuted}
+                          multiline
+                          maxLength={500}
+                          editable={!actionBusy}
+                        />
+                        <View style={styles.actionColumn}>
+                          {detail.allowedTransitions.map((target) => {
+                            const isEscalate = target === 'escalated';
+                            return (
+                              <TouchableOpacity
+                                key={target}
+                                style={[
+                                  isEscalate
+                                    ? styles.dangerAction
+                                    : styles.primaryAction,
+                                  actionBusy && styles.actionDisabled,
+                                ]}
+                                onPress={() => confirmTransition(target)}
+                                disabled={actionBusy || contactBusy}
+                                activeOpacity={0.85}
+                              >
+                                {actionBusy ? (
+                                  <ActivityIndicator
+                                    color={isEscalate ? colors.escalated : colors.white}
+                                  />
+                                ) : (
+                                  <Text
+                                    style={
+                                      isEscalate
+                                        ? styles.dangerActionText
+                                        : styles.primaryActionText
+                                    }
+                                  >
+                                    {transitionActionLabel(target)}
+                                  </Text>
+                                )}
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </View>
+                      </View>
+                    </View>
+                  ) : null}
+                  {detail.mediaError ? (
+                    <Text style={[styles.detailBody, { color: colors.danger }]}>
+                      {detail.mediaError}
+                    </Text>
+                  ) : null}
                 </View>
+              ) : null}
 
-                <View style={styles.metaRow}>
-                  <Text style={styles.metaLabel}>Reported</Text>
-                  <Text style={styles.metaValue}>
-                    {detail.createdAt
-                      ? formatPublishedAt(detail.createdAt)
-                      : 'Unknown'}
-                  </Text>
-                </View>
+              {!isResponseOfficial ? (
+                <View style={styles.detailCard}>
+                {!isResponseOfficial ? (
+                  <>
+                    <View style={styles.queueCardHeader}>
+                      <Text style={styles.detailTitle}>
+                        {detail.title.trim() || 'Untitled report'}
+                      </Text>
+                      <View
+                        style={[styles.statusPill, statusPillStyle(detail.status)]}
+                      >
+                        <Text style={styles.statusPillText}>
+                          {kind === 'Mayor'
+                            ? mayorReportStatusLabel({
+                                status: detail.status,
+                                barangayName: detail.barangayName,
+                                reverifiedAt: detail.reverified.at,
+                              })
+                            : statusLabel(detail.status)}
+                        </Text>
+                      </View>
+                    </View>
 
-                {detail.media.length > 0 ? (
+                    <Text style={styles.detailBody}>
+                      {detail.description.trim() || 'No description provided.'}
+                    </Text>
+                  </>
+                ) : null}
+
+                {!isResponseOfficial ? (
+                  <IncidentTypeBadge
+                    incidentType={detail.incidentType}
+                    incidentTypeOther={detail.incidentTypeOther}
+                  />
+                ) : null}
+
+                {!isResponseOfficial ? (
+                  <View style={styles.metaRow}>
+                    <Text style={styles.metaLabel}>Reporter</Text>
+                    <Text style={styles.metaValue}>{detail.reporterName}</Text>
+                  </View>
+                ) : null}
+
+                {!isResponseOfficial ? (
+                  <>
+                    <View style={styles.metaRow}>
+                      <Text style={styles.metaLabel}>Location</Text>
+                      <Text style={styles.metaValue}>
+                        {detail.addressText?.trim() ||
+                          `${detail.latitude.toFixed(5)}, ${detail.longitude.toFixed(5)}`}
+                      </Text>
+                    </View>
+
+                    <View style={styles.metaRow}>
+                      <Text style={styles.metaLabel}>Reported</Text>
+                      <Text style={styles.metaValue}>
+                        {detail.createdAt
+                          ? formatPublishedAt(detail.createdAt)
+                          : 'Unknown'}
+                      </Text>
+                    </View>
+                  </>
+                ) : null}
+
+                {!isResponseOfficial && detail.media.length > 0 ? (
                   <View style={styles.metaRow}>
                     <Text style={styles.metaLabel}>Media</Text>
                     <View style={styles.mediaRow}>
@@ -481,7 +1035,7 @@ export default function OfficialReportDetailScreen() {
                   </View>
                 ) : null}
 
-                {detail.mediaError ? (
+                {!isResponseOfficial && detail.mediaError ? (
                   <Text style={[styles.detailBody, { color: colors.danger }]}>
                     {detail.mediaError}
                   </Text>
@@ -512,9 +1066,10 @@ export default function OfficialReportDetailScreen() {
                     )}
                   </TouchableOpacity>
                 ) : null}
-              </View>
+                </View>
+              ) : null}
 
-              {detail.canEditContent || detail.canCorrectLocation ? (
+              {!isResponseOfficial && (detail.canEditContent || detail.canCorrectLocation) ? (
                 <View style={styles.detailCard}>
                   <View style={styles.queueCardHeader}>
                     <Text style={styles.sectionTitle}>
@@ -625,7 +1180,8 @@ export default function OfficialReportDetailScreen() {
                 </View>
               ) : null}
 
-              <View style={styles.collapsibleRow}>
+              {!isResponseOfficial ? (
+                <View style={styles.collapsibleRow}>
                 <View style={styles.collapsiblePanel}>
                   <TouchableOpacity
                     style={styles.collapsibleHeader}
@@ -751,7 +1307,8 @@ export default function OfficialReportDetailScreen() {
                     </View>
                   ) : null}
                 </View>
-              </View>
+                </View>
+              ) : null}
 
               {kind === 'Mayor' ? (
                 <View style={styles.readOnlyBanner}>
@@ -762,73 +1319,6 @@ export default function OfficialReportDetailScreen() {
                 </View>
               ) : null}
 
-              {kind !== 'Mayor' && detail.allowedTransitions.length > 0 ? (
-                <View style={styles.statusActionsCard}>
-                  <Text style={styles.sectionTitle}>Status actions</Text>
-                  <Text style={styles.noteHint}>
-                    Optional note (max 500 characters) is saved with the status
-                    change.
-                  </Text>
-                  <TextInput
-                    style={styles.noteInput}
-                    value={note}
-                    onChangeText={setNote}
-                    placeholder="Add a short note for the timeline"
-                    placeholderTextColor={colors.textMuted}
-                    multiline
-                    maxLength={500}
-                    editable={!actionBusy}
-                  />
-                  <View style={styles.actionColumn}>
-                    {detail.allowedTransitions.map((target) => {
-                      const isEscalate = target === 'escalated';
-                      return (
-                        <TouchableOpacity
-                          key={target}
-                          style={[
-                            isEscalate
-                              ? styles.dangerAction
-                              : styles.primaryAction,
-                            actionBusy && styles.actionDisabled,
-                          ]}
-                          onPress={() => confirmTransition(target)}
-                          disabled={actionBusy || contactBusy}
-                          activeOpacity={0.85}
-                        >
-                          {actionBusy ? (
-                            <ActivityIndicator
-                    color={isEscalate ? colors.escalated : colors.white}
-                            />
-                          ) : (
-                            <Text
-                              style={
-                                isEscalate
-                                  ? styles.dangerActionText
-                                  : styles.primaryActionText
-                              }
-                            >
-                              {transitionActionLabel(target)}
-                            </Text>
-                          )}
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                </View>
-              ) : null}
-
-              <View style={styles.detailCard}>
-                <CommentsSection
-                  reportId={detail.id}
-                  refreshSignal={refreshing ? 1 : 0}
-                  moderationMode={kind === 'MDRRMO' || kind === 'BDRRMO' ? 'scoped' : 'none'}
-                  autoFocus={focusComments}
-                  highlighted={focusComments}
-                  onComposerFocus={() =>
-                    scrollRef.current?.scrollToEnd({ animated: true })
-                  }
-                />
-              </View>
             </>
           ) : null}
         </ScrollView>
@@ -837,6 +1327,37 @@ export default function OfficialReportDetailScreen() {
       <ReportMediaPreviewModal
         preview={mediaPreview}
         onClose={() => setMediaPreview(null)}
+      />
+      {detail && correctedPosition ? (
+        <ReportLocationPicker
+          visible={locationPickerVisible}
+          incidentPosition={correctedPosition}
+          devicePosition={correctionDevicePosition}
+          adjustmentBoundaryPosition={{
+            latitude: detail.latitude,
+            longitude: detail.longitude,
+            accuracyMeters: detail.gpsAccuracyMeters,
+          }}
+          maximumDistanceMeters={getReportLocationAdjustmentLimit(
+            detail.gpsAccuracyMeters,
+          )}
+          onConfirm={confirmCorrectedPin}
+          onClose={() => setLocationPickerVisible(false)}
+        />
+      ) : null}
+      <ReportBarangayPicker
+        visible={barangayPickerVisible}
+        barangays={correctionBarangayOptions}
+        selectedBarangayId={selectedCorrectionBarangayId}
+        loading={correctionBarangaysLoading || locationCorrectionBusy}
+        error={correctionBarangaysError}
+        onSelect={(barangayId) => {
+          setSelectedCorrectionBarangayId(barangayId);
+          setBarangayPickerVisible(false);
+          void saveTimelineLocationCorrection(barangayId);
+        }}
+        onRetry={() => void loadCorrectionBarangays()}
+        onClose={() => setBarangayPickerVisible(false)}
       />
     </SafeAreaView>
   );

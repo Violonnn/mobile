@@ -99,6 +99,7 @@ export type OfficialReportDetail = {
   incidentTypeOther: string | null;
   status: ReportStatus;
   barangayId: string | null;
+  barangayName: string | null;
   addressText: string | null;
   latitude: number;
   longitude: number;
@@ -812,6 +813,15 @@ export async function fetchOfficialReportDetail(
   const reverifiedAt = row.reverified_at ? String(row.reverified_at) : null;
   const status = asReportStatus(row.status);
   const barangayId = row.barangay_id ? String(row.barangay_id) : null;
+  let barangayName: string | null = null;
+  if (barangayId) {
+    const { data: barangayRow } = await supabase
+      .from('barangays')
+      .select('name')
+      .eq('id', barangayId)
+      .maybeSingle();
+    barangayName = barangayRow?.name ? String(barangayRow.name) : null;
+  }
 
   const session = await getActiveSession();
   const detail: OfficialReportDetail = {
@@ -824,6 +834,7 @@ export async function fetchOfficialReportDetail(
       : null,
     status,
     barangayId,
+    barangayName,
     addressText: row.address_text ? String(row.address_text) : null,
     latitude: Number.isFinite(latitude) ? latitude : 0,
     longitude: Number.isFinite(longitude) ? longitude : 0,
