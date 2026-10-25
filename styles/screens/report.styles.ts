@@ -1371,6 +1371,8 @@ export const reportStyles = StyleSheet.create({
     lineHeight: 20,
   },
   deliveryStatusMessage: {
+    // Reserve two lines so the success card does not resize when sending finishes.
+    minHeight: 40,
     fontFamily: fonts.regular,
     fontSize: 13,
     color: reportColors.textLight,

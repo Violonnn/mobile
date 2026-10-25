@@ -36,7 +36,8 @@ function formatElapsedLabel(value: string, referenceTime: number): string {
   const ageHours = Math.floor(ageMinutes / 60);
   if (ageHours < 24) return `${ageHours} HR`;
 
-  return `${Math.floor(ageHours / 24)} DAY`;
+  const ageDays = Math.floor(ageHours / 24);
+  return `${ageDays} ${ageDays === 1 ? 'DAY' : 'DAYS'}`;
 }
 
 function formatTimelineTime(value: string): string {
