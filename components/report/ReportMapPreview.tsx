@@ -162,12 +162,20 @@ function buildPreviewHtml(
 
       function stabilizeMapSize() {
         map.invalidateSize(false);
-        map.setView([${latitude}, ${longitude}], ${zoom}, { animate: false });
+        // A delayed native-layout refresh must preserve a pin the resident moved.
+        map.setView(lastValidCoordinate, map.getZoom(), { animate: false });
       }
 
-      map.whenReady(function() {
+      // React Native layout changes do not always emit a WebView resize event.
+      // Expose a refresh method so the native view can request Leaflet tiles only
+      // after it has received its final dimensions.
+      window.refreshReportMap = function() {
         requestAnimationFrame(stabilizeMapSize);
-        setTimeout(stabilizeMapSize, 350);
+        setTimeout(stabilizeMapSize, 100);
+      };
+
+      map.whenReady(function() {
+        window.refreshReportMap();
       });
       window.addEventListener('resize', stabilizeMapSize);
       }
@@ -210,6 +218,15 @@ export default function ReportMapPreview({
   );
   const source = useMemo(() => ({ html }), [html]);
 
+  const refreshMapLayout = useCallback(() => {
+    webViewRef.current?.injectJavaScript(`
+      if (window.refreshReportMap) {
+        window.refreshReportMap();
+      }
+      true;
+    `);
+  }, []);
+
   const syncAdjustmentMode = useCallback(() => {
     const configuration = JSON.stringify({
       enabled: adjusting,
@@ -237,6 +254,18 @@ export default function ReportMapPreview({
   useEffect(() => {
     syncAdjustmentMode();
   }, [syncAdjustmentMode]);
+
+  useEffect(() => {
+    // The report-step transition lasts 330 ms. Refresh afterwards so Android
+    // WebView does not keep the blank layer it drew before the final layout.
+    const layoutTimer = setTimeout(refreshMapLayout, 420);
+    return () => clearTimeout(layoutTimer);
+  }, [refreshMapLayout]);
+
+  const handleMapLoadEnd = useCallback(() => {
+    syncAdjustmentMode();
+    refreshMapLayout();
+  }, [refreshMapLayout, syncAdjustmentMode]);
 
   const handleMessage = useCallback(
     (event: WebViewMessageEvent) => {
@@ -279,12 +308,14 @@ export default function ReportMapPreview({
     <View
       style={[styles.mapPreview, compact && styles.mapPreviewCompact]}
       pointerEvents={adjusting ? 'auto' : 'none'}
+      onLayout={refreshMapLayout}
     >
       <WebView
         ref={webViewRef}
         style={styles.mapPreviewWebView}
         originWhitelist={['*']}
         source={source}
+        androidLayerType="hardware"
         scrollEnabled={false}
         nestedScrollEnabled
         overScrollMode="never"
@@ -292,7 +323,7 @@ export default function ReportMapPreview({
         // Tile requests can report their own HTTP errors. One missing tile must
         // not replace the whole otherwise usable Leaflet map with a gray fallback.
         onError={() => setMapFailed(true)}
-        onLoadEnd={syncAdjustmentMode}
+        onLoadEnd={handleMapLoadEnd}
         startInLoadingState
         renderLoading={() => (
           <View style={styles.mapPreviewLoading}>

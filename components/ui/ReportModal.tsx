@@ -97,6 +97,7 @@ export default function ReportModal({ visible, onClose, onSubmitted }: Props) {
 
   const canDismissDeliveredReport =
     flow.step === 'success' && flow.syncStatus === 'synced';
+  const stepContainsMap = flow.step === 'location' || flow.step === 'review';
 
   // Capture the queued id so "Done" can navigate to the map afterwards.
   React.useEffect(() => {
@@ -199,8 +200,10 @@ export default function ReportModal({ visible, onClose, onSubmitted }: Props) {
               >
                 <Animated.View
                   key={flow.step}
-                  entering={SlideInRight.duration(330)}
-                  exiting={FadeOutLeft.duration(160)}
+                  // Android WebViews can remain blank when they load during a
+                  // translated step animation. Map-bearing steps render in place.
+                  entering={stepContainsMap ? undefined : SlideInRight.duration(330)}
+                  exiting={stepContainsMap ? undefined : FadeOutLeft.duration(160)}
                 >
                   {flow.step === 'location' && (
                     <LocationStep
