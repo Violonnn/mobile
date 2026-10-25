@@ -189,7 +189,7 @@ const ReportButton = memo(function ReportButton({
   );
 });
 
-export default function BottomNav({ state, navigation }: BottomTabBarProps) {
+export default function BottomNav({ state, emitter, navigateToTab }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const barHeight = navMetrics.barHeight;
   const currentRouteName = state.routes[state.index]?.name;
@@ -233,17 +233,17 @@ export default function BottomNav({ state, navigation }: BottomTabBarProps) {
       const target = state.routes.find((r) => r.name === routeName);
       if (!target) return;
 
-      const event = navigation.emit({
+      const event = emitter.emit({
         type: 'tabPress',
         target: target.key,
         canPreventDefault: true,
       });
 
       if (currentRouteName !== routeName && !event.defaultPrevented) {
-        navigation.navigate(routeName);
+        navigateToTab(target.key);
       }
     },
-    [navigation, state.routes, currentRouteName],
+    [emitter, navigateToTab, state.routes, currentRouteName],
   );
 
   const handleReportPress = useCallback(() => {
@@ -264,9 +264,9 @@ export default function BottomNav({ state, navigation }: BottomTabBarProps) {
     triggerHaptic();
     const target = state.routes.find((r) => r.name === 'map');
     if (target) {
-      navigation.navigate(target.name);
+      navigateToTab(target.key);
     }
-  }, [navigation, state.routes]);
+  }, [navigateToTab, state.routes]);
 
   return (
     <>

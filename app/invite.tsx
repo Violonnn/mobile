@@ -3,6 +3,7 @@ import {
   View,
   Text,
   TextInput,
+  type TextInputInstance,
   TouchableOpacity,
   ScrollView,
   KeyboardAvoidingView,
@@ -18,7 +19,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
-import { useNavigation, useRouter, type Href } from 'expo-router';
+import { usePreventRemove, useRouter, type Href } from 'expo-router';
 import {
   OFFICIAL_REGISTER_STEP_LABELS,
   useOfficialRegistrationFlow,
@@ -51,7 +52,6 @@ function responsiveSealSize(screenWidth: number, screenHeight: number): number {
  * Entered only from an invite URL — never from official sign-in.
  */
 export default function InviteScreen() {
-  const navigation = useNavigation();
   const router = useRouter();
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const sealSize = responsiveSealSize(screenWidth, screenHeight);
@@ -59,9 +59,9 @@ export default function InviteScreen() {
   const [passwordFocused, setPasswordFocused] = useState(false);
   const [confirmFocused, setConfirmFocused] = useState(false);
 
-  const firstNameRef = useRef<TextInput>(null);
-  const middleNameRef = useRef<TextInput>(null);
-  const allowLeaveRef = useRef(false);
+  const firstNameRef = useRef<TextInputInstance>(null);
+  const middleNameRef = useRef<TextInputInstance>(null);
+  const [exitDestination, setExitDestination] = useState<Href | null>(null);
 
   const flow = useOfficialRegistrationFlow();
 
@@ -75,20 +75,17 @@ export default function InviteScreen() {
           text: 'Leave',
           style: 'destructive',
           onPress: () => {
-            allowLeaveRef.current = true;
-            router.replace('/(auth)/login' as Href);
+            setExitDestination('/(auth)/login' as Href);
           },
         },
       ],
     );
-  }, [router]);
+  }, []);
 
   const handleCreateAccount = useCallback(async () => {
     const created = await flow.submitPassword();
     if (!created) return;
 
-    // beforeRemove otherwise intercepts replace and steps back to Details.
-    allowLeaveRef.current = true;
     Alert.alert(
       'Account created',
       'Sign in with your government email and password to continue.',
@@ -96,13 +93,13 @@ export default function InviteScreen() {
         {
           text: 'Sign in',
           onPress: () => {
-            router.replace('/(auth)/official-login' as Href);
+            setExitDestination('/(auth)/official-login' as Href);
           },
         },
       ],
       { cancelable: false },
     );
-  }, [flow, router]);
+  }, [flow]);
 
   const handleBack = useCallback(() => {
     if (flow.goBack()) return true;
@@ -119,18 +116,15 @@ export default function InviteScreen() {
   useRegistrationBackHandler(handleBack, true);
 
   // iOS swipe / stack pop → same wizard back behavior (don't exit mid-flow).
+  usePreventRemove(exitDestination === null, () => {
+    if (flow.goBack()) return;
+    confirmLeaveRegistration();
+  });
+
   useEffect(() => {
-    const unsubscribe = navigation.addListener('beforeRemove', (event) => {
-      if (allowLeaveRef.current) return;
-
-      event.preventDefault();
-
-      if (flow.goBack()) return;
-      confirmLeaveRegistration();
-    });
-
-    return unsubscribe;
-  }, [confirmLeaveRegistration, flow.goBack, navigation]);
+    if (!exitDestination) return;
+    router.replace(exitDestination);
+  }, [exitDestination, router]);
 
   if (flow.validatingToken && flow.step === 0) {
     return (

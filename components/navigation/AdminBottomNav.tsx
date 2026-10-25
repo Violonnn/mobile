@@ -96,7 +96,7 @@ const NavItem = memo(function NavItem({
   );
 });
 
-export default function AdminBottomNav({ state, navigation }: BottomTabBarProps) {
+export default function AdminBottomNav({ state, emitter, navigateToTab }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const currentRouteName = state.routes[state.index]?.name;
 
@@ -106,17 +106,17 @@ export default function AdminBottomNav({ state, navigation }: BottomTabBarProps)
       const target = state.routes.find((route) => route.name === routeName);
       if (!target) return;
 
-      const event = navigation.emit({
+      const event = emitter.emit({
         type: 'tabPress',
         target: target.key,
         canPreventDefault: true,
       });
 
       if (currentRouteName !== routeName && !event.defaultPrevented) {
-        navigation.navigate(routeName);
+        navigateToTab(target.key);
       }
     },
-    [navigation, state.routes, currentRouteName],
+    [emitter, navigateToTab, state.routes, currentRouteName],
   );
 
   return (

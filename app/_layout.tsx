@@ -70,7 +70,6 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider initialMetrics={initialWindowMetrics}>
         <Stack
-          initialRouteName="index"
           screenOptions={{
             headerShown: false,
             animation: 'none',

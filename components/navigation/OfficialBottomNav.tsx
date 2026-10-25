@@ -130,7 +130,8 @@ const NavItem = memo(function NavItem({
 
 export default function OfficialBottomNav({
   state,
-  navigation,
+  emitter,
+  navigateToTab,
 }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const { officialKind } = useOfficialPortal();
@@ -151,17 +152,17 @@ export default function OfficialBottomNav({
       const target = state.routes.find((route) => route.name === routeName);
       if (!target) return;
 
-      const event = navigation.emit({
+      const event = emitter.emit({
         type: 'tabPress',
         target: target.key,
         canPreventDefault: true,
       });
 
       if (currentRouteName !== routeName && !event.defaultPrevented) {
-        navigation.navigate(routeName);
+        navigateToTab(target.key);
       }
     },
-    [navigation, state.routes, currentRouteName],
+    [emitter, navigateToTab, state.routes, currentRouteName],
   );
 
   // Hide the custom bar on nested detail / log-incident routes.
