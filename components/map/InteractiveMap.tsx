@@ -11,8 +11,12 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import {
+  CompatibleWebView,
+  type CompatibleWebViewHandle,
+  type WebViewMessageEvent,
+} from './CompatibleWebView';
 import { colors, fonts, fontSizes, radius, spacing } from '../../styles/theme';
 import {
   getReportStatusPresentation,
@@ -997,7 +1001,7 @@ export default function InteractiveMap({
   focusZoomLevel = 16,
   stickyFocus = false,
 }: Props) {
-  const webRef = useRef<WebView>(null);
+  const webRef = useRef<CompatibleWebViewHandle>(null);
   const [initialShowMapDetails] = useState(showMapDetails);
   const lastFocusSignatureRef = useRef('');
   // Leaflet supports a wider range, but the app's tile sources are configured for levels 1-19.
@@ -1023,7 +1027,6 @@ export default function InteractiveMap({
       ),
     [
       initialShowMapDetails,
-      MAP_HTML_VERSION,
       safeFocusZoomLevel,
       safeViewportBottom,
       safeViewportLeft,
@@ -1044,16 +1047,19 @@ export default function InteractiveMap({
     useState<ReportStatusFilter>('all');
   const isLayerPanelVisible = layerPanelVisible ?? uncontrolledLayerPanelVisible;
 
-  useEffect(() => {
-    if (reportStatusOptions.includes(reportStatusFilter)) return;
-    setReportStatusFilter('all');
-  }, [reportStatusFilter, reportStatusOptions]);
+  const effectiveReportStatusFilter = reportStatusOptions.includes(reportStatusFilter)
+    ? reportStatusFilter
+    : 'all';
 
   useEffect(() => {
     // The screen owns navigation focus, while the map keeps its WebView and viewport mounted.
-    setSearchQuery('');
-    setSearchFocused(false);
-    Keyboard.dismiss();
+    const animationFrame = requestAnimationFrame(() => {
+      setSearchQuery('');
+      setSearchFocused(false);
+      Keyboard.dismiss();
+    });
+
+    return () => cancelAnimationFrame(animationFrame);
   }, [dismissSearchSignal]);
 
   useEffect(() => {
@@ -1062,12 +1068,13 @@ export default function InteractiveMap({
 
   const visibleReports = useMemo(() => {
     if (!layerVisibility.reports) return [];
-    if (reportStatusFilter === 'all') return markers;
+    if (effectiveReportStatusFilter === 'all') return markers;
     // Keep a directly requested report visible even when a saved filter excludes it.
     return markers.filter(
-      (report) => report.id === highlightedReportId || report.status === reportStatusFilter,
+      (report) =>
+        report.id === highlightedReportId || report.status === effectiveReportStatusFilter,
     );
-  }, [highlightedReportId, layerVisibility.reports, markers, reportStatusFilter]);
+  }, [effectiveReportStatusFilter, highlightedReportId, layerVisibility.reports, markers]);
   const visibleResources = useMemo(() => {
     const next: MapResourceMarker[] = [];
     if (layerVisibility.facilities) {
@@ -1255,7 +1262,7 @@ export default function InteractiveMap({
       onTouchEnd={onGestureActiveChange ? () => onGestureActiveChange(false) : undefined}
       onTouchCancel={onGestureActiveChange ? () => onGestureActiveChange(false) : undefined}
     >
-      <WebView
+      <CompatibleWebView
         ref={webRef}
         style={mapStyles.webview}
         originWhitelist={['*']}
@@ -1434,7 +1441,7 @@ export default function InteractiveMap({
             {REPORT_STATUS_OPTIONS.filter((option) =>
               reportStatusOptions.includes(option.value),
             ).map((option) => {
-                  const selected = reportStatusFilter === option.value;
+                  const selected = effectiveReportStatusFilter === option.value;
                   return (
                     <Pressable
                       key={option.value}

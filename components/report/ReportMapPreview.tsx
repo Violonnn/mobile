@@ -1,7 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { WebView, type WebViewMessageEvent } from 'react-native-webview';
+import {
+  CompatibleWebView,
+  type CompatibleWebViewHandle,
+  type WebViewMessageEvent,
+} from '../map/CompatibleWebView';
 
 import type { GpsPosition } from '../../lib/location';
 import {
@@ -193,7 +197,7 @@ export default function ReportMapPreview({
   maximumDistanceMeters = 150,
   onPositionChange,
 }: Props) {
-  const webViewRef = useRef<WebView>(null);
+  const webViewRef = useRef<CompatibleWebViewHandle>(null);
   const [initialMapConfiguration] = useState(() => ({
       latitude: position.latitude,
       longitude: position.longitude,
@@ -310,7 +314,7 @@ export default function ReportMapPreview({
       pointerEvents={adjusting ? 'auto' : 'none'}
       onLayout={refreshMapLayout}
     >
-      <WebView
+      <CompatibleWebView
         ref={webViewRef}
         style={styles.mapPreviewWebView}
         originWhitelist={['*']}
