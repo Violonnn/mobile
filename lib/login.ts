@@ -1,8 +1,5 @@
 import { supabase } from './supabase';
-import {
-  parseEdgeFunctionMeta,
-  readEdgeFunctionErrorMessage,
-} from './edgeFunctionErrors';
+import { readEdgeFunctionErrorMessage } from './edgeFunctionErrors';
 
 export type VerifyLoginInput = {
   phone: string;

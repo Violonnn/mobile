@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, type ReactNode } from 'react';
+import React, { useEffect, useState, type ReactNode } from 'react';
 import { Animated } from 'react-native';
 
 type AuthStepTransitionProps = {
@@ -7,8 +7,8 @@ type AuthStepTransitionProps = {
 
 /** Gives each authentication step the same brief, native-driven entrance. */
 export default function AuthStepTransition({ children }: AuthStepTransitionProps) {
-  const opacity = useRef(new Animated.Value(0)).current;
-  const translateY = useRef(new Animated.Value(8)).current;
+  const [opacity] = useState(() => new Animated.Value(0));
+  const [translateY] = useState(() => new Animated.Value(8));
 
   useEffect(() => {
     const animation = Animated.parallel([

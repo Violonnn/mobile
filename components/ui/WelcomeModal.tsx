@@ -54,6 +54,8 @@ export default function WelcomeModal({ visible, firstName, barangay, onDone }: P
     if (!visible) return;
     const frame = requestAnimationFrame(startEntranceAnimation);
     return () => cancelAnimationFrame(frame);
+    // Reanimated shared values are stable objects; only visibility restarts the entrance.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
 
   const imageStyle = useAnimatedStyle(() => ({

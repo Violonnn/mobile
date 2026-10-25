@@ -115,12 +115,15 @@ export default function BdrrmoCommandIntakeMap({
     const nextState = LOCAL_RESPONSE_STATES.find(
       (state) => reportsByStatus[state.status].length > 0,
     );
-    if (nextState) setActiveStatus(nextState.status);
-  }, [activeReports.length, reportsByStatus]);
+    if (!nextState) return;
 
-  useEffect(() => {
-    setActiveIndex(0);
-  }, [activeStatus]);
+    const animationFrame = requestAnimationFrame(() => {
+      setActiveStatus(nextState.status);
+      setActiveIndex(0);
+    });
+
+    return () => cancelAnimationFrame(animationFrame);
+  }, [activeReports.length, reportsByStatus]);
 
   const focusTarget = activeReport && hasValidLocation(activeReport)
     ? {
@@ -167,7 +170,10 @@ export default function BdrrmoCommandIntakeMap({
               <TouchableOpacity
                 key={state.status}
                 style={[styles.mapQueueTab, selected && { backgroundColor: state.color }]}
-                onPress={() => setActiveStatus(state.status)}
+                onPress={() => {
+                  setActiveStatus(state.status);
+                  setActiveIndex(0);
+                }}
                 accessibilityRole="tab"
                 accessibilityLabel={`${state.label} local reports, ${count}`}
                 accessibilityState={{ selected }}
