@@ -26,7 +26,7 @@ import { fetchBarangays, type BarangayOption } from '../../lib/barangays';
 import { getReportLocationAdjustmentLimit, type GpsPosition } from '../../lib/location';
 import { mayorReportStatusLabel } from '../../lib/mayorStatusLabels';
 import { goBackOrReplace } from '../../lib/navigation';
-import { OfficialShellSkeleton } from '../../components/ui/OfficialScreenSkeletons';
+import { ReportOperationsSkeleton } from '../../components/ui/OfficialScreenSkeletons';
 import { useOfficialPortal } from '../../context/OfficialPortalContext';
 import { useOfficialReportDetail } from '../../hooks/useOfficialReports';
 import {
@@ -137,7 +137,7 @@ export default function OfficialReportDetailScreen() {
   const [selectedCorrectionBarangayId, setSelectedCorrectionBarangayId] = useState<string | null>(null);
   const [locationCorrectionBusy, setLocationCorrectionBusy] = useState(false);
 
-  const { detail, error, loading, refreshing, refresh, reload } =
+  const { detail, error, loading, refreshing, refresh, reload, invalidateCache } =
     useOfficialReportDetail(reportId, scope);
   // Verification begins the response timeline, which remains visible after resolution.
   const hasResponseStarted = detail?.status !== 'unverified';
@@ -241,6 +241,7 @@ export default function OfficialReportDetailScreen() {
       setNote('');
       if (target === 'escalated' && kind === 'BDRRMO') {
         // A successful handoff ends BDRRMO access immediately.
+        invalidateCache();
         router.replace('/official/incidents?status=unverified' as never);
         return;
       }
@@ -400,7 +401,7 @@ export default function OfficialReportDetailScreen() {
     return (
       <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
         <StatusBar style="dark" />
-        <OfficialShellSkeleton />
+        <ReportOperationsSkeleton />
       </SafeAreaView>
     );
   }
@@ -450,6 +451,15 @@ export default function OfficialReportDetailScreen() {
             </TouchableOpacity>
           </View>
         </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+        <StatusBar style="dark" />
+        <ReportOperationsSkeleton />
       </SafeAreaView>
     );
   }

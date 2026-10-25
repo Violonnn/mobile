@@ -25,6 +25,80 @@ function emptyCounts(): OfficialStatusCounts {
   };
 }
 
+const OFFICIAL_DETAIL_CACHE_TTL_MS = 30 * 1000;
+const MAX_CACHED_OFFICIAL_DETAILS = 12;
+
+type CachedOfficialReportDetail = {
+  detail: OfficialReportDetail;
+  cachedAt: number;
+};
+
+// Official report data stays only in memory. The key prevents one official's
+// cached report from appearing under another official's role or barangay scope.
+const officialDetailCache = new Map<string, CachedOfficialReportDetail>();
+
+function getOfficialDetailCacheKey(
+  scope: OfficialAccessScope | null,
+  reportId: string | undefined,
+): string | null {
+  if (!scope || !reportId) return null;
+
+  // BDRRMO access to a report ends after escalation, so it must always receive
+  // a fresh RLS-checked response instead of a previously authorized cache entry.
+  if (scope.role === 'officer' && scope.barangay_id) return null;
+
+  const officialEmail = scope.email.trim().toLowerCase();
+  const barangayScope = scope.barangay_id ?? 'municipal';
+  return `${scope.role}:${officialEmail}:${barangayScope}:${reportId}`;
+}
+
+function getCachedOfficialReportDetail(
+  scope: OfficialAccessScope | null,
+  reportId: string | undefined,
+): OfficialReportDetail | null {
+  const cacheKey = getOfficialDetailCacheKey(scope, reportId);
+  if (!cacheKey) return null;
+
+  const cachedDetail = officialDetailCache.get(cacheKey);
+  if (!cachedDetail) return null;
+  if (Date.now() - cachedDetail.cachedAt < OFFICIAL_DETAIL_CACHE_TTL_MS) {
+    return cachedDetail.detail;
+  }
+
+  officialDetailCache.delete(cacheKey);
+  return null;
+}
+
+function cacheOfficialReportDetail(
+  scope: OfficialAccessScope | null,
+  detail: OfficialReportDetail,
+): void {
+  const cacheKey = getOfficialDetailCacheKey(scope, detail.id);
+  if (!cacheKey) return;
+
+  // Remove expired entries first and cap the cache for long-running sessions.
+  const now = Date.now();
+  officialDetailCache.forEach((cachedDetail, key) => {
+    if (now - cachedDetail.cachedAt >= OFFICIAL_DETAIL_CACHE_TTL_MS) {
+      officialDetailCache.delete(key);
+    }
+  });
+  if (officialDetailCache.size >= MAX_CACHED_OFFICIAL_DETAILS) {
+    const oldestEntry = officialDetailCache.entries().next().value;
+    if (oldestEntry) officialDetailCache.delete(oldestEntry[0]);
+  }
+
+  officialDetailCache.set(cacheKey, { detail, cachedAt: now });
+}
+
+function invalidateOfficialReportDetailCache(
+  scope: OfficialAccessScope | null,
+  reportId: string | undefined,
+): void {
+  const cacheKey = getOfficialDetailCacheKey(scope, reportId);
+  if (cacheKey) officialDetailCache.delete(cacheKey);
+}
+
 /** Scoped report queue for the official overview screen. */
 export function useOfficialReportQueue(scope: OfficialAccessScope | null) {
   const pageSize = 20;
@@ -170,9 +244,13 @@ export function useOfficialReportDetail(
   reportId: string | undefined,
   scope: OfficialAccessScope | null,
 ) {
-  const [detail, setDetail] = useState<OfficialReportDetail | null>(null);
+  const [detail, setDetail] = useState<OfficialReportDetail | null>(() =>
+    getCachedOfficialReportDetail(scope, reportId),
+  );
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() =>
+    !getCachedOfficialReportDetail(scope, reportId),
+  );
   const [refreshing, setRefreshing] = useState(false);
 
   const channelName = useRealtimeChannelName('official-detail');
@@ -186,9 +264,18 @@ export function useOfficialReportDetail(
     }
 
     const result = await fetchOfficialReportDetail(reportId, scope);
+    if (result.detail) {
+      cacheOfficialReportDetail(scope, result.detail);
+    } else {
+      invalidateOfficialReportDetailCache(scope, reportId);
+    }
     setDetail(result.detail);
     setError(result.error);
     setLoading(false);
+  }, [reportId, scope]);
+
+  const invalidateCache = useCallback(() => {
+    invalidateOfficialReportDetailCache(scope, reportId);
   }, [reportId, scope]);
 
   const refresh = useCallback(async () => {
@@ -199,9 +286,19 @@ export function useOfficialReportDetail(
 
   useFocusEffect(
     useCallback(() => {
+      const cachedDetail = getCachedOfficialReportDetail(scope, reportId);
+      if (cachedDetail) {
+        // A short cache window avoids repeat queries during quick reopens.
+        // Realtime updates still invalidate this entry while the screen is open.
+        setDetail(cachedDetail);
+        setError(null);
+        setLoading(false);
+        return;
+      }
+
       setLoading(true);
       void load();
-    }, [load]),
+    }, [load, reportId, scope]),
   );
 
   useEffect(() => {
@@ -218,6 +315,7 @@ export function useOfficialReportDetail(
           filter: `id=eq.${reportId}`,
         },
         () => {
+          invalidateCache();
           void load();
         },
       )
@@ -226,14 +324,20 @@ export function useOfficialReportDetail(
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [scope, reportId, channelName, load]);
+  }, [scope, reportId, channelName, invalidateCache, load]);
+
+  const reload = useCallback(async () => {
+    invalidateCache();
+    await load();
+  }, [invalidateCache, load]);
 
   return {
     detail,
     error,
     loading,
     refreshing,
-    reload: load,
+    reload,
     refresh,
+    invalidateCache,
   };
 }
