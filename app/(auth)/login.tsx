@@ -13,6 +13,7 @@ import {
   ScrollView,
   Text,
   TextInput,
+  type TextInputInstance,
   TouchableOpacity,
   TouchableWithoutFeedback,
   View,
@@ -35,8 +36,8 @@ const LOGIN_LOGO_SOURCE = require('../../assets/images/splash_iconDL-transparent
 const PLACEHOLDER_DOTS = '······';
 
 export default function LoginScreen() {
-  const phoneRef = useRef<TextInput>(null);
-  const pinRef = useRef<TextInput>(null);
+  const phoneRef = useRef<TextInputInstance>(null);
+  const pinRef = useRef<TextInputInstance>(null);
   const [phoneFocused, setPhoneFocused] = useState(false);
   const [pinFocused, setPinFocused] = useState(false);
   const [pinVisible, setPinVisible] = useState(false);

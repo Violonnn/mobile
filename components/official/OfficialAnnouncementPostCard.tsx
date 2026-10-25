@@ -7,6 +7,7 @@ import {
     Pressable,
     RefreshControl,
     ScrollView,
+    type ScrollViewInstance,
     StyleSheet,
     Text,
     TouchableOpacity,
@@ -594,7 +595,7 @@ export default function OfficialAnnouncementPostCard({
   const [selectedAnnouncement, setSelectedAnnouncement] = useState(announcement);
   const [previousAnnouncementId, setPreviousAnnouncementId] = useState(announcement.id);
   const { notifyCommentAdded } = useAnnouncementEngagement();
-  const modalScrollRef = useRef<ScrollView>(null);
+  const modalScrollRef = useRef<ScrollViewInstance>(null);
   const pendingScrollToComments = useRef(false);
   const {
     announcement: detailAnnouncement,

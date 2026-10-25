@@ -8,6 +8,7 @@ import {
   Text,
   TouchableOpacity,
   View,
+  type ViewInstance,
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
@@ -25,7 +26,7 @@ type ProfilePhotoModalProps = {
   firstName: string;
   lastName: string;
   avatarPath: string | null;
-  blurTarget?: RefObject<View | null>;
+  blurTarget?: RefObject<ViewInstance | null>;
   onClose: () => void;
   onChanged: (avatarPath: string | null) => void;
 };

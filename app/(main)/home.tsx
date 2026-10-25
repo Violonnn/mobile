@@ -1,10 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AppState,
-  type AppStateStatus,
   Modal,
   RefreshControl,
   ScrollView,
+  type ScrollViewInstance,
   Text,
   TouchableOpacity,
   useWindowDimensions,
@@ -52,11 +52,11 @@ export default function HomeScreen() {
     insets.top + RESIDENT_HEADER_HEIGHT,
   );
   const { welcome } = useLocalSearchParams<{ welcome?: string }>();
-  const homeScrollRef = useRef<ScrollView>(null);
+  const homeScrollRef = useRef<ScrollViewInstance>(null);
   const locationRequestIdRef = useRef(0);
   const locationLoadedAtRef = useRef(0);
   const foregroundRefreshAtRef = useRef(0);
-  const appStateRef = useRef<AppStateStatus>(AppState.currentState);
+  const appStateRef = useRef<string | null | undefined>(AppState.currentState);
   const {
     profile,
     profileInitialLoading,

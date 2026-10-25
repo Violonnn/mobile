@@ -3,6 +3,7 @@ import {
   View,
   Text,
   TextInput,
+  type TextInputInstance,
   TouchableOpacity,
   Pressable,
   ReturnKeyTypeOptions,
@@ -28,7 +29,7 @@ type Props = {
 // Masked numeric PIN input shared by the registration and PIN-reset screens.
 // Owns only its own focus/visibility UI state; all PIN values and submit
 // handlers stay in the parent so behavior is unchanged.
-const PinField = forwardRef<TextInput, Props>(function PinField(
+const PinField = forwardRef<TextInputInstance, Props>(function PinField(
   {
     value,
     onChangeText,
@@ -40,11 +41,11 @@ const PinField = forwardRef<TextInput, Props>(function PinField(
   },
   ref,
 ) {
-  const innerRef = useRef<TextInput>(null);
+  const innerRef = useRef<TextInputInstance>(null);
   const [focused, setFocused] = useState(false);
   const [visible, setVisible] = useState(false);
 
-  function setRefs(node: TextInput | null) {
+  function setRefs(node: TextInputInstance | null) {
     innerRef.current = node;
     if (typeof ref === 'function') {
       ref(node);

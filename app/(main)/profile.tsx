@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   useWindowDimensions,
   View,
+  type ViewInstance,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -112,7 +113,7 @@ export default function ProfileScreen() {
   const { fontScale } = useWindowDimensions();
   const bottomNavigationPadding =
     getResidentBottomNavigationHeight(fontScale) + insets.bottom + 16;
-  const blurTargetRef = useRef<View>(null);
+  const blurTargetRef = useRef<ViewInstance>(null);
   const {
     profile,
     profileInitialLoading,

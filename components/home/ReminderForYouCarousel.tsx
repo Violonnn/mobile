@@ -1,6 +1,5 @@
-import React from 'react';
+import React, { type ComponentProps } from 'react';
 import {
-  type ImageSourcePropType,
   ScrollView,
   Text,
   View,
@@ -11,7 +10,7 @@ import { useAccessibilityLayout } from '../../hooks/useAccessibilityLayout';
 import { homeStyles as styles } from '../../styles/screens/home.styles';
 
 type ReminderCard = {
-  image: ImageSourcePropType;
+  image: ComponentProps<typeof Image>['source'];
   title: string;
   description: string;
 };

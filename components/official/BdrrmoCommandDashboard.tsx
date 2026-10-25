@@ -1,5 +1,12 @@
 import React, { useCallback, useEffect, useRef } from 'react';
-import { RefreshControl, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import {
+  RefreshControl,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  View,
+  type ScrollViewInstance,
+} from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -45,7 +52,7 @@ export default function BdrrmoCommandDashboard({
     loadMore: loadMoreAnnouncements,
     refresh: refreshAnnouncements,
   } = useAnnouncements({ limit: 20 });
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
   const mapUnlockTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {

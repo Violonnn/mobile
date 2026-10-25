@@ -1,5 +1,12 @@
 import React, { useRef } from 'react';
-import { View, Text, TextInput, Pressable, StyleSheet } from 'react-native';
+import {
+  View,
+  Text,
+  TextInput,
+  Pressable,
+  StyleSheet,
+  type TextInputInstance,
+} from 'react-native';
 import { registerStyles as styles } from '../../styles/screens/register.styles';
 import { getOtpDimensions } from '../../lib/layout';
 
@@ -8,7 +15,7 @@ const OTP_LENGTH = 6;
 type Props = { value: string; onChange: (v: string) => void; hasError?: boolean };
 
 export default function OTPInput({ value, onChange, hasError = false }: Props) {
-  const hiddenInputRef = useRef<TextInput>(null);
+  const hiddenInputRef = useRef<TextInputInstance>(null);
   const { boxWidth, boxHeight, gap, fontSize } = getOtpDimensions(OTP_LENGTH);
 
   const handlePress = () => {

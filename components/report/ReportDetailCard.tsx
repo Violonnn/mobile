@@ -13,6 +13,7 @@ import {
     Pressable,
     RefreshControl,
     ScrollView,
+    type ScrollViewInstance,
     StyleSheet,
     Text,
     TouchableOpacity,
@@ -896,7 +897,7 @@ export function ReportDetailCard({
     refresh: refreshDetail,
   } = useReportDetail(expanded ? report : null, { cacheScope: detailCacheScope });
 
-  const modalScrollRef = useRef<ScrollView>(null);
+  const modalScrollRef = useRef<ScrollViewInstance>(null);
   // While true, every content-size change (media, then comments loading in)
   // re-scrolls to the bottom so the comments section stays in view. Cleared as
   // soon as the user drags, so live updates never yank them back down.

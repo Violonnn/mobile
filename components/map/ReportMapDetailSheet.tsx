@@ -5,6 +5,7 @@ import {
   TouchableOpacity,
   FlatList,
   ScrollView,
+  type ScrollViewInstance,
   RefreshControl,
   StyleSheet,
   Platform,
@@ -146,7 +147,7 @@ export default function ReportMapDetailSheet({
   const [focusComments, setFocusComments] = useState(false);
   const { notifyCommentAdded } = useReportEngagement();
 
-  const detailScrollRef = useRef<ScrollView>(null);
+  const detailScrollRef = useRef<ScrollViewInstance>(null);
   // While true, content-size changes (media/comments loading in) keep the view
   // pinned to the bottom; cleared when the user drags so live updates never
   // yank them back down.

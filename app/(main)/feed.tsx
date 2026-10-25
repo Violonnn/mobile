@@ -552,7 +552,7 @@ export default function FeedScreen() {
                       {communitySectionCopy.subtitle}
                     </Text>
                   </View>
-                ) : null
+                ) : undefined
               }
               ListFooterComponent={
                 hasMoreCommunityReports ? (
@@ -575,7 +575,7 @@ export default function FeedScreen() {
                       <Ionicons name="add" size={21} color={colors.text} />
                     )}
                   </TouchableOpacity>
-                ) : null
+                ) : undefined
               }
               ListEmptyComponent={
                 initialLoading ? (
@@ -662,7 +662,7 @@ export default function FeedScreen() {
                       {officialSectionCopy.subtitle}
                     </Text>
                   </View>
-                ) : null
+                ) : undefined
               }
               renderItem={({ item: announcement, index }) => (
                 <OfficialAnnouncementPostCard
@@ -720,7 +720,7 @@ export default function FeedScreen() {
                       <Ionicons name="add" size={21} color={colors.text} />
                     )}
                   </TouchableOpacity>
-                ) : null
+                ) : undefined
               }
             />
           )}

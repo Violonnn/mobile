@@ -6,6 +6,7 @@ import {
   ImageBackground,
   RefreshControl,
   ScrollView,
+  type ScrollViewInstance,
   Text,
   TouchableOpacity,
   useWindowDimensions,
@@ -261,7 +262,7 @@ export default function MayorDashboard({
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
   const mapUnlockTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [activeMapReportIndex, setActiveMapReportIndex] = useState(0);
   const [referenceTime, setReferenceTime] = useState(() => Date.now());

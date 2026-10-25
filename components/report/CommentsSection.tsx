@@ -10,6 +10,7 @@ import {
   View,
   Text,
   TextInput,
+  type TextInputInstance,
   TouchableOpacity,
   ActivityIndicator,
   StyleSheet,
@@ -151,7 +152,7 @@ export default function CommentsSection({
   const [sendError, setSendError] = useState<string | null>(null);
   const [highlightActive, setHighlightActive] = useState(highlighted);
   const [previousHighlighted, setPreviousHighlighted] = useState(highlighted);
-  const inputRef = useRef<TextInput>(null);
+  const inputRef = useRef<TextInputInstance>(null);
   const previousRefreshSignal = useRef(refreshSignal);
 
   const handleModeration = (comment: ThreadComment) => {

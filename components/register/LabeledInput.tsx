@@ -1,5 +1,11 @@
 import React, { forwardRef, useState } from 'react';
-import { View, Text, TextInput, TextInputProps } from 'react-native';
+import {
+  View,
+  Text,
+  TextInput,
+  type TextInputInstance,
+  type TextInputProps,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { registerStyles as styles, registerColors } from '../../styles/screens/register.styles';
 import FieldError from './FieldError';
@@ -16,7 +22,7 @@ type Props = TextInputProps & {
   leadingPrefix?: string;
 };
 
-const LabeledInput = forwardRef<TextInput, Props>(function LabeledInput(
+const LabeledInput = forwardRef<TextInputInstance, Props>(function LabeledInput(
   { label, error, required, leadingIcon, leadingPrefix, style, ...rest },
   ref,
 ) {

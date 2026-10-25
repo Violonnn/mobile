@@ -1,5 +1,12 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Keyboard, ActivityIndicator } from 'react-native';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  Keyboard,
+  ActivityIndicator,
+  type TextInputInstance,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { registerStyles as styles, registerColors } from '../../styles/screens/register.styles';
 import { fonts } from '../../styles/theme';
@@ -30,8 +37,8 @@ export default function PINStep({
   title = 'Almost there...',
   submitLabel = 'CREATE ACCOUNT',
 }: Props) {
-  const pinRef = useRef<TextInput>(null);
-  const confirmRef = useRef<TextInput>(null);
+  const pinRef = useRef<TextInputInstance>(null);
+  const confirmRef = useRef<TextInputInstance>(null);
 
   const [error, setError] = useState('');
 
