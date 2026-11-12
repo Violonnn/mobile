@@ -68,11 +68,11 @@ values (
   'Permission test comment.'
 );
 
-insert into public.hotlines (id, name, number, category, barangay_id)
+insert into public.hotlines (id, name, number, category, barangay_id, is_active)
 values
-  ('e4000000-0000-4000-8000-000000000001', 'Local hotline', '911001', 'rescue', 'e2000000-0000-4000-8000-000000000001'),
-  ('e4000000-0000-4000-8000-000000000002', 'Other hotline', '911002', 'rescue', 'e2000000-0000-4000-8000-000000000002'),
-  ('e4000000-0000-4000-8000-000000000003', 'National emergency', '911', 'national_emergency', null),
+  ('e4000000-0000-4000-8000-000000000001', 'Local hotline', '911001', 'rescue', 'e2000000-0000-4000-8000-000000000001', true),
+  ('e4000000-0000-4000-8000-000000000002', 'Other hotline', '911002', 'rescue', 'e2000000-0000-4000-8000-000000000002', true),
+  ('e4000000-0000-4000-8000-000000000003', 'National emergency', '911', 'national_emergency', null, true),
   ('e4000000-0000-4000-8000-000000000004', 'Archived municipal hotline', '911004', 'lgu', null, false);
 
 insert into public.facilities (
@@ -105,7 +105,8 @@ set local role authenticated;
 select set_config('request.jwt.claim.sub', 'e1000000-0000-4000-8000-000000000001', true);
 select is(public.has_active_profile(), true, 'active BDRRMO has an active profile');
 select is((select count(*) from public.reports), 1::bigint, 'BDRRMO only reads reports from its assigned barangay');
-select is((select count(*) from public.hotlines), 2::bigint, 'BDRRMO reads local and active municipality-wide hotlines only');
+-- Count only these fixtures; migrations also seed a national hotline.
+select is((select count(*) from public.hotlines where id::text like 'e4000000-%'), 2::bigint, 'BDRRMO reads local and active municipality-wide hotlines only');
 select is((select count(*) from public.facilities), 2::bigint, 'BDRRMO reads local and active municipality-wide facilities only');
 select is((select count(*) from public.evacuation_centers), 1::bigint, 'BDRRMO only reads evacuation centers in its assigned barangay');
 select is((select count(*) from public.announcements), 2::bigint, 'BDRRMO sees municipal and assigned-barangay announcements only');
@@ -121,26 +122,26 @@ select is(
   ],
   'The BDRRMO local pin appears below the municipal pin'
 );
+-- PostgreSQL requires data-changing CTEs at the statement's top level.
+with changed as (
+  update public.announcements
+     set is_pinned = false
+   where id = 'e5000000-0000-4000-8000-000000000002'
+   returning id
+)
 select is(
-  (
-    with changed as (
-      update public.announcements
-         set is_pinned = false
-       where id = 'e5000000-0000-4000-8000-000000000002'
-       returning id
-    )
-    select count(*) from changed
-  ),
+  (select count(*) from changed),
   1::bigint,
   'BDRRMO can change the pin on its assigned-barangay announcement'
 );
+with changed as (
+  update public.hotlines
+     set name = 'Cross-barangay edit'
+   where id = 'e4000000-0000-4000-8000-000000000002'
+   returning id
+)
 select is(
-  (with changed as (
-    update public.hotlines
-       set name = 'Cross-barangay edit'
-     where id = 'e4000000-0000-4000-8000-000000000002'
-     returning id
-   ) select count(*) from changed),
+  (select count(*) from changed),
   0::bigint,
   'BDRRMO cannot mutate a different barangay hotline'
 );
@@ -154,16 +155,14 @@ select throws_ok(
   'BDRRMO may only change status on evacuation centers.',
   'BDRRMO cannot edit evacuation-center metadata'
 );
+with changed as (
+  update public.hotlines
+     set is_active = false
+   where id = 'e4000000-0000-4000-8000-000000000003'
+   returning id
+)
 select is(
-  (
-    with changed as (
-      update public.hotlines
-         set is_active = false
-       where id = 'e4000000-0000-4000-8000-000000000003'
-       returning id
-    )
-    select count(*) from changed
-  ),
+  (select count(*) from changed),
   0::bigint,
   'BDRRMO cannot archive the national emergency hotline'
 );
@@ -226,20 +225,20 @@ select lives_ok(
   $$select public.transition_report_status('e3000000-0000-4000-8000-000000000001', 'escalated', 'Needs municipal support')$$,
   'BDRRMO can escalate a locally verified report'
 );
-select is((select count(*) from public.reports where id = 'e3000000-0000-4000-8000-000000000001'), 0::bigint, 'BDRRMO cannot select an escalated report');
-select is((select count(*) from public.reports_map where id = 'e3000000-0000-4000-8000-000000000001'), 0::bigint, 'BDRRMO map projection hides an escalated report');
-select is((select count(*) from public.report_media where report_id = 'e3000000-0000-4000-8000-000000000001'), 0::bigint, 'BDRRMO cannot read escalated report media');
-select is((select count(*) from public.report_status_history where report_id = 'e3000000-0000-4000-8000-000000000001'), 0::bigint, 'BDRRMO cannot read escalated report history');
-select is((select count(*) from public.comments where report_id = 'e3000000-0000-4000-8000-000000000001'), 0::bigint, 'BDRRMO cannot read escalated report comments');
-select is(public.can_read_report_id('e3000000-0000-4000-8000-000000000001'), false, 'copied escalated report ids are denied to BDRRMO');
-select is(public.can_moderate_report_comment('e3000000-0000-4000-8000-000000000001'), false, 'BDRRMO cannot moderate comments after escalation');
-select is((select count(*) from public.get_report_location_verification('e3000000-0000-4000-8000-000000000001')), 0::bigint, 'BDRRMO cannot read location verification after escalation');
+select is((select count(*) from public.reports where id = 'e3000000-0000-4000-8000-000000000001'), 1::bigint, 'BDRRMO retains a report while transfer acceptance is pending');
+select is((select count(*) from public.reports_map where id = 'e3000000-0000-4000-8000-000000000001'), 1::bigint, 'BDRRMO map retains a pending transfer');
+-- This fixture was authored by this officer, so the reporter exception applies.
+-- report_access_privacy.sql separately denies escalated evidence to non-authors.
+select is((select count(*) from public.report_media where report_id = 'e3000000-0000-4000-8000-000000000001'), 1::bigint, 'report author retains own evidence after escalation');
+select ok((select count(*) from public.report_status_history where report_id = 'e3000000-0000-4000-8000-000000000001') > 0, 'BDRRMO retains scoped transfer history');
+select is((select count(*) from public.comments where report_id = 'e3000000-0000-4000-8000-000000000001'), 1::bigint, 'BDRRMO retains scoped comments while awaiting acceptance');
+select is(public.can_read_report_id('e3000000-0000-4000-8000-000000000001'), true, 'BDRRMO retains pending-transfer id access');
+select is(public.can_moderate_report_comment('e3000000-0000-4000-8000-000000000001'), true, 'BDRRMO remains responsible for comments while awaiting acceptance');
+select is((select count(*) from public.get_report_location_verification('e3000000-0000-4000-8000-000000000001')), 1::bigint, 'BDRRMO retains scoped location verification');
 set local role service_role;
-select throws_ok(
+select lives_ok(
   $$select public.correct_report_incident_location('e1000000-0000-4000-8000-000000000001', 'e3000000-0000-4000-8000-000000000001', 10.25, 123.80, 'Stale BDRRMO edit', 'e2000000-0000-4000-8000-000000000001', 'Attempt after handoff')$$,
-  '42501',
-  'This report has already been handed off to MDRRMO.',
-  'trusted BDRRMO mutations are rejected after escalation'
+  'lead BDRRMO may correct location before municipal acceptance'
 );
 set local role authenticated;
 select set_config('request.jwt.claim.sub', 'e1000000-0000-4000-8000-000000000001', true);
@@ -257,6 +256,8 @@ select throws_ok(
 );
 
 -- Private evidence buckets enforce the same outer limits as trusted functions.
+-- Inspect server configuration as the test runner; clients cannot list buckets.
+reset role;
 select is(
   (select file_size_limit from storage.buckets where id = 'report-media'),
   20971520::bigint,
@@ -279,7 +280,6 @@ select is(
 );
 
 -- Report creation must commit feed-ready media metadata together with the report.
-reset role;
 select lives_ok(
   $$select public.create_report_with_media(
     'e1000000-0000-4000-8000-000000000007',

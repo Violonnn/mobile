@@ -158,6 +158,52 @@ const { error } = await supabase.from('profiles').insert({
 
 ---
 
+## Report privacy after Phase 0
+
+The three `20261030` migrations restrict internal report history to scoped
+officials, evidence rows and all storage variants to the active reporter or
+scoped officials, and unverified reports (including comments and upvotes) to
+their reporter or scoped officials. The independent access matrix is in
+`supabase/tests/report_access_privacy.sql`.
+
+`report_feed_activity` intentionally uses owner rights so residents retain the
+existing feed-ordering timestamps without access to history notes. Its explicit
+`can_read_report_id` check limits rows, and its only columns are the report id
+and three timestamps. The Security Advisor definer-view warning is expected.
+
+Remaining exposures, scheduled in `docs/report-response-flow-plan.md`:
+
+The Phase 3 migration `20261102000200` additionally keeps `closed`
+reports private to their reporter and scoped officials. Rejecting a previously
+hidden pending report therefore cannot expose its content to other residents.
+Phase 3 retains the existing verified/escalated/resolved resident read behavior
+until T26. The three Phase 3 migrations are deployed to hosted Supabase for
+owner-authorized Expo Go testing. Thirteen hosted permission/catalog checks
+pass, including this privacy guard and operational-table RLS. No test reports
+or invented actions were added; version enforcement stays off.
+
+- **Until T26:** other residents can still read verified, escalated, and resolved
+  report titles, descriptions, exact incident pins, reporter names, comments,
+  and upvotes. They cannot read the evidence rows or sign original, display, or
+  thumbnail files. T26 replaces source-report access with limited public incidents.
+- **Until T31:** the Mayor retains full report detail, internal history, the
+  location-verification RPC, and raw evidence for existing screens. Reporter
+  contact preview/reveal and raw phone columns remain denied.
+
+Storage policy changes prevent new unauthorized signed URLs. Previously issued
+URLs remain usable until their expiry, and previously downloaded evidence may
+remain on a device; this migration cannot recall those copies.
+
+Local validation on 30 October 2026: every migration applied to a fresh local
+Supabase database, and `node_modules/.bin/supabase.cmd test db` passed both
+database suites (252 assertions, including 200 report privacy assertions).
+Hosted deployment on 30 October 2026: all three Phase 0 migrations were applied
+to **DisasterLink For Minglanilla** (`wkblsbtypaxvdgvkiopc`), alongside the already
+pending Mayor watchlist ambiguity repair. No migrations remain pending, and ten
+read-only hosted catalog checks confirm the installed privacy rules. Production
+test fixtures were not inserted. Expo Go device acceptance remains pending:
+verify the Phase 0 scenarios with reporter, other-resident, and official accounts.
+
 ## Follow-ups (not yet implemented)
 
 - **Weak PIN blocklist.** `isValidPin` (`supabase/functions/_shared/validation.ts`)

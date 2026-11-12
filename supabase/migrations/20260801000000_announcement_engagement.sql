@@ -5,8 +5,10 @@ alter table public.announcements
   add column if not exists upvote_count integer not null default 0,
   add column if not exists comment_count integer not null default 0;
 
--- Postgres expands a.* at view-create time, so recreate after adding columns.
-create or replace view public.announcements_ranked
+-- New a.* columns would shift author_rank, which CREATE OR REPLACE rejects.
+-- Rebuild the view, matching the following projection-repair migration.
+drop view if exists public.announcements_ranked;
+create view public.announcements_ranked
 with (security_invoker = true) as
 select
   a.*,
