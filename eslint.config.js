@@ -7,7 +7,7 @@ module.exports = defineConfig([
   expoConfig,
   {
     // Supabase Edge Functions use their own Deno configuration and import map.
-    ignores: ['dist/*', 'backups/*', 'supabase/functions/**'],
+    ignores: ['dist/*', 'backups/*', 'tmp/**', 'supabase/functions/**'],
   },
   {
     files: ['scripts/**/*.js'],

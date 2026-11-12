@@ -3,6 +3,10 @@
 # dependencies
 node_modules/
 
+# Local Supabase runtime state and generated development credentials
+/supabase/.branches/
+/supabase/.temp/
+
 # Expo
 .expo/
 dist/
@@ -29,6 +33,9 @@ yarn-error.*
 
 # Local recovery snapshots created before portal stabilization work.
 /backups/
+
+# Temporary local scripts, logs, and review snapshots
+/tmp/
 
 # macOS
 .DS_Store
