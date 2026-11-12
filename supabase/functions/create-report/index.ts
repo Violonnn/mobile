@@ -6,12 +6,7 @@ import {
   REPORT_WINDOW_MINUTES,
 } from "../_shared/report-rate-limit.ts";
 import { rejectExtraKeys, trimText } from "../_shared/validation.ts";
-
-/** Rough Minglanilla / metro Cebu bounding box for GPS sanity checks. */
-const LAT_MIN = 10.15;
-const LAT_MAX = 10.35;
-const LNG_MIN = 123.70;
-const LNG_MAX = 123.90;
+import { intakeJurisdiction, isInsideReportCoverage } from "../_shared/report-coverage.ts";
 
 const MAX_TITLE = 120;
 const MAX_DESCRIPTION = 2000;
@@ -48,6 +43,9 @@ type CreateReportPayload = {
   addressText?: string;
   /** Resident-selected barangay; optional for legacy offline queue rows. */
   barangayId?: string;
+  showReporterName?: boolean;
+  showReporterAvatar?: boolean;
+  allowExactLocation?: boolean;
   media?: MediaItem[];
 };
 
@@ -324,6 +322,9 @@ Deno.serve(async (req) => {
       "gpsAccuracyMeters",
       "addressText",
       "barangayId",
+      "showReporterName",
+      "showReporterAvatar",
+      "allowExactLocation",
       "media",
     ],
   );
@@ -351,6 +352,15 @@ Deno.serve(async (req) => {
     ? null
     : Number(rawPayload.gpsAccuracyMeters);
   const reportId = trimText(rawPayload.reportId);
+  const publicationPreferences = {
+    show_reporter_name: rawPayload.showReporterName === true,
+    show_reporter_avatar: rawPayload.showReporterAvatar === true,
+    allow_exact_location: rawPayload.allowExactLocation === true,
+  };
+  if ([rawPayload.showReporterName, rawPayload.showReporterAvatar, rawPayload.allowExactLocation]
+    .some((value) => value !== undefined && typeof value !== "boolean")) {
+    return jsonResponse({ error: "Invalid publication preferences." }, 400);
+  }
   const media = Array.isArray(rawPayload.media) ? rawPayload.media : [];
 
   if (!title || title.length > MAX_TITLE) {
@@ -381,25 +391,19 @@ Deno.serve(async (req) => {
   if (barangayIdRaw && !isUuid(barangayIdRaw)) {
     return jsonResponse({ error: "Invalid barangay id." }, 400);
   }
-  if (
-    !Number.isFinite(latitude) ||
-    !Number.isFinite(longitude) ||
-    latitude < LAT_MIN ||
-    latitude > LAT_MAX ||
-    longitude < LNG_MIN ||
-    longitude > LNG_MAX
-  ) {
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+    return jsonResponse({ error: "Valid incident coordinates are required." }, 400);
+  }
+  if (!isInsideReportCoverage(latitude, longitude)) {
     return jsonResponse({
-      error: "Location must be inside Minglanilla / nearby Cebu.",
-    }, 400);
+      code: "outside_coverage",
+      error: "This location appears to be outside DisasterLink's coverage area. It was not sent to any office. Call 911 for urgent danger, or contact MDRRMO if you believe this is wrong.",
+    }, 422);
   }
   if (
     !Number.isFinite(deviceLatitude) ||
     !Number.isFinite(deviceLongitude) ||
-    deviceLatitude < LAT_MIN ||
-    deviceLatitude > LAT_MAX ||
-    deviceLongitude < LNG_MIN ||
-    deviceLongitude > LNG_MAX
+    !isInsideReportCoverage(deviceLatitude, deviceLongitude)
   ) {
     return jsonResponse({
       error:
@@ -485,6 +489,24 @@ Deno.serve(async (req) => {
     }, 403);
   }
 
+  if (reportId) {
+    const { data: existingReport, error: existingReportError } = await adminClient
+      .from("reports")
+      .select("reporter_id")
+      .eq("id", reportId)
+      .maybeSingle();
+    if (existingReportError) {
+      console.error("create-report retry lookup:", existingReportError.message);
+      return jsonResponse({ error: GENERIC_SERVER_ERROR }, 500);
+    }
+    if (existingReport) {
+      if (existingReport.reporter_id !== reporterId) {
+        return jsonResponse({ error: "Report id is already in use." }, 400);
+      }
+      return jsonResponse({ reportId }, 200);
+    }
+  }
+
   const limit = await checkReportCreateAllowed(adminClient, reporterId);
   if (!limit.ok) {
     return jsonResponse({
@@ -511,8 +533,23 @@ Deno.serve(async (req) => {
     height: item.height == null ? null : Number(item.height),
   }));
 
+  const routingResult = await adminClient.rpc("get_report_intake_routing", {
+    p_latitude: latitude, p_longitude: longitude, p_barangay_id: validatedBarangayId,
+  });
+  if (routingResult.error) {
+    console.error("create-report coverage lookup:", routingResult.error.message);
+    return jsonResponse({ error: GENERIC_SERVER_ERROR }, 500);
+  }
+  const routing = routingResult.data?.[0];
+  const jurisdictionStatus = intakeJurisdiction({
+    nearestDistanceMeters: routing?.nearest_distance_meters ?? null,
+    selectedDistanceMeters: routing?.selected_distance_meters ?? null,
+    nearestBarangayId: routing?.nearest_barangay_id ?? null,
+    selectedBarangayId: validatedBarangayId,
+  });
+
   const { data: createdId, error: rpcError } = await adminClient.rpc(
-    "create_report_with_media",
+    "create_report_with_publication_preferences",
     {
       p_reporter_id: reporterId,
       p_report_id: reportId || null,
@@ -531,6 +568,10 @@ Deno.serve(async (req) => {
       p_media: mediaJson,
       // Pass the validated barangay id; null keeps the existing centroid fallback.
       p_barangay_id: validatedBarangayId,
+      p_jurisdiction_status: jurisdictionStatus,
+      p_show_reporter_name: publicationPreferences.show_reporter_name,
+      p_show_reporter_avatar: publicationPreferences.show_reporter_avatar,
+      p_allow_exact_location: publicationPreferences.allow_exact_location,
     },
   );
 

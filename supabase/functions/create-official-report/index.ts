@@ -1,11 +1,12 @@
 // supabase/functions/create-official-report/index.ts
-// Secure create path for active officers (BDRRMO / MDRRMO) logging verified
-// field incidents. Mayor cannot create. Media is optional.
+// Active officers may record a hotline account or their own field observation.
+// The database confirms only field observations. Media is optional.
 
 import { createClient } from "@supabase/supabase-js";
 import { GENERIC_SERVER_ERROR, jsonResponse } from "../_shared/http.ts";
 import { rejectExtraKeys, trimText } from "../_shared/validation.ts";
 import { verifyPrivateMedia } from "../_shared/private-media.ts";
+import { processPublicPhotoDerivatives } from "../_shared/public-photo-processing.ts";
 
 /** Rough Minglanilla / metro Cebu bounding box for GPS sanity checks. */
 const LAT_MIN = 10.15;
@@ -18,6 +19,17 @@ const MAX_DESCRIPTION = 2000;
 const MAX_ADDRESS = 300;
 const MAX_INCIDENT_TYPE_OTHER = 80;
 const INCIDENT_TYPES = ["fire", "flood", "road_crash", "medical", "other"];
+
+function officialSourceTitleForType(incidentType: string): string {
+  switch (incidentType) {
+    case "fire": return "Fire";
+    case "flood": return "Flood";
+    case "road_crash": return "Road crash";
+    case "medical": return "Medical emergency";
+    case "other": return "Other incident";
+    default: return "Incident";
+  }
+}
 
 type MediaItem = {
   id?: string;
@@ -32,6 +44,8 @@ type MediaItem = {
 };
 
 type CreateOfficialReportPayload = {
+  intakeChannel?: string;
+  operationId?: string;
   reportId?: string;
   title?: string;
   description?: string;
@@ -42,6 +56,13 @@ type CreateOfficialReportPayload = {
   addressText?: string;
   barangayId?: string;
   media?: MediaItem[];
+  publicTitle?: string;
+  publicDescription?: string;
+  publishPublicPost?: boolean;
+  publicationAcknowledged?: boolean;
+  publicPhotoMediaIds?: string[];
+  markIncidentSensitive?: boolean;
+  sensitivityReason?: string;
 };
 
 type OfficerProfile = {
@@ -54,16 +75,6 @@ type OfficerProfile = {
 function isUuid(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
     .test(value);
-}
-
-function isMissingRpcError(message: string): boolean {
-  const lower = message.toLowerCase();
-  return (
-    lower.includes("could not find the function") ||
-    lower.includes("function public.create_official_report_with_media") ||
-    lower.includes("schema cache") ||
-    lower.includes("pgrst202")
-  );
 }
 
 /** Official media is optional; when present, enforce live-capture limits. */
@@ -164,79 +175,6 @@ function toMediaJson(media: MediaItem[]) {
   }));
 }
 
-async function insertOfficialReportDirect(
-  // deno-lint-ignore no-explicit-any
-  adminClient: any,
-  params: {
-    reporterId: string;
-    reportId: string | null;
-    title: string;
-    description: string;
-    incidentType: string;
-    incidentTypeOther: string;
-    latitude: number;
-    longitude: number;
-    addressText: string;
-    barangayId: string | null;
-    media: MediaItem[];
-  },
-): Promise<{ reportId: string | null; error: string | null }> {
-  const reportId = params.reportId || crypto.randomUUID();
-  const locationWkt = `SRID=4326;POINT(${params.longitude} ${params.latitude})`;
-
-  const { error: insertError } = await adminClient.from("reports").insert({
-    id: reportId,
-    reporter_id: params.reporterId,
-    title: params.title,
-    description: params.description,
-    incident_type: params.incidentType || null,
-    incident_type_other: params.incidentType === "other"
-      ? params.incidentTypeOther
-      : null,
-    location: locationWkt,
-    address_text: params.addressText || null,
-    barangay_id: params.barangayId,
-  });
-
-  if (insertError) {
-    console.error("create-official-report insert:", insertError.message);
-    return { reportId: null, error: insertError.message };
-  }
-
-  if (params.media.length > 0) {
-    const mediaRows = params.media.map((item, index) => ({
-      id: trimText(item.id),
-      report_id: reportId,
-      type: trimText(item.type),
-      storage_path: trimText(item.storagePath),
-      duration_seconds: item.type === "video"
-        ? Number(item.durationSeconds)
-        : null,
-      thumbnail_storage_path: trimText(item.thumbnailStoragePath) || null,
-      display_storage_path: trimText(item.displayStoragePath) || null,
-      file_size_bytes: item.fileSizeBytes == null
-        ? null
-        : Number(item.fileSizeBytes),
-      width: item.width == null ? null : Number(item.width),
-      height: item.height == null ? null : Number(item.height),
-      position: index,
-    }));
-
-    const { error: mediaError } = await adminClient
-      .from("report_media")
-      .insert(mediaRows);
-
-    if (mediaError) {
-      console.error("create-official-report media:", mediaError.message);
-      // Best-effort cleanup so a half-written report does not linger.
-      await adminClient.from("reports").delete().eq("id", reportId);
-      return { reportId: null, error: mediaError.message };
-    }
-  }
-
-  return { reportId, error: null };
-}
-
 Deno.serve(async (req) => {
   if (req.method !== "POST") {
     return jsonResponse({ error: "Method not allowed" }, 405);
@@ -278,7 +216,9 @@ Deno.serve(async (req) => {
   const extraFieldsError = rejectExtraKeys(
     rawPayload as Record<string, unknown>,
     [
+      "operationId",
       "reportId",
+      "intakeChannel",
       "title",
       "description",
       "incidentType",
@@ -288,6 +228,13 @@ Deno.serve(async (req) => {
       "addressText",
       "barangayId",
       "media",
+      "publicTitle",
+      "publicDescription",
+      "publishPublicPost",
+      "publicationAcknowledged",
+      "publicPhotoMediaIds",
+      "markIncidentSensitive",
+      "sensitivityReason",
     ],
   );
   if (extraFieldsError) {
@@ -295,6 +242,12 @@ Deno.serve(async (req) => {
   }
 
   const title = trimText(rawPayload.title);
+  const intakeChannel = rawPayload.intakeChannel === undefined
+    ? "official_field"
+    : trimText(rawPayload.intakeChannel);
+  if (intakeChannel !== "official_field" && intakeChannel !== "hotline_call") {
+    return jsonResponse({ error: "Select a valid official intake channel." }, 400);
+  }
   const description = trimText(rawPayload.description);
   const incidentType = trimText(rawPayload.incidentType);
   const incidentTypeOther = trimText(rawPayload.incidentTypeOther);
@@ -303,7 +256,26 @@ Deno.serve(async (req) => {
   const latitude = Number(rawPayload.latitude);
   const longitude = Number(rawPayload.longitude);
   const reportId = trimText(rawPayload.reportId);
+  const operationId = trimText(rawPayload.operationId);
   const media = Array.isArray(rawPayload.media) ? rawPayload.media : [];
+  const publicTitle = trimText(rawPayload.publicTitle);
+  const publicDescription = trimText(rawPayload.publicDescription);
+  const publishPublicPost = rawPayload.publishPublicPost === true;
+  const publicationAcknowledged = rawPayload.publicationAcknowledged === true;
+  const markIncidentSensitive = rawPayload.markIncidentSensitive === true;
+  const sensitivityReason = trimText(rawPayload.sensitivityReason);
+  const publicPhotoMediaIds = Array.isArray(rawPayload.publicPhotoMediaIds)
+    ? rawPayload.publicPhotoMediaIds.map((value) => trimText(value))
+    : [];
+  const usesPublicationFlow = rawPayload.operationId !== undefined ||
+    rawPayload.publicationAcknowledged !== undefined || rawPayload.publishPublicPost !== undefined ||
+    rawPayload.publicPhotoMediaIds !== undefined || rawPayload.markIncidentSensitive !== undefined;
+  // Field observations with no typed title use the same category label as the
+  // public projection. The derived title is stored on the source, so retries
+  // hash the same value and the publication still mirrors its source exactly.
+  const sourceTitle = usesPublicationFlow && intakeChannel === "official_field" && !title
+    ? officialSourceTitleForType(incidentType)
+    : title;
 
   // Title is optional for officials; description and GPS remain required.
   if (title.length > MAX_TITLE) {
@@ -332,6 +304,36 @@ Deno.serve(async (req) => {
   }
   if (reportId && !isUuid(reportId)) {
     return jsonResponse({ error: "Invalid report id." }, 400);
+  }
+  if (usesPublicationFlow && (!isUuid(reportId) || !isUuid(operationId))) {
+    return jsonResponse({ error: "Keep a valid report and operation id for safe retries." }, 400);
+  }
+  if (rawPayload.publicPhotoMediaIds !== undefined &&
+    (!Array.isArray(rawPayload.publicPhotoMediaIds) || publicPhotoMediaIds.some((id) => !isUuid(id)))) {
+    return jsonResponse({ error: "Select valid report photos for publication." }, 400);
+  }
+  if (rawPayload.publishPublicPost !== undefined && typeof rawPayload.publishPublicPost !== "boolean") {
+    return jsonResponse({ error: "Choose whether to publish the screened post." }, 400);
+  }
+  if (rawPayload.markIncidentSensitive !== undefined && typeof rawPayload.markIncidentSensitive !== "boolean") {
+    return jsonResponse({ error: "Choose whether the incident is sensitive." }, 400);
+  }
+  if (usesPublicationFlow && intakeChannel === "official_field" &&
+    ((!publishPublicPost && !markIncidentSensitive) || (publishPublicPost && !publicationAcknowledged))) {
+    return jsonResponse({ error: "Publish the screened field post or mark it sensitive for safety." }, 400);
+  }
+  if (publishPublicPost && intakeChannel !== "official_field") {
+    return jsonResponse({ error: "Only on-site official reports can publish from intake." }, 400);
+  }
+  if (publicTitle.length > MAX_TITLE || publicDescription.length > MAX_DESCRIPTION) {
+    return jsonResponse({ error: "Public title and description must fit the source report limits." }, 400);
+  }
+  if (markIncidentSensitive && (!sensitivityReason || sensitivityReason.length > 280)) {
+    return jsonResponse({ error: "Give a short reason for marking this incident sensitive." }, 400);
+  }
+  if ((publishPublicPost && markIncidentSensitive) || (markIncidentSensitive && publicPhotoMediaIds.length > 0) ||
+    (!publishPublicPost && publicPhotoMediaIds.length > 0)) {
+    return jsonResponse({ error: "Sensitive or private reports cannot include public photos." }, 400);
   }
   if (barangayIdRaw && !isUuid(barangayIdRaw)) {
     return jsonResponse({ error: "Invalid barangay id." }, 400);
@@ -398,7 +400,7 @@ Deno.serve(async (req) => {
   if (officer.role !== "officer" || officer.status !== "active") {
     return jsonResponse({
       error:
-        "Only active BDRRMO or MDRRMO officers can log verified incidents.",
+        "Only active BDRRMO or MDRRMO officers can log incidents.",
     }, 403);
   }
 
@@ -446,11 +448,74 @@ Deno.serve(async (req) => {
 
   const mediaJson = toMediaJson(media);
 
-  // Prefer the migration RPC when present; otherwise insert with service role.
+  if (usesPublicationFlow) {
+    if (new Set(publicPhotoMediaIds).size !== publicPhotoMediaIds.length) {
+      return jsonResponse({ error: "Each public photo can be selected only once." }, 400);
+    }
+    const selectedPhotos = publicPhotoMediaIds.map((mediaId) => {
+      const match = media.find((item) => trimText(item.id) === mediaId && trimText(item.type) === "photo");
+      return match ? { mediaId, item: match } : null;
+    });
+    if (selectedPhotos.some((selection) => selection === null)) {
+      return jsonResponse({ error: "A selected photo is no longer attached to this report." }, 400);
+    }
+
+    const photoProofs = [];
+    for (const selection of selectedPhotos) {
+      if (!selection) continue;
+      const { mediaId, item } = selection;
+      const processed = await processPublicPhotoDerivatives(adminClient, {
+        reporterId,
+        reportId,
+        mediaId,
+        sourceStoragePath: trimText(item.storagePath),
+        displaySourcePath: trimText(item.displayStoragePath),
+        thumbnailSourcePath: trimText(item.thumbnailStoragePath),
+      });
+      if (!processed.processed) {
+        return jsonResponse({ error: processed.error ?? "Could not prepare this photo for publication." }, 400);
+      }
+      photoProofs.push({ mediaId, ...processed.processed });
+    }
+
+    const { data: result, error: publicationError } = await adminClient.rpc(
+      "create_official_report_with_publication",
+      {
+        p_operation_id: operationId,
+        p_reporter_id: reporterId,
+        p_report_id: reportId,
+        p_title: sourceTitle,
+        p_description: description,
+        p_latitude: latitude,
+        p_longitude: longitude,
+        p_address_text: addressText || null,
+        p_media: mediaJson,
+        p_barangay_id: validatedBarangayId,
+        p_incident_type: incidentType || null,
+        p_incident_type_other: incidentType === "other" ? incidentTypeOther : null,
+        p_intake_channel: intakeChannel,
+        p_public_title: publishPublicPost && publicTitle ? publicTitle : null,
+        p_public_description: publishPublicPost && publicDescription ? publicDescription : null,
+        p_publish: publishPublicPost,
+        p_publication_acknowledged: publicationAcknowledged,
+        p_photo_proofs: photoProofs,
+        p_mark_incident_sensitive: markIncidentSensitive,
+        p_sensitivity_reason: markIncidentSensitive ? sensitivityReason : null,
+      },
+    );
+    if (!publicationError && result && typeof result === "object") {
+      return jsonResponse(result as Record<string, unknown>, 200);
+    }
+    console.error("create-official-report publication rpc:", publicationError?.message ?? "No result");
+    return jsonResponse({ error: "Could not save the official report. Please try again." }, 400);
+  }
+
+  // Older clients omit the channel and retain the field-observation default.
   const { data: createdId, error: rpcError } = await adminClient.rpc(
     "create_official_report_with_media",
     {
       p_reporter_id: reporterId,
+      p_intake_channel: intakeChannel,
       p_report_id: reportId || null,
       p_title: title,
       p_description: description,
@@ -470,36 +535,8 @@ Deno.serve(async (req) => {
     return jsonResponse({ reportId: createdId }, 200);
   }
 
-  if (!isMissingRpcError(rpcError.message)) {
-    console.error("create-official-report rpc:", rpcError.message);
-    const hint = rpcError.message.includes("barangay") ||
-        rpcError.message.includes("media") ||
-        rpcError.message.includes("photo") ||
-        rpcError.message.includes("video")
-      ? rpcError.message
-      : "Could not save the official report.";
-    return jsonResponse({ error: hint }, 400);
-  }
-
-  const direct = await insertOfficialReportDirect(adminClient, {
-    reporterId,
-    reportId: reportId || null,
-    title,
-    description,
-    incidentType,
-    incidentTypeOther,
-    latitude,
-    longitude,
-    addressText,
-    barangayId: validatedBarangayId,
-    media,
-  });
-
-  if (direct.error || !direct.reportId) {
-    return jsonResponse({
-      error: direct.error || "Could not save the official report.",
-    }, 400);
-  }
-
-  return jsonResponse({ reportId: direct.reportId }, 200);
+  // Keep report, incident, and media creation atomic; a missing migration must
+  // never fall back to a differently classified or half-written report.
+  console.error("create-official-report rpc:", rpcError.message);
+  return jsonResponse({ error: "Could not save the official report. Please try again." }, 400);
 });
