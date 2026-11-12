@@ -2,17 +2,19 @@
   "expo": {
     "name": "DisasterLink",
     "slug": "DisasterLink",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/images/iconDL.png",
     "scheme": "disasterlink",
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.yourcompany.disasterlink"
+      "bundleIdentifier": "com.yourcompany.disasterlink",
+      "buildNumber": "2"
     },
     "android": {
       "package": "com.yourcompany.disasterlink",
+      "versionCode": 2,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/iconDL.png"
