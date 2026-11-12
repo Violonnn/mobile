@@ -5,14 +5,31 @@ on:
     branches:
       - "**"
   pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A newer commit replaces checks for the same pull request or branch.
+concurrency:
+  group: project-health-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  CI: "true"
+  EXPO_NO_DOTENV: "1"
 
 jobs:
   clean-install:
+    name: Code checks
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -24,4 +41,106 @@ jobs:
         run: npm ci
 
       - name: Check Expo dependency versions
-        run: npx expo install --check
+        run: npx --no-install expo install --check
+
+      - name: Set up Deno for Edge Function linting
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.8.3
+
+      - name: Run unit tests
+        run: npm run test:unit
+
+      - name: Check TypeScript
+        run: npm run typecheck
+
+      - name: Lint application and Edge Functions
+        run: npm run lint
+
+  database:
+    name: Database checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install from lockfile
+        run: npm ci
+
+      # The runner starts with no database volumes; startup applies all migrations.
+      - name: Create disposable local database from migrations
+        run: npx --no-install supabase db start
+
+      - name: Check public-schema SQL for errors
+        run: npx --no-install supabase db lint --local --schema public --level error --fail-on error
+
+      - name: Run database and RLS tests
+        run: npm run test:rls
+
+      - name: Stop disposable local database
+        if: always()
+        run: npx --no-install supabase stop --no-backup
+
+  bundles:
+    name: Bundle (${{ matrix.platform }})
+    needs: clean-install
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [android, ios, web]
+    env:
+      NODE_OPTIONS: --max-old-space-size=4096
+      # These are deliberately unusable placeholders, not backend credentials.
+      EXPO_PUBLIC_SUPABASE_URL: https://ci-preview.invalid
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: ci-public-placeholder
+      EXPO_PUBLIC_DEMO_AUTH_MODE: "false"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install from lockfile
+        run: npm ci
+
+      - name: Export production JavaScript bundle
+        run: npx --no-install expo export --platform ${{ matrix.platform }} --output-dir dist/ci-${{ matrix.platform }}
+
+  ci:
+    name: CI passed
+    if: always()
+    needs: [clean-install, database, bundles]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      # Keep one stable required status even when the bundle matrix changes.
+      - name: Require every check to succeed
+        env:
+          CODE_RESULT: ${{ needs.clean-install.result }}
+          DATABASE_RESULT: ${{ needs.database.result }}
+          BUNDLES_RESULT: ${{ needs.bundles.result }}
+        run: |
+          if [[ "$CODE_RESULT" != "success" || "$DATABASE_RESULT" != "success" || "$BUNDLES_RESULT" != "success" ]]; then
+            echo "CI failed: code=$CODE_RESULT database=$DATABASE_RESULT bundles=$BUNDLES_RESULT"
+            exit 1
+          fi
+          echo "All code, database, and bundle checks passed."
