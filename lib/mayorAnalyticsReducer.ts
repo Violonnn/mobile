@@ -59,7 +59,7 @@ export const MAYOR_STATUSES: ReportStatus[] = [
 ];
 
 export function emptyMayorStatusCounts(): MayorStatusCounts {
-  return { unverified: 0, verified: 0, escalated: 0, resolved: 0 };
+  return { unverified: 0, verified: 0, escalated: 0, resolved: 0, closed: 0 };
 }
 
 function asReportStatus(value: unknown): ReportStatus | null {

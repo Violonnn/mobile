@@ -16,7 +16,9 @@ import {
   formatReportLocation,
   formatReporterName,
   type MapReportMarker,
+  type ReportStatusPresentation,
 } from '../../lib/reports';
+import { publicDiscussionIncidentId } from '../../lib/reportLifecycle';
 import { formatPublishedAt } from '../../lib/formatTime';
 import {
   CommunityReportTags,
@@ -27,9 +29,11 @@ import {
 } from '../report/ReportDetailCard';
 import { ReporterAvatar } from '../report/ReporterAvatar';
 import CommentsSection from '../report/CommentsSection';
+import IncidentCategoryCard from '../report/IncidentCategoryCard';
 import { useReportEngagement } from '../report/ReportEngagementProvider';
 import { useKeyboardHeight } from '../../hooks/useKeyboardHeight';
 import { useReportDetail } from '../../hooks/useReportDetail';
+import ResidentReportProgress from '../report/ResidentReportProgress';
 import ResidentBottomSheet from '../ui/ResidentBottomSheet';
 import { ReportDetailSheetSkeleton } from '../ui/ResidentScreenSkeletons';
 import MapRelevantComments from './MapRelevantComments';
@@ -41,7 +45,13 @@ type Props = {
   /** Shared with the resident feed so an opened report is not fetched twice. */
   detailCacheScope?: string | null;
   commentMode?: 'interactive' | 'prioritizedReadOnly';
+  statusPresentation?: (report: MapReportMarker) => Pick<ReportStatusPresentation, 'label' | 'color' | 'backgroundColor'> | null;
   onOpenCommunityReport?: (reportId: string) => void;
+  /**
+   * Resident map: once a report belongs to a public incident, its discussion
+   * lives in Community. The map shows a read-only summary and links there.
+   */
+  onOpenCommunityIncident?: (incidentCaseId: string) => void;
 };
 
 const LIST_INITIAL_COUNT = 3;
@@ -49,10 +59,12 @@ const LIST_PAGE_SIZE = 5;
 
 function ShrunkReportCard({
   report,
+  statusPresentation,
   onPress,
   onCommentPress,
 }: {
   report: MapReportMarker;
+  statusPresentation?: Pick<ReportStatusPresentation, 'label' | 'color' | 'backgroundColor'>;
   onPress: () => void;
   onCommentPress: () => void;
 }) {
@@ -90,7 +102,7 @@ function ShrunkReportCard({
                 </Text>
               </View>
               <Text style={styles.listDate}>{formatPublishedAt(report.created_at)}</Text>
-              <CommunityReportTags report={report} />
+              <CommunityReportTags report={report} statusPresentation={statusPresentation} />
               <Text style={styles.listDescription}>
                 {report.description || 'No description provided.'}
               </Text>
@@ -123,7 +135,15 @@ function ShrunkReportCard({
               ) : null}
             </View>
           </View>
-        ) : null}
+        ) : (
+          <View style={styles.listCategoryPreview}>
+            <IncidentCategoryCard
+              incidentType={report.incidentType}
+              incidentTypeOther={report.incidentTypeOther}
+              compact
+            />
+          </View>
+        )}
       </View>
     </TouchableOpacity>
   );
@@ -135,7 +155,9 @@ export default function ReportMapDetailSheet({
   onClose,
   detailCacheScope,
   commentMode = 'interactive',
+  statusPresentation,
   onOpenCommunityReport,
+  onOpenCommunityIncident,
 }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showingAllMedia, setShowingAllMedia] = useState(false);
@@ -198,6 +220,14 @@ export default function ReportMapDetailSheet({
   // separate from showingAllMedia so the back button still only appears for a
   // manual expansion (3 or fewer attachments never reach this state anyway).
   const autoShowAllMedia = (detailReport?.media.length ?? 0) >= 4;
+  const communityIncidentId = detailReport && onOpenCommunityIncident
+    ? publicDiscussionIncidentId(detailReport.incidentCaseId, detailReport.lifecycle)
+    : null;
+  const ownerDiscussionNeedsConfirmation = Boolean(
+    detailReport &&
+      detailCacheScope === detailReport.reporter.id &&
+      !communityIncidentId,
+  );
   const visibleListReports = sorted.slice(0, listVisibleCount);
   const hasMoreListReports = listVisibleCount < sorted.length;
   // Match the feed: reserve the final layout while one opened report resolves
@@ -326,6 +356,7 @@ export default function ReportMapDetailSheet({
                 renderItem={({ item: report }) => (
                   <ShrunkReportCard
                     report={report}
+                    statusPresentation={statusPresentation?.(report) ?? undefined}
                     onPress={() => {
                       setShowingAllMedia(false);
                       setSelectedId(report.id);
@@ -384,9 +415,14 @@ export default function ReportMapDetailSheet({
                 <>
                   <ReportDetailContent
                     report={detailReport}
+                    statusPresentation={statusPresentation?.(detailReport) ?? undefined}
                     showingAllMedia={showingAllMedia || autoShowAllMedia}
                     onShowingAllMediaChange={setShowingAllMedia}
-                    onRequestComments={jumpToComments}
+                    onRequestComments={
+                      communityIncidentId
+                        ? () => onOpenCommunityIncident?.(communityIncidentId)
+                        : jumpToComments
+                    }
                     showCommunityTags
                   />
 
@@ -394,9 +430,25 @@ export default function ReportMapDetailSheet({
                     <Text style={styles.refreshError}>{refreshError}</Text>
                   ) : null}
 
+                  {detailCacheScope === detailReport.reporter.id && <ResidentReportProgress report={detailReport} refreshSignal={refreshVersion} />}
+
                   {/* Inline thread — mounted (and live) only while details are open. */}
                   {!detailReport.isPending ? (
-                    commentMode === 'prioritizedReadOnly' && onOpenCommunityReport ? (
+                    communityIncidentId ? (
+                      <MapRelevantComments
+                        key={communityIncidentId}
+                        incidentCaseId={communityIncidentId}
+                        refreshSignal={refreshVersion}
+                        onOpenCommunityReport={() => onOpenCommunityIncident?.(communityIncidentId)}
+                      />
+                    ) : ownerDiscussionNeedsConfirmation ? (
+                      <View style={styles.commentsUnavailable}>
+                        <Ionicons name="lock-closed-outline" size={18} color={colors.navigationActive} />
+                        <Text style={styles.commentsUnavailableText}>
+                          Discussion opens after an official confirms this report.
+                        </Text>
+                      </View>
+                    ) : commentMode === 'prioritizedReadOnly' && onOpenCommunityReport ? (
                       <MapRelevantComments
                         key={detailReport.id}
                         reportId={detailReport.id}
@@ -605,6 +657,25 @@ const styles = StyleSheet.create({
     height: 76,
     position: 'relative',
     flexShrink: 0,
+  },
+  listCategoryPreview: {
+    flexShrink: 1,
+    maxWidth: '35%',
+  },
+  commentsUnavailable: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    backgroundColor: colors.primaryLight,
+  },
+  commentsUnavailableText: {
+    flex: 1,
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.sm,
+    lineHeight: 20,
+    color: colors.textMuted,
   },
   listMediaThumb: {
     width: 64,

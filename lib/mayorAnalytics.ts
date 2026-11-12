@@ -304,6 +304,7 @@ export async function fetchMayorSituationStatusCounts(input: {
   );
 
   const counts: MayorStatusCounts = {
+    closed: 0,
     unverified: 0,
     verified: 0,
     escalated: 0,

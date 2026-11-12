@@ -25,6 +25,25 @@ export const INCIDENT_TYPE_OPTIONS: IncidentTypeOption[] = [
   { value: 'other', label: 'Other', icon: 'ellipsis-horizontal-circle' },
 ];
 
+export type IncidentTypeTone = {
+  color: string;
+  softColor: string;
+  icon: IncidentTypeOption['icon'];
+};
+
+/** Washed-out category colors shared by resident posts, tags and map markers. */
+const INCIDENT_TYPE_TONES: Record<IncidentType, IncidentTypeTone> = {
+  fire: { color: '#A64B3A', softColor: '#FCEEEA', icon: 'flame' },
+  flood: { color: '#3B6797', softColor: '#EAF1F9', icon: 'water' },
+  road_crash: { color: '#82601F', softColor: '#FBF3E2', icon: 'car' },
+  medical: { color: '#6E5499', softColor: '#F2EEF9', icon: 'medkit' },
+  other: { color: '#5A6679', softColor: '#EFF2F6', icon: 'ellipsis-horizontal-circle' },
+};
+
+export function incidentTypeTone(incidentType: IncidentType | string | null | undefined): IncidentTypeTone {
+  return isIncidentType(incidentType) ? INCIDENT_TYPE_TONES[incidentType] : INCIDENT_TYPE_TONES.other;
+}
+
 export function isIncidentType(value: unknown): value is IncidentType {
   return INCIDENT_TYPE_VALUES.includes(value as IncidentType);
 }

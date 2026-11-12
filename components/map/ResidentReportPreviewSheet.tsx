@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import {
   ScrollView,
   StyleSheet,
@@ -12,19 +12,22 @@ import { useAccessibilityLayout } from '../../hooks/useAccessibilityLayout';
 import { formatIncidentType } from '../../lib/incidentTypes';
 import {
   formatReportLocation,
-  getReportStatusPresentation,
+  getMapReportPresentation,
   type MapReportMarker,
 } from '../../lib/reports';
 import { colors, fonts, fontSizes, radius, spacing } from '../../styles/theme';
 import { CollageCellContent } from '../report/ReportDetailCard';
+import IncidentCategoryCard from '../report/IncidentCategoryCard';
 import ReportStatusTimeline, {
   residentReportStatusIconName,
 } from '../report/ReportStatusTimeline';
+import ResidentReportProgress from '../report/ResidentReportProgress';
 
 type ResidentReportPreviewContentProps = {
   report: MapReportMarker;
   onOpenFullReport: () => void;
   primaryActionLabel?: string;
+  showActivity?: boolean;
 };
 
 function formatReportCode(reportId: string): string {
@@ -43,19 +46,21 @@ function formatMapDateTime(isoDate: string): string {
   });
 }
 
-function ReportMediaStrip({ report }: { report: MapReportMarker }) {
+function ReportMediaStrip({ report, compactBanner }: { report: MapReportMarker; compactBanner: boolean }) {
   const visibleMedia = report.media.slice(0, 2);
   const hiddenCount = Math.max(0, report.media.length - 2);
 
   if (visibleMedia.length === 0) {
-    const emptyMediaLabel = report.mediaDetailLoaded
-      ? 'No attachments'
-      : 'Attachments load in the full report';
-
     return (
       <View style={styles.emptyMedia}>
-        <Ionicons name="image-outline" size={28} color={colors.textMuted} />
-        <Text style={styles.emptyMediaText}>{emptyMediaLabel}</Text>
+        <IncidentCategoryCard
+          incidentType={report.incidentType}
+          incidentTypeOther={report.incidentTypeOther}
+          compact={compactBanner}
+        />
+        {report.mediaError ? (
+          <Text style={styles.emptyMediaText}>Attachments temporarily unavailable</Text>
+        ) : null}
       </View>
     );
   }
@@ -88,12 +93,10 @@ export function ResidentReportPreviewContent({
   report,
   onOpenFullReport,
   primaryActionLabel = 'Open full report',
+  showActivity = false,
 }: ResidentReportPreviewContentProps) {
   const { isLargeText } = useAccessibilityLayout();
-  const status = useMemo(
-    () => getReportStatusPresentation(report.status),
-    [report.status],
-  );
+  const status = getMapReportPresentation(report);
 
   return (
     <>
@@ -123,7 +126,7 @@ export function ResidentReportPreviewContent({
           </View>
         </View>
 
-        <ReportMediaStrip report={report} />
+        <ReportMediaStrip report={report} compactBanner={showActivity} />
 
         <View style={[styles.metadataGrid, isLargeText && styles.metadataGridLargeText]}>
           <View style={[styles.metadataItem, isLargeText && styles.metadataItemLargeText]}>
@@ -144,33 +147,40 @@ export function ResidentReportPreviewContent({
           </View>
           <View style={[styles.metadataItem, isLargeText && styles.metadataItemLargeText]}>
             <Ionicons name="person-outline" size={18} color={colors.navigationActive} />
-            <Text style={styles.metadataText}>Community report</Text>
+            <Text style={styles.metadataText}>Private submission</Text>
           </View>
         </View>
 
-        <ReportStatusTimeline
-          status={report.status}
-          useStatusProgressColors
-          style={styles.timeline}
-        />
+        {showActivity ? (
+          <ResidentReportProgress report={report} />
+        ) : (
+          <>
+            <ReportStatusTimeline
+              lifecycle={report.lifecycle}
+              status={report.status}
+              useStatusProgressColors
+              style={styles.timeline}
+            />
 
-        <Text style={styles.updatedText}>
-          Status updates are synchronized across response teams
-        </Text>
-        <View style={styles.nextActionCard}>
-          <Text style={styles.nextActionLabel}>Next:</Text>
-          <Text style={styles.nextActionText}>{status.nextAction}</Text>
-        </View>
-        <View style={styles.infoRow}>
-          <Ionicons
-            name="information-circle-outline"
-            size={18}
-            color={colors.navigationActive}
-          />
-          <Text style={styles.infoText}>
-            Reports can be escalated to the Municipal DRRMO when barangay resources are insufficient.
-          </Text>
-        </View>
+            <Text style={styles.updatedText}>
+              Status updates are synchronized across response teams
+            </Text>
+            <View style={styles.nextActionCard}>
+              <Text style={styles.nextActionLabel}>Next:</Text>
+              <Text style={styles.nextActionText}>{status.nextAction}</Text>
+            </View>
+            <View style={styles.infoRow}>
+              <Ionicons
+                name="information-circle-outline"
+                size={18}
+                color={colors.navigationActive}
+              />
+              <Text style={styles.infoText}>
+                Your barangay remains responsible while a transfer is awaiting MDRRMO acceptance. Support requests keep the current lead office.
+              </Text>
+            </View>
+          </>
+        )}
       </ScrollView>
 
       <View style={styles.footer}>
@@ -259,13 +269,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   emptyMedia: {
-    height: 86,
     marginTop: spacing.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
     gap: spacing.xs,
-    borderRadius: 10,
-    backgroundColor: '#F0F2F5',
   },
   emptyMediaText: {
     fontFamily: fonts.regular,

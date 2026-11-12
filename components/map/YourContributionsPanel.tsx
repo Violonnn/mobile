@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
   type GestureResponderHandlers,
   ScrollView,
   Text,
@@ -11,10 +12,12 @@ import { Ionicons } from '@expo/vector-icons';
 import {
   formatReportLocation,
   getReportStatusPresentation,
+  getLifecyclePresentation,
   type MapReportMarker,
 } from '../../lib/reports';
 import { contributionStyles as styles } from '../../styles/components/yourContributions.styles';
 import { colors } from '../../styles/theme';
+import { useReportDetail } from '../../hooks/useReportDetail';
 import { CollageCellContent } from '../report/ReportDetailCard';
 import IncidentTypeBadge from '../report/IncidentTypeBadge';
 import { residentReportStatusIconName } from '../report/ReportStatusTimeline';
@@ -117,7 +120,7 @@ function contributionStatus(report: MapReportMarker): {
     };
   }
 
-  const presentation = getReportStatusPresentation(report.status);
+  const presentation = report.lifecycle ? getLifecyclePresentation(report.lifecycle) : getReportStatusPresentation(report.status);
   return {
     label: presentation.label,
     icon: residentReportStatusIconName(report.status),
@@ -153,6 +156,7 @@ export default function YourContributionsPanel({
   loading,
   error,
   bottomInset,
+  detailCacheScope,
   onReportPress,
   onShowReportOnMap,
   onRetry,
@@ -165,6 +169,7 @@ export default function YourContributionsPanel({
   loading: boolean;
   error: string | null;
   bottomInset: number;
+  detailCacheScope: string | null;
   onReportPress: () => void;
   onShowReportOnMap: (report: MapReportMarker) => void;
   onRetry: () => void;
@@ -176,6 +181,18 @@ export default function YourContributionsPanel({
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
   const resolvedCount = reports.filter((report) => report.status === 'resolved').length;
   const selectedReport = reports.find((report) => report.id === selectedReportId) ?? null;
+  const {
+    report: selectedReportDetail,
+    refreshError: detailError,
+    refreshing: detailRefreshing,
+    refresh: refreshSelectedReport,
+  } = useReportDetail(selectedReport, { cacheScope: detailCacheScope });
+  const loadingSelectedReportDetail = Boolean(
+    selectedReport &&
+    !selectedReport.isPending &&
+    !detailError &&
+    !selectedReportDetail?.mediaDetailLoaded,
+  );
   const contributionGroups = useMemo(
     () => groupContributionsByDate(reports, new Date()),
     [reports],
@@ -259,11 +276,32 @@ export default function YourContributionsPanel({
 
       {selectedReport ? (
         <View style={[styles.detailContent, { paddingBottom: bottomInset }]}>
-          <ResidentReportPreviewContent
-            report={selectedReport}
-            onOpenFullReport={() => onShowReportOnMap(selectedReport)}
-            primaryActionLabel="Show on map"
-          />
+          {selectedReport.isPending ? null : detailError ? (
+            <View style={styles.detailError}>
+              <Text accessibilityRole="alert" style={styles.stateText}>{detailError}</Text>
+              <TouchableOpacity
+                style={styles.retryButton}
+                onPress={() => void refreshSelectedReport()}
+                disabled={detailRefreshing}
+                accessibilityRole="button"
+              >
+                <Text style={styles.retryText}>{detailRefreshing ? 'Retrying…' : 'Retry report details'}</Text>
+              </TouchableOpacity>
+            </View>
+          ) : loadingSelectedReportDetail ? (
+            <View style={styles.detailLoading}>
+              <ActivityIndicator color={colors.primary} />
+              <Text style={styles.stateText}>Loading your report details…</Text>
+            </View>
+          ) : null}
+          {!loadingSelectedReportDetail ? (
+            <ResidentReportPreviewContent
+              report={selectedReportDetail ?? selectedReport}
+              onOpenFullReport={() => onShowReportOnMap(selectedReport)}
+              primaryActionLabel="Show on map"
+              showActivity
+            />
+          ) : null}
         </View>
       ) : (
       <ScrollView

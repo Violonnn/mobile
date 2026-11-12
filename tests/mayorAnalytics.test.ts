@@ -33,6 +33,7 @@ test('all-time aggregate reduction reconciles status and unassigned totals', () 
 
   assert.equal(snapshot.matchingTotal, 9);
   assert.deepEqual(snapshot.statusCounts, {
+    closed: 0,
     unverified: 4,
     verified: 1,
     escalated: 2,
@@ -50,6 +51,7 @@ test('barangay selection retains the full status context while matching total re
 
   assert.equal(snapshot.matchingTotal, 3);
   assert.deepEqual(snapshot.statusCounts, {
+    closed: 0,
     unverified: 3,
     verified: 1,
     escalated: 0,

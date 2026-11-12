@@ -15,28 +15,35 @@ import { colors, fonts, fontSizes, radius, spacing } from '../../styles/theme';
 import { ReporterAvatar } from '../report/ReporterAvatar';
 
 type Props = {
-  reportId: string;
+  /** Pass a resident report id, or an incident case id for public incident posts. */
+  reportId?: string;
+  incidentCaseId?: string;
   refreshSignal?: number;
   onOpenCommunityReport: () => void;
 };
 
-/** Compact, read-only discussion summary for a report opened from the map. */
+/**
+ * Compact, read-only discussion summary. Commenting happens only in Community,
+ * so the map never shows a second, competing thread.
+ */
 export default function MapRelevantComments({
   reportId,
+  incidentCaseId,
   refreshSignal = 0,
   onOpenCommunityReport,
 }: Props) {
   const { comments, loading, error, reload } = usePrioritizedReportComments(
-    reportId,
+    incidentCaseId ?? reportId ?? null,
     refreshSignal,
+    incidentCaseId ? 'incident' : 'report',
   );
 
   return (
     <View style={styles.section}>
       <View style={styles.headingRow}>
         <View style={styles.headingCopy}>
-          <Text style={styles.title}>Relevant comments</Text>
-          <Text style={styles.subtitle}>Official responses first, then the latest discussion</Text>
+          <Text style={styles.title}>Latest comments</Text>
+          <Text style={styles.subtitle}>Up to three highlights. Join the discussion in Community.</Text>
         </View>
         <View style={styles.readOnlyPill}>
           <Ionicons name="eye-outline" size={13} color={colors.navigationActive} />
@@ -94,7 +101,7 @@ export default function MapRelevantComments({
         onPress={onOpenCommunityReport}
         activeOpacity={0.84}
         accessibilityRole="button"
-        accessibilityLabel="Open this report in the Community screen"
+        accessibilityLabel="Open the full discussion in the Community screen"
       >
         <Ionicons name="chatbubbles-outline" size={18} color={colors.white} />
         <Text style={styles.communityButtonText}>View full discussion in Community</Text>

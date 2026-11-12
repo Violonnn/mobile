@@ -1,5 +1,5 @@
 // Interactive Leaflet map in a WebView (OSM tiles, Minglanilla).
-// Soft red report pins with clustering; blue facility + green evac markers.
+// Stage-colored incident pins with clustering; blue facility + green evacuation markers.
 // Layer filters live in React Native so report clustering stays unchanged.
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -9,6 +9,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -19,14 +20,16 @@ import {
 } from './CompatibleWebView';
 import { colors, fonts, fontSizes, radius, spacing } from '../../styles/theme';
 import {
-  getReportStatusPresentation,
+  getMapReportPresentation,
   type MapReportMarker,
 } from '../../lib/reports';
+import { PUBLIC_INCIDENT_STATUS_OPTIONS, publicIncidentTone, type PublicIncident, type PublicIncidentStatusFilter } from '../../lib/publicIncidents';
+import { MAP_RESOURCE_TONES } from '../../lib/mapResourceTones';
 
 const CENTER = { lat: 10.2447, lng: 123.7967 };
 const ZOOM = 14;
 // Bump this when embedded marker HTML changes so Fast Refresh rebuilds the WebView document.
-const MAP_HTML_VERSION = 'incident-glyphs-v2';
+const MAP_HTML_VERSION = 'public-incident-markers-v12';
 
 export type MapResourceMarker = {
   id: string;
@@ -74,7 +77,21 @@ export type MapViewportFrame = {
 };
 
 type Props = {
+  highlightedPublicIncidentId?: string;
+  publicIncidentFilters?: {
+    visible: boolean;
+    onVisibilityChange: (visible: boolean) => void;
+    status: PublicIncidentStatusFilter;
+    onStatusChange: (status: PublicIncidentStatusFilter) => void;
+    unlocatedCount: number;
+    onOpenUnlocated: () => void;
+  };
+  publicIncidents?: PublicIncident[];
+  /** groupIds lists every incident drawn at the same rounded public point. */
+  onPublicIncidentPress?: (incidentCaseId: string, groupIds: string[], reportId?: string) => void;
+  reportLayerLabel?: string;
   markers?: MapReportMarker[];
+  reportPresentation?: (report: MapReportMarker) => { label: string; color: string } | null;
   facilities?: MapResourceMarker[];
   evacuationCenters?: MapResourceMarker[];
   layerVisibility?: MapLayerVisibility;
@@ -111,9 +128,9 @@ type Props = {
   onReportDetailsRequest?: (reportId: string) => void;
   onResourceSelection?: (resource: MapResourceMarker) => void;
   focusTarget?: MapFocusTarget | null;
-  /** Selected resident report rendered above clustering with a pulsing warning marker. */
+  /** Selected resident report rendered above clustering with a pulsing status pin. */
   highlightedReportId?: string | null;
-  /** Replaces the highlighted triangle's warning glyph with a known incident-type glyph. */
+  /** @deprecated All report pins now use the shared status-colored incident triangle. */
   showHighlightedReportIncidentIcon?: boolean;
   /** Focused facility or evacuation center rendered with a matching pulse. */
   highlightedResourceId?: string | null;
@@ -165,6 +182,7 @@ function buildMapHtml(
   unblurredViewportBottom: number,
   unblurredViewportLeft: number,
   unblurredViewportRadius: number,
+  htmlVersion: string = MAP_HTML_VERSION,
 ): string {
   const isDark = tone === 'dark';
   const hasUnblurredViewport = unblurredViewportTop > 0;
@@ -177,7 +195,7 @@ function buildMapHtml(
 <html>
   <head>
     <meta charset="utf-8" />
-    <meta name="disasterlink-map-version" content="${MAP_HTML_VERSION}" />
+    <meta name="disasterlink-map-version" content="${htmlVersion}" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
@@ -199,27 +217,22 @@ function buildMapHtml(
       }
 
       .report-pin {
-        width: 32px;
-        height: 32px;
+        width: 44px;
+        height: 44px;
         display: flex;
         align-items: center;
         justify-content: center;
-        border-radius: 50%;
-        background: #C65B66;
-        border: 3px solid #FFFFFF;
-        box-shadow: 0 4px 12px rgba(106, 24, 36, 0.3);
       }
 
-      .report-pin-core {
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        background: #FFFFFF;
+      .report-pin svg {
+        width: 40px;
+        height: 40px;
+        filter: drop-shadow(0 4px 6px rgba(15, 32, 68, 0.3));
       }
 
       .report-pin-highlighted {
-        width: 58px;
-        height: 58px;
+        width: 50px;
+        height: 50px;
         position: relative;
         display: flex;
         align-items: center;
@@ -229,17 +242,17 @@ function buildMapHtml(
       .report-pin-highlighted svg {
         position: relative;
         z-index: 2;
-        width: 46px;
-        height: 46px;
-        filter: drop-shadow(0 5px 7px rgba(106, 24, 36, 0.38));
+        width: 44px;
+        height: 44px;
+        filter: drop-shadow(0 5px 7px rgba(15, 32, 68, 0.3));
       }
 
-      .report-highlight-pulse {
+      .report-pin-highlight-pulse,
+      .public-pin-highlight-pulse {
         position: absolute;
-        inset: 8px;
+        inset: 6px;
         z-index: 1;
         border-radius: 50%;
-        background: rgba(220, 38, 38, 0.42);
         pointer-events: none;
         animation: reportHighlightPulse 1.55s ease-out infinite;
       }
@@ -248,6 +261,15 @@ function buildMapHtml(
         0% { opacity: 0.74; transform: scale(0.72); }
         72% { opacity: 0.12; transform: scale(1.55); }
         100% { opacity: 0; transform: scale(1.9); }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .report-pin-highlight-pulse,
+        .public-pin-highlight-pulse,
+        .resource-highlight-pulse {
+          animation: none;
+          opacity: 0.16;
+        }
       }
 
       .resource-pin {
@@ -267,15 +289,15 @@ function buildMapHtml(
       }
 
       .resource-pin.facility {
-        background: #4B82B5;
+        background: ${MAP_RESOURCE_TONES.facility};
       }
 
       .resource-pin.evacuation {
-        background: #3F7B6C;
+        background: ${MAP_RESOURCE_TONES.evacuation};
       }
 
       .resource-pin.evacuation.priority {
-        box-shadow: 0 0 0 3px rgba(234, 179, 8, 0.55), 0 3px 10px rgba(28, 43, 75, 0.28);
+        box-shadow: 0 0 0 3px ${MAP_RESOURCE_TONES.priorityHalo}, 0 3px 10px rgba(28, 43, 75, 0.28);
       }
 
       .resource-pin-highlighted {
@@ -337,11 +359,43 @@ function buildMapHtml(
         background: #741F2A;
       }
 
-      @media (prefers-reduced-motion: reduce) {
-        .report-highlight-pulse {
-          animation: none;
-          opacity: 0.28;
-        }
+      .public-pin-wrap {
+        background: transparent;
+        border: 0;
+      }
+
+      .public-pin {
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .public-pin-triangle {
+        position: relative;
+        z-index: 2;
+        width: 40px;
+        height: 40px;
+        overflow: visible;
+        filter: drop-shadow(0 4px 6px rgba(15, 32, 68, 0.3));
+      }
+
+      .public-pin-triangle-highlighted {
+        width: 44px;
+        height: 44px;
+      }
+
+      .public-pin-stack {
+        position: absolute;
+        z-index: 3;
+        top: 0;
+        right: 0;
+        width: 13px;
+        height: 13px;
+        border: 2px solid #FFFFFF;
+        border-radius: 4px;
+        background: #0F2044;
+        box-shadow: -3px 3px 0 -1px #FFFFFF, -4px 4px 0 0 #0F2044;
       }
 
       .report-details-popup-button {
@@ -523,15 +577,7 @@ function buildMapHtml(
       }
       updateBaseLayer();
 
-      var reportPinIcon = L.divIcon({
-        className: 'report-pin-wrap',
-        html: '<div class="report-pin"><div class="report-pin-core"></div></div>',
-        iconSize: [32, 32],
-        iconAnchor: [16, 16],
-        popupAnchor: [0, -19]
-      });
-
-      function highlightedReportGlyph(incidentType) {
+      function incidentGlyph(incidentType) {
         if (incidentType === 'fire') {
           return '<g transform="translate(0 3)"><path d="M26 15c-1 5-8 7-8 13 0 5 3 8 8 8s8-3 8-8c0-4-2-7-5-10 0 4-1 6-3 8-2-2-3-5 0-11Zm0 18c-2 0-3-1-3-3s1-3 3-5c0 2 3 3 3 5s-1 3-3 3Z" fill="#FFFFFF" fill-rule="evenodd"/></g>';
         }
@@ -544,9 +590,29 @@ function buildMapHtml(
         if (incidentType === 'medical') {
           return '<g transform="translate(0 3)"><path d="M23 16h6v6h6v6h-6v6h-6v-6h-6v-6h6v-6Z" fill="#FFFFFF"/></g>';
         }
+        if (incidentType === 'other') {
+          return '<circle cx="19" cy="26" r="2.5" fill="#FFFFFF"/><circle cx="26" cy="26" r="2.5" fill="#FFFFFF"/><circle cx="33" cy="26" r="2.5" fill="#FFFFFF"/>';
+        }
 
-        // Legacy, custom, and missing incident types retain the warning glyph.
+        // Legacy and missing incident types retain the warning glyph.
         return '<path d="M26 16v13" stroke="#FFFFFF" stroke-width="4" stroke-linecap="round"/><circle cx="26" cy="35" r="2.4" fill="#FFFFFF"/>';
+      }
+
+      function reportPinHtml(statusColor, incidentType) {
+        return '<svg viewBox="0 0 52 48" aria-hidden="true">' +
+          '<path d="M26 3 49 44H3L26 3Z" fill="' + statusColor + '" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round"/>' +
+          incidentGlyph(incidentType) +
+        '</svg>';
+      }
+
+      function reportPinIcon(statusColor, incidentType) {
+        return L.divIcon({
+          className: 'report-pin-wrap',
+          html: '<div class="report-pin">' + reportPinHtml(statusColor, incidentType) + '</div>',
+          iconSize: [44, 44],
+          iconAnchor: [22, 22],
+          popupAnchor: [0, -24]
+        });
       }
 
       function highlightedReportPinIcon(statusColor, incidentType) {
@@ -554,24 +620,22 @@ function buildMapHtml(
           className: 'report-pin-wrap',
           html:
             '<div class="report-pin-highlighted">' +
-              '<span class="report-highlight-pulse" style="background:' + statusColor + '"></span>' +
-              '<svg viewBox="0 0 52 48" aria-hidden="true">' +
-                '<path d="M26 3 49 44H3L26 3Z" fill="' + statusColor + '" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round"/>' +
-                highlightedReportGlyph(incidentType) +
-              '</svg>' +
+              '<span class="report-pin-highlight-pulse" style="background:' + statusColor + '"></span>' +
+              reportPinHtml(statusColor, incidentType) +
             '</div>',
-          iconSize: [58, 58],
-          iconAnchor: [29, 29],
-          popupAnchor: [0, -31]
+          iconSize: [50, 50],
+          iconAnchor: [25, 25],
+          popupAnchor: [0, -28]
         });
       }
 
       function resourceIcon(kind, isPriority, highlighted) {
-        var extra = kind === 'evacuation' && isPriority ? ' priority' : '';
-        var markerColor = isPriority ? '#EAB308' : kind === 'facility' ? '#4B82B5' : '#3F7B6C';
+        var priorityEvacuation = kind === 'evacuation' && isPriority;
+        var extra = priorityEvacuation ? ' priority' : '';
+        var markerColor = priorityEvacuation ? '${MAP_RESOURCE_TONES.priority}' : kind === 'facility' ? '${MAP_RESOURCE_TONES.facility}' : '${MAP_RESOURCE_TONES.evacuation}';
         var icon = kind === 'facility'
           ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 6v12M6 12h12" stroke="#FFFFFF" stroke-width="2.7" stroke-linecap="round"/></svg>'
-          : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10h18v10H3zM2 10l5-5h10l5 5H2Z" fill="#FFFFFF"/><path d="M8 20v-6h8v6" fill="#3F7B6C"/></svg>';
+          : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10h18v10H3zM2 10l5-5h10l5 5H2Z" fill="#FFFFFF"/><path d="M8 20v-6h8v6" fill="${MAP_RESOURCE_TONES.evacuation}"/></svg>';
         var markerHtml = '<div class="resource-pin ' + kind + extra + '">' + icon + '</div>';
         if (highlighted) {
           markerHtml = '<div class="resource-pin-highlighted"><span class="resource-highlight-pulse" style="background:' + markerColor + '"></span>' + markerHtml + '</div>';
@@ -630,7 +694,10 @@ function buildMapHtml(
           : null;
         if (previousMarker) {
           highlightedReportGroup.removeLayer(previousMarker);
-          previousMarker.setIcon(reportPinIcon);
+          previousMarker.setIcon(reportPinIcon(
+            previousMarker.options.reportMeta.statusColor,
+            previousMarker.options.reportMeta.incidentType
+          ));
           previousMarker.setZIndexOffset(0);
           clusterGroup.addLayer(previousMarker);
         }
@@ -713,6 +780,71 @@ function buildMapHtml(
       // the animated refit is what raced with clearLayers on iOS.
       var initialViewFitted = false;
 
+      var publicIncidentGroup = L.layerGroup().addTo(map);
+
+      function publicIncidentIcon(lead, count, highlighted) {
+        var size = highlighted ? 50 : 44;
+        var triangleClass = highlighted
+          ? 'public-pin-triangle public-pin-triangle-highlighted'
+          : 'public-pin-triangle';
+        var html = '<div class="public-pin" style="width:' + size + 'px;height:' + size + 'px">' +
+          (highlighted ? '<span class="public-pin-highlight-pulse" style="background:' + lead.color + '"></span>' : '') +
+          '<svg class="' + triangleClass + '" viewBox="0 0 52 48" aria-hidden="true">' +
+            '<path d="M26 3 49 44H3L26 3Z" fill="' + lead.color + '" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round"/>' +
+            incidentGlyph(lead.incidentType) +
+          '</svg>' +
+          (count > 1 ? '<span class="public-pin-stack" aria-hidden="true"></span>' : '') +
+        '</div>';
+        return L.divIcon({ className: 'public-pin-wrap', html: html, iconSize: [size, size], iconAnchor: [size / 2, size / 2] });
+      }
+
+      window.setPublicIncidents = function(incidents) {
+        publicIncidentGroup.clearLayers();
+        // Several incidents can share one rounded public point, so use a stack mark.
+        var groups = {};
+        var order = [];
+        (incidents || []).forEach(function(incident) {
+          var point = incident.exactLocation || incident.approximateArea;
+          if (!point) return;
+          var key = point.latitude.toFixed(5) + ',' + point.longitude.toFixed(5);
+          if (!groups[key]) {
+            groups[key] = { point: point, items: [] };
+            order.push(key);
+          }
+          groups[key].items.push(incident);
+        });
+        order.forEach(function(key) {
+          var group = groups[key];
+          var highlightedItem = group.items.filter(function(item) { return item.highlighted; })[0];
+          var lead = highlightedItem || group.items[0];
+          var marker = L.marker([group.point.latitude, group.point.longitude], {
+            icon: publicIncidentIcon(lead, group.items.length, Boolean(highlightedItem)),
+            zIndexOffset: highlightedItem ? 900 : 300,
+            keyboard: false
+          });
+          var tooltip = document.createElement('span');
+          tooltip.textContent = group.items.length > 1
+            ? group.items.length + ' community reports near this spot · Brgy. ' + lead.barangayName
+            : lead.publicLocationMode === 'exact_shared'
+              ? 'Exact submitted location shared by the reporter · Brgy. ' + lead.barangayName
+            : lead.exactLocation
+              ? 'Exact location for safety: ' + lead.exactLocation.reason
+              : 'Approximate location · Brgy. ' + lead.barangayName + '. The pin marks the nearby area, not the exact spot.';
+          marker.bindTooltip(tooltip, { direction: 'top' });
+          marker.on('click', function(event) {
+            L.DomEvent.stopPropagation(event);
+            if (!window.ReactNativeWebView) return;
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'publicIncident',
+              incidentCaseId: lead.incidentCaseId,
+              reportId: lead.reportId || null,
+              reportIds: group.items.map(function(item) { return item.reportId || item.incidentCaseId; })
+            }));
+          });
+          publicIncidentGroup.addLayer(marker);
+        });
+      };
+
       window.setReportMarkers = function(markers) {
         var requestedHighlight = highlightedReportId;
         clusterGroup.clearLayers();
@@ -729,12 +861,12 @@ function buildMapHtml(
           if (typeof m.latitude !== 'number' || typeof m.longitude !== 'number') return;
 
           var marker = L.marker([m.latitude, m.longitude], {
-            icon: reportPinIcon,
+            icon: reportPinIcon(m.statusColor, m.incidentType),
             reportId: m.id,
             reportMeta: {
               id: m.id,
               createdAt: m.created_at || '',
-              statusColor: m.statusColor || '#B33443',
+              statusColor: m.statusColor || '#A9475A',
               incidentType: m.incidentType || null
             }
           });
@@ -828,6 +960,10 @@ function buildMapHtml(
       // On iOS, React Native can inject markers before this script has run
       // (onLoadEnd fires for the intermediate blank page). Apply anything
       // that was buffered while we were still loading.
+      if (window.__pendingPublicIncidents) {
+        window.setPublicIncidents(window.__pendingPublicIncidents);
+        window.__pendingPublicIncidents = null;
+      }
       if (window.__pendingReportMarkers) {
         window.setReportMarkers(window.__pendingReportMarkers);
         window.__pendingReportMarkers = null;
@@ -857,18 +993,49 @@ function buildMapHtml(
 </html>`;
 }
 
+function publicIncidentsToInjectScript(
+  incidents: PublicIncident[],
+  highlightedIncidentId?: string,
+): string {
+  const payload = incidents.map((incident) => {
+    const tone = publicIncidentTone(incident.publicStatus);
+    return {
+      incidentCaseId: incident.incidentCaseId,
+      reportId: incident.reportId || null,
+      publicLocationMode: incident.publicLocationMode,
+      incidentType: incident.incidentType,
+      barangayName: incident.barangayName,
+      approximateArea: incident.approximateArea,
+      exactLocation: incident.exactLocation,
+      highlighted: (incident.reportId || incident.incidentCaseId) === highlightedIncidentId,
+      color: tone.color,
+      softColor: tone.softColor,
+    };
+  });
+  const json = JSON.stringify(payload).replace(/</g, '\\u003c');
+  // iOS can deliver onLoadEnd for an intermediate blank page, before Leaflet starts.
+  return `(function() {
+    var data = ${json};
+    if (window.setPublicIncidents) {
+      window.setPublicIncidents(data);
+    } else {
+      window.__pendingPublicIncidents = data;
+    }
+  })(); true;`;
+}
+
 function markersToInjectScript(
   markers: MapReportMarker[],
   showReportDetailsPopup: boolean,
-  showHighlightedReportIncidentIcon: boolean,
+  reportPresentation?: Props['reportPresentation'],
 ): string {
   const payload = markers.map((m) => ({
     id: m.id,
     latitude: m.latitude,
     longitude: m.longitude,
     created_at: m.created_at,
-    statusColor: getReportStatusPresentation(m.status).color,
-    incidentType: showHighlightedReportIncidentIcon ? m.incidentType : null,
+    statusColor: reportPresentation?.(m)?.color ?? getMapReportPresentation(m).color,
+    incidentType: m.incidentType,
     showDetailsPopup: showReportDetailsPopup,
   }));
   const json = JSON.stringify(payload).replace(/</g, '\\u003c');
@@ -965,7 +1132,13 @@ function mapDetailsToInjectScript(showMapDetails: boolean): string {
 }
 
 export default function InteractiveMap({
+  highlightedPublicIncidentId,
+  publicIncidentFilters,
+  publicIncidents = [],
+  onPublicIncidentPress,
+  reportLayerLabel = 'Reports',
   markers = [],
+  reportPresentation,
   facilities = [],
   evacuationCenters = [],
   layerVisibility = DEFAULT_LAYERS,
@@ -991,7 +1164,6 @@ export default function InteractiveMap({
   onResourceSelection,
   focusTarget,
   highlightedReportId = null,
-  showHighlightedReportIncidentIcon = false,
   highlightedResourceId = null,
   showZoomControls = true,
   showMapDetails = true,
@@ -1001,6 +1173,7 @@ export default function InteractiveMap({
   focusZoomLevel = 16,
   stickyFocus = false,
 }: Props) {
+  const { height: viewportHeight, fontScale } = useWindowDimensions();
   const webRef = useRef<CompatibleWebViewHandle>(null);
   const [initialShowMapDetails] = useState(showMapDetails);
   const lastFocusSignatureRef = useRef('');
@@ -1011,6 +1184,7 @@ export default function InteractiveMap({
   const safeViewportBottom = Math.min(300, Math.max(0, Math.round(unblurredViewportFrame?.bottom ?? 0)));
   const safeViewportLeft = Math.min(200, Math.max(0, Math.round(unblurredViewportFrame?.left ?? 0)));
   const safeViewportRadius = Math.min(80, Math.max(0, Math.round(unblurredViewportFrame?.borderRadius ?? 0)));
+  const mapHtmlVersion = MAP_HTML_VERSION;
   const html = useMemo(
     () =>
       buildMapHtml(
@@ -1024,8 +1198,10 @@ export default function InteractiveMap({
         safeViewportBottom,
         safeViewportLeft,
         safeViewportRadius,
+        mapHtmlVersion,
       ),
     [
+      mapHtmlVersion,
       initialShowMapDetails,
       safeFocusZoomLevel,
       safeViewportBottom,
@@ -1090,18 +1266,27 @@ export default function InteractiveMap({
     return next;
   }, [facilities, evacuationCenters, layerVisibility]);
 
+  const publicIncidentsScript = useMemo(
+    () => publicIncidentsToInjectScript(publicIncidents, highlightedPublicIncidentId),
+    [publicIncidents, highlightedPublicIncidentId],
+  );
+
+  useEffect(() => {
+    if (readyRef.current) webRef.current?.injectJavaScript(publicIncidentsScript);
+  }, [publicIncidentsScript]);
+
   useEffect(() => {
     if (!readyRef.current || !webRef.current) return;
     webRef.current.injectJavaScript(
       markersToInjectScript(
         visibleReports,
         showReportDetailsPopup,
-        showHighlightedReportIncidentIcon,
+        reportPresentation,
       ),
     );
     webRef.current.injectJavaScript(resourcesToInjectScript(visibleResources));
   }, [
-    showHighlightedReportIncidentIcon,
+    reportPresentation,
     showReportDetailsPopup,
     visibleReports,
     visibleResources,
@@ -1148,8 +1333,16 @@ export default function InteractiveMap({
           active?: boolean;
           reportIds?: string[];
           reportId?: string;
+          incidentCaseId?: string;
           resource?: MapResourceMarker;
         };
+        if (data.type === 'publicIncident' && data.incidentCaseId) {
+          const groupIds = Array.isArray(data.reportIds)
+            ? data.reportIds.filter((id): id is string => typeof id === 'string')
+            : [data.reportId || data.incidentCaseId];
+          onPublicIncidentPress?.(data.incidentCaseId, groupIds, data.reportId ?? undefined);
+          return;
+        }
         if (data.type === 'mapGesture' && typeof data.active === 'boolean') {
           onGestureActiveChange?.(data.active);
           return;
@@ -1169,7 +1362,7 @@ export default function InteractiveMap({
         // Ignore malformed WebView messages.
       }
     },
-    [onGestureActiveChange, onReportSelection, onReportDetailsRequest, onResourceSelection],
+    [onGestureActiveChange, onReportSelection, onReportDetailsRequest, onResourceSelection, onPublicIncidentPress],
   );
 
   function toggleLayer(key: keyof MapLayerVisibility) {
@@ -1224,13 +1417,29 @@ export default function InteractiveMap({
         resource,
       }));
 
-    return [...reportResults, ...resourceResults].slice(0, 6);
-  }, [evacuationCenters, facilities, markers, normalizedSearchQuery]);
+    const incidentResults = publicIncidents.filter((incident) =>
+      `${incident.publicTypeLabel} ${incident.barangayName}`.toLocaleLowerCase().includes(normalizedSearchQuery),
+    ).slice(0, 4).map((incident) => {
+      const location = incident.exactLocation ?? incident.approximateArea;
+      return { id: incident.incidentCaseId, kind: 'incident' as const, title: incident.publicTitle ?? incident.publicTypeLabel,
+        subtitle: `${incident.publicLocationMode === 'approximate_area' ? 'Approximate location · ' : ''}Brgy. ${incident.barangayName}`,
+        latitude: location?.latitude, longitude: location?.longitude,
+      };
+    });
+    return [...incidentResults, ...reportResults, ...resourceResults].slice(0, 6);
+  }, [evacuationCenters, facilities, markers, normalizedSearchQuery, publicIncidents]);
 
   function selectSearchResult(result: (typeof searchResults)[number]) {
     Keyboard.dismiss();
     setSearchFocused(false);
     setSearchQuery(result.title);
+    if (result.kind === 'incident') {
+      onPublicIncidentPress?.(result.id, [result.id]);
+      if (result.latitude != null && result.longitude != null) {
+        webRef.current?.injectJavaScript(focusToInjectScript({ latitude: result.latitude, longitude: result.longitude }));
+      }
+      return;
+    }
     if (result.kind === 'report') {
       onReportSelection?.([result.id]);
       webRef.current?.injectJavaScript(
@@ -1263,6 +1472,7 @@ export default function InteractiveMap({
       onTouchCancel={onGestureActiveChange ? () => onGestureActiveChange(false) : undefined}
     >
       <CompatibleWebView
+        key={MAP_HTML_VERSION}
         ref={webRef}
         style={mapStyles.webview}
         originWhitelist={['*']}
@@ -1277,10 +1487,11 @@ export default function InteractiveMap({
             markersToInjectScript(
               visibleReports,
               showReportDetailsPopup,
-              showHighlightedReportIncidentIcon,
+              reportPresentation,
             ),
           );
           webRef.current?.injectJavaScript(resourcesToInjectScript(visibleResources));
+          webRef.current?.injectJavaScript(publicIncidentsScript);
           webRef.current?.injectJavaScript(userLocationToInjectScript(userLocation));
           webRef.current?.injectJavaScript(mapDetailsToInjectScript(showMapDetails));
           webRef.current?.injectJavaScript(
@@ -1365,7 +1576,7 @@ export default function InteractiveMap({
                           <MaterialCommunityIcons name="warehouse" size={17} color={colors.navigationActive} />
                         ) : (
                           <Ionicons
-                            name={result.kind === 'report' ? 'warning-outline' : 'medical-outline'}
+                            name={result.kind === 'incident' ? 'location-outline' : result.kind === 'report' ? 'flag-outline' : 'medical-outline'}
                             size={17}
                             color={colors.navigationActive}
                           />
@@ -1391,12 +1602,14 @@ export default function InteractiveMap({
           style={[
             mapStyles.legend,
             compactLayerFilters && mapStyles.legendCompact,
+            compactLayerFilters && fontScale > 1.2 && { width: 270, maxWidth: '90%' },
             showSearchBar && mapStyles.legendBelowSearch,
             layerPanelAlign === 'right' && mapStyles.legendRight,
             { top: showSearchBar ? searchBarTopInset + 60 : layerFiltersTopInset },
           ]}
           pointerEvents="box-none"
         >
+          <ScrollView style={{ width: '100%', maxHeight: Math.max(180, viewportHeight - (showSearchBar ? searchBarTopInset + 60 : layerFiltersTopInset) - 165) }} contentContainerStyle={{ gap: compactLayerFilters ? 2 : spacing.xs }} nestedScrollEnabled keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           {collapsibleLayerFilters ? (
             <View style={mapStyles.legendHeader}>
               <Text style={mapStyles.legendTitle}>Map filters</Text>
@@ -1410,6 +1623,24 @@ export default function InteractiveMap({
               </Pressable>
             </View>
           ) : null}
+          {publicIncidentFilters ? <>
+            <Pressable style={[mapStyles.legendRow, compactLayerFilters && mapStyles.legendRowCompact, !publicIncidentFilters.visible && mapStyles.legendRowInactive]}
+              onPress={() => publicIncidentFilters.onVisibilityChange(!publicIncidentFilters.visible)} accessibilityRole="switch" accessibilityState={{ checked: publicIncidentFilters.visible }} accessibilityLabel="Community reports layer">
+              <Ionicons name="people-outline" size={18} color={colors.navigationActive} />
+              <Text style={[mapStyles.legendText, compactLayerFilters && mapStyles.legendTextCompact]}>Community reports</Text>
+              <View style={[mapStyles.layerSwitch, publicIncidentFilters.visible && mapStyles.layerSwitchActive]}><View style={[mapStyles.layerSwitchThumb, publicIncidentFilters.visible && mapStyles.layerSwitchThumbActive]} /></View>
+            </Pressable>
+            {publicIncidentFilters.visible ? <View style={mapStyles.statusFilterWrap}>
+              <Text style={mapStyles.statusFilterLabel}>Community status</Text>
+              <View style={mapStyles.statusFilterGrid}>{PUBLIC_INCIDENT_STATUS_OPTIONS.map((option) => <Pressable key={option.value}
+                style={[mapStyles.statusFilterChip, publicIncidentFilters.status === option.value && mapStyles.statusFilterChipSelected]}
+                onPress={() => publicIncidentFilters.onStatusChange(option.value)} accessibilityRole="button" accessibilityState={{ selected: publicIncidentFilters.status === option.value }}>
+                {/* The chip dot doubles as the marker color legend. */}
+                {option.value !== 'all' ? <View style={[mapStyles.statusFilterDot, { backgroundColor: publicIncidentTone(option.value).color }]} /> : null}
+                <Text style={[mapStyles.statusFilterChipText, publicIncidentFilters.status === option.value && mapStyles.statusFilterChipTextSelected]}>{option.label}</Text>
+              </Pressable>)}</View>
+            </View> : null}
+          </> : null}
           <Pressable
             style={[
               mapStyles.legendRow,
@@ -1428,7 +1659,7 @@ export default function InteractiveMap({
                 tone === 'dark' && !showSearchBar && mapStyles.legendTextDark,
               ]}
             >
-              Reports
+              {reportLayerLabel}
             </Text>
             <View style={[mapStyles.layerSwitch, layerVisibility.reports && mapStyles.layerSwitchActive]}>
               <View style={[mapStyles.layerSwitchThumb, layerVisibility.reports && mapStyles.layerSwitchThumbActive]} />
@@ -1454,6 +1685,14 @@ export default function InteractiveMap({
                       accessibilityState={{ selected }}
                       accessibilityLabel={`Show ${option.label.toLocaleLowerCase()} reports`}
                     >
+                      {option.value !== 'all' ? (
+                        <View
+                          style={[
+                            mapStyles.statusFilterDot,
+                            { backgroundColor: getMapReportPresentation({ status: option.value }).color },
+                          ]}
+                        />
+                      ) : null}
                       <Text
                         style={[
                           mapStyles.statusFilterChipText,
@@ -1523,8 +1762,12 @@ export default function InteractiveMap({
               tone === 'dark' && !showSearchBar && mapStyles.legendHintDark,
             ]}
           >
-            Tap a layer to show or hide
+            {publicIncidentFilters ? 'Pins follow report status. Approximate pins mark an area, not the exact location.' : 'Tap a layer to show or hide'}
           </Text>
+          {publicIncidentFilters && publicIncidentFilters.unlocatedCount > 0 ? <Pressable onPress={publicIncidentFilters.onOpenUnlocated} accessibilityRole="button" style={mapStyles.legendUnlocated}>
+            <Ionicons name="list-outline" size={16} color={colors.navigationActive} /><Text style={mapStyles.legendHint}>{publicIncidentFilters.unlocatedCount} without public map pins</Text>
+          </Pressable> : null}
+          </ScrollView>
         </View>
       ) : null}
 
@@ -1665,7 +1908,10 @@ const mapStyles = StyleSheet.create({
   },
   statusFilterChip: {
     minHeight: 28,
+    flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'center',
+    gap: 5,
     paddingHorizontal: spacing.sm,
     borderWidth: 1,
     borderColor: colors.border,
@@ -1683,6 +1929,13 @@ const mapStyles = StyleSheet.create({
   },
   statusFilterChipTextSelected: {
     color: colors.white,
+  },
+  statusFilterDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: colors.white,
   },
   legendDot: {
     width: 10,
@@ -1721,6 +1974,7 @@ const mapStyles = StyleSheet.create({
   legendHintDark: {
     color: '#FCA5A5',
   },
+  legendUnlocated: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingVertical: spacing.sm },
   layerSwitch: {
     width: 30,
     height: 18,

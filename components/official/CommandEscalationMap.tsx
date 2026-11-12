@@ -3,40 +3,20 @@ import { Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, type Href } from 'expo-router';
 
+import { officialReportMapMarker } from '../map/officialMapReports';
+import { officialLabel } from '../../lib/reportLifecycle';
 import InteractiveMap from '../map/InteractiveMap';
 import { formatIncidentType } from '../../lib/incidentTypes';
 import type { OfficialReportQueueItem } from '../../lib/officialReports';
 import {
+  getMapReportPresentation,
   getReportStatusPresentation,
   type MapReportMarker,
 } from '../../lib/reports';
 import { colors } from '../../styles/theme';
 import { mdrrmoCommandStyles as styles } from '../../styles/screens/mdrrmoCommand.styles';
 
-const ESCALATED_STATUS_COLOR = getReportStatusPresentation('escalated').color;
-
-function asMapMarker(report: OfficialReportQueueItem): MapReportMarker | null {
-  if (report.latitude == null || report.longitude == null) return null;
-
-  return {
-    id: report.id,
-    title: report.title,
-    description: report.description,
-    incidentType: report.incidentType,
-    incidentTypeOther: report.incidentTypeOther,
-    status: report.status,
-    latitude: report.latitude,
-    longitude: report.longitude,
-    addressText: report.addressText,
-    barangay_id: report.barangayId,
-    created_at: report.createdAt,
-    reporter: report.reporter,
-    media: report.media,
-    mediaError: report.mediaError,
-    upvoteCount: report.upvoteCount,
-    commentCount: report.commentCount,
-  };
-}
+const REQUESTS_STATUS_COLOR = getReportStatusPresentation('escalated').color;
 
 function formatElapsedLabel(value: string, referenceTime: number): string {
   const timestamp = new Date(value).getTime();
@@ -94,12 +74,12 @@ export default function CommandEscalationMap({
 }) {
   const router = useRouter();
   const escalations = useMemo(
-    () => reports.filter((report) => report.status === 'escalated'),
+    () => reports.filter((report) => ['support_requested', 'transfer_requested'].includes(report.lifecycleFacts.coordination ?? '')),
     [reports],
   );
   const markers = useMemo(
     () => escalations
-      .map(asMapMarker)
+      .map(officialReportMapMarker)
       .filter((marker): marker is MapReportMarker => marker !== null),
     [escalations],
   );
@@ -108,6 +88,7 @@ export default function CommandEscalationMap({
   const maximumActiveIndex = Math.max(0, escalations.length - 1);
   const safeActiveIndex = Math.min(activeIndex, maximumActiveIndex);
   const activeReport = escalations[safeActiveIndex] ?? null;
+  const activeReportPresentation = activeReport ? getMapReportPresentation(activeReport) : null;
   const activeIncidentType = activeReport ? incidentTypeLabel(activeReport) : 'Report';
   const activeIncidentPlace = activeReport
     ? reportedPlaceLabel(activeReport)
@@ -159,23 +140,23 @@ export default function CommandEscalationMap({
 
         <TouchableOpacity
           style={styles.mapEscalationBadge}
-          onPress={() => router.push('/official/incidents?status=escalated' as Href)}
+          onPress={() => router.push('/official/incidents?queue=incoming_requests' as Href)}
           accessibilityRole="button"
-          accessibilityLabel={`View ${escalations.length} escalated reports`}
+          accessibilityLabel={`View ${escalations.length} incoming requests`}
         >
           <View
             style={[
               styles.mapEscalationDot,
-              { backgroundColor: ESCALATED_STATUS_COLOR },
+              { backgroundColor: REQUESTS_STATUS_COLOR },
             ]}
           />
           <Text
             style={[
               styles.mapEscalationBadgeText,
-              { color: ESCALATED_STATUS_COLOR },
+              { color: REQUESTS_STATUS_COLOR },
             ]}
           >
-            {escalations.length} ESCALATED
+            {escalations.length} REQUESTS
           </Text>
           <Ionicons name="chevron-forward" size={15} color={colors.text} />
         </TouchableOpacity>
@@ -186,7 +167,7 @@ export default function CommandEscalationMap({
               style={styles.mapPagerButton}
               onPress={() => move(-1)}
               disabled={escalations.length < 2}
-              accessibilityLabel="Previous escalation"
+              accessibilityLabel="Previous request"
             >
               <Ionicons name="chevron-back" size={17} color={colors.text} />
             </TouchableOpacity>
@@ -195,7 +176,7 @@ export default function CommandEscalationMap({
               style={styles.mapPagerButton}
               onPress={() => move(1)}
               disabled={escalations.length < 2}
-              accessibilityLabel="Next escalation"
+              accessibilityLabel="Next request"
             >
               <Ionicons name="chevron-forward" size={17} color={colors.text} />
             </TouchableOpacity>
@@ -207,8 +188,8 @@ export default function CommandEscalationMap({
         <View style={styles.activeIncidentCard}>
           <View style={styles.activeIncidentTopRow}>
             <View style={styles.activeIncidentCopy}>
-              <Text style={styles.activeIncidentEyebrow}>
-                ESCALATED · {formatElapsedLabel(
+              <Text style={[styles.activeIncidentEyebrow, { color: activeReportPresentation?.color }]}>
+                REQUESTS · {formatElapsedLabel(
                   activeReport.escalatedAt || activeReport.createdAt,
                   referenceTime,
                 )}
@@ -232,13 +213,13 @@ export default function CommandEscalationMap({
             </TouchableOpacity>
           </View>
 
-          <View style={styles.activeIncidentQuote}>
-            <View style={styles.activeIncidentQuoteAccent} />
-            <Text style={styles.activeIncidentQuoteMark}>“</Text>
+          <View style={[styles.activeIncidentQuote, { backgroundColor: activeReportPresentation?.backgroundColor }]}>
+            <View style={[styles.activeIncidentQuoteAccent, { backgroundColor: activeReportPresentation?.color }]} />
+            <Text style={[styles.activeIncidentQuoteMark, { color: activeReportPresentation?.color }]}>“</Text>
             <View style={styles.activeIncidentQuoteCopy}>
               <Text style={styles.activeIncidentQuoteText}>
                 {activeReport.escalationNote?.trim() ||
-                  'No escalation message was provided.'}
+                  'Open the incident to review the request and current lead office.'}
               </Text>
               <Text style={styles.activeIncidentQuoteSource} numberOfLines={1}>
                 {activeReport.barangayName
@@ -250,62 +231,19 @@ export default function CommandEscalationMap({
             </View>
           </View>
 
-          <View style={styles.incidentTimeline}>
-            <View style={styles.incidentTimelineLine} />
-            {[
-              {
-                label: 'Reported by',
-                name: activeReport.reporterName,
-                complete: true,
-              },
-              {
-                label: 'Verified by',
-                name: activeReport.verifiedByName ?? 'Name unavailable',
-                complete: Boolean(activeReport.verifiedAt),
-              },
-              {
-                label: 'Escalated by',
-                name: activeReport.escalatedByName ?? 'Name unavailable',
-                complete: Boolean(activeReport.escalatedAt),
-                current: true,
-              },
-            ].map((step) => (
-              <View key={step.label} style={styles.incidentTimelineStep}>
-                <View
-                  style={[
-                    styles.incidentTimelineDot,
-                    step.current && styles.incidentTimelineDotCurrent,
-                    !step.complete && styles.incidentTimelineDotPending,
-                  ]}
-                >
-                  <Ionicons
-                    name={
-                      step.label === 'Reported by'
-                        ? 'time-outline'
-                        : step.label === 'Verified by'
-                          ? 'location-outline'
-                          : 'document-text-outline'
-                    }
-                    size={13}
-                    color={colors.white}
-                  />
-                </View>
-                <Text style={styles.incidentTimelineLabel}>{step.label}</Text>
-                <Text style={styles.incidentTimelineName} numberOfLines={2}>
-                  {step.name}
-                </Text>
-              </View>
-            ))}
-          </View>
+          <Text style={styles.activeIncidentMeta}>
+            {officialLabel(activeReport.lifecycle, { claimedByName: activeReport.lifecycleFacts.reviewClaimedByName, claimedAt: activeReport.lifecycleFacts.reviewClaimedAt })}
+          </Text>
+          <Text style={styles.activeIncidentMeta}>The barangay keeps the lead until a transfer is accepted.</Text>
         </View>
       ) : (
         <View style={styles.activeIncidentEmpty}>
           <View style={styles.activeIncidentEmptyIcon}>
             <Ionicons name="checkmark-circle-outline" size={31} color={colors.navigationActive} />
           </View>
-          <Text style={styles.activeIncidentEmptyTitle}>No active escalations</Text>
+          <Text style={styles.activeIncidentEmptyTitle}>No incoming requests</Text>
           <Text style={styles.activeIncidentEmptyBody}>
-            Escalated municipal reports will appear here.
+            Support and transfer requests will appear here.
           </Text>
         </View>
       )}

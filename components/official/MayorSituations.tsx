@@ -38,7 +38,7 @@ import {
   type MayorWatchlistSnapshot,
 } from '../../lib/mayorAnalytics';
 import { mayorStatusFilterLabel } from '../../lib/mayorStatusLabels';
-import type { MapReportMarker } from '../../lib/reports';
+import { getMapReportPresentation, type MapReportMarker } from '../../lib/reports';
 import { supabase } from '../../lib/supabase';
 import { useEvacuationCenters } from '../../hooks/useEvacuationCenters';
 import { useReports } from '../../hooks/useReports';
@@ -57,6 +57,7 @@ const STATUS_OPTIONS: { value: MayorStatusFilter; label: string }[] = [
 ];
 
 const EMPTY_STATUS_COUNTS: MayorStatusCounts = {
+  closed: 0,
   unverified: 0,
   verified: 0,
   escalated: 0,
@@ -69,11 +70,11 @@ function statusLabel(status: MayorStatusFilter): string {
   return mayorStatusFilterLabel(status);
 }
 
-function statusColor(status: MayorSituationItem['status']): string {
-  if (status === 'unverified') return colors.unverified;
-  if (status === 'verified') return colors.success;
-  if (status === 'escalated') return colors.escalated;
-  return colors.textMuted;
+function statusColor(
+  status: MayorSituationItem['status'],
+  lifecycle?: MapReportMarker['lifecycle'],
+): string {
+  return getMapReportPresentation({ status, lifecycle }).color;
 }
 
 function matchesMarkerSearch(marker: MapReportMarker, search: string): boolean {
@@ -818,7 +819,7 @@ function ReportLocationThumbnail({ report, marker }: { report: MayorSituationIte
       <Ionicons
         name={marker ? 'location' : 'location-outline'}
         size={34}
-        color={marker ? colors.unverified : colors.textMuted}
+        color={marker ? statusColor(report.status, marker.lifecycle) : colors.textMuted}
       />
       <Text style={styles.thumbnailLabel} numberOfLines={2}>{report.barangayName}</Text>
     </View>
@@ -836,6 +837,8 @@ function MayorSituationRow({
   highlighted: boolean;
   onPress: () => void;
 }) {
+  const reportTone = getMapReportPresentation({ status: report.status, lifecycle: marker?.lifecycle });
+
   return (
     <TouchableOpacity
       style={[styles.reportRow, highlighted && styles.reportRowHighlighted]}
@@ -848,8 +851,8 @@ function MayorSituationRow({
       <View style={styles.reportCopy}>
         <View style={styles.reportTitleRow}>
           <Text style={styles.reportTitle} numberOfLines={1}>{report.title.trim() || 'Untitled report'}</Text>
-          <View style={[styles.statusPill, { borderColor: statusColor(report.status) }]}>
-            <Text style={[styles.statusPillText, { color: statusColor(report.status) }]}>
+          <View style={[styles.statusPill, { borderColor: reportTone.color, backgroundColor: reportTone.backgroundColor }]}>
+            <Text style={[styles.statusPillText, { color: reportTone.color }]}>
               {mayorSituationStatusLabel(report).toUpperCase()}
             </Text>
           </View>

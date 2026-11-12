@@ -26,7 +26,6 @@ export const mayorMapStyles = StyleSheet.create({
   retryText: { fontFamily: fonts.semibold, fontSize: fontSizes.sm, color: colors.primary },
   reportRow: { minHeight: 88, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, borderBottomWidth: 1, borderBottomColor: '#D9E1EC' },
   reportAccent: { width: 4, height: 48, borderRadius: 2, backgroundColor: colors.unverified },
-  reportAccentEscalated: { backgroundColor: colors.escalated },
   reportCopy: { flex: 1, gap: 3 },
   reportStatus: { fontFamily: fonts.semibold, fontSize: 9, letterSpacing: 0.4, color: colors.escalated },
   reportTitle: { fontFamily: fonts.semibold, fontSize: fontSizes.sm, color: colors.text },

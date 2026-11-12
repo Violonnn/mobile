@@ -381,10 +381,7 @@ export const mayorBriefStyles = StyleSheet.create({
     elevation: 2,
   },
   briefingImage: {
-    flex: 1,
-  },
-  briefingImageStyle: {
-    resizeMode: 'cover',
+    ...StyleSheet.absoluteFill,
   },
   briefingShade: {
     ...StyleSheet.absoluteFill,

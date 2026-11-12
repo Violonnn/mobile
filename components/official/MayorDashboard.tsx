@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  ImageBackground,
+  Image,
   RefreshControl,
   ScrollView,
   type ScrollViewInstance,
@@ -669,25 +669,24 @@ export default function MayorDashboard({
                     accessibilityRole="button"
                     accessibilityLabel="Open situation summary"
                   >
-                    <ImageBackground
+                    <Image
                       source={require('../../assets/images/municipal.png')}
                       style={styles.briefingImage}
-                      imageStyle={styles.briefingImageStyle}
-                    >
-                      <LinearGradient
-                        colors={['rgba(8, 24, 38, 0.02)', 'rgba(8, 24, 38, 0.84)']}
-                        style={styles.briefingShade}
-                      />
-                      <View style={styles.briefingContent}>
-                        <View>
-                          <Text style={styles.briefingTitle}>Situation summary</Text>
-                          <Text style={styles.briefingSubtitle}>{formatBriefingTime(snapshot.fetchedAt)}</Text>
-                        </View>
-                        <View style={styles.briefingArrow}>
-                          <Ionicons name="chevron-forward" size={16} color={colors.white} />
-                        </View>
+                      resizeMode="cover"
+                    />
+                    <LinearGradient
+                      colors={['rgba(8, 24, 38, 0.02)', 'rgba(8, 24, 38, 0.84)']}
+                      style={styles.briefingShade}
+                    />
+                    <View style={styles.briefingContent}>
+                      <View>
+                        <Text style={styles.briefingTitle}>Situation summary</Text>
+                        <Text style={styles.briefingSubtitle}>{formatBriefingTime(snapshot.fetchedAt)}</Text>
                       </View>
-                    </ImageBackground>
+                      <View style={styles.briefingArrow}>
+                        <Ionicons name="chevron-forward" size={16} color={colors.white} />
+                      </View>
+                    </View>
                   </TouchableOpacity>
 
                   <TouchableOpacity
@@ -697,10 +696,10 @@ export default function MayorDashboard({
                     accessibilityRole="button"
                     accessibilityLabel={`${affectedBarangayCount} barangays have unverified or escalated reports. Open affected areas.`}
                   >
-                    <ImageBackground
+                    <Image
                       source={require('../../assets/images/noActiveBackground.png')}
                       style={styles.briefingImage}
-                      imageStyle={styles.briefingImageStyle}
+                      resizeMode="cover"
                     />
                     <LinearGradient
                       colors={['rgba(8, 24, 38, 0)', 'rgba(8, 24, 38, 0.78)']}
@@ -727,24 +726,23 @@ export default function MayorDashboard({
                     accessibilityRole="button"
                     accessibilityLabel={`Evacuation centers. ${openCenters} currently open.`}
                   >
-                    <ImageBackground
+                    <Image
                       source={require('../../assets/images/municipal.png')}
                       style={styles.briefingImage}
-                      imageStyle={styles.briefingImageStyle}
-                    >
-                      <LinearGradient
-                        colors={['rgba(8, 24, 38, 0.08)', 'rgba(8, 24, 38, 0.86)']}
-                        style={styles.briefingShade}
-                      />
-                      <View style={styles.briefingContent}>
-                        <View>
-                          <Text style={styles.briefingTitle}>Evacuation centers</Text>
-                        </View>
-                        <View style={styles.briefingArrow}>
-                          <Ionicons name="chevron-forward" size={16} color={colors.white} />
-                        </View>
+                      resizeMode="cover"
+                    />
+                    <LinearGradient
+                      colors={['rgba(8, 24, 38, 0.08)', 'rgba(8, 24, 38, 0.86)']}
+                      style={styles.briefingShade}
+                    />
+                    <View style={styles.briefingContent}>
+                      <View>
+                        <Text style={styles.briefingTitle}>Evacuation centers</Text>
                       </View>
-                    </ImageBackground>
+                      <View style={styles.briefingArrow}>
+                        <Ionicons name="chevron-forward" size={16} color={colors.white} />
+                      </View>
+                    </View>
                   </TouchableOpacity>
                 </ScrollView>
               </View>

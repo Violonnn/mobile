@@ -25,6 +25,9 @@ import ReportMapDetailSheet from '../../components/map/ReportMapDetailSheet';
 import EscalatedReportsPanel from '../../components/map/EscalatedReportsPanel';
 import MayorMapPanel from '../../components/map/MayorMapPanel';
 import { ReportEngagementProvider } from '../../components/report/ReportEngagementProvider';
+import { useOfficialReportQueue } from '../../hooks/useOfficialReports';
+import { officialReportMapMarker } from '../../components/map/officialMapReports';
+import { officialLabel } from '../../lib/reportLifecycle';
 import { useReports } from '../../hooks/useReports';
 import { useResources } from '../../hooks/useResources';
 import { useEvacuationCenters } from '../../hooks/useEvacuationCenters';
@@ -34,7 +37,7 @@ import {
   evacuationStatusLabel,
   facilityTypeLabel,
 } from '../../lib/resources';
-import { type MapReportMarker } from '../../lib/reports';
+import { getMapReportPresentation, type MapReportMarker } from '../../lib/reports';
 import { colors, fonts, fontSizes, spacing } from '../../styles/theme';
 import { officialStyles } from '../../styles/screens/official.styles';
 import { residentMapStyles } from '../../styles/screens/residentMap.styles';
@@ -44,7 +47,7 @@ import { createMutableNumber } from '../../lib/mutableNumber';
 import { MapScreenSkeleton } from '../../components/ui/OfficialScreenSkeletons';
 
 const COLLAPSED_PANEL_HEADER_HEIGHT = 88;
-const BDRRMO_MAP_REPORT_STATUS_OPTIONS = ['all', 'unverified', 'verified', 'resolved'] as const;
+const BDRRMO_MAP_REPORT_STATUS_OPTIONS = ['all', 'unverified', 'verified', 'escalated', 'resolved'] as const;
 
 export default function OfficialMapScreen() {
   const router = useRouter();
@@ -59,11 +62,25 @@ export default function OfficialMapScreen() {
   const scopeBarangayId = scope?.barangay_id ?? null;
   const barangayFilter =
     officialKind === 'BDRRMO' ? scopeBarangayId : null;
-  const { reports: markers, error, loading, reload } = useReports({
-    realtime: true,
+  const residentReports = useReports({
+    enabled: officialKind === 'Mayor',
+    realtime: officialKind === 'Mayor',
     barangayId: barangayFilter,
     includePending: false,
   });
+
+  const officialReports = useOfficialReportQueue(officialKind === 'Mayor' ? null : scope);
+  const markers = useMemo(() => officialKind === 'Mayor' ? residentReports.reports : officialReports.reports.map(officialReportMapMarker).filter((marker): marker is MapReportMarker => marker !== null), [officialKind, residentReports.reports, officialReports.reports]);
+  const { error, loading, reload } = officialKind === 'Mayor' ? residentReports : officialReports;
+  const officialById = useMemo(() => new Map(officialReports.reports.map((report) => [report.id, report])), [officialReports.reports]);
+  const reportPresentation = useCallback((marker: MapReportMarker) => {
+    const report = officialById.get(marker.id);
+    if (!report) return null;
+    return {
+      ...getMapReportPresentation(marker),
+      label: officialLabel(marker.lifecycle ?? report.lifecycle, { claimedByName: report.lifecycleFacts.reviewClaimedByName, claimedAt: report.lifecycleFacts.reviewClaimedAt }),
+    };
+  }, [officialById]);
 
   const { facilities } = useResources({
     mode: 'official',
@@ -97,7 +114,7 @@ export default function OfficialMapScreen() {
     }
     return markers.filter(
       (marker) =>
-        marker.barangay_id === scopeBarangayId && marker.status !== 'escalated',
+        marker.barangay_id === scopeBarangayId,
     );
   }, [markers, officialKind, scopeBarangayId]);
 
@@ -168,19 +185,19 @@ export default function OfficialMapScreen() {
   const escalatedReports = useMemo(
     () =>
       scopedMarkers
-        .filter((marker) => marker.status === 'escalated')
+        .filter((marker) => ['support_requested', 'transfer_requested'].includes(officialById.get(marker.id)?.lifecycleFacts.coordination ?? ''))
         .sort(
           (first, second) =>
             new Date(second.created_at).getTime() - new Date(first.created_at).getTime(),
         ),
-    [scopedMarkers],
+    [scopedMarkers, officialById],
   );
   const bdrrmoResponseReports = useMemo(
     () =>
       scopedMarkers
         .filter(
           (marker) =>
-            marker.status === 'unverified' || marker.status === 'verified',
+            marker.status !== 'resolved' && marker.status !== 'closed',
         )
         .sort((first, second) => {
           // New reports need verification before already-verified reports need a disposition.
@@ -428,6 +445,7 @@ export default function OfficialMapScreen() {
           <StatusBar style="dark" />
           <View style={residentMapStyles.mapSection}>
             <InteractiveMap
+              reportPresentation={reportPresentation}
               markers={scopedMarkers}
               facilities={facilityMarkers}
               evacuationCenters={centerMarkers}
@@ -499,6 +517,7 @@ export default function OfficialMapScreen() {
           {highlightedReport ? (
             <HighlightedReportCallout
               report={highlightedReport}
+              statusPresentation={reportPresentation(highlightedReport)}
               bottomOffset={officialNavMetrics.barHeight + insets.bottom + spacing.md}
               onClose={() => setHighlightedReportId(null)}
               onOpenDetails={openHighlightedReportDetails}
@@ -508,6 +527,7 @@ export default function OfficialMapScreen() {
           <ReportMapDetailSheet
             visible={selectedReports.length > 0}
             reports={selectedReports}
+            statusPresentation={reportPresentation}
             onClose={() => setSelectedReportIds([])}
           />
         </View>
@@ -522,6 +542,7 @@ export default function OfficialMapScreen() {
           <StatusBar style="dark" />
           <View style={residentMapStyles.mapSection}>
             <InteractiveMap
+              reportPresentation={reportPresentation}
               markers={scopedMarkers}
               facilities={facilityMarkers}
               evacuationCenters={centerMarkers}
@@ -583,6 +604,10 @@ export default function OfficialMapScreen() {
           >
             <EscalatedReportsPanel
               reports={escalatedReports}
+              reportPresentation={reportPresentation}
+              hasMore={officialReports.hasMore}
+              loadingMore={officialReports.loadingMore}
+              onLoadMore={() => void officialReports.loadMore()}
               loading={loading}
               error={error}
               bottomInset={escalatedPanelBottomInset}
@@ -602,6 +627,7 @@ export default function OfficialMapScreen() {
           {highlightedReport ? (
             <HighlightedReportCallout
               report={highlightedReport}
+              statusPresentation={reportPresentation(highlightedReport)}
               bottomOffset={officialNavMetrics.barHeight + insets.bottom + spacing.md}
               onClose={() => setHighlightedReportId(null)}
               onOpenDetails={openHighlightedReportDetails}
@@ -611,6 +637,7 @@ export default function OfficialMapScreen() {
           <ReportMapDetailSheet
             visible={selectedReports.length > 0}
             reports={selectedReports}
+            statusPresentation={reportPresentation}
             onClose={() => setSelectedReportIds([])}
           />
         </View>
@@ -662,6 +689,7 @@ export default function OfficialMapScreen() {
           </View>
           <View style={localStyles.mapFill}>
             <InteractiveMap
+              reportPresentation={reportPresentation}
               markers={scopedMarkers}
               facilities={facilityMarkers}
               evacuationCenters={centerMarkers}
@@ -721,6 +749,10 @@ export default function OfficialMapScreen() {
             >
               <EscalatedReportsPanel
                 reports={bdrrmoResponseReports}
+                reportPresentation={reportPresentation}
+              hasMore={officialReports.hasMore}
+              loadingMore={officialReports.loadingMore}
+              onLoadMore={() => void officialReports.loadMore()}
                 loading={loading}
                 error={error}
                 bottomInset={escalatedPanelBottomInset}
@@ -745,6 +777,7 @@ export default function OfficialMapScreen() {
           {highlightedReport ? (
             <HighlightedReportCallout
               report={highlightedReport}
+              statusPresentation={reportPresentation(highlightedReport)}
               bottomOffset={officialNavMetrics.barHeight + insets.bottom + spacing.md}
               onClose={() => setHighlightedReportId(null)}
               onOpenDetails={openHighlightedReportDetails}
@@ -754,6 +787,7 @@ export default function OfficialMapScreen() {
           <ReportMapDetailSheet
             visible={selectedReports.length > 0}
             reports={selectedReports}
+            statusPresentation={reportPresentation}
             onClose={() => setSelectedReportIds([])}
           />
         </SafeAreaView>
@@ -772,6 +806,7 @@ export default function OfficialMapScreen() {
         </View>
         <View style={localStyles.mapFill}>
           <InteractiveMap
+              reportPresentation={reportPresentation}
             markers={scopedMarkers}
             facilities={facilityMarkers}
             evacuationCenters={centerMarkers}
@@ -812,6 +847,7 @@ export default function OfficialMapScreen() {
         {highlightedReport ? (
           <HighlightedReportCallout
             report={highlightedReport}
+              statusPresentation={reportPresentation(highlightedReport)}
             bottomOffset={officialNavMetrics.barHeight + insets.bottom + spacing.md}
             onClose={() => setHighlightedReportId(null)}
             onOpenDetails={openHighlightedReportDetails}
@@ -821,6 +857,7 @@ export default function OfficialMapScreen() {
         <ReportMapDetailSheet
           visible={selectedReports.length > 0}
           reports={selectedReports}
+          statusPresentation={reportPresentation}
           onClose={() => setSelectedReportIds([])}
         />
       </SafeAreaView>

@@ -11,9 +11,10 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-import type { MapReportMarker } from '../../lib/reports';
+import { getMapReportPresentation, type MapReportMarker } from '../../lib/reports';
 import IncidentTypeBadge from '../report/IncidentTypeBadge';
 import type { EvacuationCenterRecord } from '../../lib/resources';
+import { MAP_RESOURCE_TONES } from '../../lib/mapResourceTones';
 import { formatPublishedAt } from '../../lib/formatTime';
 import { mayorMapStyles as styles } from '../../styles/screens/mayorMap.styles';
 import { colors } from '../../styles/theme';
@@ -95,9 +96,9 @@ export default function MayorMapPanel({
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.metrics}>
-            <Metric color={colors.unverified} value={unverified} label="Unverified" />
-          <Metric color={colors.escalated} value={escalated} label="Escalated" />
-            <Metric color={colors.danger} value={priorityCenters} label="Priority centers" />
+            <Metric color={getMapReportPresentation({ status: 'unverified' }).color} value={unverified} label="Unverified" />
+            <Metric color={getMapReportPresentation({ status: 'escalated' }).color} value={escalated} label="Escalated" />
+            <Metric color={MAP_RESOURCE_TONES.priority} value={priorityCenters} label="Priority centers" />
           </View>
 
           {loading ? (
@@ -125,9 +126,9 @@ export default function MayorMapPanel({
               accessibilityRole="button"
               accessibilityLabel={`Locate ${report.title || 'report'} on map`}
             >
-              <View style={[styles.reportAccent, report.status === 'escalated' && styles.reportAccentEscalated]} />
+              <View style={[styles.reportAccent, { backgroundColor: getMapReportPresentation(report).color }]} />
               <View style={styles.reportCopy}>
-                <Text style={styles.reportStatus}>{report.status.toUpperCase()}</Text>
+                <Text style={[styles.reportStatus, { color: getMapReportPresentation(report).color }]}>{report.status.toUpperCase()}</Text>
                 <Text style={styles.reportTitle} numberOfLines={1}>{report.title.trim() || 'Untitled report'}</Text>
                 <IncidentTypeBadge
                   incidentType={report.incidentType}

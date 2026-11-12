@@ -12,7 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { formatPublishedAt } from '../../lib/formatTime';
 import {
   formatReportLocation,
-  getReportStatusPresentation,
+  getMapReportPresentation,
   type MapReportMarker,
 } from '../../lib/reports';
 import IncidentTypeBadge from '../report/IncidentTypeBadge';
@@ -21,6 +21,10 @@ import { colors } from '../../styles/theme';
 
 type Props = {
   reports: MapReportMarker[];
+  hasMore?: boolean;
+  loadingMore?: boolean;
+  onLoadMore?: () => void;
+  reportPresentation?: (report: MapReportMarker) => { label: string; color: string } | null;
   loading: boolean;
   error: string | null;
   bottomInset: number;
@@ -42,6 +46,10 @@ type Props = {
 
 export default function EscalatedReportsPanel({
   reports,
+  hasMore = false,
+  loadingMore = false,
+  onLoadMore,
+  reportPresentation,
   loading,
   error,
   bottomInset,
@@ -51,10 +59,10 @@ export default function EscalatedReportsPanel({
   onRetry,
   onToggleCollapsed,
   dragHandlePanHandlers,
-  queueTitle = 'ESCALATED REPORTS',
-  emptyTitle = 'No escalated reports',
-  emptyBody = 'New barangay escalations will appear here automatically.',
-  loadingLabel = 'Loading escalated reports…',
+  queueTitle = 'INCOMING REQUESTS',
+  emptyTitle = 'No incoming requests',
+  emptyBody = 'New support and transfer requests will appear here automatically.',
+  loadingLabel = 'Loading requests…',
   reviewActionLabel = 'Review report',
   reviewAccessibilityVerb = 'Review',
   summaryText = (count) => `${count} awaiting MDRRMO coordination`,
@@ -120,7 +128,7 @@ export default function EscalatedReportsPanel({
           <>
             {reports.map((report, index) => {
               const isLatest = index === 0;
-              const statusPresentation = getReportStatusPresentation(report.status);
+              const statusPresentation = reportPresentation?.(report) ?? getMapReportPresentation(report);
               return (
                 <TouchableOpacity
                   key={report.id}
@@ -190,6 +198,7 @@ export default function EscalatedReportsPanel({
             </View>
           </>
         )}
+        {hasMore && onLoadMore && <TouchableOpacity onPress={onLoadMore} disabled={loadingMore} accessibilityRole="button"><Text style={styles.stateText}>{loadingMore ? 'Loading more reports...' : 'Load more reports'}</Text></TouchableOpacity>}
       </ScrollView>
     </View>
   );

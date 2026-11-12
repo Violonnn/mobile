@@ -94,6 +94,18 @@ export const contributionStyles = StyleSheet.create({
     flex: 1,
     minHeight: 0,
   },
+  detailError: {
+    gap: spacing.sm,
+    paddingHorizontal: spacing.xl,
+    paddingBottom: spacing.md,
+  },
+  detailLoading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.sm,
+  },
   stateBlock: {
     minHeight: 175,
     alignItems: 'center',

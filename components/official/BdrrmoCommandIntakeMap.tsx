@@ -3,58 +3,25 @@ import { Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, type Href } from 'expo-router';
 
+import { officialReportMapMarker } from '../map/officialMapReports';
+import { officialLabel } from '../../lib/reportLifecycle';
+import { getMapReportPresentation } from '../../lib/reports';
 import InteractiveMap from '../map/InteractiveMap';
 import { formatIncidentType } from '../../lib/incidentTypes';
-import type { OfficialReportQueueItem, ReportStatus } from '../../lib/officialReports';
+import type { OfficialReportQueueItem } from '../../lib/officialReports';
 import type { MapReportMarker } from '../../lib/reports';
 import { colors } from '../../styles/theme';
 import { mdrrmoCommandStyles as styles } from '../../styles/screens/mdrrmoCommand.styles';
 
-type LocalResponseStatus = Extract<ReportStatus, 'unverified' | 'verified'>;
-type LocatedOfficialReportQueueItem = OfficialReportQueueItem & {
-  latitude: number;
-  longitude: number;
-};
-
+type LocalResponseStatus = 'unverified' | 'verified';
 const LOCAL_RESPONSE_STATES: {
   status: LocalResponseStatus;
   label: string;
   color: string;
 }[] = [
-  { status: 'unverified', label: 'Unverified', color: colors.unverified },
-  { status: 'verified', label: 'Verified', color: colors.success },
+  { status: 'unverified', label: 'Needs review', color: getMapReportPresentation({ status: 'unverified' }).color },
+  { status: 'verified', label: 'Active response', color: getMapReportPresentation({ status: 'verified' }).color },
 ];
-
-function hasValidLocation(report: OfficialReportQueueItem): report is LocatedOfficialReportQueueItem {
-  return (
-    Number.isFinite(report.latitude) &&
-    Number.isFinite(report.longitude) &&
-    !(report.latitude === 0 && report.longitude === 0)
-  );
-}
-
-function asMapMarker(report: OfficialReportQueueItem): MapReportMarker | null {
-  if (!hasValidLocation(report)) return null;
-
-  return {
-    id: report.id,
-    title: report.title,
-    description: report.description,
-    incidentType: report.incidentType,
-    incidentTypeOther: report.incidentTypeOther,
-    status: report.status,
-    latitude: report.latitude,
-    longitude: report.longitude,
-    addressText: report.addressText,
-    barangay_id: report.barangayId,
-    created_at: report.createdAt,
-    reporter: report.reporter,
-    media: report.media,
-    mediaError: report.mediaError,
-    upvoteCount: report.upvoteCount,
-    commentCount: report.commentCount,
-  };
-}
 
 function elapsedLabel(value: string, referenceTime: number): string {
   const timestamp = new Date(value).getTime();
@@ -90,19 +57,21 @@ export default function BdrrmoCommandIntakeMap({
   const [referenceTime, setReferenceTime] = useState(() => Date.now());
   const reportsByStatus = useMemo(
     () => ({
-      unverified: reports.filter((report) => report.status === 'unverified'),
-      verified: reports.filter((report) => report.status === 'verified'),
+      unverified: reports.filter((report) => ['awaiting_review', 'under_review'].includes(report.lifecycle.primaryStage)),
+      verified: reports.filter((report) => ['being_assessed', 'confirmed', 'response_ongoing'].includes(report.lifecycle.primaryStage)),
     }),
     [reports],
   );
   const activeReports = reportsByStatus[activeStatus];
   const markers = useMemo(
-    () => activeReports.map(asMapMarker).filter((marker): marker is MapReportMarker => marker !== null),
+    () => activeReports.map(officialReportMapMarker).filter((marker): marker is MapReportMarker => marker !== null),
     [activeReports],
   );
   const safeActiveIndex = Math.min(activeIndex, Math.max(0, activeReports.length - 1));
   const activeReport = activeReports[safeActiveIndex] ?? null;
   const activeState = LOCAL_RESPONSE_STATES.find((state) => state.status === activeStatus)!;
+  const activeReportPresentation = activeReport ? getMapReportPresentation(activeReport) : null;
+  const activeReportTone = activeReportPresentation?.color ?? activeState.color;
 
   useEffect(() => {
     const timer = setInterval(() => setReferenceTime(Date.now()), 60_000);
@@ -125,7 +94,7 @@ export default function BdrrmoCommandIntakeMap({
     return () => cancelAnimationFrame(animationFrame);
   }, [activeReports.length, reportsByStatus]);
 
-  const focusTarget = activeReport && hasValidLocation(activeReport)
+  const focusTarget = activeReport && activeReport.latitude != null && activeReport.longitude != null
     ? {
         reportId: activeReport.id,
         latitude: activeReport.latitude,
@@ -188,7 +157,7 @@ export default function BdrrmoCommandIntakeMap({
 
         <TouchableOpacity
           style={styles.mapEscalationBadge}
-          onPress={() => router.push(`/official/incidents?status=${activeStatus}&from=command` as Href)}
+          onPress={() => router.push(`/official/incidents?queue=${activeStatus === 'unverified' ? 'needs_review' : 'all'}&from=command` as Href)}
           accessibilityRole="button"
           accessibilityLabel={`View ${activeReports.length} ${activeState.label.toLowerCase()} local reports`}
         >
@@ -228,8 +197,8 @@ export default function BdrrmoCommandIntakeMap({
         <View style={styles.activeIncidentCard}>
           <View style={styles.activeIncidentTopRow}>
             <View style={styles.activeIncidentCopy}>
-              <Text style={[styles.activeIncidentEyebrow, { color: activeState.color }]}>
-                {activeState.label.toUpperCase()} - {elapsedLabel(activeReport.createdAt, referenceTime)}
+              <Text style={[styles.activeIncidentEyebrow, { color: activeReportTone }]}>
+                {officialLabel(activeReport.lifecycle, { claimedByName: activeReport.lifecycleFacts.reviewClaimedByName, claimedAt: activeReport.lifecycleFacts.reviewClaimedAt })} - {elapsedLabel(activeReport.createdAt, referenceTime)}
               </Text>
               <Text style={styles.activeIncidentTitle}>{typeLabel} - {placeLabel}</Text>
               <Text style={styles.activeIncidentMeta}>
@@ -251,16 +220,11 @@ export default function BdrrmoCommandIntakeMap({
           <View
             style={[
               styles.activeIncidentQuote,
-              {
-                backgroundColor:
-                  activeStatus === 'verified'
-                    ? 'rgba(34, 197, 94, 0.08)'
-                    : 'rgba(217, 45, 32, 0.06)',
-              },
+              { backgroundColor: activeReportPresentation?.backgroundColor ?? colors.background },
             ]}
           >
-            <View style={[styles.activeIncidentQuoteAccent, { backgroundColor: activeState.color }]} />
-            <Text style={[styles.activeIncidentQuoteMark, { color: activeState.color }]}>&quot;</Text>
+            <View style={[styles.activeIncidentQuoteAccent, { backgroundColor: activeReportTone }]} />
+            <Text style={[styles.activeIncidentQuoteMark, { color: activeReportTone }]}>&quot;</Text>
             <View style={styles.activeIncidentQuoteCopy}>
               <Text style={styles.activeIncidentQuoteText}>
                 {activeReport.description.trim() || 'No report description was provided.'}
@@ -271,46 +235,9 @@ export default function BdrrmoCommandIntakeMap({
             </View>
           </View>
 
-          <View style={styles.incidentTimeline}>
-            <View style={styles.incidentTimelineLine} />
-            {[
-              {
-                label: 'Reported',
-                name: activeReport.reporterName,
-                complete: true,
-                current: activeStatus === 'unverified',
-                icon: 'time-outline' as const,
-              },
-              {
-                label: 'Verified',
-                name: activeStatus === 'verified' ? 'BDRRMO verified' : 'BDRRMO review',
-                complete: activeStatus === 'verified',
-                current: activeStatus === 'verified',
-                icon: 'shield-checkmark-outline' as const,
-              },
-              {
-                label: 'Respond',
-                name: 'Resolve or escalate',
-                complete: false,
-                current: false,
-                icon: 'navigate-outline' as const,
-              },
-            ].map((step) => (
-              <View key={step.label} style={styles.incidentTimelineStep}>
-                <View
-                  style={[
-                    styles.incidentTimelineDot,
-                    step.current && { backgroundColor: activeState.color },
-                    !step.complete && !step.current && styles.incidentTimelineDotPending,
-                  ]}
-                >
-                  <Ionicons name={step.icon} size={13} color={colors.white} />
-                </View>
-                <Text style={styles.incidentTimelineLabel}>{step.label}</Text>
-                <Text style={styles.incidentTimelineName} numberOfLines={2}>{step.name}</Text>
-              </View>
-            ))}
-          </View>
+          <Text style={styles.activeIncidentMeta}>
+            {activeReport.lifecycleFacts.leadOffice === 'municipal' ? 'MDRRMO lead' : 'Barangay lead'} · {activeReport.lifecycleFacts.hasQualifyingResponseAction ? 'Response action recorded' : 'No response action recorded'}
+          </Text>
         </View>
       ) : (
         <View style={styles.activeIncidentEmpty}>

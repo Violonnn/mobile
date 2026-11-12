@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
+  StyleSheet,
+  ScrollView,
   PanResponder,
   Text,
   TouchableOpacity,
@@ -18,25 +20,31 @@ import InteractiveMap, {
   type MapLayerVisibility,
   type MapResourceMarker,
 } from '../../components/map/InteractiveMap';
-import HighlightedReportCallout from '../../components/map/HighlightedReportCallout';
 import ReportMapDetailSheet from '../../components/map/ReportMapDetailSheet';
+import ResidentMapCallout from '../../components/map/ResidentMapCallout';
 import YourContributionsPanel, {
   type ContributionPanelState,
 } from '../../components/map/YourContributionsPanel';
 import { ReportEngagementProvider } from '../../components/report/ReportEngagementProvider';
+import PublicIncidentCard from '../../components/report/PublicIncidentCard';
+import PublicIncidentDetail from '../../components/report/PublicIncidentDetail';
+import ResidentBottomSheet from '../../components/ui/ResidentBottomSheet';
 import { useResidentData } from '../../context/ResidentDataContext';
 import { useReports } from '../../hooks/useReports';
+import { useIncidentSupport } from '../../hooks/useIncidentSupport';
+import { usePublicIncidents } from '../../hooks/usePublicIncidents';
 import { getGrantedMapGps, type GpsPosition } from '../../lib/location';
 import { getResidentMapTheme, type ResidentMapTheme } from '../../lib/mapPreferences';
 import { createMutableNumber } from '../../lib/mutableNumber';
-import type { MapReportMarker } from '../../lib/reports';
+import { fetchMapReportById, type MapReportMarker } from '../../lib/reports';
+import type { PublicIncidentStatusFilter } from '../../lib/publicIncidents';
 import { evacuationStatusLabel, facilityTypeLabel } from '../../lib/resources';
 import {
   getResidentBottomNavigationHeight,
   navMetrics,
 } from '../../styles/components/bottomNav.styles';
 import { residentMapStyles as styles } from '../../styles/screens/residentMap.styles';
-import { colors, spacing } from '../../styles/theme';
+import { colors, fonts, radius, spacing } from '../../styles/theme';
 
 const COLLAPSED_HEADER_HEIGHT = 88;
 const RESTING_CONTRIBUTION_LIFT = 12;
@@ -51,21 +59,44 @@ export default function MapScreen() {
   const insets = useSafeAreaInsets();
   const { width: windowWidth, height: windowHeight, fontScale } = useWindowDimensions();
   const bottomNavigationHeight = getResidentBottomNavigationHeight(fontScale);
-  const { reportId, resourceId, resourceKind, fromNotification } = useLocalSearchParams<{
+  const { reportId, publicReportId, resourceId, resourceKind, fromNotification, incidentId, openRequest } = useLocalSearchParams<{
     reportId?: string | string[];
+    publicReportId?: string | string[];
     resourceId?: string | string[];
     resourceKind?: string | string[];
     fromNotification?: string | string[];
+    incidentId?: string | string[];
+    openRequest?: string | string[];
   }>();
   const openedFromNotification = Array.isArray(fromNotification)
     ? fromNotification[0] === '1'
     : fromNotification === '1';
+  const { incidents, error: incidentsError, loading: incidentsLoading, reload: reloadIncidents, hasMore: hasMoreIncidents, loadMore: loadMoreIncidents, loadingMore: incidentsLoadingMore, patchEngagement } = usePublicIncidents();
+  const [publicLayerVisible, setPublicLayerVisible] = useState(true);
+  const [publicStatus, setPublicStatus] = useState<PublicIncidentStatusFilter>('all');
+  const [incidentListVisible, setIncidentListVisible] = useState(false);
+  // selectedIncidentId opens the detail sheet; highlightedIncidentId drives the callout and pulsing marker.
+  const [selectedIncidentId, setSelectedIncidentId] = useState<string | null>(null);
+  const [selectedPublicReportId, setSelectedPublicReportId] = useState<string | null>(null);
+  const [highlightedIncidentId, setHighlightedIncidentId] = useState<string | null>(null);
+  const [incidentGroupIds, setIncidentGroupIds] = useState<string[]>([]);
+  const requestedIncidentId = Array.isArray(incidentId) ? incidentId[0] : incidentId;
+  const requestedPublicReportId = Array.isArray(publicReportId) ? publicReportId[0] : publicReportId;
+  const requestedOpenKey = Array.isArray(openRequest) ? openRequest[0] : openRequest;
+  const handledIncidentRequestRef = useRef<string | null>(null);
+  const { toggleSupport: toggleIncidentSupport, busyId: supportBusyId } = useIncidentSupport(patchEngagement);
+  const visibleIncidents = incidents.filter((incident) => publicStatus === 'all' || incident.publicStatus === publicStatus);
+  const highlightedIncident = highlightedIncidentId
+    ? incidents.find((incident) => (incident.reportId ?? incident.incidentCaseId) === highlightedIncidentId)
+      ?? incidents.find((incident) => incident.incidentCaseId === highlightedIncidentId) ?? null
+    : null;
   const {
-    reports: markers,
+    reports: loadedMarkers,
     error,
     loading: reportsLoading,
     reload,
   } = useReports({
+    ownOnly: true,
     realtime: true,
     // Pins only need coordinates and incident metadata. Attachment thumbnails
     // are loaded for one report after the resident opens it.
@@ -108,7 +139,25 @@ export default function MapScreen() {
     ? resourceKind[0]
     : resourceKind;
 
+  const [requestedOwnReport, setRequestedOwnReport] = useState<MapReportMarker | null>(null);
+  const [requestedOwnError, setRequestedOwnError] = useState<string | null>(null);
+  const [requestRetry, setRequestRetry] = useState(0);
+  const markers = useMemo(() => requestedOwnReport && requestedOwnReport.reporter.id === profile?.id && !loadedMarkers.some((report) => report.id === requestedOwnReport.id)
+    ? [requestedOwnReport, ...loadedMarkers]
+    : loadedMarkers, [loadedMarkers, requestedOwnReport, profile?.id]);
+  const unlocatedIncidents = visibleIncidents.filter((incident) => !incident.exactLocation && !incident.approximateArea);
   const currentUserId = profile?.id ?? null;
+
+  useEffect(() => {
+    if (!requestedReportId) return;
+    let cancelled = false;
+    void fetchMapReportById(requestedReportId, { ownOnly: true }).then((result) => {
+      if (cancelled) return;
+      setRequestedOwnReport(result.report);
+      setRequestedOwnError(result.error ?? (!result.report ? 'This report is unavailable in your account.' : null));
+    }).catch(() => { if (!cancelled) setRequestedOwnError('Could not open your report. Tap to retry.'); });
+    return () => { cancelled = true; };
+  }, [requestedReportId, requestRetry]);
 
   useEffect(() => {
     void Promise.all([ensureFacilities(), ensureCenters()]);
@@ -147,8 +196,8 @@ export default function MapScreen() {
       handledRouteReportIdRef.current = requestedReportId;
       setLayers((current) => ({ ...current, reports: true }));
       setHighlightedResourceId(null);
-      setFullReportVisible(false);
-      setSelectedReportIds([]);
+      setFullReportVisible(true);
+      setSelectedReportIds([requestedReport.id]);
       setHighlightedReportId(requestedReport.id);
       setFocusTarget({
         reportId: requestedReport.id,
@@ -247,6 +296,68 @@ export default function MapScreen() {
     router,
   ]);
 
+  const highlightPublicIncident = useCallback((incidentCaseId: string, groupIds: string[], reportId?: string) => {
+    setHighlightedReportId(null);
+    setSelectedReportIds([]);
+    setFullReportVisible(false);
+    setHighlightedResourceId(null);
+    const publicKey = reportId ?? incidentCaseId;
+    setHighlightedIncidentId(publicKey);
+    setIncidentGroupIds(groupIds.length > 0 ? groupIds : [publicKey]);
+  }, []);
+
+  const clearHighlightedIncident = useCallback(() => {
+    setHighlightedIncidentId(null);
+    setIncidentGroupIds([]);
+  }, []);
+
+  useEffect(() => {
+    // "View on map" from Community or Home: center and pulse the incident, or
+    // open its details directly when it has no public pin.
+    const routeSyncTimer = setTimeout(() => {
+      if (!requestedIncidentId) return;
+      const requestKey = `${requestedIncidentId}:${requestedPublicReportId ?? ''}:${requestedOpenKey ?? ''}`;
+      if (handledIncidentRequestRef.current === requestKey || incidentsLoading) return;
+      handledIncidentRequestRef.current = requestKey;
+      router.setParams({ incidentId: undefined, publicReportId: undefined, openRequest: undefined });
+
+      const requestedIncident = incidents.find((incident) => requestedPublicReportId
+        ? incident.reportId === requestedPublicReportId
+        : incident.incidentCaseId === requestedIncidentId);
+      const point = requestedIncident?.exactLocation ?? requestedIncident?.approximateArea ?? null;
+      if (!requestedIncident || !point) {
+        setSelectedIncidentId(requestedIncidentId);
+        setSelectedPublicReportId(requestedPublicReportId ?? null);
+        return;
+      }
+      setPublicLayerVisible(true);
+      setPublicStatus('all');
+      highlightPublicIncident(requestedIncident.incidentCaseId, [requestedIncident.reportId ?? requestedIncident.incidentCaseId], requestedIncident.reportId);
+      setFocusTarget({ latitude: point.latitude, longitude: point.longitude });
+    }, 0);
+    return () => clearTimeout(routeSyncTimer);
+  }, [highlightPublicIncident, incidents, incidentsLoading, requestedIncidentId, requestedPublicReportId, requestedOpenKey, router]);
+
+  /** Discussion lives in Community; the map only links there. */
+  const openCommunityIncident = useCallback((incidentCaseId: string) => {
+    setSelectedIncidentId(null);
+    setFullReportVisible(false);
+    setSelectedReportIds([]);
+    router.navigate({
+      pathname: '/(main)/feed',
+      params: { incidentId: incidentCaseId, openRequest: `${incidentCaseId}-${Date.now()}`, focus: 'comments' },
+    });
+  }, [router]);
+
+  const highlightedIncidentGroupIndex = highlightedIncidentId
+    ? Math.max(0, incidentGroupIds.indexOf(highlightedIncidentId))
+    : 0;
+  const stepIncidentGroup = (direction: 1 | -1) => {
+    if (incidentGroupIds.length < 2) return;
+    const nextIndex = (highlightedIncidentGroupIndex + direction + incidentGroupIds.length) % incidentGroupIds.length;
+    setHighlightedIncidentId(incidentGroupIds[nextIndex]);
+  };
+
   const selectedReports = useMemo(() => {
     if (selectedReportIds.length === 0) return [];
     const reportsById = new Map(markers.map((marker) => [marker.id, marker]));
@@ -281,6 +392,7 @@ export default function MapScreen() {
   const showContributionOnMap = (report: MapReportMarker) => {
     setLayers((current) => ({ ...current, reports: true }));
     setHighlightedResourceId(null);
+    clearHighlightedIncident();
     setSelectedReportIds([]);
     setFullReportVisible(false);
     setHighlightedReportId(report.id);
@@ -357,7 +469,7 @@ export default function MapScreen() {
     // the highlighted report can replace it without losing the panel's state.
     const currentOffset = contributionOffsets[contributionPanelState];
     Animated.spring(highlightedReportTranslateY, {
-      toValue: highlightedReportId
+      toValue: highlightedReportId || highlightedIncident
         ? Math.max(0, contributionHiddenOffset - currentOffset)
         : 0,
       damping: 22,
@@ -369,6 +481,7 @@ export default function MapScreen() {
     contributionHiddenOffset,
     contributionOffsets,
     contributionPanelState,
+    highlightedIncident,
     highlightedReportId,
     highlightedReportTranslateY,
   ]);
@@ -377,6 +490,8 @@ export default function MapScreen() {
     (reportIds: string[]) => {
       setHighlightedResourceId(null);
       setFullReportVisible(false);
+      setHighlightedIncidentId(null);
+      setIncidentGroupIds([]);
 
       if (reportIds.length === 1) {
         const report = markers.find((marker) => marker.id === reportIds[0]);
@@ -404,20 +519,6 @@ export default function MapScreen() {
     setSelectedReportIds([]);
   }, []);
 
-  const openReportInCommunity = useCallback(
-    (targetReportId: string) => {
-      setFullReportVisible(false);
-      setSelectedReportIds([]);
-      router.navigate({
-        pathname: '/(main)/feed',
-        params: {
-          reportId: targetReportId,
-          openRequest: `${targetReportId}-${Date.now()}`,
-        },
-      });
-    },
-    [router],
-  );
 
   const contributionPanResponder = useMemo(
     () =>
@@ -486,12 +587,21 @@ export default function MapScreen() {
         <View style={styles.mapSection}>
           <InteractiveMap
             markers={markers}
+            publicIncidents={publicLayerVisible ? visibleIncidents : []}
+            highlightedPublicIncidentId={highlightedIncidentId ?? undefined}
+            onPublicIncidentPress={highlightPublicIncident}
+            reportLayerLabel="Your contributions"
+            publicIncidentFilters={{
+              visible: publicLayerVisible, onVisibilityChange: setPublicLayerVisible,
+              status: publicStatus, onStatusChange: setPublicStatus,
+              unlocatedCount: unlocatedIncidents.length,
+              onOpenUnlocated: () => { setMapFilterVisible(false); setIncidentListVisible(true); },
+            }}
             facilities={facilityMarkers}
             evacuationCenters={centerMarkers}
             layerVisibility={layers}
             showLayerFilters
             collapsibleLayerFilters
-            showReportStatusFilters
             showSearchBar
             compactLayerFilters
             layerPanelVisible={mapFilterVisible}
@@ -515,15 +625,20 @@ export default function MapScreen() {
             focusTarget={focusTarget}
             highlightedReportId={highlightedReportId}
             highlightedResourceId={highlightedResourceId}
-            showHighlightedReportIncidentIcon
             onReportSelection={handleReportSelection}
             onResourceSelection={(resource) => {
               setSelectedReportIds([]);
               setFullReportVisible(false);
               setHighlightedReportId(null);
+              clearHighlightedIncident();
               setHighlightedResourceId(resource.id);
             }}
           />
+          {(incidentsError || error || requestedOwnError) ? <TouchableOpacity
+            style={[styles.errorBanner, { top: insets.top + (openedFromNotification ? 120 : 70) }]}
+            onPress={() => { void reloadIncidents(); void reload(); setRequestRetry((value) => value + 1); }} accessibilityRole="button">
+            <Text accessibilityRole="alert" style={styles.errorText}>{requestedOwnError ?? 'Some map data could not refresh. Tap to retry.'}</Text>
+          </TouchableOpacity> : null}
           {openedFromNotification ? (
             <TouchableOpacity
               style={[styles.notificationBackButton, { top: insets.top + 8 }]}
@@ -536,26 +651,32 @@ export default function MapScreen() {
               <Text style={styles.notificationBackText}>Back</Text>
             </TouchableOpacity>
           ) : null}
-          {error ? (
-            <View
-              style={[
-                styles.errorBanner,
-                { top: insets.top + 70 + (openedFromNotification ? 50 : 0) },
-              ]}
-              pointerEvents="none"
-            >
-              <Text style={styles.errorText}>Map data could not fully refresh.</Text>
-            </View>
-          ) : null}
+
         </View>
 
         {highlightedReport ? (
-            <HighlightedReportCallout
-              report={highlightedReport}
-              bottomOffset={highlightedReportBottomOffset}
-              onClose={clearHighlightedReport}
-              onOpenDetails={openHighlightedReportDetails}
-            />
+          <ResidentMapCallout
+            report={highlightedReport}
+            bottomOffset={highlightedReportBottomOffset}
+            onClose={clearHighlightedReport}
+            onOpenDetails={openHighlightedReportDetails}
+          />
+        ) : highlightedIncident ? (
+          <ResidentMapCallout
+            incident={highlightedIncident}
+            bottomOffset={highlightedReportBottomOffset}
+            onClose={clearHighlightedIncident}
+            onOpenDetails={() => {
+              setSelectedIncidentId(highlightedIncident.incidentCaseId);
+              setSelectedPublicReportId(highlightedIncident.reportId ?? null);
+            }}
+            pager={{
+              index: highlightedIncidentGroupIndex,
+              total: incidentGroupIds.length,
+              onPrevious: () => stepIncidentGroup(-1),
+              onNext: () => stepIncidentGroup(1),
+            }}
+          />
         ) : null}
 
         <Animated.View
@@ -579,6 +700,7 @@ export default function MapScreen() {
             loading={reportsLoading || profileInitialLoading}
             error={error}
             bottomInset={contributionBottomInset}
+            detailCacheScope={currentUserId}
             onReportPress={openContribution}
             onShowReportOnMap={showContributionOnMap}
             onRetry={() => void reload()}
@@ -601,14 +723,52 @@ export default function MapScreen() {
           visible={selectedReports.length > 1 || fullReportVisible}
           reports={selectedReports}
           detailCacheScope={currentUserId}
-          commentMode="prioritizedReadOnly"
-          onOpenCommunityReport={openReportInCommunity}
+          commentMode="interactive"
+          onOpenCommunityIncident={openCommunityIncident}
           onClose={() => {
             setFullReportVisible(false);
             setSelectedReportIds([]);
           }}
         />
+        <ResidentBottomSheet visible={incidentListVisible} onClose={() => setIncidentListVisible(false)}>
+          <ScrollView contentContainerStyle={publicStyles.sheet}>
+            <Text style={publicStyles.title}>Reports without public map pins</Text>
+            <Text style={publicStyles.caption}>These community reports keep their location private. They are also available in Community reports.</Text>
+            {incidentsLoading ? <Text>Loading incidents…</Text> : !unlocatedIncidents.length ? <Text>No incidents found.</Text> : null}
+            {unlocatedIncidents.map((incident, index) => (
+              <PublicIncidentCard
+                key={incident.reportId ?? incident.incidentCaseId}
+                incident={incident}
+                isLast={index === unlocatedIncidents.length - 1}
+                supportBusy={supportBusyId === incident.incidentCaseId}
+                onToggleSupport={() => void toggleIncidentSupport(incident.incidentCaseId)}
+                onRequestComments={() => { setIncidentListVisible(false); openCommunityIncident(incident.incidentCaseId); }}
+                onPress={() => { setIncidentListVisible(false); setSelectedIncidentId(incident.incidentCaseId); setSelectedPublicReportId(incident.reportId ?? null); }}
+              />
+            ))}
+            {hasMoreIncidents ? <TouchableOpacity style={publicStyles.toolbarButton} accessibilityRole="button" disabled={incidentsLoadingMore} onPress={() => void loadMoreIncidents()}><Text>{incidentsLoadingMore ? 'Loading…' : 'Load more incidents'}</Text></TouchableOpacity> : null}
+            {incidentsError ? <TouchableOpacity style={publicStyles.toolbarButton} accessibilityRole="button" onPress={() => void reloadIncidents()}><Text>{incidentsError} · Try again</Text></TouchableOpacity> : null}
+          </ScrollView>
+        </ResidentBottomSheet>
+        {selectedIncidentId ? (
+          <PublicIncidentDetail
+            key={`${selectedIncidentId}-${selectedPublicReportId ?? 'incident'}`}
+            incidentCaseId={selectedIncidentId}
+            reportId={selectedPublicReportId ?? undefined}
+            context="map"
+            onClose={() => { setSelectedIncidentId(null); setSelectedPublicReportId(null); }}
+            onOpenCommunity={openCommunityIncident}
+            onEngagementChange={patchEngagement}
+          />
+        ) : null}
       </View>
     </ReportEngagementProvider>
   );
 }
+
+const publicStyles = StyleSheet.create({
+  toolbarButton: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: spacing.sm, padding: spacing.md, backgroundColor: colors.card, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border },
+  sheet: { padding: spacing.md, paddingBottom: spacing.xl, gap: spacing.md },
+  title: { fontFamily: fonts.semibold, fontSize: 18, color: colors.text },
+  caption: { fontFamily: fonts.regular, fontSize: 13, color: colors.textMuted },
+});
