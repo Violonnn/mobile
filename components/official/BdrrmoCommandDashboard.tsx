@@ -25,6 +25,9 @@ type Props = {
   reportsError: string | null;
   reportsLoading: boolean;
   reportsRefreshing: boolean;
+  hasMoreReports: boolean;
+  reportsLoadingMore: boolean;
+  loadMoreReports: () => Promise<void>;
   assignedBarangayId: string | null;
   assignedBarangay: string | null;
   reloadReports: () => Promise<void>;
@@ -36,6 +39,9 @@ export default function BdrrmoCommandDashboard({
   reportsError,
   reportsLoading,
   reportsRefreshing,
+  hasMoreReports,
+  reportsLoadingMore,
+  loadMoreReports,
   assignedBarangayId,
   assignedBarangay,
   reloadReports,
@@ -119,6 +125,20 @@ export default function BdrrmoCommandDashboard({
             assignedBarangay={assignedBarangay}
             onGestureActiveChange={handleMapGestureActiveChange}
           />
+        )}
+
+        {hasMoreReports && !reportsError && (
+          <TouchableOpacity
+            style={officialStyles.secondaryAction}
+            onPress={() => void loadMoreReports()}
+            disabled={reportsLoadingMore}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: reportsLoadingMore }}
+          >
+            <Text style={officialStyles.secondaryActionText}>
+              {reportsLoadingMore ? 'Loading more reports...' : 'Load more reports'}
+            </Text>
+          </TouchableOpacity>
         )}
 
         <BdrrmoCommandQuickResponse />

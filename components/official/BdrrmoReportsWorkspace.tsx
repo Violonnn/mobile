@@ -16,20 +16,27 @@ import { StatusBar } from 'expo-status-bar';
 import { useFocusEffect, useRouter, type Href } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import WorkflowQueuePicker from './WorkflowQueuePicker';
+import { officialLabel, lifecycleColor } from '../../lib/reportLifecycle';
 import MdrrmoHeader from './MdrrmoHeader';
 import { statusLabel } from '../report/ReportDetailCard';
 import { ReportsScreenSkeleton } from '../ui/OfficialScreenSkeletons';
 import { formatPublishedAt } from '../../lib/formatTime';
 import { formatIncidentType } from '../../lib/incidentTypes';
-import type { OfficialReportQueueItem, ReportStatus } from '../../lib/officialReports';
+import type { OfficialWorkflowQueue, OfficialReportQueueItem, ReportStatus } from '../../lib/officialReports';
 import { mdrrmoReportsStyles as styles } from '../../styles/screens/mdrrmoReports.styles';
 import { colors } from '../../styles/theme';
 
-type BdrrmoStatusFilter = Exclude<ReportStatus, 'escalated'> | 'all';
+type BdrrmoStatusFilter = ReportStatus | 'all';
 type QueueSort = 'recent' | 'relevance' | 'oldest';
 
 type Props = {
   reports: OfficialReportQueueItem[];
+  hasMore: boolean;
+  loadingMore: boolean;
+  onLoadMore: () => Promise<void>;
+  workflowQueue: OfficialWorkflowQueue;
+  onQueueChange: (queue: OfficialWorkflowQueue) => void;
   error: string | null;
   loading: boolean;
   refreshing: boolean;
@@ -53,12 +60,6 @@ const SORT_OPTIONS: { value: QueueSort; label: string }[] = [
   { value: 'oldest', label: 'Oldest first' },
 ];
 
-function statusColor(status: ReportStatus): string {
-  if (status === 'unverified') return '#D92D20';
-  if (status === 'verified') return '#169B55';
-  return '#64748B';
-}
-
 function filterLabel(filter: BdrrmoStatusFilter): string {
   if (filter === 'all') return 'All available reports';
   return `${statusLabel(filter)} reports`;
@@ -66,6 +67,11 @@ function filterLabel(filter: BdrrmoStatusFilter): string {
 
 export default function BdrrmoReportsWorkspace({
   reports,
+  hasMore,
+  loadingMore,
+  onLoadMore,
+  workflowQueue,
+  onQueueChange,
   error,
   loading,
   refreshing,
@@ -78,10 +84,10 @@ export default function BdrrmoReportsWorkspace({
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [statusFilter, setStatusFilter] = useState<BdrrmoStatusFilter>(
-    initialStatus ?? 'unverified',
+    initialStatus ?? 'all',
   );
   const [draftStatusFilter, setDraftStatusFilter] =
-    useState<BdrrmoStatusFilter>(initialStatus ?? 'unverified');
+    useState<BdrrmoStatusFilter>(initialStatus ?? 'all');
   const [sort, setSort] = useState<QueueSort>('recent');
   const [draftSort, setDraftSort] = useState<QueueSort>('recent');
   const [searchVisible, setSearchVisible] = useState(false);
@@ -91,7 +97,7 @@ export default function BdrrmoReportsWorkspace({
 
   if (initialStatus !== previousInitialStatus) {
     setPreviousInitialStatus(initialStatus);
-    setStatusFilter(initialStatus ?? 'unverified');
+    setStatusFilter(initialStatus ?? 'all');
   }
 
   useFocusEffect(
@@ -107,8 +113,7 @@ export default function BdrrmoReportsWorkspace({
     const normalizedQuery = searchQuery.trim().toLocaleLowerCase();
     const matched = reports.filter((report) => {
       // Client filtering is defensive; RLS is still the authorization boundary.
-      if (report.status === 'escalated') return false;
-      if (statusFilter !== 'all' && report.status !== statusFilter) return false;
+      if (workflowQueue === 'all' && statusFilter !== 'all' && report.status !== statusFilter) return false;
       if (!normalizedQuery) return true;
       return [
         report.title,
@@ -134,7 +139,7 @@ export default function BdrrmoReportsWorkspace({
       }
       return new Date(second.createdAt).getTime() - new Date(first.createdAt).getTime();
     });
-  }, [reports, searchQuery, sort, statusFilter]);
+  }, [reports, searchQuery, sort, statusFilter, workflowQueue]);
 
   function openFilters() {
     setDraftStatusFilter(statusFilter);
@@ -183,6 +188,7 @@ export default function BdrrmoReportsWorkspace({
           }
         />
 
+        <WorkflowQueuePicker municipal={false} selected={workflowQueue} onSelect={onQueueChange} />
         {searchVisible ? (
           <View style={styles.searchBox}>
             <Ionicons name="search" size={20} color={colors.textMuted} />
@@ -208,7 +214,7 @@ export default function BdrrmoReportsWorkspace({
         <View style={styles.queueSection}>
           <View style={[styles.sectionHeader, styles.queueHeader]}>
             <View style={styles.sectionTitleGroup}>
-              <Text style={styles.sectionLabel}>{filterLabel(statusFilter).toUpperCase()}</Text>
+              <Text style={styles.sectionLabel}>{(workflowQueue === 'all' ? filterLabel(statusFilter) : workflowQueue.replace(/_/g, ' ')).toUpperCase()}</Text>
               <Text style={styles.sectionSubtitle}>
                 {assignedBarangay ? `${assignedBarangay} · ` : 'Assigned barangay · '}
                 {visibleReports.length} {visibleReports.length === 1 ? 'result' : 'results'}
@@ -243,7 +249,7 @@ export default function BdrrmoReportsWorkspace({
           ) : null}
 
           {!error ? visibleReports.map((report, index) => {
-            const accentColor = statusColor(report.status);
+            const accentColor = lifecycleColor(report.lifecycle);
             return (
               <TouchableOpacity
                 key={report.id}
@@ -271,7 +277,7 @@ export default function BdrrmoReportsWorkspace({
                   <View style={styles.statusRow}>
                     <View style={[styles.statusDot, { backgroundColor: accentColor }]} />
                     <Text style={[styles.statusText, { color: accentColor }]}>
-                      {statusLabel(report.status).toUpperCase()}
+                      {officialLabel(report.lifecycle, { claimedByName: report.lifecycleFacts.reviewClaimedByName, claimedAt: report.lifecycleFacts.reviewClaimedAt }).toUpperCase()}
                     </Text>
                     <Text style={styles.statusSeparator}>·</Text>
                     <Text style={styles.timeText}>{formatPublishedAt(report.createdAt)}</Text>
@@ -303,6 +309,7 @@ export default function BdrrmoReportsWorkspace({
             );
           }) : null}
         </View>
+        {hasMore && <TouchableOpacity style={styles.applyButton} onPress={() => void onLoadMore()} disabled={loadingMore} accessibilityRole="button"><Text style={styles.applyButtonText}>{loadingMore ? 'Loading more reports...' : 'Load more reports'}</Text></TouchableOpacity>}
       </ScrollView>
 
       <Modal visible={filterVisible} transparent animationType="fade" onRequestClose={() => setFilterVisible(false)}>

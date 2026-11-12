@@ -24,7 +24,7 @@ import MdrrmoHeader from '../../components/official/MdrrmoHeader';
 import { statusLabel } from '../../components/report/ReportDetailCard';
 import IncidentTypeBadge from '../../components/report/IncidentTypeBadge';
 import { formatPublishedAt } from '../../lib/formatTime';
-import type { ReportStatus } from '../../lib/officialReports';
+import type { OfficialWorkflowQueue, ReportStatus } from '../../lib/officialReports';
 import MdrrmoReportsWorkspace from '../../components/official/MdrrmoReportsWorkspace';
 import BdrrmoReportsWorkspace from '../../components/official/BdrrmoReportsWorkspace';
 import { OfficialShellSkeleton } from '../../components/ui/OfficialScreenSkeletons';
@@ -54,9 +54,8 @@ function routeStatus(value: string | string[] | undefined): StatusFilter | null 
 
 function bdrrmoRouteStatus(
   value: string | string[] | undefined,
-): Exclude<StatusFilter, 'escalated'> | null {
-  const parsedStatus = routeStatus(value);
-  return parsedStatus === 'escalated' ? null : parsedStatus;
+): StatusFilter | null {
+  return routeStatus(value);
 }
 
 function statusPillStyle(status: ReportStatus) {
@@ -99,8 +98,9 @@ const FILTERS: { key: StatusFilter; label: string }[] = [
 
 export default function OfficialIncidentsScreen() {
   const router = useRouter();
-  const { status, from } = useLocalSearchParams<{
+  const { status, from, queue } = useLocalSearchParams<{
     status?: string | string[];
+    queue?: string;
     from?: string | string[];
   }>();
   const { scope, officialKind, loading: scopeLoading, error: scopeError } =
@@ -109,6 +109,8 @@ export default function OfficialIncidentsScreen() {
   const requestedStatus = routeStatus(status);
   const openedFromCommand = (Array.isArray(from) ? from[0] : from) === 'command';
   const [statusFilter, setStatusFilter] = useState<StatusFilter | null>(requestedStatus);
+  const validQueues: OfficialWorkflowQueue[] = ['all', 'needs_review', 'under_review', 'mine', 'being_assessed', 'awaiting_mdrrmo', 'jurisdiction_check', 'incoming_requests', 'legacy_escalations', 'municipal_review', 'municipal_lead', 'mayor_requests'];
+  const [workflowQueue, setWorkflowQueue] = useState<OfficialWorkflowQueue>(validQueues.includes(queue as OfficialWorkflowQueue) ? queue as OfficialWorkflowQueue : 'all');
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState<OfficialReportSort>('recent');
   const [statusOpen, setStatusOpen] = useState(false);
@@ -123,8 +125,8 @@ export default function OfficialIncidentsScreen() {
   }
 
   const activeFilter = statusFilter ?? defaultFilter(officialKind);
-  const { reports, error, loading, refreshing, refresh, reload } =
-    useOfficialReportQueue(officialKind === 'Mayor' ? null : scope);
+  const { reports, error, loading, refreshing, refresh, reload, hasMore, loadingMore, loadMore } =
+    useOfficialReportQueue(officialKind === 'Mayor' ? null : scope, workflowQueue);
 
   const filtered = useMemo(() => {
     const needle = search.trim().toLowerCase();
@@ -191,6 +193,11 @@ export default function OfficialIncidentsScreen() {
     return (
       <MdrrmoReportsWorkspace
         reports={reports}
+        hasMore={hasMore}
+        loadingMore={loadingMore}
+        onLoadMore={loadMore}
+        workflowQueue={workflowQueue}
+        onQueueChange={setWorkflowQueue}
         error={error}
         loading={loading}
         refreshing={refreshing}
@@ -206,6 +213,11 @@ export default function OfficialIncidentsScreen() {
     return (
       <BdrrmoReportsWorkspace
         reports={reports}
+        hasMore={hasMore}
+        loadingMore={loadingMore}
+        onLoadMore={loadMore}
+        workflowQueue={workflowQueue}
+        onQueueChange={setWorkflowQueue}
         error={error}
         loading={loading}
         refreshing={refreshing}

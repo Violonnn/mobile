@@ -16,12 +16,15 @@ import { StatusBar } from 'expo-status-bar';
 import { useFocusEffect, useRouter, type Href } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import WorkflowQueuePicker from './WorkflowQueuePicker';
+import { officialLabel, lifecycleColor } from '../../lib/reportLifecycle';
 import MdrrmoHeader from './MdrrmoHeader';
 import OfficialReportModal from './OfficialReportModal';
 import { statusLabel } from '../report/ReportDetailCard';
 import { formatPublishedAt } from '../../lib/formatTime';
 import { formatIncidentType } from '../../lib/incidentTypes';
 import type {
+  OfficialWorkflowQueue,
   OfficialReportQueueItem,
   ReportStatus,
 } from '../../lib/officialReports';
@@ -34,6 +37,11 @@ type QueueSort = 'recent' | 'relevance' | 'oldest';
 
 type Props = {
   reports: OfficialReportQueueItem[];
+  hasMore: boolean;
+  loadingMore: boolean;
+  onLoadMore: () => Promise<void>;
+  workflowQueue: OfficialWorkflowQueue;
+  onQueueChange: (queue: OfficialWorkflowQueue) => void;
   error: string | null;
   loading: boolean;
   refreshing: boolean;
@@ -56,10 +64,6 @@ const SORT_OPTIONS: { value: QueueSort; label: string }[] = [
   { value: 'oldest', label: 'Oldest first' },
 ];
 
-function statusColor(status: ReportStatus): string {
-  return STATUS_STEPS.find((step) => step.status === status)?.color ?? colors.textMuted;
-}
-
 function filterLabel(filter: StatusFilter): string {
   if (filter === 'all') return 'All reports';
   return `${statusLabel(filter)} reports`;
@@ -67,6 +71,11 @@ function filterLabel(filter: StatusFilter): string {
 
 export default function MdrrmoReportsWorkspace({
   reports,
+  hasMore,
+  loadingMore,
+  onLoadMore,
+  workflowQueue,
+  onQueueChange,
   error,
   loading,
   refreshing,
@@ -77,9 +86,9 @@ export default function MdrrmoReportsWorkspace({
 }: Props) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>(initialStatus ?? 'escalated');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>(initialStatus ?? 'all');
   const [sort, setSort] = useState<QueueSort>('recent');
-  const [draftStatusFilter, setDraftStatusFilter] = useState<StatusFilter>(initialStatus ?? 'escalated');
+  const [draftStatusFilter, setDraftStatusFilter] = useState<StatusFilter>(initialStatus ?? 'all');
   const [draftSort, setDraftSort] = useState<QueueSort>('recent');
   const [searchVisible, setSearchVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -90,7 +99,7 @@ export default function MdrrmoReportsWorkspace({
 
   if (initialStatus !== previousInitialStatus) {
     setPreviousInitialStatus(initialStatus);
-    setStatusFilter(initialStatus ?? 'escalated');
+    setStatusFilter(initialStatus ?? 'all');
   }
 
   useFocusEffect(
@@ -106,7 +115,7 @@ export default function MdrrmoReportsWorkspace({
   const filteredReports = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLocaleLowerCase();
     const matched = reports.filter((report) => {
-      if (statusFilter !== 'all' && report.status !== statusFilter) return false;
+      if (workflowQueue === 'all' && statusFilter !== 'all' && report.status !== statusFilter) return false;
       if (!normalizedQuery) return true;
       return [
         report.title,
@@ -131,7 +140,7 @@ export default function MdrrmoReportsWorkspace({
       }
       return new Date(second.createdAt).getTime() - new Date(first.createdAt).getTime();
     });
-  }, [reports, searchQuery, sort, statusFilter]);
+  }, [reports, searchQuery, sort, statusFilter, workflowQueue]);
 
   const openReport = (reportId: string) => {
     router.push(`/official/${reportId}` as Href);
@@ -221,6 +230,7 @@ export default function MdrrmoReportsWorkspace({
           }
         />
 
+        <WorkflowQueuePicker municipal={true} selected={workflowQueue} onSelect={onQueueChange} />
         {searchVisible ? (
           <View style={styles.searchBox}>
             <Ionicons name="search" size={20} color={colors.textMuted} />
@@ -246,7 +256,7 @@ export default function MdrrmoReportsWorkspace({
         <View style={styles.queueSection}>
           <View style={[styles.sectionHeader, styles.queueHeader]}>
             <View style={styles.sectionTitleGroup}>
-              <Text style={styles.sectionLabel}>{filterLabel(statusFilter).toUpperCase()}</Text>
+              <Text style={styles.sectionLabel}>{(workflowQueue === 'all' ? filterLabel(statusFilter) : workflowQueue.replace(/_/g, ' ')).toUpperCase()}</Text>
               <Text style={styles.sectionSubtitle}>
                 {filteredReports.length} {filteredReports.length === 1 ? 'result' : 'results'} · tap a report to manage it
               </Text>
@@ -282,7 +292,7 @@ export default function MdrrmoReportsWorkspace({
           ) : null}
 
           {!loading && !error ? filteredReports.map((report, index) => {
-            const accentColor = statusColor(report.status);
+            const accentColor = lifecycleColor(report.lifecycle);
             return (
               <TouchableOpacity
                 key={report.id}
@@ -311,7 +321,7 @@ export default function MdrrmoReportsWorkspace({
                   <View style={styles.statusRow}>
                     <View style={[styles.statusDot, { backgroundColor: accentColor }]} />
                     <Text style={[styles.statusText, { color: accentColor }]}>
-                      {statusLabel(report.status).toUpperCase()}
+                      {officialLabel(report.lifecycle, { claimedByName: report.lifecycleFacts.reviewClaimedByName, claimedAt: report.lifecycleFacts.reviewClaimedAt }).toUpperCase()}
                     </Text>
                     <Text style={styles.statusSeparator}>·</Text>
                     <Text style={styles.timeText}>{formatPublishedAt(report.createdAt)}</Text>
@@ -345,6 +355,7 @@ export default function MdrrmoReportsWorkspace({
             );
           }) : null}
         </View>
+        {hasMore && <TouchableOpacity style={styles.applyButton} onPress={() => void onLoadMore()} disabled={loadingMore} accessibilityRole="button"><Text style={styles.applyButtonText}>{loadingMore ? 'Loading more reports...' : 'Load more reports'}</Text></TouchableOpacity>}
       </ScrollView>
 
       <Modal

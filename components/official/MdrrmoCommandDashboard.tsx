@@ -24,6 +24,9 @@ type MdrrmoCommandDashboardProps = {
   reportsError: string | null;
   reportsLoading: boolean;
   reportsRefreshing: boolean;
+  hasMoreReports: boolean;
+  reportsLoadingMore: boolean;
+  loadMoreReports: () => Promise<void>;
   reloadReports: () => Promise<void>;
   refreshReports: () => Promise<void>;
 };
@@ -33,6 +36,9 @@ export default function MdrrmoCommandDashboard({
   reportsError,
   reportsLoading,
   reportsRefreshing,
+  hasMoreReports,
+  reportsLoadingMore,
+  loadMoreReports,
   reloadReports,
   refreshReports,
 }: MdrrmoCommandDashboardProps) {
@@ -114,6 +120,20 @@ export default function MdrrmoCommandDashboard({
             reports={reports}
             onGestureActiveChange={handleMapGestureActiveChange}
           />
+        )}
+
+        {hasMoreReports && !reportsError && (
+          <TouchableOpacity
+            style={officialStyles.secondaryAction}
+            onPress={() => void loadMoreReports()}
+            disabled={reportsLoadingMore}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: reportsLoadingMore }}
+          >
+            <Text style={officialStyles.secondaryActionText}>
+              {reportsLoadingMore ? 'Loading more reports...' : 'Load more reports'}
+            </Text>
+          </TouchableOpacity>
         )}
 
         <CommandQuickResponse />

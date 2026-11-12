@@ -16,6 +16,7 @@ import {
 } from './reportMedia';
 import type { GpsPosition } from './location';
 import type { IncidentType } from './incidentTypes';
+import { notifyReportPublicationChanged } from './reportPublication';
 
 export type OfficialReportMediaPayload = {
   id: string;
@@ -30,6 +31,9 @@ export type OfficialReportMediaPayload = {
 };
 
 export type CreateOfficialReportInput = {
+  reportId?: string;
+  operationId?: string;
+  intakeChannel: 'official_field' | 'hotline_call';
   title?: string;
   description: string;
   incidentType: IncidentType;
@@ -38,6 +42,11 @@ export type CreateOfficialReportInput = {
   addressText?: string;
   barangayId?: string | null;
   media?: CapturedMedia[];
+  publishPublicPost?: boolean;
+  publicationAcknowledged?: boolean;
+  publicPhotoMediaIds?: string[];
+  markIncidentSensitive?: boolean;
+  sensitivityReason?: string | null;
 };
 
 export type UpdateOfficialReportInput = {
@@ -115,43 +124,47 @@ async function uploadOfficialMedia(
   return { uploaded, error: null };
 }
 
-/** Create a verified official incident via the Edge Function. */
+/** Record caller accounts for review; on-site observations start confirmed. */
 export async function submitOfficialReport(
   input: CreateOfficialReportInput,
-): Promise<{ reportId: string | null; error: string | null }> {
+): Promise<{ reportId: string | null; error: string | null; definitiveFailure?: boolean; publicAvailable?: boolean; publicationStatus?: string | null }> {
   const description = input.description.trim();
+  if (!['official_field', 'hotline_call'].includes(input.intakeChannel)) {
+    return { reportId: null, error: 'Choose how this incident was reported.', definitiveFailure: true };
+  }
   if (!description) {
-    return { reportId: null, error: 'Enter a description.' };
+    return { reportId: null, error: 'Enter a description.', definitiveFailure: true };
   }
   if (input.incidentType === 'other' && !input.incidentTypeOther?.trim()) {
-    return { reportId: null, error: 'Specify the incident type.' };
+    return { reportId: null, error: 'Specify the incident type.', definitiveFailure: true };
   }
   if (
     !Number.isFinite(input.position.latitude) ||
     !Number.isFinite(input.position.longitude)
   ) {
-    return { reportId: null, error: 'Capture a GPS location first.' };
+    return { reportId: null, error: 'Capture a GPS location first.', definitiveFailure: true };
   }
 
   const media = input.media ?? [];
   const mediaError = validateOptionalOfficialMedia(media);
   if (mediaError) {
-    return { reportId: null, error: mediaError };
+    return { reportId: null, error: mediaError, definitiveFailure: true };
   }
 
   const session = await getActiveSession();
   const userId = session?.user?.id;
   if (!userId) {
-    return { reportId: null, error: 'Sign in to log an incident.' };
+    return { reportId: null, error: 'Sign in to log an incident.', definitiveFailure: true };
   }
 
-  const reportId = randomUuid();
+  const reportId = input.reportId ?? randomUuid();
+  const operationId = input.operationId ?? randomUuid();
   let uploaded: OfficialReportMediaPayload[] = [];
 
   if (media.length > 0) {
     const uploadResult = await uploadOfficialMedia(userId, reportId, media);
     if (uploadResult.error) {
-      return { reportId: null, error: uploadResult.error };
+      return { reportId: null, error: uploadResult.error, definitiveFailure: true };
     }
     uploaded = uploadResult.uploaded;
   }
@@ -161,7 +174,9 @@ export async function submitOfficialReport(
       'create-official-report',
       {
         body: {
+          operationId,
           reportId,
+          intakeChannel: input.intakeChannel,
           title: (input.title ?? '').trim() || undefined,
           description,
           incidentType: input.incidentType,
@@ -174,6 +189,11 @@ export async function submitOfficialReport(
           addressText: input.addressText?.trim() || undefined,
           barangayId: input.barangayId || undefined,
           media: uploaded,
+          publishPublicPost: input.publishPublicPost ?? false,
+          publicationAcknowledged: input.publicationAcknowledged ?? false,
+          publicPhotoMediaIds: input.publicPhotoMediaIds ?? [],
+          markIncidentSensitive: input.markIncidentSensitive ?? false,
+          sensitivityReason: input.sensitivityReason?.trim() || undefined,
         },
       },
     );
@@ -184,8 +204,11 @@ export async function submitOfficialReport(
         response,
         'Could not log this incident. Please try again.',
       );
-      return { reportId: null, error: message };
+      const definitiveFailure = typeof response?.status === 'number' && response.status >= 400 && response.status < 500;
+      return { reportId: null, error: message, definitiveFailure };
     }
+
+    notifyReportPublicationChanged();
 
     const createdId =
       data && typeof data === 'object' && 'reportId' in data
@@ -193,10 +216,16 @@ export async function submitOfficialReport(
         : reportId;
 
     media.forEach(deletePersistedReportMedia);
-    return { reportId: createdId, error: null };
+      return {
+        reportId: createdId,
+        error: null,
+        publicAvailable: (data as { publicAvailable?: unknown })?.publicAvailable === true,
+        publicationStatus: typeof (data as { publicationStatus?: unknown })?.publicationStatus === 'string'
+          ? String((data as { publicationStatus: unknown }).publicationStatus) : null,
+      };
   } catch (err) {
     const detail = err instanceof Error ? err.message : 'Unknown error';
-    return { reportId: null, error: detail };
+    return { reportId: null, error: detail, definitiveFailure: false };
   }
 }
 

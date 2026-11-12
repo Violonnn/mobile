@@ -175,7 +175,7 @@ export default function BdrrmoCommunityFeed({
     // or out-of-barangay report can never appear in the BDRRMO community feed.
     return reports.filter(
       (report) =>
-        report.barangayId === assignedBarangayId && report.status !== 'escalated',
+        report.barangayId === assignedBarangayId,
     );
   }, [assignedBarangayId, reports]);
 

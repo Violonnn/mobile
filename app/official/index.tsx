@@ -125,8 +125,11 @@ export default function OfficialCommandScreen() {
     refreshing,
     refresh,
     reload,
+    hasMore,
+    loadingMore,
+    loadMore,
   } =
-    useOfficialReportQueue(officialKind === 'Mayor' ? null : scope);
+    useOfficialReportQueue(officialKind === 'Mayor' ? null : scope, officialKind === 'MDRRMO' ? 'incoming_requests' : 'all');
 
   const centersBarangayId =
     officialKind === 'BDRRMO' ? scope?.barangay_id ?? null : null;
@@ -227,6 +230,9 @@ export default function OfficialCommandScreen() {
         reportsError={error}
         reportsLoading={loading}
         reportsRefreshing={refreshing}
+        hasMoreReports={hasMore}
+        reportsLoadingMore={loadingMore}
+        loadMoreReports={loadMore}
         reloadReports={reload}
         refreshReports={refresh}
       />
@@ -240,6 +246,9 @@ export default function OfficialCommandScreen() {
         reportsError={error}
         reportsLoading={loading}
         reportsRefreshing={refreshing}
+        hasMoreReports={hasMore}
+        reportsLoadingMore={loadingMore}
+        loadMoreReports={loadMore}
         assignedBarangayId={scope.barangay_id}
         assignedBarangay={scope.barangay_name}
         refreshReports={refresh}

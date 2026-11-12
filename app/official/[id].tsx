@@ -1,20 +1,20 @@
 // app/official/[id].tsx
 // Official report detail: content, attribution, timeline, status actions,
-// and protected "Call reporter" (masked until confirmed).
+// and protected reporter contact (revealed through the audited confirmation flow).
 
 import React, { useState } from 'react';
 import {
-  View,
-  Text,
-  TouchableOpacity,
   ActivityIndicator,
   Alert,
-  ScrollView,
-  RefreshControl,
-  TextInput,
   Image,
   KeyboardAvoidingView,
   Platform,
+  RefreshControl,
+  ScrollView,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -22,8 +22,11 @@ import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { officialStyles as styles } from '../../styles/screens/official.styles';
 import { colors } from '../../styles/theme';
-import { fetchBarangays, type BarangayOption } from '../../lib/barangays';
-import { getReportLocationAdjustmentLimit, type GpsPosition } from '../../lib/location';
+import { type BarangayOption, fetchBarangays } from '../../lib/barangays';
+import {
+  getReportLocationAdjustmentLimit,
+  type GpsPosition,
+} from '../../lib/location';
 import { mayorReportStatusLabel } from '../../lib/mayorStatusLabels';
 import { goBackOrReplace } from '../../lib/navigation';
 import { ReportOperationsSkeleton } from '../../components/ui/OfficialScreenSkeletons';
@@ -35,20 +38,44 @@ import {
   ReportMediaPreviewModal,
   statusLabel,
 } from '../../components/report/ReportDetailCard';
-import { formatPublishedAt } from '../../lib/formatTime';
 import {
-  openReporterDialer,
-  requestReporterContact,
-  transitionActionLabel,
-  transitionConfirmMessage,
-  transitionOfficialReportStatus,
+  formatOperationTimestamp,
+  formatPublishedAt,
+} from '../../lib/formatTime';
+import {
   type ReportStatus,
+  type ResponseEventType,
 } from '../../lib/officialReports';
 import type { ReportMediaAttachment } from '../../lib/reports';
 import {
   correctOfficialReportLocation,
   updateOfficialReport,
 } from '../../lib/officialReportSubmit';
+import { useReportCallFlow } from '../../hooks/useReportCallFlow';
+import {
+  callOutcomeFeedback,
+  hotlineEventDetails,
+} from '../../lib/reportContactFlow';
+import { reportOperationsStyles as operationStyles } from '../../styles/components/reportOperations.styles';
+import { lifecycleColor, officialLabel } from '../../lib/reportLifecycle';
+import {
+  WorkflowActionRow,
+  WorkflowButton,
+  WorkflowFeedback,
+  WorkflowHistoryRow,
+  WorkflowSuccess,
+} from '../../components/official/WorkflowForm';
+import ResourceFormSheet from '../../components/official/ResourceFormSheet';
+import OperationTimelineStep from '../../components/official/OperationTimelineStep';
+import ReviewDecisionPanel from '../../components/official/ReviewDecisionPanel';
+import JurisdictionCheckPanel, {
+  ReportRoutingPanel,
+} from '../../components/official/JurisdictionCheckPanel';
+import LinkIncidentSheet from '../../components/official/LinkIncidentSheet';
+import ResponseEventSheet from '../../components/official/ResponseEventSheet';
+import UrgentDangerCard from '../../components/official/UrgentDangerCard';
+import WorkflowToast from '../../components/official/WorkflowToast';
+import IncidentCasePanel from '../../components/official/IncidentCasePanel';
 import IncidentTypeBadge from '../../components/report/IncidentTypeBadge';
 import { ReporterAvatar } from '../../components/report/ReporterAvatar';
 import ReportBarangayPicker from '../../components/report/ReportBarangayPicker';
@@ -76,6 +103,17 @@ function timelineLabel(event: {
   fromStatus: ReportStatus | null;
   toStatus: ReportStatus | null;
 }): string {
+  const workflowLabels: Record<string, string> = {
+    review_claimed: 'Taken for review',
+    review_taken_over: 'Review taken over',
+    review_released: 'Review released',
+    review_decided: 'Review decision recorded',
+    review_reopened: 'Review reopened',
+    contact_logged: 'Contact / response activity recorded',
+    routing_changed: 'Report routed to another barangay',
+    jurisdiction_checked: 'Jurisdiction checked',
+  };
+  if (workflowLabels[event.eventType]) return workflowLabels[event.eventType];
   if (event.eventType === 'barangay_change') {
     return 'Barangay updated';
   }
@@ -94,13 +132,6 @@ function timelineLabel(event: {
   return 'Status update';
 }
 
-function transitionConfirmationLabel(target: ReportStatus): string {
-  if (target === 'verified') return 'Yes, verify';
-  if (target === 'escalated') return 'Yes, escalate';
-  if (target === 'resolved') return 'Yes, resolve';
-  return 'Yes, update';
-}
-
 export default function OfficialReportDetailScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ id?: string }>();
@@ -113,9 +144,18 @@ export default function OfficialReportDetailScreen() {
     error: scopeError,
   } = useOfficialPortal();
   const isResponseOfficial = kind === 'MDRRMO' || kind === 'BDRRMO';
-  const [note, setNote] = useState('');
-  const [actionBusy, setActionBusy] = useState(false);
-  const [contactBusy, setContactBusy] = useState(false);
+  const [linkVisible, setLinkVisible] = useState(false);
+  const [responseType, setResponseType] = useState<ResponseEventType | null>(
+    null,
+  );
+  const callFlow = useReportCallFlow();
+  const contactBusy = callFlow.calling;
+  const [responseVisible, setResponseVisible] = useState(false);
+  const [responseForCall, setResponseForCall] = useState(false);
+  const [reroutedTo, setReroutedTo] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [successVersion, setSuccessVersion] = useState(0);
+  const [claimReminderHeight, setClaimReminderHeight] = useState(0);
   const [editing, setEditing] = useState(false);
   const [editTitle, setEditTitle] = useState('');
   const [editDescription, setEditDescription] = useState('');
@@ -127,176 +167,173 @@ export default function OfficialReportDetailScreen() {
   // Verification / Timeline start collapsed; tap a header to reveal its content.
   const [verificationOpen, setVerificationOpen] = useState(false);
   const [timelineOpen, setTimelineOpen] = useState(false);
-  const [mediaPreview, setMediaPreview] = useState<ReportMediaAttachment | null>(null);
+  const [reportHistoryVisible, setReportHistoryVisible] = useState(false);
+  const [mediaPreview, setMediaPreview] = useState<
+    ReportMediaAttachment | null
+  >(null);
   const [locationPickerVisible, setLocationPickerVisible] = useState(false);
   const [barangayPickerVisible, setBarangayPickerVisible] = useState(false);
-  const [correctedPosition, setCorrectedPosition] = useState<GpsPosition | null>(null);
-  const [correctionBarangays, setCorrectionBarangays] = useState<BarangayOption[]>([]);
-  const [correctionBarangaysLoading, setCorrectionBarangaysLoading] = useState(false);
-  const [correctionBarangaysError, setCorrectionBarangaysError] = useState<string | null>(null);
-  const [selectedCorrectionBarangayId, setSelectedCorrectionBarangayId] = useState<string | null>(null);
+  const [correctedPosition, setCorrectedPosition] = useState<
+    GpsPosition | null
+  >(null);
+  const [correctionBarangays, setCorrectionBarangays] = useState<
+    BarangayOption[]
+  >([]);
+  const [correctionBarangaysLoading, setCorrectionBarangaysLoading] = useState(
+    false,
+  );
+  const [correctionBarangaysError, setCorrectionBarangaysError] = useState<
+    string | null
+  >(null);
+  const [selectedCorrectionBarangayId, setSelectedCorrectionBarangayId] =
+    useState<string | null>(null);
   const [locationCorrectionBusy, setLocationCorrectionBusy] = useState(false);
 
-  const { detail, error, loading, refreshing, refresh, reload, invalidateCache } =
+  const { detail, error, loading, refreshing, refresh, reload } =
     useOfficialReportDetail(reportId, scope);
-  // Verification begins the response timeline, which remains visible after resolution.
-  const hasResponseStarted = detail?.status !== 'unverified';
-  const isResolved = detail?.status === 'resolved';
-  const isEscalated = detail?.status === 'escalated';
-  const currentTimelineStep = isResolved
-    ? 'resolved'
-    : isEscalated
-      ? 'escalated'
-      : hasResponseStarted
-        ? 'status'
-        : 'review';
-  // Match the verification event first so a later re-verification note is not shown here.
-  const verificationEvent = detail?.timeline.find(
-    (event) => event.toStatus === 'verified' && event.createdAt === detail.verified.at,
+  const canLogResponse = detail != null && (
+    detail.allowedIncidentActions.includes('log_event') ||
+    (!detail.incidentCase && detail.canReviewReport &&
+      detail.lifecycleFacts.reviewOutcome === 'pending' &&
+      detail.lifecycleFacts.jurisdictionStatus === 'in_coverage')
   );
-  const verificationNote =
-    verificationEvent?.note?.trim() ||
-    detail?.timeline.find((event) => event.toStatus === 'verified')?.note?.trim() ||
-    null;
-  const resolutionEvent = detail?.timeline.find(
-    (event) => event.toStatus === 'resolved' && event.createdAt === detail.resolved.at,
-  );
-  const resolutionNote =
-    resolutionEvent?.note?.trim() ||
-    detail?.timeline.find((event) => event.toStatus === 'resolved')?.note?.trim() ||
-    null;
-  const escalationEvent = detail?.timeline.find(
-    (event) => event.toStatus === 'escalated' && event.createdAt === detail.escalated.at,
-  );
-  const escalationNote =
-    escalationEvent?.note?.trim() ||
-    detail?.timeline.find((event) => event.toStatus === 'escalated')?.note?.trim() ||
-    null;
   const correctionDevicePosition =
     detail && detail.deviceLatitude != null && detail.deviceLongitude != null
       ? {
-          latitude: detail.deviceLatitude,
-          longitude: detail.deviceLongitude,
-          accuracyMeters: detail.gpsAccuracyMeters,
-        }
+        latitude: detail.deviceLatitude,
+        longitude: detail.deviceLongitude,
+        accuracyMeters: detail.gpsAccuracyMeters,
+      }
       : undefined;
-  const canCorrectTimelineLocation =
-    isResponseOfficial &&
+  const canCorrectTimelineLocation = isResponseOfficial &&
     detail?.canCorrectLocation === true &&
     detail.status === 'unverified';
-  const correctionBarangayOptions =
-    kind === 'BDRRMO' && scope?.barangay_id
-      ? correctionBarangays.filter((barangay) => barangay.id === scope.barangay_id)
-      : correctionBarangays;
+  const correctionBarangayOptions = kind === 'BDRRMO' && scope?.barangay_id
+    ? correctionBarangays.filter((barangay) =>
+      barangay.id === scope.barangay_id
+    )
+    : correctionBarangays;
   const locationWasUpdated = detail?.timeline.some(
-    (event) => event.eventType === 'location_change' || event.eventType === 'barangay_change',
+    (event) =>
+      event.eventType === 'location_change' ||
+      event.eventType === 'barangay_change',
   );
   const currentLocation = detail
     ? detail.addressText?.trim() ||
       `${detail.latitude.toFixed(5)}, ${detail.longitude.toFixed(5)}`
     : 'Unknown location';
   const currentLocationWithPin = detail?.addressText?.trim()
-    ? `${currentLocation} (${detail.latitude.toFixed(5)}, ${detail.longitude.toFixed(5)})`
+    ? `${currentLocation} (${detail.latitude.toFixed(5)}, ${
+      detail.longitude.toFixed(5)
+    })`
     : currentLocation;
 
-  function confirmTransition(target: ReportStatus) {
-    if (!detail || !kind || actionBusy) return;
-
-    Alert.alert(
-      transitionActionLabel(target),
-      transitionConfirmMessage(target, kind),
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: transitionConfirmationLabel(target),
-          style: target === 'escalated' ? 'destructive' : 'default',
-          onPress: () => {
-            void runTransition(target);
-          },
-        },
-      ],
+  const sortedReportEvents = [...(detail?.timeline ?? [])].sort((
+    first,
+    second,
+  ) =>
+    (Date.parse(second.createdAt) || 0) - (Date.parse(first.createdAt) || 0)
+  );
+  const ownsPendingReview = Boolean(
+    detail &&
+      detail.reviewClaimedById === detail.currentUserId &&
+      detail.lifecycleFacts.reviewOutcome === 'pending',
+  );
+  // Evidence supports review; only an available decision marks its required step.
+  const canMakeReviewDecision = ownsPendingReview && !detail?.incidentCase &&
+    detail?.allowedReviewActions.some((action) =>
+      ['verify', 'link', 'needs_assessment', 'could_not_confirm', 'reject']
+        .includes(action)
     );
-  }
+  const operationStep =
+    detail?.lifecycleFacts.jurisdictionStatus === 'needs_check'
+      ? 'review'
+      : canMakeReviewDecision
+      ? 'decision'
+      : !detail?.incidentCase &&
+          detail?.lifecycleFacts.reviewOutcome === 'pending'
+      ? 'review'
+      : null;
+
+  const reviewOutcome = detail?.lifecycleFacts.reviewOutcome;
+  // Match the decision panel's visibility so a historical summary never opens an empty body.
+  const canReopenReview = detail?.canReviewReport &&
+    ['rejected', 'could_not_confirm'].includes(detail.lifecycle.primaryStage);
+  const hasReviewDecisionControls = Boolean(
+    detail &&
+      !detail.allowedReviewActions.some((action) =>
+        action === 'claim' || action === 'take_over'
+      ) &&
+      (detail.allowedReviewActions.length > 0 || canReopenReview),
+  );
+  const showReviewDecision =
+    detail?.lifecycleFacts.jurisdictionStatus !== 'needs_check' &&
+    (operationStep === 'decision' ||
+      (reviewOutcome != null && reviewOutcome !== 'pending'));
+  const reviewDecisionSummary = {
+    pending: 'Record what the evidence supports',
+    verified: 'Report verified',
+    linked: 'Report linked to an existing incident',
+    needs_assessment: 'Field assessment requested',
+    could_not_confirm: 'Could not confirm this report',
+    rejected: 'Report rejected',
+    outside_coverage: 'Report outside coverage',
+  }[reviewOutcome ?? 'pending'];
 
   function openReportOperationsHelp() {
     Alert.alert(
       'Report operations help',
-      'Review the report, contact the reporter if needed, then select the appropriate next status.',
+      'Take the report for review, check evidence, and record a review decision. Calling is optional. Record response actions separately.',
     );
   }
 
-  async function runTransition(target: ReportStatus) {
-    if (!detail) return;
-    setActionBusy(true);
-    try {
-      const result = await transitionOfficialReportStatus({
-        reportId: detail.id,
-        targetStatus: target,
-        note,
-      });
-      if (result.error) {
-        Alert.alert('Status update failed', result.error);
-        return;
-      }
-      setNote('');
-      if (target === 'escalated' && kind === 'BDRRMO') {
-        // A successful handoff ends BDRRMO access immediately.
-        invalidateCache();
-        router.replace('/official/incidents?status=unverified' as never);
-        return;
-      }
-      await reload();
-    } finally {
-      setActionBusy(false);
-    }
+  function handleCallReporter() {
+    if (!detail || contactBusy) return;
+    void callFlow.startReporterCall(detail.id);
   }
 
-  function confirmCallReporter() {
-    if (!detail || contactBusy) return;
+  function openActivityComposer() {
+    setResponseForCall(false);
+    setResponseType(null);
+    setResponseVisible(true);
+  }
 
-    if (!detail.maskedPhone) {
-      Alert.alert(
-        'Contact unavailable',
-        'No usable reporter contact number is available for this incident.',
-      );
+  function openCallOutcome() {
+    if (!callFlow.pendingCall || callFlow.pendingCall.reportId !== detail?.id) {
       return;
     }
-
-    Alert.alert(
-      'Call reporter?',
-      'Use this call only to confirm or coordinate this incident.',
-      [
-        { text: 'No', style: 'cancel' },
-        {
-          text: 'Yes, call',
-          onPress: () => {
-            void runCallReporter();
-          },
-        },
-      ],
+    setResponseForCall(true);
+    setResponseType(
+      callFlow.pendingCall.kind === 'reporter'
+        ? 'reporter_call'
+        : 'hotline_contacted',
     );
+    setResponseVisible(true);
   }
 
-  async function runCallReporter() {
-    if (!detail) return;
-    setContactBusy(true);
-    try {
-      const contact = await requestReporterContact(detail.id);
-      if (contact.error || !contact.phone) {
-        Alert.alert(
-          'Contact unavailable',
-          contact.error || 'Reporter contact is unavailable.',
-        );
-        return;
-      }
+  function showSuccess(message: string | null) {
+    setSuccessMessage(message);
+    if (message) setSuccessVersion((version) => version + 1);
+  }
 
-      const dialer = await openReporterDialer(contact.phone);
-      if (dialer.error) {
-        Alert.alert('Could not open dialer', dialer.error);
-      }
-    } finally {
-      setContactBusy(false);
+  function operationSaved(message: string) {
+    showSuccess(message);
+    void reload();
+  }
+
+  function clearCallFollowup() {
+    callFlow.clearPendingCall();
+    showSuccess('Call follow-up cleared. No call activity was recorded.');
+  }
+
+  function handleReportRouted(targetName?: string) {
+    if (kind === 'BDRRMO') {
+      setReroutedTo(targetName ?? 'the selected barangay');
+      return;
     }
+    operationSaved(
+      'Report routed to ' + (targetName ?? 'the selected office') + '.',
+    );
   }
 
   async function loadCorrectionBarangays() {
@@ -309,7 +346,9 @@ export default function OfficialReportDetailScreen() {
   }
 
   function openTimelineLocationCorrection() {
-    if (!detail || !canCorrectTimelineLocation || locationCorrectionBusy) return;
+    if (!detail || !canCorrectTimelineLocation || locationCorrectionBusy) {
+      return;
+    }
 
     setCorrectedPosition({
       latitude: detail.latitude,
@@ -374,20 +413,20 @@ export default function OfficialReportDetailScreen() {
     };
     const result = detail.canEditContent
       ? await updateOfficialReport({
-          reportId: detail.id,
-          title: editTitle,
-          description: editDescription,
-          position: correctedPosition,
-          addressText: editAddress,
-          barangayId: detail.barangayId,
-        })
+        reportId: detail.id,
+        title: editTitle,
+        description: editDescription,
+        position: correctedPosition,
+        addressText: editAddress,
+        barangayId: detail.barangayId,
+      })
       : await correctOfficialReportLocation({
-          reportId: detail.id,
-          position: correctedPosition,
-          addressText: editAddress,
-          barangayId: detail.barangayId,
-          note: editCorrectionNote,
-        });
+        reportId: detail.id,
+        position: correctedPosition,
+        addressText: editAddress,
+        barangayId: detail.barangayId,
+        note: editCorrectionNote,
+      });
     setEditBusy(false);
     if (result.error) {
       Alert.alert('Could not update incident', result.error);
@@ -400,7 +439,7 @@ export default function OfficialReportDetailScreen() {
   if (scopeLoading || (!scope && !scopeError)) {
     return (
       <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-        <StatusBar style="dark" />
+        <StatusBar style='dark' />
         <ReportOperationsSkeleton />
       </SafeAreaView>
     );
@@ -409,8 +448,10 @@ export default function OfficialReportDetailScreen() {
   if (scopeError || !scope) {
     return (
       <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-        <StatusBar style="dark" />
-        <View style={[styles.scrollContent, { flex: 1, justifyContent: 'center' }]}>
+        <StatusBar style='dark' />
+        <View
+          style={[styles.scrollContent, { flex: 1, justifyContent: 'center' }]}
+        >
           <View style={styles.stateBox}>
             <Text style={styles.stateTitle}>Official access unavailable</Text>
             <Text style={styles.stateBody}>{scopeError}</Text>
@@ -428,6 +469,7 @@ export default function OfficialReportDetailScreen() {
   }
 
   if (
+    !reroutedTo &&
     !loading &&
     kind === 'BDRRMO' &&
     !detail &&
@@ -435,8 +477,10 @@ export default function OfficialReportDetailScreen() {
   ) {
     return (
       <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-        <StatusBar style="dark" />
-        <View style={[styles.scrollContent, { flex: 1, justifyContent: 'center' }]}>
+        <StatusBar style='dark' />
+        <View
+          style={[styles.scrollContent, { flex: 1, justifyContent: 'center' }]}
+        >
           <View style={styles.stateBox}>
             <Text style={styles.stateTitle}>Report unavailable</Text>
             <Text style={styles.stateBody}>
@@ -444,8 +488,11 @@ export default function OfficialReportDetailScreen() {
             </Text>
             <TouchableOpacity
               style={styles.retryButton}
-              onPress={() => router.replace('/official/incidents?status=unverified' as never)}
-              accessibilityRole="button"
+              onPress={() =>
+                router.replace(
+                  '/official/incidents?status=unverified' as never,
+                )}
+              accessibilityRole='button'
             >
               <Text style={styles.retryButtonText}>Back to reports</Text>
             </TouchableOpacity>
@@ -455,10 +502,10 @@ export default function OfficialReportDetailScreen() {
     );
   }
 
-  if (loading) {
+  if (loading && !reroutedTo) {
     return (
       <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-        <StatusBar style="dark" />
+        <StatusBar style='dark' />
         <ReportOperationsSkeleton />
       </SafeAreaView>
     );
@@ -466,895 +513,983 @@ export default function OfficialReportDetailScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-      <StatusBar style="dark" />
+      <StatusBar style='dark' />
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
+        {isResponseOfficial && !reroutedTo && ownsPendingReview && (
+          <View
+            style={operationStyles.claimReminder}
+            onLayout={(event) =>
+              setClaimReminderHeight(event.nativeEvent.layout.height)}
+          >
+            <Ionicons
+              name='person-circle-outline'
+              size={20}
+              color={colors.navigationActive}
+            />
+            <Text
+              style={[
+                operationStyles.caption,
+                operationStyles.claimReminderText,
+              ]}
+            >
+              You are reviewing this report
+            </Text>
+          </View>
+        )}
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={refresh} />
           }
-          keyboardShouldPersistTaps="handled"
+          keyboardShouldPersistTaps='handled'
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.headerRow}>
             <TouchableOpacity
               style={[styles.backButton, styles.reportOperationsHeaderButton]}
               onPress={() => goBackOrReplace(router, '/official/incidents')}
-              accessibilityRole="button"
-              accessibilityLabel="Back to queue"
+              accessibilityRole='button'
+              accessibilityLabel='Back to queue'
             >
-              <Ionicons name="arrow-back" size={22} color={colors.text} />
+              <Ionicons name='arrow-back' size={22} color={colors.text} />
             </TouchableOpacity>
             <View style={styles.headerTextGroup}>
               <Text style={styles.incidentDetailLabel}>Incident detail</Text>
               <Text style={styles.screenTitle} numberOfLines={1}>
                 Report operations
               </Text>
-              {isResponseOfficial ? (
-                <Text style={styles.reportOperationsInstruction}>
-                  Review. Verify. Respond.
-                </Text>
-              ) : null}
+              {isResponseOfficial
+                ? (
+                  <Text style={styles.reportOperationsInstruction}>
+                    Review. Verify. Respond.
+                  </Text>
+                )
+                : null}
             </View>
             <TouchableOpacity
               style={[styles.backButton, styles.reportOperationsHeaderButton]}
               onPress={openReportOperationsHelp}
-              accessibilityRole="button"
-              accessibilityLabel="Report operations help"
+              accessibilityRole='button'
+              accessibilityLabel='Report operations help'
             >
-              <Ionicons name="help-circle-outline" size={23} color={colors.navigationActive} />
+              <Ionicons
+                name='help-circle-outline'
+                size={23}
+                color={colors.navigationActive}
+              />
             </TouchableOpacity>
           </View>
 
-          {loading ? (
-            <View style={styles.stateBox}>
-              <ActivityIndicator color={colors.themeSoft} />
-              <Text style={styles.stateBody}>Loading report…</Text>
+          {loading && !reroutedTo
+            ? (
+              <View style={styles.stateBox}>
+                <ActivityIndicator color={colors.themeSoft} />
+                <Text style={styles.stateBody}>Loading report…</Text>
+              </View>
+            )
+            : null}
+
+          {!reroutedTo && !loading && error
+            ? (
+              <View style={styles.stateBox}>
+                <Text style={styles.stateTitle}>Could not load report</Text>
+                <Text style={styles.stateBody}>{error}</Text>
+                <TouchableOpacity
+                  style={styles.retryButton}
+                  onPress={() => void reload()}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.retryButtonText}>Try again</Text>
+                </TouchableOpacity>
+              </View>
+            )
+            : null}
+
+          {reroutedTo && (
+            <View style={styles.card}>
+              <WorkflowSuccess
+                message={'Report moved to ' + reroutedTo +
+                  ' BDRRMO. Your office no longer handles this report.'}
+              />
+              <WorkflowButton
+                label='Back to reports'
+                onPress={() => router.replace('/official/incidents')}
+              />
             </View>
-          ) : null}
-
-          {!loading && error ? (
-            <View style={styles.stateBox}>
-              <Text style={styles.stateTitle}>Could not load report</Text>
-              <Text style={styles.stateBody}>{error}</Text>
-              <TouchableOpacity
-                style={styles.retryButton}
-                onPress={() => void reload()}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.retryButtonText}>Try again</Text>
-              </TouchableOpacity>
-            </View>
-          ) : null}
-
-          {!loading && !error && detail ? (
-            <>
-              {isResponseOfficial ? (
-                <View style={styles.reporterIdentity}>
-                  <ReporterAvatar reporter={detail.reporter} size={48} />
-                  <View style={styles.reporterIdentityCopy}>
-                    <Text style={styles.reporterIdentityName} numberOfLines={1}>
-                      {detail.reporterName}
-                    </Text>
-                    <Text style={styles.reporterIdentityRole}>Reporter</Text>
-                  </View>
-                </View>
-              ) : null}
-
-              {isResponseOfficial ? (
-                <View style={styles.reportSummary}>
-                  <Text style={styles.detailBody}>
-                    {detail.description.trim() || 'No description provided.'}
-                  </Text>
-                  {detail.media.length > 0 ? (
-                    <MediaCollage
-                      media={detail.media}
-                      onOpenPreview={setMediaPreview}
-                      onOpenGallery={() => setMediaPreview(detail.media[0])}
-                    />
-                  ) : null}
-                  <CommunityReportTags report={detail} />
-                  <View style={styles.reportMetaTimeline}>
-                    <View
-                      style={[
-                        styles.reportMetaTimelineItem,
-                        currentTimelineStep === 'review'
-                          ? styles.reportMetaTimelineItemCurrent
-                          : styles.reportMetaTimelineItemMuted,
-                      ]}
-                    >
-                      <View style={styles.reportMetaTimelineMarker}>
-                        {canCorrectTimelineLocation ? (
-                          <TouchableOpacity
-                            style={[
-                              styles.reportMetaTimelineIcon,
-                              currentTimelineStep === 'review' &&
-                                styles.reportMetaTimelineIconCurrent,
-                            ]}
-                            onPress={openTimelineLocationCorrection}
-                            disabled={locationCorrectionBusy}
-                            hitSlop={8}
-                            accessibilityRole="button"
-                            accessibilityLabel="Correct incident location"
-                          >
-                            <Ionicons
-                              name="location"
-                              size={currentTimelineStep === 'review' ? 24 : 18}
-                              color={colors.navigationActive}
-                            />
-                          </TouchableOpacity>
-                        ) : (
-                          <View
-                            style={[
-                              styles.reportMetaTimelineIcon,
-                              currentTimelineStep === 'review' &&
-                                styles.reportMetaTimelineIconCurrent,
-                            ]}
-                          >
-                            <Ionicons
-                              name="location"
-                              size={currentTimelineStep === 'review' ? 24 : 18}
-                              color={colors.navigationActive}
-                            />
-                          </View>
-                        )}
-                        <View
-                          style={[
-                            styles.reportMetaTimelineLine,
-                            currentTimelineStep === 'review' &&
-                              styles.reportMetaTimelineLineToCurrent,
-                          ]}
-                        />
-                      </View>
-                      <View
-                        style={[
-                          styles.reportMetaTimelineCopy,
-                          currentTimelineStep === 'review' && styles.reportMetaTimelineCopyCurrent,
-                        ]}
-                      >
+          )}
+          {!reroutedTo && !loading && !error && detail
+            ? (
+              <>
+                {isResponseOfficial
+                  ? (
+                    <View style={styles.reporterIdentity}>
+                      <ReporterAvatar reporter={detail.reporter} size={48} />
+                      <View style={styles.reporterIdentityCopy}>
                         <Text
-                          style={[
-                            styles.reportMetaTimelineLabel,
-                            currentTimelineStep === 'review' && styles.reportMetaTimelineLabelCurrent,
-                          ]}
+                          style={styles.reporterIdentityName}
+                          numberOfLines={1}
                         >
-                          Located and reported at
+                          {detail.reporterName}
                         </Text>
-                        <Text
-                          style={[
-                            styles.reportMetaTimelineValue,
-                            currentTimelineStep === 'review' && styles.reportMetaTimelineValueCurrent,
-                          ]}
-                        >
-                          {currentLocation}{' '}
-                          at {detail.createdAt ? formatPublishedAt(detail.createdAt) : 'Unknown'}
+                        <Text style={styles.reporterIdentityRole}>
+                          Reporter
                         </Text>
-                        {locationWasUpdated ? (
-                          <Text
-                            style={[
-                              styles.reportMetaTimelineValue,
-                              currentTimelineStep === 'review' &&
-                                styles.reportMetaTimelineValueCurrent,
-                            ]}
-                          >
-                            Updated location to {currentLocationWithPin}
-                          </Text>
-                        ) : null}
                       </View>
                     </View>
-                    <View
-                      style={[
-                        styles.reportMetaTimelineItem,
-                        currentTimelineStep === 'review'
-                          ? styles.reportMetaTimelineItemCurrent
-                          : styles.reportMetaTimelineItemMuted,
-                        currentTimelineStep === 'review' &&
-                          styles.reportMetaTimelineItemFollowsExtendedLine,
-                      ]}
-                    >
-                      <View style={styles.reportMetaTimelineMarker}>
-                        {detail.canContactReporter ? (
-                          <TouchableOpacity
-                            style={[
-                              styles.reportMetaTimelineIcon,
-                              currentTimelineStep === 'review' &&
-                                styles.reportMetaTimelineIconCurrent,
-                            ]}
-                            onPress={confirmCallReporter}
-                            disabled={contactBusy}
-                            hitSlop={8}
-                            accessibilityRole="button"
-                            accessibilityLabel="Call reporter to confirm this incident"
-                          >
-                            <Ionicons
-                              name="call"
-                              size={currentTimelineStep === 'review' ? 24 : 18}
-                              color={colors.navigationActive}
-                            />
-                          </TouchableOpacity>
-                        ) : (
-                          <View
-                            style={[
-                              styles.reportMetaTimelineIcon,
-                              currentTimelineStep === 'review' &&
-                                styles.reportMetaTimelineIconCurrent,
-                            ]}
-                          >
-                            <Ionicons
-                              name="call"
-                              size={currentTimelineStep === 'review' ? 24 : 18}
-                              color={colors.navigationActive}
-                            />
-                          </View>
-                        )}
-                        {hasResponseStarted ? (
-                          <View
-                            style={[
-                              styles.reportMetaTimelineLine,
-                              currentTimelineStep === 'status' &&
-                                styles.reportMetaTimelineLineToCurrent,
-                            ]}
+                  )
+                  : null}
+
+                {isResponseOfficial
+                  ? (
+                    <View style={styles.reportSummary}>
+                      <CommunityReportTags
+                        report={detail}
+                        statusPresentation={{
+                          label: ownsPendingReview
+                            ? 'Under review'
+                            : officialLabel(detail.lifecycle, {
+                              claimedByName:
+                                detail.lifecycleFacts.reviewClaimedByName,
+                              claimedAt: detail.lifecycleFacts.reviewClaimedAt,
+                            }),
+                          color: lifecycleColor(detail.lifecycle),
+                        }}
+                      />
+                      {canLogResponse && (
+                        <UrgentDangerCard
+                          barangayId={scope?.barangay_id}
+                          calling={callFlow.calling ||
+                            Boolean(callFlow.pendingCall)}
+                          onLogActivity={openActivityComposer}
+                          hideActivityEntry
+                          onCallHotline={(hotline) =>
+                            void callFlow.startHotlineCall(
+                              hotline,
+                              detail.id,
+                            )}
+                        />
+                      )}
+                      {callFlow.pendingCall?.reportId === detail.id && (
+                        <View style={styles.card}>
+                          <Text style={styles.sectionTitle}>
+                            Back from your call?
+                          </Text>
+                          <Text style={operationStyles.caption}>
+                            {callFlow.pendingCall.kind === 'hotline'
+                              ? callFlow.pendingCall.hotline?.name
+                              : 'Reporter'}{' '}
+                            - record what happened when you are ready.
+                          </Text>
+                          <WorkflowButton
+                            label='Record call outcome'
+                            onPress={openCallOutcome}
                           />
-                        ) : null}
-                      </View>
-                      <View
-                        style={[
-                          styles.reportMetaTimelineCopy,
-                          currentTimelineStep === 'review' && styles.reportMetaTimelineCopyCurrent,
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.reportMetaTimelineLabel,
-                            currentTimelineStep === 'review' && styles.reportMetaTimelineLabelCurrent,
-                          ]}
-                        >
-                          Under review
-                        </Text>
-                        {/* Escalated and resolved reports have already completed verification. */}
-                        <Text
-                          style={[
-                            styles.reportMetaTimelineValue,
-                            currentTimelineStep === 'review' && styles.reportMetaTimelineValueCurrent,
-                          ]}
-                        >
-                          {detail.status !== 'unverified'
-                            ? `Confirmed by ${detail.verified.name ?? 'an official'} at ${
-                                detail.verified.at
-                                  ? formatPublishedAt(detail.verified.at)
-                                  : 'Unknown time'
-                              }`
-                            : 'Awaiting confirmation'}
-                        </Text>
-                        {detail.status !== 'unverified' && verificationNote ? (
-                          <Text
-                            style={[
-                              styles.reportMetaTimelineValue,
-                              currentTimelineStep === 'review' &&
-                                styles.reportMetaTimelineValueCurrent,
-                            ]}
+                          <TouchableOpacity
+                            style={operationStyles.quietAction}
+                            onPress={clearCallFollowup}
                           >
-                            {verificationNote}
-                          </Text>
-                        ) : null}
-                      </View>
-                    </View>
-                    {hasResponseStarted ? (
-                      <View
-                        style={[
-                          styles.reportMetaTimelineItem,
-                          currentTimelineStep === 'status'
-                            ? styles.reportMetaTimelineItemCurrent
-                            : styles.reportMetaTimelineItemMuted,
-                          currentTimelineStep === 'status' &&
-                            styles.reportMetaTimelineItemFollowsExtendedLine,
-                        ]}
-                      >
-                        <View style={styles.reportMetaTimelineMarker}>
-                          <View
-                            style={[
-                              styles.reportMetaTimelineIcon,
-                              currentTimelineStep === 'status' &&
-                                styles.reportMetaTimelineIconCurrent,
-                            ]}
-                          >
-                            <Ionicons
-                              name="chatbubbles"
-                              size={currentTimelineStep === 'status' ? 24 : 18}
-                              color={colors.navigationActive}
+                            <Text style={operationStyles.quietActionText}>
+                              No call made
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                      )}
+                      <WorkflowFeedback
+                        busy={callFlow.calling}
+                        error={callFlow.error}
+                      />
+                      <View style={styles.reportMetaTimeline}>
+                        <OperationTimelineStep
+                          title='Review & routing'
+                          summary={detail.barangayName
+                            ? 'Assigned to ' + detail.barangayName
+                            : 'Check the receiving office'}
+                          icon='location'
+                          current={operationStep === 'review'}
+                        >
+                          {detail.lifecycleFacts.jurisdictionStatus ===
+                                'needs_check' && kind === 'MDRRMO'
+                            ? (
+                              <JurisdictionCheckPanel
+                                reportId={detail.id}
+                                onDone={() =>
+                                  operationSaved(
+                                    'Jurisdiction decision saved.',
+                                  )}
+                              />
+                            )
+                            : (
+                              <ReviewDecisionPanel
+                                stage='claim'
+                                key={detail.id}
+                                detail={detail}
+                                currentUserId={detail.currentUserId}
+                                onChanged={() => void reload()}
+                                onSuccess={showSuccess}
+                                onOpenLinkSheet={() => setLinkVisible(true)}
+                              />
+                            )}
+
+                          {!detail.canReroute &&
+                            !detail.allowedReviewActions.some((action) =>
+                              action === 'claim' || action === 'take_over'
+                            ) &&
+                            detail.lifecycleFacts.jurisdictionStatus !==
+                              'needs_check' &&
+                            (
+                              <Text style={operationStyles.caption}>
+                                Routing is set.
+                              </Text>
+                            )}
+                          {detail.canReroute && (
+                            <ReportRoutingPanel
+                              reportId={detail.id}
+                              barangayName={detail.barangayName}
+                              onDone={handleReportRouted}
                             />
-                          </View>
-                          {isResolved || isEscalated ? (
-                            <View style={[
-                              styles.reportMetaTimelineLine,
-                              styles.reportMetaTimelineLineToCurrent,
-                            ]} />
-                          ) : null}
-                        </View>
-                        <View
-                          style={[
-                            styles.reportMetaTimelineCopy,
-                            currentTimelineStep === 'status' && styles.reportMetaTimelineCopyCurrent,
-                          ]}
+                          )}
+                          {operationStep === 'review' && canLogResponse &&
+                            !detail.incidentCase && (
+                            <WorkflowActionRow
+                              title='Record activity'
+                              icon='create-outline'
+                              onPress={openActivityComposer}
+                            />
+                          )}
+                        </OperationTimelineStep>
+                        <OperationTimelineStep
+                          title='Evidence & contact'
+                          key={'evidence-' + detail.id + '-' +
+                            (operationStep ?? 'completed')}
+                          defaultExpanded={operationStep !== null}
+                          last={!showReviewDecision && !detail.incidentCase}
+                          summary='Report details and optional contact'
+                          icon='document-text'
                         >
-                          <Text
-                            style={[
-                              styles.reportMetaTimelineLabel,
-                              currentTimelineStep === 'status' && styles.reportMetaTimelineLabelCurrent,
-                            ]}
-                          >
-                            Status
-                          </Text>
-                          <Text
-                            style={[
-                              styles.reportMetaTimelineValue,
-                              currentTimelineStep === 'status' &&
-                                styles.reportMetaTimelineValueCurrent,
-                            ]}
-                          >
-                            Response ongoing
-                          </Text>
-                        </View>
-                      </View>
-                    ) : null}
-                    {isEscalated ? (
-                      <View
-                        style={[
-                          styles.reportMetaTimelineItem,
-                          styles.reportMetaTimelineItemCurrent,
-                          styles.reportMetaTimelineItemFollowsExtendedLine,
-                        ]}
-                      >
-                        <View style={styles.reportMetaTimelineMarker}>
-                          <View style={[styles.reportMetaTimelineIcon, styles.reportMetaTimelineIconCurrent]}>
-                            <Ionicons name="megaphone" size={24} color={colors.navigationActive} />
-                          </View>
-                        </View>
-                        <View style={[styles.reportMetaTimelineCopy, styles.reportMetaTimelineCopyCurrent]}>
-                          <Text style={[styles.reportMetaTimelineLabel, styles.reportMetaTimelineLabelCurrent]}>
-                            Requesting assistance
-                          </Text>
-                          <Text
-                            style={[styles.reportMetaTimelineValue, styles.reportMetaTimelineValueCurrent]}
-                          >
-                            {`Escalated by ${detail.escalated.name ?? 'an official'} at ${
-                              detail.escalated.at
-                                ? formatPublishedAt(detail.escalated.at)
-                                : 'Unknown time'
-                            }`}
-                          </Text>
-                          {escalationNote ? (
-                            <Text
-                              style={[
-                                styles.reportMetaTimelineValue,
-                                styles.reportMetaTimelineValueCurrent,
-                              ]}
-                            >
-                              {escalationNote}
+                          <View style={operationStyles.section}>
+                            <Text style={styles.detailBody}>
+                              {detail.description.trim() ||
+                                'No description provided.'}
                             </Text>
-                          ) : null}
-                        </View>
-                      </View>
-                    ) : null}
-                    {isResolved ? (
-                      <View
-                        style={[
-                          styles.reportMetaTimelineItem,
-                          styles.reportMetaTimelineItemCurrent,
-                          styles.reportMetaTimelineItemFollowsExtendedLine,
-                        ]}
-                      >
-                        <View style={styles.reportMetaTimelineMarker}>
-                          <View style={[styles.reportMetaTimelineIcon, styles.reportMetaTimelineIconCurrent]}>
-                            <Ionicons name="checkmark-circle" size={24} color={colors.navigationActive} />
-                          </View>
-                        </View>
-                        <View style={[styles.reportMetaTimelineCopy, styles.reportMetaTimelineCopyCurrent]}>
-                          <Text style={[styles.reportMetaTimelineLabel, styles.reportMetaTimelineLabelCurrent]}>
-                            Resolved
-                          </Text>
-                          <Text
-                            style={[styles.reportMetaTimelineValue, styles.reportMetaTimelineValueCurrent]}
-                          >
-                            {`Resolved by ${detail.resolved.name ?? 'an official'} at ${
-                              detail.resolved.at
-                                ? formatPublishedAt(detail.resolved.at)
-                                : 'Unknown time'
-                            }`}
-                          </Text>
-                          {resolutionNote ? (
-                            <Text
-                              style={[
-                                styles.reportMetaTimelineValue,
-                                styles.reportMetaTimelineValueCurrent,
-                              ]}
-                            >
-                              {resolutionNote}
+                            <Text style={operationStyles.caption}>
+                              Received{' '}
+                              {formatOperationTimestamp(detail.createdAt)}
                             </Text>
-                          ) : null}
-                        </View>
+                            {detail.media.length > 0 && (
+                              <MediaCollage
+                                media={detail.media}
+                                onOpenPreview={setMediaPreview}
+                                onOpenGallery={() =>
+                                  setMediaPreview(detail.media[0])}
+                              />
+                            )}
+                            {locationWasUpdated && (
+                              <Text style={operationStyles.caption}>
+                                Updated location: {currentLocationWithPin}
+                              </Text>
+                            )}
+                            {canCorrectTimelineLocation && (
+                              <WorkflowActionRow
+                                title='Correct incident location'
+                                icon='location-outline'
+                                onPress={openTimelineLocationCorrection}
+                                disabled={locationCorrectionBusy}
+                              />
+                            )}
+                            {detail.canContactReporter && (
+                              <WorkflowActionRow
+                                title='Call reporter'
+                                description='Optional - a call is not required to verify'
+                                icon='call-outline'
+                                onPress={handleCallReporter}
+                                disabled={contactBusy ||
+                                  Boolean(callFlow.pendingCall)}
+                              />
+                            )}
+                          </View>
+                        </OperationTimelineStep>
+                        {showReviewDecision && (
+                          <OperationTimelineStep
+                            title='Review decision'
+                            collapsible={hasReviewDecisionControls}
+                            summary={reviewDecisionSummary}
+                            icon='checkmark-circle'
+                            current={operationStep === 'decision'}
+                            last={!detail.incidentCase}
+                          >
+                            <ReviewDecisionPanel
+                              stage='decision'
+                              key={detail.id}
+                              detail={detail}
+                              currentUserId={detail.currentUserId}
+                              onChanged={() => void reload()}
+                              onSuccess={showSuccess}
+                              onOpenLinkSheet={() => setLinkVisible(true)}
+                            />
+                            {operationStep === 'decision' && canLogResponse &&
+                              !detail.incidentCase && (
+                              <WorkflowActionRow
+                                title='Record activity'
+                                icon='create-outline'
+                                onPress={openActivityComposer}
+                              />
+                            )}
+                          </OperationTimelineStep>
+                        )}
+                        {detail.incidentCase && kind && (
+                          <IncidentCasePanel
+                            key={detail.incidentCase.id}
+                            currentReportId={detail.id}
+                            incident={detail.incidentCase}
+                            viewerKind={kind}
+                            allowedActions={detail.allowedIncidentActions}
+                            onChanged={() =>
+                              operationSaved('Incident updated.')}
+                            assessmentRequested={reviewOutcome ===
+                              'needs_assessment'}
+                            onLogActivity={openActivityComposer}
+                          />
+                        )}
                       </View>
-                    ) : null}
-                  </View>
-                  {detail.allowedTransitions.length > 0 ? (
-                    <View style={styles.timelineStatusAction}>
-                      <View style={styles.timelineStatusActionConnector}>
-                        <Ionicons
-                          name="return-down-forward-outline"
-                          size={24}
-                          color={colors.textMuted}
-                        />
-                      </View>
-                      <View style={styles.statusActionsCard}>
-                        <TextInput
-                          style={styles.noteInput}
-                          value={note}
-                          onChangeText={setNote}
-                          placeholder="Add a short note for the timeline (500 characters)"
-                          placeholderTextColor={colors.textMuted}
-                          multiline
-                          maxLength={500}
-                          editable={!actionBusy}
-                        />
-                        <View style={styles.actionColumn}>
-                          {detail.allowedTransitions.map((target) => {
-                            const isEscalate = target === 'escalated';
-                            return (
-                              <TouchableOpacity
-                                key={target}
+
+
+                      <OperationTimelineStep
+                        title='Report history'
+                        collapsible={false}
+                        summary='Review decisions and routing changes'
+                        icon='chatbubbles'
+                        utility
+                      >
+                        {sortedReportEvents.length === 0 && (
+                          <Text style={operationStyles.caption}>
+                            No review activity recorded yet.
+                          </Text>
+                        )}
+                        {sortedReportEvents.slice(0, 3).map((event) => (
+                          <WorkflowHistoryRow
+                            key={event.id}
+                            title={timelineLabel(event)}
+                            eventType={event.eventType}
+                            timestamp={event.createdAt}
+                            actorName={event.changedByName}
+                            details={event.detail}
+                            note={event.note}
+                          />
+                        ))}
+                        {sortedReportEvents.length > 0 && (
+                          <WorkflowActionRow
+                            title='View all report history'
+                            icon='time-outline'
+                            onPress={() => setReportHistoryVisible(true)}
+                          />
+                        )}
+                      </OperationTimelineStep>
+
+                      {detail.mediaError
+                        ? (
+                          <Text
+                            style={[styles.detailBody, {
+                              color: colors.danger,
+                            }]}
+                          >
+                            {detail.mediaError}
+                          </Text>
+                        )
+                        : null}
+                    </View>
+                  )
+                  : null}
+
+                {!isResponseOfficial
+                  ? (
+                    <View style={styles.detailCard}>
+                      {!isResponseOfficial
+                        ? (
+                          <>
+                            <View style={styles.queueCardHeader}>
+                              <Text style={styles.detailTitle}>
+                                {detail.title.trim() || 'Untitled report'}
+                              </Text>
+                              <View
                                 style={[
-                                  isEscalate
-                                    ? styles.dangerAction
-                                    : styles.primaryAction,
-                                  actionBusy && styles.actionDisabled,
+                                  styles.statusPill,
+                                  statusPillStyle(detail.status),
                                 ]}
-                                onPress={() => confirmTransition(target)}
-                                disabled={actionBusy || contactBusy}
-                                activeOpacity={0.85}
                               >
-                                {actionBusy ? (
-                                  <ActivityIndicator
-                                    color={isEscalate ? colors.escalated : colors.white}
+                                <Text style={styles.statusPillText}>
+                                  {kind === 'Mayor'
+                                    ? mayorReportStatusLabel({
+                                      status: detail.status,
+                                      barangayName: detail.barangayName,
+                                      reverifiedAt: detail.reverified.at,
+                                    })
+                                    : statusLabel(detail.status)}
+                                </Text>
+                              </View>
+                            </View>
+
+                            <Text style={styles.detailBody}>
+                              {detail.description.trim() ||
+                                'No description provided.'}
+                            </Text>
+                          </>
+                        )
+                        : null}
+
+                      {!isResponseOfficial
+                        ? (
+                          <IncidentTypeBadge
+                            incidentType={detail.incidentType}
+                            incidentTypeOther={detail.incidentTypeOther}
+                          />
+                        )
+                        : null}
+
+                      {!isResponseOfficial
+                        ? (
+                          <View style={styles.metaRow}>
+                            <Text style={styles.metaLabel}>Reporter</Text>
+                            <Text style={styles.metaValue}>
+                              {detail.reporterName}
+                            </Text>
+                          </View>
+                        )
+                        : null}
+
+                      {!isResponseOfficial
+                        ? (
+                          <>
+                            <View style={styles.metaRow}>
+                              <Text style={styles.metaLabel}>Location</Text>
+                              <Text style={styles.metaValue}>
+                                {detail.addressText?.trim() ||
+                                  `${detail.latitude.toFixed(5)}, ${
+                                    detail.longitude.toFixed(5)
+                                  }`}
+                              </Text>
+                            </View>
+
+                            <View style={styles.metaRow}>
+                              <Text style={styles.metaLabel}>Reported</Text>
+                              <Text style={styles.metaValue}>
+                                {detail.createdAt
+                                  ? formatPublishedAt(detail.createdAt)
+                                  : 'Unknown'}
+                              </Text>
+                            </View>
+                          </>
+                        )
+                        : null}
+
+                      {!isResponseOfficial && detail.media.length > 0
+                        ? (
+                          <View style={styles.metaRow}>
+                            <Text style={styles.metaLabel}>Media</Text>
+                            <View style={styles.mediaRow}>
+                              {detail.media.map((item) => (
+                                <TouchableOpacity
+                                  key={item.id}
+                                  style={styles.mediaThumb}
+                                  onPress={() => setMediaPreview(item)}
+                                  activeOpacity={0.85}
+                                  accessibilityRole='button'
+                                  accessibilityLabel={item.type === 'video'
+                                    ? 'View video'
+                                    : 'View photo'}
+                                >
+                                  {item.type === 'photo'
+                                    ? (
+                                      <Image
+                                        source={{ uri: item.url }}
+                                        style={styles.mediaThumbImage}
+                                        resizeMode='cover'
+                                      />
+                                    )
+                                    : (
+                                      <View style={styles.mediaVideoThumb}>
+                                        <Ionicons
+                                          name='play-circle'
+                                          size={36}
+                                          color={colors.themeSoft}
+                                        />
+                                      </View>
+                                    )}
+                                </TouchableOpacity>
+                              ))}
+                            </View>
+                          </View>
+                        )
+                        : null}
+
+                      {!isResponseOfficial && detail.mediaError
+                        ? (
+                          <Text
+                            style={[styles.detailBody, {
+                              color: colors.danger,
+                            }]}
+                          >
+                            {detail.mediaError}
+                          </Text>
+                        )
+                        : null}
+
+                      {detail.canContactReporter
+                        ? (
+                          <TouchableOpacity
+                            style={[
+                              styles.primaryAction,
+                              styles.callReporterAction,
+                              contactBusy && styles.actionDisabled,
+                            ]}
+                            onPress={handleCallReporter}
+                            disabled={contactBusy}
+                            activeOpacity={0.85}
+                            accessibilityRole='button'
+                            accessibilityLabel={`Call reporter ${
+                              detail.maskedPhone ?? ''
+                            }`}
+                          >
+                            {contactBusy
+                              ? <ActivityIndicator color={colors.white} />
+                              : (
+                                <>
+                                  <Ionicons
+                                    name='call'
+                                    size={18}
+                                    color={colors.white}
                                   />
-                                ) : (
-                                  <Text
-                                    style={
-                                      isEscalate
-                                        ? styles.dangerActionText
-                                        : styles.primaryActionText
-                                    }
-                                  >
-                                    {transitionActionLabel(target)}
+                                  <Text style={styles.primaryActionText}>
+                                    {detail.maskedPhone ?? 'Number unavailable'}
+                                  </Text>
+                                </>
+                              )}
+                          </TouchableOpacity>
+                        )
+                        : null}
+                    </View>
+                  )
+                  : null}
+
+                {!isResponseOfficial &&
+                    (detail.canEditContent || detail.canCorrectLocation)
+                  ? (
+                    <View style={styles.detailCard}>
+                      <View style={styles.queueCardHeader}>
+                        <Text style={styles.sectionTitle}>
+                          {detail.canEditContent
+                            ? 'Correct incident details'
+                            : 'Correct incident location'}
+                        </Text>
+                        {!editing
+                          ? (
+                            <TouchableOpacity
+                              style={styles.retryButton}
+                              onPress={beginEdit}
+                              accessibilityRole='button'
+                              accessibilityLabel='Edit incident details'
+                            >
+                              <Text style={styles.retryButtonText}>Edit</Text>
+                            </TouchableOpacity>
+                          )
+                          : null}
+                      </View>
+                      {editing
+                        ? (
+                          <>
+                            {detail.canEditContent
+                              ? (
+                                <>
+                                  <Text style={styles.formLabel}>
+                                    Title (optional)
+                                  </Text>
+                                  <TextInput
+                                    style={styles.formInput}
+                                    value={editTitle}
+                                    onChangeText={setEditTitle}
+                                    maxLength={120}
+                                    editable={!editBusy}
+                                  />
+                                  <Text style={styles.formLabel}>
+                                    Description
+                                  </Text>
+                                  <TextInput
+                                    style={[
+                                      styles.formInput,
+                                      styles.formTextArea,
+                                    ]}
+                                    value={editDescription}
+                                    onChangeText={setEditDescription}
+                                    multiline
+                                    maxLength={2000}
+                                    editable={!editBusy}
+                                  />
+                                </>
+                              )
+                              : null}
+                            <Text style={styles.formLabel}>Address</Text>
+                            <TextInput
+                              style={styles.formInput}
+                              value={editAddress}
+                              onChangeText={setEditAddress}
+                              maxLength={300}
+                              editable={!editBusy}
+                            />
+                            {!detail.canEditContent
+                              ? (
+                                <>
+                                  <Text style={styles.formLabel}>
+                                    Correction note (optional)
+                                  </Text>
+                                  <TextInput
+                                    style={[
+                                      styles.formInput,
+                                      styles.formTextArea,
+                                    ]}
+                                    value={editCorrectionNote}
+                                    onChangeText={setEditCorrectionNote}
+                                    placeholder='Why is the response location being corrected?'
+                                    placeholderTextColor={colors.textMuted}
+                                    multiline
+                                    maxLength={500}
+                                    editable={!editBusy}
+                                  />
+                                </>
+                              )
+                              : null}
+                            <Text style={styles.formLabel}>Coordinates</Text>
+                            <TextInput
+                              style={styles.formInput}
+                              value={editLatitude}
+                              onChangeText={setEditLatitude}
+                              placeholder='Latitude'
+                              placeholderTextColor={colors.textMuted}
+                              keyboardType='decimal-pad'
+                              editable={!editBusy}
+                            />
+                            <TextInput
+                              style={styles.formInput}
+                              value={editLongitude}
+                              onChangeText={setEditLongitude}
+                              placeholder='Longitude'
+                              placeholderTextColor={colors.textMuted}
+                              keyboardType='decimal-pad'
+                              editable={!editBusy}
+                            />
+                            <TouchableOpacity
+                              style={[
+                                styles.primaryAction,
+                                editBusy && styles.actionDisabled,
+                              ]}
+                              onPress={() => void saveEdit()}
+                              disabled={editBusy}
+                              activeOpacity={0.85}
+                            >
+                              {editBusy
+                                ? <ActivityIndicator color={colors.white} />
+                                : (
+                                  <Text style={styles.primaryActionText}>
+                                    Save corrections
                                   </Text>
                                 )}
-                              </TouchableOpacity>
-                            );
-                          })}
-                        </View>
-                      </View>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={styles.secondaryAction}
+                              onPress={() => setEditing(false)}
+                              disabled={editBusy}
+                              activeOpacity={0.85}
+                            >
+                              <Text style={styles.secondaryActionText}>
+                                Cancel
+                              </Text>
+                            </TouchableOpacity>
+                          </>
+                        )
+                        : (
+                          <Text style={styles.queueMeta}>
+                            {detail.canEditContent
+                              ? 'The submitting officer may correct content and location. Every location change is audited.'
+                              : 'Authorized responders may correct the response point. The original device location remains unchanged.'}
+                          </Text>
+                        )}
                     </View>
-                  ) : null}
-                  {detail.mediaError ? (
-                    <Text style={[styles.detailBody, { color: colors.danger }]}>
-                      {detail.mediaError}
-                    </Text>
-                  ) : null}
-                </View>
-              ) : null}
+                  )
+                  : null}
 
-              {!isResponseOfficial ? (
-                <View style={styles.detailCard}>
-                {!isResponseOfficial ? (
-                  <>
-                    <View style={styles.queueCardHeader}>
-                      <Text style={styles.detailTitle}>
-                        {detail.title.trim() || 'Untitled report'}
-                      </Text>
-                      <View
-                        style={[styles.statusPill, statusPillStyle(detail.status)]}
-                      >
-                        <Text style={styles.statusPillText}>
-                          {kind === 'Mayor'
-                            ? mayorReportStatusLabel({
-                                status: detail.status,
-                                barangayName: detail.barangayName,
-                                reverifiedAt: detail.reverified.at,
-                              })
-                            : statusLabel(detail.status)}
-                        </Text>
-                      </View>
-                    </View>
-
-                    <Text style={styles.detailBody}>
-                      {detail.description.trim() || 'No description provided.'}
-                    </Text>
-                  </>
-                ) : null}
-
-                {!isResponseOfficial ? (
-                  <IncidentTypeBadge
-                    incidentType={detail.incidentType}
-                    incidentTypeOther={detail.incidentTypeOther}
-                  />
-                ) : null}
-
-                {!isResponseOfficial ? (
-                  <View style={styles.metaRow}>
-                    <Text style={styles.metaLabel}>Reporter</Text>
-                    <Text style={styles.metaValue}>{detail.reporterName}</Text>
-                  </View>
-                ) : null}
-
-                {!isResponseOfficial ? (
-                  <>
-                    <View style={styles.metaRow}>
-                      <Text style={styles.metaLabel}>Location</Text>
-                      <Text style={styles.metaValue}>
-                        {detail.addressText?.trim() ||
-                          `${detail.latitude.toFixed(5)}, ${detail.longitude.toFixed(5)}`}
-                      </Text>
-                    </View>
-
-                    <View style={styles.metaRow}>
-                      <Text style={styles.metaLabel}>Reported</Text>
-                      <Text style={styles.metaValue}>
-                        {detail.createdAt
-                          ? formatPublishedAt(detail.createdAt)
-                          : 'Unknown'}
-                      </Text>
-                    </View>
-                  </>
-                ) : null}
-
-                {!isResponseOfficial && detail.media.length > 0 ? (
-                  <View style={styles.metaRow}>
-                    <Text style={styles.metaLabel}>Media</Text>
-                    <View style={styles.mediaRow}>
-                      {detail.media.map((item) => (
+                {!isResponseOfficial
+                  ? (
+                    <View style={styles.collapsibleRow}>
+                      <View style={styles.collapsiblePanel}>
                         <TouchableOpacity
-                          key={item.id}
-                          style={styles.mediaThumb}
-                          onPress={() => setMediaPreview(item)}
+                          style={styles.collapsibleHeader}
+                          onPress={() => setVerificationOpen((open) => !open)}
                           activeOpacity={0.85}
-                          accessibilityRole="button"
-                          accessibilityLabel={
-                            item.type === 'video' ? 'View video' : 'View photo'
-                          }
+                          accessibilityRole='button'
+                          accessibilityState={{ expanded: verificationOpen }}
+                          accessibilityLabel='Verification'
                         >
-                          {item.type === 'photo' ? (
-                            <Image
-                              source={{ uri: item.url }}
-                              style={styles.mediaThumbImage}
-                              resizeMode="cover"
-                            />
-                          ) : (
-                            <View style={styles.mediaVideoThumb}>
-                              <Ionicons
-                                name="play-circle"
-                                size={36}
-                                color={colors.themeSoft}
-                              />
-                            </View>
-                          )}
+                          <Text
+                            style={styles.collapsibleHeaderText}
+                            numberOfLines={1}
+                          >
+                            Verification
+                          </Text>
+                          <Ionicons
+                            name={verificationOpen
+                              ? 'chevron-up'
+                              : 'chevron-down'}
+                            size={18}
+                            color={colors.textMuted}
+                          />
                         </TouchableOpacity>
-                      ))}
-                    </View>
-                  </View>
-                ) : null}
+                        {verificationOpen
+                          ? (
+                            <View style={styles.collapsibleBody}>
+                              <View style={styles.metaRow}>
+                                <Text style={styles.metaLabel}>Device GPS</Text>
+                                <Text style={styles.metaValue}>
+                                  {detail.deviceLatitude == null ||
+                                      detail.deviceLongitude == null
+                                    ? 'Not available for this legacy report'
+                                    : `${detail.deviceLatitude.toFixed(5)}, ${
+                                      detail.deviceLongitude.toFixed(5)
+                                    }`}
+                                </Text>
+                              </View>
+                              <View style={styles.metaRow}>
+                                <Text style={styles.metaLabel}>
+                                  GPS accuracy
+                                </Text>
+                                <Text style={styles.metaValue}>
+                                  {detail.gpsAccuracyMeters == null
+                                    ? 'Not recorded'
+                                    : `±${
+                                      Math.round(detail.gpsAccuracyMeters)
+                                    } m`}
+                                </Text>
+                              </View>
+                              <View style={styles.metaRow}>
+                                <Text style={styles.metaLabel}>
+                                  Pin adjustment
+                                </Text>
+                                <Text style={styles.metaValue}>
+                                  {detail.locationAdjustmentMeters == null
+                                    ? 'Not recorded'
+                                    : `${
+                                      Math.round(
+                                        detail.locationAdjustmentMeters,
+                                      )
+                                    } m`}
+                                </Text>
+                              </View>
+                              <View style={styles.metaRow}>
+                                <Text style={styles.metaLabel}>
+                                  Verified by
+                                </Text>
+                                <Text style={styles.metaValue}>
+                                  {formatAttribution(
+                                    detail.verified.name,
+                                    detail.verified.at,
+                                  )}
+                                </Text>
+                              </View>
+                              <View style={styles.metaRow}>
+                                <Text style={styles.metaLabel}>
+                                  Re-verified by
+                                </Text>
+                                <Text style={styles.metaValue}>
+                                  {formatAttribution(
+                                    detail.reverified.name,
+                                    detail.reverified.at,
+                                  )}
+                                </Text>
+                              </View>
+                              <View style={styles.metaRow}>
+                                <Text style={styles.metaLabel}>
+                                  Escalated by
+                                </Text>
+                                <Text style={styles.metaValue}>
+                                  {formatAttribution(
+                                    detail.escalated.name,
+                                    detail.escalated.at,
+                                  )}
+                                </Text>
+                              </View>
+                              <View style={styles.metaRow}>
+                                <Text style={styles.metaLabel}>
+                                  Resolved by
+                                </Text>
+                                <Text style={styles.metaValue}>
+                                  {formatAttribution(
+                                    detail.resolved.name,
+                                    detail.resolved.at,
+                                  )}
+                                </Text>
+                              </View>
+                            </View>
+                          )
+                          : null}
+                      </View>
 
-                {!isResponseOfficial && detail.mediaError ? (
-                  <Text style={[styles.detailBody, { color: colors.danger }]}>
-                    {detail.mediaError}
-                  </Text>
-                ) : null}
-
-                {detail.canContactReporter ? (
-                  <TouchableOpacity
-                    style={[
-                      styles.primaryAction,
-                      styles.callReporterAction,
-                      contactBusy && styles.actionDisabled,
-                    ]}
-                    onPress={confirmCallReporter}
-                    disabled={contactBusy || actionBusy}
-                    activeOpacity={0.85}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Call reporter ${detail.maskedPhone ?? ''}`}
-                  >
-                    {contactBusy ? (
-                      <ActivityIndicator color={colors.white} />
-                    ) : (
-                      <>
-                        <Ionicons name="call" size={18} color={colors.white} />
-                        <Text style={styles.primaryActionText}>
-                          {detail.maskedPhone ?? 'Number unavailable'}
-                        </Text>
-                      </>
-                    )}
-                  </TouchableOpacity>
-                ) : null}
-                </View>
-              ) : null}
-
-              {!isResponseOfficial && (detail.canEditContent || detail.canCorrectLocation) ? (
-                <View style={styles.detailCard}>
-                  <View style={styles.queueCardHeader}>
-                    <Text style={styles.sectionTitle}>
-                      {detail.canEditContent
-                        ? 'Correct incident details'
-                        : 'Correct incident location'}
-                    </Text>
-                    {!editing ? (
-                      <TouchableOpacity
-                        style={styles.retryButton}
-                        onPress={beginEdit}
-                        accessibilityRole="button"
-                        accessibilityLabel="Edit incident details"
-                      >
-                        <Text style={styles.retryButtonText}>Edit</Text>
-                      </TouchableOpacity>
-                    ) : null}
-                  </View>
-                  {editing ? (
-                    <>
-                      {detail.canEditContent ? (
-                        <>
-                          <Text style={styles.formLabel}>Title (optional)</Text>
-                          <TextInput
-                            style={styles.formInput}
-                            value={editTitle}
-                            onChangeText={setEditTitle}
-                            maxLength={120}
-                            editable={!editBusy}
+                      <View style={styles.collapsiblePanel}>
+                        <TouchableOpacity
+                          style={styles.collapsibleHeader}
+                          onPress={() => setTimelineOpen((open) => !open)}
+                          activeOpacity={0.85}
+                          accessibilityRole='button'
+                          accessibilityState={{ expanded: timelineOpen }}
+                          accessibilityLabel='Timeline'
+                        >
+                          <Text
+                            style={styles.collapsibleHeaderText}
+                            numberOfLines={1}
+                          >
+                            Timeline
+                          </Text>
+                          <Ionicons
+                            name={timelineOpen ? 'chevron-up' : 'chevron-down'}
+                            size={18}
+                            color={colors.textMuted}
                           />
-                          <Text style={styles.formLabel}>Description</Text>
-                          <TextInput
-                            style={[styles.formInput, styles.formTextArea]}
-                            value={editDescription}
-                            onChangeText={setEditDescription}
-                            multiline
-                            maxLength={2000}
-                            editable={!editBusy}
-                          />
-                        </>
-                      ) : null}
-                      <Text style={styles.formLabel}>Address</Text>
-                      <TextInput
-                        style={styles.formInput}
-                        value={editAddress}
-                        onChangeText={setEditAddress}
-                        maxLength={300}
-                        editable={!editBusy}
-                      />
-                      {!detail.canEditContent ? (
-                        <>
-                          <Text style={styles.formLabel}>Correction note (optional)</Text>
-                          <TextInput
-                            style={[styles.formInput, styles.formTextArea]}
-                            value={editCorrectionNote}
-                            onChangeText={setEditCorrectionNote}
-                            placeholder="Why is the response location being corrected?"
-                            placeholderTextColor={colors.textMuted}
-                            multiline
-                            maxLength={500}
-                            editable={!editBusy}
-                          />
-                        </>
-                      ) : null}
-                      <Text style={styles.formLabel}>Coordinates</Text>
-                      <TextInput
-                        style={styles.formInput}
-                        value={editLatitude}
-                        onChangeText={setEditLatitude}
-                        placeholder="Latitude"
-                        placeholderTextColor={colors.textMuted}
-                        keyboardType="decimal-pad"
-                        editable={!editBusy}
-                      />
-                      <TextInput
-                        style={styles.formInput}
-                        value={editLongitude}
-                        onChangeText={setEditLongitude}
-                        placeholder="Longitude"
-                        placeholderTextColor={colors.textMuted}
-                        keyboardType="decimal-pad"
-                        editable={!editBusy}
-                      />
-                      <TouchableOpacity
-                        style={[styles.primaryAction, editBusy && styles.actionDisabled]}
-                        onPress={() => void saveEdit()}
-                        disabled={editBusy}
-                        activeOpacity={0.85}
-                      >
-                        {editBusy ? <ActivityIndicator color={colors.white} /> : <Text style={styles.primaryActionText}>Save corrections</Text>}
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={styles.secondaryAction}
-                        onPress={() => setEditing(false)}
-                        disabled={editBusy}
-                        activeOpacity={0.85}
-                      >
-                        <Text style={styles.secondaryActionText}>Cancel</Text>
-                      </TouchableOpacity>
-                    </>
-                  ) : (
-                    <Text style={styles.queueMeta}>
-                      {detail.canEditContent
-                        ? 'The submitting officer may correct content and location. Every location change is audited.'
-                        : 'Authorized responders may correct the response point. The original device location remains unchanged.'}
-                    </Text>
-                  )}
-                </View>
-              ) : null}
-
-              {!isResponseOfficial ? (
-                <View style={styles.collapsibleRow}>
-                <View style={styles.collapsiblePanel}>
-                  <TouchableOpacity
-                    style={styles.collapsibleHeader}
-                    onPress={() => setVerificationOpen((open) => !open)}
-                    activeOpacity={0.85}
-                    accessibilityRole="button"
-                    accessibilityState={{ expanded: verificationOpen }}
-                    accessibilityLabel="Verification"
-                  >
-                    <Text style={styles.collapsibleHeaderText} numberOfLines={1}>
-                      Verification
-                    </Text>
-                    <Ionicons
-                      name={verificationOpen ? 'chevron-up' : 'chevron-down'}
-                      size={18}
-                      color={colors.textMuted}
-                    />
-                  </TouchableOpacity>
-                  {verificationOpen ? (
-                    <View style={styles.collapsibleBody}>
-                      <View style={styles.metaRow}>
-                        <Text style={styles.metaLabel}>Device GPS</Text>
-                        <Text style={styles.metaValue}>
-                          {detail.deviceLatitude == null || detail.deviceLongitude == null
-                            ? 'Not available for this legacy report'
-                            : `${detail.deviceLatitude.toFixed(5)}, ${detail.deviceLongitude.toFixed(5)}`}
-                        </Text>
-                      </View>
-                      <View style={styles.metaRow}>
-                        <Text style={styles.metaLabel}>GPS accuracy</Text>
-                        <Text style={styles.metaValue}>
-                          {detail.gpsAccuracyMeters == null
-                            ? 'Not recorded'
-                            : `±${Math.round(detail.gpsAccuracyMeters)} m`}
-                        </Text>
-                      </View>
-                      <View style={styles.metaRow}>
-                        <Text style={styles.metaLabel}>Pin adjustment</Text>
-                        <Text style={styles.metaValue}>
-                          {detail.locationAdjustmentMeters == null
-                            ? 'Not recorded'
-                            : `${Math.round(detail.locationAdjustmentMeters)} m`}
-                        </Text>
-                      </View>
-                      <View style={styles.metaRow}>
-                        <Text style={styles.metaLabel}>Verified by</Text>
-                        <Text style={styles.metaValue}>
-                          {formatAttribution(detail.verified.name, detail.verified.at)}
-                        </Text>
-                      </View>
-                      <View style={styles.metaRow}>
-                        <Text style={styles.metaLabel}>Re-verified by</Text>
-                        <Text style={styles.metaValue}>
-                          {formatAttribution(
-                            detail.reverified.name,
-                            detail.reverified.at,
-                          )}
-                        </Text>
-                      </View>
-                      <View style={styles.metaRow}>
-                        <Text style={styles.metaLabel}>Escalated by</Text>
-                        <Text style={styles.metaValue}>
-                          {formatAttribution(
-                            detail.escalated.name,
-                            detail.escalated.at,
-                          )}
-                        </Text>
-                      </View>
-                      <View style={styles.metaRow}>
-                        <Text style={styles.metaLabel}>Resolved by</Text>
-                        <Text style={styles.metaValue}>
-                          {formatAttribution(detail.resolved.name, detail.resolved.at)}
-                        </Text>
+                        </TouchableOpacity>
+                        {timelineOpen
+                          ? (
+                            <View style={styles.collapsibleBody}>
+                              {detail.timeline.length === 0
+                                ? (
+                                  <Text style={styles.queueMeta}>
+                                    No timeline events yet.
+                                  </Text>
+                                )
+                                : (
+                                  detail.timeline.map((event) => (
+                                    <View
+                                      key={event.id}
+                                      style={styles.timelineItem}
+                                    >
+                                      <Text style={styles.timelineTitle}>
+                                        {timelineLabel(event)}
+                                      </Text>
+                                      <Text style={styles.timelineMeta}>
+                                        {[
+                                          event.changedByName,
+                                          event.createdAt
+                                            ? formatPublishedAt(event.createdAt)
+                                            : null,
+                                        ]
+                                          .filter(Boolean)
+                                          .join(' · ')}
+                                      </Text>
+                                      {event.note
+                                        ? (
+                                          <Text style={styles.timelineNote}>
+                                            {event.note}
+                                          </Text>
+                                        )
+                                        : null}
+                                    </View>
+                                  ))
+                                )}
+                            </View>
+                          )
+                          : null}
                       </View>
                     </View>
-                  ) : null}
-                </View>
+                  )
+                  : null}
 
-                <View style={styles.collapsiblePanel}>
-                  <TouchableOpacity
-                    style={styles.collapsibleHeader}
-                    onPress={() => setTimelineOpen((open) => !open)}
-                    activeOpacity={0.85}
-                    accessibilityRole="button"
-                    accessibilityState={{ expanded: timelineOpen }}
-                    accessibilityLabel="Timeline"
-                  >
-                    <Text style={styles.collapsibleHeaderText} numberOfLines={1}>
-                      Timeline
-                    </Text>
-                    <Ionicons
-                      name={timelineOpen ? 'chevron-up' : 'chevron-down'}
-                      size={18}
-                      color={colors.textMuted}
-                    />
-                  </TouchableOpacity>
-                  {timelineOpen ? (
-                    <View style={styles.collapsibleBody}>
-                      {detail.timeline.length === 0 ? (
-                        <Text style={styles.queueMeta}>No timeline events yet.</Text>
-                      ) : (
-                        detail.timeline.map((event) => (
-                          <View key={event.id} style={styles.timelineItem}>
-                            <Text style={styles.timelineTitle}>
-                              {timelineLabel(event)}
-                            </Text>
-                            <Text style={styles.timelineMeta}>
-                              {[
-                                event.changedByName,
-                                event.createdAt
-                                  ? formatPublishedAt(event.createdAt)
-                                  : null,
-                              ]
-                                .filter(Boolean)
-                                .join(' · ')}
-                            </Text>
-                            {event.note ? (
-                              <Text style={styles.timelineNote}>{event.note}</Text>
-                            ) : null}
-                          </View>
-                        ))
-                      )}
+                {kind === 'Mayor'
+                  ? (
+                    <View style={styles.readOnlyBanner}>
+                      <Text style={styles.readOnlyText}>
+                        Mayor view is read-only. Status changes and reporter
+                        contact are not available.
+                      </Text>
                     </View>
-                  ) : null}
-                </View>
-                </View>
-              ) : null}
-
-              {kind === 'Mayor' ? (
-                <View style={styles.readOnlyBanner}>
-                  <Text style={styles.readOnlyText}>
-                    Mayor view is read-only. Status changes and reporter contact
-                    are not available.
-                  </Text>
-                </View>
-              ) : null}
-
-            </>
-          ) : null}
+                  )
+                  : null}
+              </>
+            )
+            : null}
         </ScrollView>
+        {isResponseOfficial && !reroutedTo && successMessage && (
+          <WorkflowToast
+            key={successVersion}
+            topOffset={ownsPendingReview ? claimReminderHeight : 0}
+            message={successMessage}
+            onDismiss={() => showSuccess(null)}
+          />
+        )}
       </KeyboardAvoidingView>
 
+      {detail && (
+        <>
+          <LinkIncidentSheet
+            visible={linkVisible}
+            reportId={detail.id}
+            onClose={() => setLinkVisible(false)}
+            onLinked={() => operationSaved('Report linked to the incident.')}
+          />
+          <ResponseEventSheet
+            visible={responseVisible}
+            target={detail.incidentCase
+              ? { incidentCaseId: detail.incidentCase.id }
+              : { reportId: detail.id }}
+            initialType={responseType}
+            initialDetails={responseForCall && callFlow.pendingCall?.hotline
+              ? hotlineEventDetails(callFlow.pendingCall.hotline)
+              : undefined}
+            onClose={() => setResponseVisible(false)}
+            onLogged={(result) => {
+              if (responseForCall) callFlow.clearPendingCall();
+              operationSaved(callOutcomeFeedback(result));
+            }}
+          />
+        </>
+      )}
+      <ResourceFormSheet
+        visible={reportHistoryVisible}
+        title='Report history'
+        hasUnsavedChanges={false}
+        onClose={() => setReportHistoryVisible(false)}
+      >
+        {sortedReportEvents.map((event) => (
+          <WorkflowHistoryRow
+            key={event.id}
+            title={timelineLabel(event)}
+            eventType={event.eventType}
+            timestamp={event.createdAt}
+            actorName={event.changedByName}
+            details={event.detail}
+            note={event.note}
+          />
+        ))}
+      </ResourceFormSheet>
       <ReportMediaPreviewModal
         preview={mediaPreview}
         onClose={() => setMediaPreview(null)}
       />
-      {detail && correctedPosition ? (
-        <ReportLocationPicker
-          visible={locationPickerVisible}
-          incidentPosition={correctedPosition}
-          devicePosition={correctionDevicePosition}
-          adjustmentBoundaryPosition={{
-            latitude: detail.latitude,
-            longitude: detail.longitude,
-            accuracyMeters: detail.gpsAccuracyMeters,
-          }}
-          maximumDistanceMeters={getReportLocationAdjustmentLimit(
-            detail.gpsAccuracyMeters,
-          )}
-          onConfirm={confirmCorrectedPin}
-          onClose={() => setLocationPickerVisible(false)}
-        />
-      ) : null}
+      {detail && correctedPosition
+        ? (
+          <ReportLocationPicker
+            visible={locationPickerVisible}
+            incidentPosition={correctedPosition}
+            devicePosition={correctionDevicePosition}
+            adjustmentBoundaryPosition={{
+              latitude: detail.latitude,
+              longitude: detail.longitude,
+              accuracyMeters: detail.gpsAccuracyMeters,
+            }}
+            maximumDistanceMeters={getReportLocationAdjustmentLimit(
+              detail.gpsAccuracyMeters,
+            )}
+            onConfirm={confirmCorrectedPin}
+            onClose={() => setLocationPickerVisible(false)}
+          />
+        )
+        : null}
       <ReportBarangayPicker
         visible={barangayPickerVisible}
         barangays={correctionBarangayOptions}

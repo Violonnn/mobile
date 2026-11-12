@@ -10,7 +10,7 @@ const QUICK_ACTIONS = [
   {
     label: 'Reports',
     icon: 'location-outline' as const,
-    route: '/official/incidents?status=unverified&from=command',
+    route: '/official/incidents?queue=needs_review&from=command',
   },
   {
     label: 'Post advisory',

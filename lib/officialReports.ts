@@ -3,6 +3,7 @@
 // Status changes and reporter contact go through secure RPCs only.
 
 import { Linking } from 'react-native';
+import type { ResponseEventDetails } from './reportContactFlow';
 import { supabase } from './supabase';
 import { getActiveSession } from './auth';
 import {
@@ -17,11 +18,24 @@ import { formatInviteKind } from './invites';
 import { isIncidentType, type IncidentType } from './incidentTypes';
 import { isProfilePhotoSchemaMissing } from './schemaCompatibility';
 import { resolveSignedMediaUrls } from './mediaUrlCache';
+import { notifyReportPublicationChanged, processPublicReportPhoto } from './reportPublication';
+import { deriveLifecycle, hasCurrentResponseAction, type LifecycleFacts, type LifecycleSummary, type ReviewOutcome } from './reportLifecycle';
+import { allowedIncidentActions, callReportFlowRpc, fetchIncidentCaseDetail, validateFlowText, type IncidentAction, type IncidentCaseDetail } from './incidentCases';
+
+export type ReviewDecision = 'verify' | 'link' | 'needs_assessment' | 'could_not_confirm' | 'reject';
+export type OfficialWorkflowQueue = 'all' | 'needs_review' | 'under_review' | 'mine' | 'being_assessed' | 'awaiting_mdrrmo' | 'jurisdiction_check' | 'incoming_requests' | 'legacy_escalations' | 'municipal_review' | 'municipal_lead' | 'mayor_requests';
+export type ReviewAction = 'claim' | 'take_over' | 'release' | ReviewDecision;
+export type RejectReasonCode = 'test_or_spam' | 'not_an_emergency_incident' | 'outside_approved_type' | 'abusive_content' | 'insufficient_location' | 'other';
+export type ResponseEventType = 'reporter_call' | 'hotline_contacted' | 'assistance_requested' | 'dispatch_confirmed' | 'responders_on_site' | 'assistance_given' | 'work_done' | 'external_info' | 'internal_note';
+export type IncidentLinkCandidate = {
+  id: string; incidentCaseId: string; sourceReportId: string; incidentType: string | null;
+  verification: string; coordination: string; distanceMeters: number; linkedReportCount: number; createdAt: string;
+};
 
 const OFFICIAL_REPORT_QUEUE_LEGACY_SELECT =
   'id, title, description, incident_type, incident_type_other, status, barangay_id, address_text, created_at, latitude, longitude, reporter_id, reporter_first_name, reporter_last_name, reporter_middle_name, upvote_count, comment_count';
 const OFFICIAL_REPORT_QUEUE_SELECT =
-  `${OFFICIAL_REPORT_QUEUE_LEGACY_SELECT}, reporter_avatar_path`;
+  `${OFFICIAL_REPORT_QUEUE_LEGACY_SELECT}, reporter_avatar_path, incident_case_id, review_outcome, review_claimed_by, review_claimed_at, jurisdiction_status, intake_channel`;
 const REPORT_MAP_IDENTITY_LEGACY_SELECT =
   'latitude, longitude, reporter_id, reporter_first_name, reporter_last_name, reporter_middle_name';
 const REPORT_MAP_IDENTITY_SELECT =
@@ -31,7 +45,8 @@ export type ReportStatus =
   | 'unverified'
   | 'verified'
   | 'escalated'
-  | 'resolved';
+  | 'resolved'
+  | 'closed';
 
 export type OfficialKind = 'Mayor' | 'BDRRMO' | 'MDRRMO';
 
@@ -40,10 +55,15 @@ export type OfficialStatusCounts = {
   verified: number;
   escalated: number;
   resolved: number;
+  closed: number;
   total: number;
 };
 
 export type OfficialReportQueueItem = {
+  lifecycleFacts: LifecycleFacts;
+  lifecycle: LifecycleSummary;
+  incidentCaseId: string | null;
+  reviewClaimedById: string | null;
   id: string;
   title: string;
   description: string;
@@ -77,6 +97,7 @@ export type OfficialReportQueueItem = {
 };
 
 export type OfficialReportTimelineEvent = {
+  detail: Record<string, unknown>;
   id: string;
   eventType: string;
   fromStatus: ReportStatus | null;
@@ -92,6 +113,17 @@ export type OfficialAttribution = {
 };
 
 export type OfficialReportDetail = {
+  currentUserId: string;
+  lifecycleFacts: LifecycleFacts;
+  lifecycle: LifecycleSummary;
+  incidentCase: IncidentCaseDetail | null;
+  allowedReviewActions: ReviewAction[];
+  allowedIncidentActions: IncidentAction[];
+  reviewClaimedById: string | null;
+  reviewReasonCode: string | null;
+  intakeChannel: 'resident_app' | 'official_field' | 'hotline_call';
+  canReviewReport: boolean;
+  canReroute: boolean;
   id: string;
   title: string;
   description: string;
@@ -180,11 +212,153 @@ export function officialKindFromScope(scope: OfficialAccessScope): OfficialKind 
   return 'MDRRMO';
 }
 
+export function allowedReviewActions(
+  scope: OfficialAccessScope,
+  facts: LifecycleFacts & { barangayId: string | null; claimedById: string | null },
+  currentUserId: string,
+): ReviewAction[] {
+  if (scope.role !== 'officer' || !currentUserId) return [];
+  const canReview = scope.barangay_id
+    ? facts.barangayId === scope.barangay_id
+    : facts.barangayHasActiveBdrrmo === false;
+  if (!canReview || facts.reviewOutcome !== 'pending' || facts.jurisdictionStatus !== 'in_coverage') return [];
+  if (!facts.claimedById) return ['claim'];
+  if (facts.claimedById !== currentUserId) return ['take_over'];
+  return ['verify', 'link', 'needs_assessment', 'could_not_confirm', 'reject', 'release'];
+}
+
+async function reportMutation(name: string, reportId: string, fields: Record<string, unknown>, validationError: string | null = null): Promise<{ error: string | null }> {
+  if (!isValidReportId(reportId)) return { error: 'Invalid report id.' };
+  if (validationError) return { error: validationError };
+  return callReportFlowRpc(name, { p_report_id: reportId.trim(), ...fields });
+}
+
+export function claimReportReview(input: { reportId: string; takeOver?: boolean }) {
+  return reportMutation('claim_report_review', input.reportId, { p_take_over: input.takeOver ?? false });
+}
+export function releaseReportReview(input: { reportId: string; note?: string | null }) {
+  return reportMutation('release_report_review', input.reportId, { p_note: input.note?.trim() || null }, validateFlowText(input.note));
+}
+export type ReportPublicationDecision = {
+  operationId?: string;
+  publish?: boolean;
+  publicationAcknowledged?: boolean;
+  approveReporterName?: boolean;
+  approveReporterAvatar?: boolean;
+  approveExactLocation?: boolean;
+  photoMediaIds?: string[];
+  markIncidentSensitive?: boolean;
+  sensitivityReason?: string | null;
+};
+
+function createReportOperationId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (character) => {
+    const randomValue = Math.floor(Math.random() * 16);
+    const value = character === 'x' ? randomValue : (randomValue & 0x3) | 0x8;
+    return value.toString(16);
+  });
+}
+
+export async function reviewOfficialReport(input: {
+  reportId: string; decision: ReviewDecision; reasonCode?: RejectReasonCode | null;
+  note?: string | null; linkIncidentCaseId?: string | null; publication?: ReportPublicationDecision;
+}): Promise<{ error: string | null; publicAvailable?: boolean; publicationStatus?: string | null }> {
+  let validationError = validateFlowText(input.note, input.decision === 'could_not_confirm' || (input.decision === 'reject' && input.reasonCode === 'other'));
+  if (input.decision === 'reject' && !input.reasonCode) validationError = 'Select a rejection reason.';
+  if (input.decision === 'link' && !isValidReportId(input.linkIncidentCaseId)) validationError = 'Select an incident to link.';
+  const publication = input.publication ?? {};
+  const selectedPhotos = publication.photoMediaIds ?? [];
+  if (publication.publish && !publication.publicationAcknowledged) {
+    validationError = 'Review the source text and selected photos before saving.';
+  }
+  if (publication.markIncidentSensitive && (!publication.sensitivityReason?.trim() || selectedPhotos.length > 0 || publication.publish)) {
+    validationError = 'Give a safety reason and clear publication photos for a sensitive incident.';
+  }
+  if (new Set(selectedPhotos).size !== selectedPhotos.length) validationError = 'Select each photo only once.';
+  if (!isValidReportId(input.reportId)) return { error: 'Invalid report id.' };
+  if (validationError) return { error: validationError };
+
+  if (publication.publish) {
+    for (const mediaId of selectedPhotos) {
+      const prepared = await processPublicReportPhoto(input.reportId, mediaId);
+      if (prepared.error) return prepared;
+    }
+  }
+
+  try {
+    const { data, error } = await supabase.rpc('review_report_with_publication', {
+      p_operation_id: publication.operationId ?? createReportOperationId(),
+      p_report_id: input.reportId.trim(),
+      p_decision: input.decision,
+      p_reason_code: input.reasonCode ?? null,
+      p_note: input.note?.trim() || null,
+      p_link_incident_case_id: input.linkIncidentCaseId?.trim() || null,
+      p_public_title: null,
+      p_public_description: null,
+      p_publish: publication.publish ?? false,
+      p_approve_reporter_name: publication.approveReporterName ?? false,
+      p_approve_reporter_avatar: publication.approveReporterAvatar ?? false,
+      p_approve_exact_location: publication.approveExactLocation ?? false,
+      p_photo_media_ids: selectedPhotos,
+      p_publication_acknowledged: publication.publicationAcknowledged ?? false,
+      p_mark_incident_sensitive: publication.markIncidentSensitive ?? false,
+      p_sensitivity_reason: publication.sensitivityReason?.trim() || null,
+    });
+    if (error) return { error: error.message };
+    const result = data && typeof data === 'object' ? data as Record<string, unknown> : {};
+    notifyReportPublicationChanged();
+    return {
+      error: null,
+      publicAvailable: result.publicAvailable === true,
+      publicationStatus: typeof result.publicationStatus === 'string' ? result.publicationStatus : null,
+    };
+  } catch {
+    return { error: 'Could not connect. Check your connection and try again.' };
+  }
+}
+export function reopenReportReview(input: { reportId: string; reason: string }) {
+  return reportMutation('reopen_report_review', input.reportId, { p_reason: input.reason.trim() }, validateFlowText(input.reason, true));
+}
+export function rerouteReportBarangay(input: { reportId: string; targetBarangayId: string; reason: string }) {
+  return reportMutation('reroute_report_barangay', input.reportId, { p_target_barangay_id: input.targetBarangayId, p_reason: input.reason.trim() },
+    !isValidReportId(input.targetBarangayId) ? 'Select a valid barangay.' : validateFlowText(input.reason, true));
+}
+export function resolveReportJurisdiction(input: { reportId: string; decision: 'in_coverage' | 'outside_coverage'; barangayId?: string | null; note?: string | null }) {
+  return reportMutation('resolve_report_jurisdiction', input.reportId, { p_decision: input.decision, p_barangay_id: input.barangayId ?? null, p_note: input.note?.trim() || null },
+    input.barangayId && !isValidReportId(input.barangayId) ? 'Select a valid barangay.' : validateFlowText(input.note));
+}
+export function logReportContact(input: { reportId: string; eventType: ResponseEventType; details: ResponseEventDetails; note?: string | null }) {
+  return reportMutation('log_report_contact', input.reportId, { p_event_type: input.eventType, p_details: input.details, p_note: input.note?.trim() || null }, validateFlowText(input.note));
+}
+
+export async function fetchIncidentLinkCandidates(reportId: string): Promise<{ candidates: IncidentLinkCandidate[]; error: string | null }> {
+  if (!isValidReportId(reportId)) return { candidates: [], error: 'Invalid report id.' };
+  const { data, error } = await supabase.rpc('list_incident_link_candidates', { p_report_id: reportId });
+  if (error) return { candidates: [], error: error.message };
+  return { candidates: (data ?? []).map((row: Record<string, unknown>) => ({
+    id: String(row.incident_case_id), incidentCaseId: String(row.incident_case_id), sourceReportId: String(row.source_report_id),
+    incidentType: row.incident_type ? String(row.incident_type) : null, verification: String(row.verification),
+    coordination: String(row.coordination), distanceMeters: Number(row.distance_meters), linkedReportCount: Number(row.linked_report_count), createdAt: String(row.created_at),
+  })), error: null };
+}
+
+export async function fetchJurisdictionQueue(): Promise<{ reports: OfficialReportQueueItem[]; error: string | null }> {
+  const session = await getActiveSession();
+  const { data: profile, error } = await supabase.from('app_profiles').select('role, barangay_id').eq('id', session?.user.id ?? '').maybeSingle();
+  if (error || profile?.role !== 'officer' || profile.barangay_id) return { reports: [], error: error?.message ?? 'Only MDRRMO can check jurisdiction.' };
+  const result = await fetchOfficialReportQueue({ role: 'officer', barangay_id: null, barangay_name: null, email: session?.user.email ?? '' }, { jurisdictionOnly: true, limit: 50 });
+  return { reports: result.reports, error: result.error };
+}
+
 function asReportStatus(value: unknown): ReportStatus {
   if (
     value === 'verified' ||
     value === 'escalated' ||
     value === 'resolved' ||
+    value === 'closed' ||
     value === 'unverified'
   ) {
     return value;
@@ -258,6 +432,7 @@ function emptyCounts(): OfficialStatusCounts {
     verified: 0,
     escalated: 0,
     resolved: 0,
+    closed: 0,
     total: 0,
   };
 }
@@ -269,9 +444,47 @@ function countStatuses(rows: { status: ReportStatus }[]): OfficialStatusCounts {
     if (row.status === 'verified') counts.verified += 1;
     else if (row.status === 'escalated') counts.escalated += 1;
     else if (row.status === 'resolved') counts.resolved += 1;
+    else if (row.status === 'closed') counts.closed += 1;
     else counts.unverified += 1;
   }
   return counts;
+}
+
+/** Build facts in batches so a queue page does not fetch each case separately. */
+async function fetchQueueLifecycleFacts(rows: Record<string, unknown>[], includeIncidents: boolean): Promise<{ facts: Map<string, LifecycleFacts>; error: string | null }> {
+  const facts = new Map<string, LifecycleFacts>();
+  if (rows.length === 0) return { facts, error: null };
+  const caseIds = [...new Set(rows.flatMap((row) => row.incident_case_id ? [String(row.incident_case_id)] : []))];
+  const claimantIds = rows.flatMap((row) => row.review_claimed_by ? [String(row.review_claimed_by)] : []);
+  const [caseResult, eventResult, requestResult, claimantNames] = await Promise.all([
+    includeIncidents && caseIds.length ? supabase.from('incident_cases').select('id, verification, state, coordination, lead_office, municipal_finding, municipal_finding_at, legacy_resolution, withdrawn_at, created_at').in('id', caseIds) : Promise.resolve({ data: [], error: null }),
+    includeIncidents && caseIds.length ? supabase.from('incident_events').select('incident_case_id, event_type, occurred_at').in('incident_case_id', caseIds) : Promise.resolve({ data: [], error: null }),
+    includeIncidents && caseIds.length ? supabase.from('incident_support_requests').select('incident_case_id, is_legacy').in('incident_case_id', caseIds).eq('status', 'requested') : Promise.resolve({ data: [], error: null }),
+    fetchProfileNamesById(claimantIds),
+  ]);
+  const error = caseResult.error?.message ?? eventResult.error?.message ?? requestResult.error?.message;
+  if (error) return { facts, error };
+  const cases = new Map((caseResult.data ?? []).map((row) => [String(row.id), row]));
+  for (const row of rows) {
+    const incident = cases.get(String(row.incident_case_id));
+    const events = (eventResult.data ?? []).filter((event) => event.incident_case_id === row.incident_case_id);
+    facts.set(String(row.id), {
+      status: asReportStatus(row.status), reviewOutcome: (row.review_outcome as ReviewOutcome | null) ?? null,
+      reviewClaimedByName: row.review_claimed_by ? claimantNames.get(String(row.review_claimed_by)) ?? 'an officer' : null,
+      reviewClaimedAt: row.review_claimed_at ? String(row.review_claimed_at) : null,
+      jurisdictionStatus: (row.jurisdiction_status as LifecycleFacts['jurisdictionStatus']) ?? null,
+      incidentVerification: (incident?.verification as LifecycleFacts['incidentVerification']) ?? null,
+      incidentState: (incident?.state as LifecycleFacts['incidentState']) ?? null,
+      coordination: (incident?.coordination as LifecycleFacts['coordination']) ?? null,
+      leadOffice: (incident?.lead_office as LifecycleFacts['leadOffice']) ?? null,
+      municipalFinding: (incident?.municipal_finding as LifecycleFacts['municipalFinding']) ?? null,
+      hasQualifyingResponseAction: hasCurrentResponseAction(events.map((event) => ({ eventType: event.event_type, occurredAt: event.occurred_at })), incident?.lead_office === 'municipal' ? 'municipal' : 'barangay'),
+      legacyResolution: Boolean(incident?.legacy_resolution), withdrawn: Boolean(incident?.withdrawn_at),
+      legacyEscalation: (requestResult.data ?? []).some((request) => request.incident_case_id === row.incident_case_id && request.is_legacy),
+      legacyHandoff: events.some((event) => event.event_type === 'legacy_handoff'),
+    });
+  }
+  return { facts, error: null };
 }
 
 async function fetchProfileNamesById(
@@ -298,7 +511,7 @@ async function fetchProfileNamesById(
 /** Load the scoped official queue plus status counts. */
 export async function fetchOfficialReportQueue(
   scope: OfficialAccessScope,
-  options?: { limit?: number; offset?: number },
+  options?: { limit?: number; offset?: number; jurisdictionOnly?: boolean; queue?: OfficialWorkflowQueue },
 ): Promise<{
   reports: OfficialReportQueueItem[];
   counts: OfficialStatusCounts;
@@ -307,6 +520,14 @@ export async function fetchOfficialReportQueue(
   const kind = officialKindFromScope(scope);
   const limit = Math.max(1, Math.min(options?.limit ?? 20, 50));
   const offset = Math.max(0, options?.offset ?? 0);
+  const queue = options?.jurisdictionOnly ? 'jurisdiction_check' : options?.queue ?? 'all';
+  const queueIdsResult = kind !== 'Mayor' || queue !== 'all'
+    ? await supabase.rpc('list_official_workflow_report_ids', { p_queue: queue, p_limit: limit, p_offset: offset })
+    : { data: null, error: null };
+  if (queueIdsResult.error) return { reports: [], counts: emptyCounts(), error: queueIdsResult.error.message };
+  const workflowPage = queueIdsResult.data as { ids: string[]; counts: OfficialStatusCounts } | null;
+  const queueIds = workflowPage?.ids ?? null;
+  if (queueIds && queueIds.length === 0) return { reports: [], counts: workflowPage?.counts ?? emptyCounts(), error: null };
 
   if (kind === 'BDRRMO' && !scope.barangay_id) {
     return {
@@ -322,14 +543,12 @@ export async function fetchOfficialReportQueue(
       .from('reports_map')
       .select(selectFields)
       .order('created_at', { ascending: false })
-      .range(offset, offset + limit - 1);
+      .order('id', { ascending: true })
+      .range(queueIds ? 0 : offset, (queueIds ? 0 : offset) + limit - 1);
+    if (queueIds) queueQuery = queueQuery.in('id', queueIds);
 
-    // BDRRMO only sees its barangay; MDRRMO and Mayor are municipality-wide.
-    if (kind === 'BDRRMO' && scope.barangay_id) {
-      queueQuery = queueQuery
-        .eq('barangay_id', scope.barangay_id)
-        .neq('status', 'escalated');
-    }
+    // RLS includes the lead/supporting office even for a linked report whose
+    // original barangay differs. A client barangay filter would hide that access.
     return queueQuery;
   };
 
@@ -344,6 +563,8 @@ export async function fetchOfficialReportQueue(
 
   const reportRows = (data ?? []) as unknown as Record<string, unknown>[];
   const reportIds = reportRows.map((row) => String(row.id));
+  const lifecycleResult = await fetchQueueLifecycleFacts(reportRows, kind !== 'Mayor');
+  if (lifecycleResult.error) return { reports: [], counts: emptyCounts(), error: lifecycleResult.error };
   const [
     firstMediaByReportId,
     mediaCountsByReportId,
@@ -371,9 +592,14 @@ export async function fetchOfficialReportQueue(
     const longitude = Number(row.longitude);
     const reportId = String(row.id);
     const meta = escalationMetaByReportId.get(reportId);
+    const lifecycleFacts = lifecycleResult.facts.get(reportId)!;
 
     return {
       id: reportId,
+      lifecycleFacts,
+      lifecycle: deriveLifecycle(lifecycleFacts),
+      incidentCaseId: row.incident_case_id ? String(row.incident_case_id) : null,
+      reviewClaimedById: row.review_claimed_by ? String(row.review_claimed_by) : null,
       title: String(row.title ?? ''),
       description: String(row.description ?? ''),
       incidentType: isIncidentType(row.incident_type) ? row.incident_type : null,
@@ -413,20 +639,16 @@ export async function fetchOfficialReportQueue(
   });
 
   let statusQuery = supabase.from('reports_map').select('status');
-  if (kind === 'BDRRMO' && scope.barangay_id) {
-    statusQuery = statusQuery
-      .eq('barangay_id', scope.barangay_id)
-      .neq('status', 'escalated');
-  }
-  const statusResult = await statusQuery;
+  if (queueIds) statusQuery = statusQuery.in('id', queueIds);
+  const statusResult = workflowPage ? { data: [], error: null } : await statusQuery;
   const allStatusRows = (statusResult.data ?? []).map((row) => ({
     status: asReportStatus(row.status),
   }));
 
   return {
     reports,
-    counts: statusResult.error ? countStatuses(reports) : countStatuses(allStatusRows),
-    error: null,
+    counts: workflowPage?.counts ?? (statusResult.error ? countStatuses(reports) : countStatuses(allStatusRows)),
+    error: statusResult.error?.message ?? activityResult.error ?? null,
   };
 }
 
@@ -698,7 +920,14 @@ export async function fetchOfficialReportDetail(
       escalated_at,
       resolved_by,
       resolved_at,
-      reporter_id
+      reporter_id,
+      incident_case_id,
+      review_outcome,
+      review_reason_code,
+      review_claimed_by,
+      review_claimed_at,
+      jurisdiction_status,
+      intake_channel
     `,
     )
     .eq('id', id);
@@ -707,9 +936,6 @@ export async function fetchOfficialReportDetail(
     if (!scope.barangay_id) {
       return { detail: null, error: 'Barangay scope is missing for this account.' };
     }
-    reportQuery = reportQuery
-      .eq('barangay_id', scope.barangay_id)
-      .neq('status', 'escalated');
   }
 
   const { data: row, error } = await reportQuery.maybeSingle();
@@ -749,7 +975,7 @@ export async function fetchOfficialReportDetail(
     supabase
       .from('report_status_history')
       .select(
-        'id, event_type, from_status, to_status, note, created_at, changed_by',
+        'id, event_type, from_status, to_status, note, detail, created_at, changed_by',
       )
       .eq('report_id', id)
       .order('created_at', { ascending: true }),
@@ -761,6 +987,10 @@ export async function fetchOfficialReportDetail(
     }),
   ]);
 
+  if (mapResult.error || (kind !== 'Mayor' && historyResult.error)) {
+    return { detail: null, error: mapResult.error?.message ?? historyResult.error?.message ?? 'Could not load report history.' };
+  }
+
   const mapRow = mapResult.data as unknown as Record<string, unknown> | null;
   const latitude = Number(mapRow?.latitude ?? NaN);
   const longitude = Number(mapRow?.longitude ?? NaN);
@@ -770,6 +1000,7 @@ export async function fetchOfficialReportDetail(
     row.reverified_by ? String(row.reverified_by) : '',
     row.escalated_by ? String(row.escalated_by) : '',
     row.resolved_by ? String(row.resolved_by) : '',
+    row.review_claimed_by ? String(row.review_claimed_by) : '',
     ...(historyResult.data ?? []).map((event) =>
       event.changed_by ? String(event.changed_by) : '',
     ),
@@ -792,6 +1023,7 @@ export async function fetchOfficialReportDetail(
     historyResult.data ?? []
   ).map((event) => ({
     id: String(event.id),
+    detail: (event.detail ?? {}) as Record<string, unknown>,
     eventType: String(event.event_type ?? 'status_change'),
     fromStatus: event.from_status ? asReportStatus(event.from_status) : null,
     toStatus: event.to_status ? asReportStatus(event.to_status) : null,
@@ -824,8 +1056,47 @@ export async function fetchOfficialReportDetail(
   }
 
   const session = await getActiveSession();
+  const incidentResult = row.incident_case_id && kind !== 'Mayor'
+    ? await fetchIncidentCaseDetail(String(row.incident_case_id), scope)
+    : { incident: null, error: null };
+  if (incidentResult.error) return { detail: null, error: incidentResult.error };
+  const incidentCase = incidentResult.incident;
+  const reviewerResult = kind === 'MDRRMO' && !row.incident_case_id
+    ? await supabase.rpc('barangay_has_active_bdrrmo', { p_barangay_id: barangayId })
+    : { data: true, error: null };
+  if (reviewerResult.error) return { detail: null, error: reviewerResult.error.message };
+  const reviewClaimedById = row.review_claimed_by ? String(row.review_claimed_by) : null;
+  const lifecycleFacts: LifecycleFacts = {
+    status, reviewOutcome: row.review_outcome as ReviewOutcome,
+    reviewClaimedByName: reviewClaimedById ? namesById.get(reviewClaimedById) ?? 'an officer' : null,
+    reviewClaimedAt: row.review_claimed_at ? String(row.review_claimed_at) : null,
+    jurisdictionStatus: row.jurisdiction_status as LifecycleFacts['jurisdictionStatus'],
+    incidentVerification: incidentCase?.verification ?? null, incidentState: incidentCase?.state ?? null,
+    coordination: incidentCase?.coordination ?? null, leadOffice: incidentCase?.leadOffice ?? null,
+    municipalFinding: incidentCase?.municipalFinding ?? null,
+    hasQualifyingResponseAction: incidentCase?.hasQualifyingResponseAction ?? false,
+    legacyResolution: incidentCase?.legacyResolution ?? false, withdrawn: Boolean(incidentCase?.withdrawnAt),
+    legacyEscalation: incidentCase?.supportRequests.some((request) => request.isLegacy && request.status === 'requested') ?? false,
+    legacyHandoff: incidentCase?.legacyHandoff ?? false,
+    barangayHasActiveBdrrmo: Boolean(reviewerResult.data),
+  };
+  const reviewActions = allowedReviewActions(scope, { ...lifecycleFacts, barangayId, claimedById: reviewClaimedById }, session?.user.id ?? '');
+  const canReviewReport = kind === 'BDRRMO' ? barangayId === scope.barangay_id : kind === 'MDRRMO' && !lifecycleFacts.barangayHasActiveBdrrmo;
+  const incidentActions = incidentCase ? allowedIncidentActions(scope, incidentCase) : [];
+  const incidentLead = incidentCase?.leadOffice === 'municipal' ? kind === 'MDRRMO' : incidentCase?.leadBarangayId === scope.barangay_id;
   const detail: OfficialReportDetail = {
+    currentUserId: session?.user.id ?? '',
     id: String(row.id),
+    lifecycleFacts,
+    lifecycle: deriveLifecycle(lifecycleFacts),
+    incidentCase,
+    allowedReviewActions: reviewActions,
+    allowedIncidentActions: incidentActions,
+    reviewClaimedById,
+    reviewReasonCode: row.review_reason_code ? String(row.review_reason_code) : null,
+    intakeChannel: row.intake_channel as OfficialReportDetail['intakeChannel'],
+    canReviewReport,
+    canReroute: kind !== 'Mayor' && lifecycleFacts.reviewOutcome === 'pending' && lifecycleFacts.jurisdictionStatus === 'in_coverage',
     title: String(row.title ?? ''),
     description: String(row.description ?? ''),
     incidentType: isIncidentType(row.incident_type) ? row.incident_type : null,
@@ -886,13 +1157,13 @@ export async function fetchOfficialReportDetail(
     escalatedAt,
     reverifiedAt,
     timeline,
-    canContactReporter: Boolean(previewRow?.can_contact),
+    canContactReporter: Boolean(previewRow?.can_contact) && (!incidentCase || incidentCase.state === 'active'),
     maskedPhone: previewRow?.masked_phone
       ? String(previewRow.masked_phone)
       : null,
     canEditContent:
-      kind !== 'Mayor' && String(row.reporter_id) === session?.user?.id,
-    canCorrectLocation: kind === 'BDRRMO' || kind === 'MDRRMO',
+      kind !== 'Mayor' && String(row.reporter_id) === session?.user?.id && (!incidentCase || incidentLead),
+    canCorrectLocation: kind !== 'Mayor' && (!incidentCase || incidentLead),
     allowedTransitions: allowedTransitionsForReport(scope, {
       status,
       barangayId,

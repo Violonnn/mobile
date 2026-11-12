@@ -8,6 +8,7 @@ import {
   ResidentFeedReportContent,
   reportDetailStyles,
 } from '../report/ReportDetailCard';
+import { officialLabel, lifecycleColor } from '../../lib/reportLifecycle';
 import type { OfficialReportQueueItem } from '../../lib/officialReports';
 import { formatReportLocation, type MapReportMarker } from '../../lib/reports';
 import { useShareSheetGuard } from '../../hooks/useShareSheetGuard';
@@ -48,6 +49,7 @@ export default function OfficialReportPostCard({
   onCommentPress: () => void;
 }) {
   const post = officialQueueItemToPost(report);
+  const statusPresentation = { label: officialLabel(report.lifecycle, { claimedByName: report.lifecycleFacts.reviewClaimedByName, claimedAt: report.lifecycleFacts.reviewClaimedAt }), color: lifecycleColor(report.lifecycle) };
   const { shareSafely, canOpenCard } = useShareSheetGuard();
 
   const shareReport = () => {
@@ -71,6 +73,7 @@ export default function OfficialReportPostCard({
       {variant === 'residentFeed' ? (
         <ResidentFeedReportContent
           report={post}
+          statusPresentation={statusPresentation}
           onRequestExpand={onPress}
           onRequestComments={onCommentPress}
           onShareReport={shareReport}
@@ -78,7 +81,8 @@ export default function OfficialReportPostCard({
       ) : (
         <ReportDetailContent
           report={post}
-          showStatus
+          statusPresentation={statusPresentation}
+          showCommunityTags
           onRequestComments={onCommentPress}
         />
       )}

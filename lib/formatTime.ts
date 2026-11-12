@@ -40,6 +40,26 @@ export function formatPublishedAt(
   return `${dateLabel} at ${timeLabel}`;
 }
 
+/** Readable local date/time for review claims and the official audit trail. */
+export function formatOperationTimestamp(iso: string | null, now: Date = new Date()): string {
+  if (!iso) return 'Time unavailable';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return 'Time unavailable';
+  const sameDay = date.getFullYear() === now.getFullYear() &&
+    date.getMonth() === now.getMonth() && date.getDate() === now.getDate();
+  if (sameDay) return `Today at ${formatClockAmPm(date)}`;
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const previousDay = date.getFullYear() === yesterday.getFullYear() &&
+    date.getMonth() === yesterday.getMonth() && date.getDate() === yesterday.getDate();
+  if (previousDay) return `Yesterday at ${formatClockAmPm(date)}`;
+  const dateLabel = date.toLocaleDateString('en-US', {
+    month: 'short', day: 'numeric',
+    ...(date.getFullYear() === now.getFullYear() ? {} : { year: 'numeric' }),
+  });
+  return `${dateLabel} at ${formatClockAmPm(date)}`;
+}
+
 /** e.g. 10:30am — no space before am/pm. */
 function formatClockAmPm(date: Date): string {
   let hours = date.getHours();

@@ -33,14 +33,15 @@ function OfficialTabs() {
         <Tabs.Screen name="map" options={{ title: 'Map' }} />
         <Tabs.Screen name="resources" options={{ title: 'Resources' }} />
         <Tabs.Screen name="settings" options={{ title: 'Settings' }} />
-        {/* Detail + log-incident stay reachable but off the tab bar. */}
+        {/* SDK 58 redirects away from href: null routes. OfficialBottomNav
+            omits these buttons and hides the bar while either route is open. */}
         <Tabs.Screen
           name="[id]"
-          options={{ href: null, title: 'Report detail' }}
+          options={{ title: 'Report detail' }}
         />
         <Tabs.Screen
           name="log-incident"
-          options={{ href: null, title: 'Log incident' }}
+          options={{ title: 'Log incident' }}
         />
       </Tabs>
       <NewNotificationOverlay />

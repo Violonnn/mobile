@@ -4,6 +4,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  Alert,
   View,
   Text,
   TouchableOpacity,
@@ -37,14 +38,17 @@ import {
   captureReportPhoto,
   captureReportVideo,
   deletePersistedReportMedia,
+  randomUuid,
   totalVideoSeconds,
   type CapturedMedia,
 } from '../../lib/reportMedia';
 import { fetchBarangays, type BarangayOption } from '../../lib/barangays';
+import { WorkflowChoices } from '../../components/official/WorkflowForm';
 import { submitOfficialReport } from '../../lib/officialReportSubmit';
 import type { IncidentType } from '../../lib/incidentTypes';
+import ReportPublicationFields from '../../components/official/ReportPublicationFields';
 
-type Step = 'location' | 'attachments' | 'details' | 'done';
+type Step = 'location' | 'attachments' | 'details' | 'retry' | 'done';
 
 export function OfficialReportForm({
   onClose,
@@ -72,6 +76,7 @@ export function OfficialReportForm({
     officialKind === 'BDRRMO' ? scope?.barangay_id ?? null : null,
   );
 
+  const [intakeChannel, setIntakeChannel] = useState<'official_field' | 'hotline_call' | null>(null);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [locationNote, setLocationNote] = useState('');
@@ -81,6 +86,14 @@ export function OfficialReportForm({
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [createdReportId, setCreatedReportId] = useState<string | null>(null);
+  const [publicationAcknowledged, setPublicationAcknowledged] = useState(false);
+  const [publicPhotoMediaIds, setPublicPhotoMediaIds] = useState<string[]>([]);
+  const [markIncidentSensitive, setMarkIncidentSensitive] = useState(false);
+  const [sensitivityReason, setSensitivityReason] = useState('');
+  const [publicAvailable, setPublicAvailable] = useState(false);
+  const [publicationStatus, setPublicationStatus] = useState<string | null>(null);
+  const [submissionIdentity, setSubmissionIdentity] = useState(() => ({ reportId: randomUuid(), operationId: randomUuid() }));
+  const [retryOutcome, setRetryOutcome] = useState<'ambiguous' | 'definitive' | null>(null);
 
   const submitLock = useRef(false);
   const isBdrrmo = officialKind === 'BDRRMO';
@@ -98,13 +111,36 @@ export function OfficialReportForm({
 
   const closeForm = () => {
     if (submitting) return;
+    if (step === 'retry') {
+      if (retryOutcome !== 'definitive') {
+        setError('The server result is still unknown. Retry this exact submission to check whether it was saved.');
+        return;
+      }
+      Alert.alert('Discard rejected submission?', 'The current request was rejected. Your saved draft will be removed. If an earlier attempt was saved, it will still appear in Incidents.', [
+        { text: 'Keep editing', style: 'cancel' },
+        { text: 'Discard', style: 'destructive', onPress: leaveForm },
+      ]);
+      return;
+    }
+    leaveForm();
+  };
+
+  function leaveForm() {
     media.forEach(deletePersistedReportMedia);
     if (onClose) {
       onClose();
       return;
     }
     goBackOrReplace(router, '/official/incidents');
-  };
+  }
+
+  function editRejectedSubmission() {
+    if (retryOutcome !== 'definitive' || submitting) return;
+    setSubmissionIdentity((current) => ({ ...current, operationId: randomUuid() }));
+    setRetryOutcome(null);
+    setError(null);
+    setStep('details');
+  }
 
   const usedPhotoSlots = media.filter((m) => m.type === 'photo').length;
   const usedVideoSeconds = totalVideoSeconds(media);
@@ -215,6 +251,7 @@ export function OfficialReportForm({
 
   async function handleSubmit() {
     if (submitLock.current || submitting) return;
+    if (!intakeChannel) { setError('Choose whether you observed this on site or are recording a caller account.'); return; }
     if (!position) {
       setError('Capture a GPS location first.');
       return;
@@ -235,6 +272,15 @@ export function OfficialReportForm({
       setError('Your assigned barangay is unavailable. Please sign in again.');
       return;
     }
+    const publishPublicPost = intakeChannel === 'official_field' && !markIncidentSensitive;
+    if (publishPublicPost && !publicationAcknowledged) {
+      setError('Review the report text and selected photos before publishing.');
+      return;
+    }
+    if (intakeChannel === 'official_field' && markIncidentSensitive && !sensitivityReason.trim()) {
+      setError('Give a short safety reason for marking this incident sensitive.');
+      return;
+    }
 
     submitLock.current = true;
     setSubmitting(true);
@@ -244,7 +290,12 @@ export function OfficialReportForm({
       .filter(Boolean)
       .join(' — ');
 
-    const result = await submitOfficialReport({
+    let result: Awaited<ReturnType<typeof submitOfficialReport>>;
+    try {
+      result = await submitOfficialReport({
+      reportId: submissionIdentity.reportId,
+      operationId: submissionIdentity.operationId,
+      intakeChannel,
       title,
       description,
       position,
@@ -255,17 +306,31 @@ export function OfficialReportForm({
       // The Edge Function repeats this authorization check before saving.
       barangayId: isBdrrmo ? scope?.barangay_id : selectedBarangayId,
       media,
-    });
+      publishPublicPost,
+      publicationAcknowledged,
+      publicPhotoMediaIds: publishPublicPost ? publicPhotoMediaIds : [],
+      markIncidentSensitive: intakeChannel === 'official_field' && markIncidentSensitive,
+      sensitivityReason: markIncidentSensitive ? sensitivityReason : null,
+      });
+    } catch {
+      result = { reportId: null, error: 'The connection ended before the server confirmed the result.', definitiveFailure: false };
+    }
 
     setSubmitting(false);
     submitLock.current = false;
 
     if (result.error || !result.reportId) {
       setError(result.error || 'Could not log this incident.');
+      setRetryOutcome(result.definitiveFailure ? 'definitive' : 'ambiguous');
+      setStep('retry');
       return;
     }
 
+    setRetryOutcome(null);
     setCreatedReportId(result.reportId);
+    setPublicAvailable(result.publicAvailable === true);
+    setPublicationStatus(result.publicationStatus ?? null);
+    setError(null);
     setStep('done');
   }
 
@@ -286,7 +351,7 @@ export function OfficialReportForm({
           <View style={styles.stateBox}>
             <Text style={styles.stateTitle}>Not available</Text>
             <Text style={styles.stateBody}>
-              Only active BDRRMO and MDRRMO officers can log verified incidents.
+              Only active BDRRMO and MDRRMO officers can record incidents.
             </Text>
             <TouchableOpacity
               style={styles.retryButton}
@@ -319,7 +384,7 @@ export function OfficialReportForm({
           </TouchableOpacity>
           <View style={styles.headerTextGroup}>
             <Text style={styles.brandLabel}>DisasterLink</Text>
-            <Text style={styles.screenTitle}>Log verified incident</Text>
+            <Text style={styles.screenTitle}>Log incident</Text>
             <Text style={styles.screenSubtitle}>
               GPS and description required · media optional
             </Text>
@@ -381,7 +446,8 @@ export function OfficialReportForm({
             </View>
           ) : null}
 
-          {step === 'details' ? (
+          {step === 'details' ? (<>
+            <WorkflowChoices label="How was this incident reported?" selected={intakeChannel} onSelect={setIntakeChannel} disabled={submitting} values={[{ value: 'official_field', label: 'I observed this on site' }, { value: 'hotline_call', label: "I'm recording a caller's account" }]} />
             <DetailsStep
               title={title}
               onChangeTitle={setTitle}
@@ -419,14 +485,73 @@ export function OfficialReportForm({
               onSubmit={() => void handleSubmit()}
               submitLabel="Log incident"
             />
+            {intakeChannel === 'official_field' ? (
+              <View style={styles.section}>
+                <ReportPublicationFields
+                  sourceTitle={title}
+                  sourceDescription={description}
+                  acknowledged={publicationAcknowledged}
+                  onAcknowledgedChange={setPublicationAcknowledged}
+                  photos={media.filter((item) => item.type === 'photo').map((item) => ({
+                    mediaId: item.id,
+                    previewUrl: item.thumbnailLocalUri ?? item.displayLocalUri ?? item.localUri,
+                    fullSizeUrl: item.displayLocalUri ?? item.localUri,
+                    verified: false,
+                    publicApproved: false,
+                  }))}
+                  selectedPhotoMediaIds={publicPhotoMediaIds}
+                  onPhotoSelectionChange={setPublicPhotoMediaIds}
+                  reporterNameAllowed={false}
+                  approveReporterName={false}
+                  onApproveReporterNameChange={() => undefined}
+                  reporterAvatarAllowed={false}
+                  approveReporterAvatar={false}
+                  onApproveReporterAvatarChange={() => undefined}
+                  exactLocationAllowed={false}
+                  approveExactLocation={false}
+                  onApproveExactLocationChange={() => undefined}
+                  sensitive={markIncidentSensitive}
+                  onSensitiveChange={setMarkIncidentSensitive}
+                  sensitivityReason={sensitivityReason}
+                  onSensitivityReasonChange={setSensitivityReason}
+                  disabled={submitting}
+                />
+              </View>
+            ) : null}
+          </>) : null}
+
+          {step === 'retry' ? (
+            <View style={styles.stateBox}>
+              <Text style={styles.stateTitle}>{retryOutcome === 'definitive' ? 'Submission was rejected' : 'Submission needs a retry'}</Text>
+              <Text accessibilityRole="alert" style={styles.stateBody}>
+                {error ?? (retryOutcome === 'definitive'
+                  ? 'This request was rejected. You can edit and submit again with a new operation id.'
+                  : 'The connection ended before the result was confirmed. Retry with the same report id and screened details.')}
+              </Text>
+              {retryOutcome === 'definitive' ? <>
+                <TouchableOpacity style={styles.primaryAction} onPress={editRejectedSubmission} activeOpacity={0.85}>
+                  <Text style={styles.primaryActionText}>Edit submission</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.retryButton} onPress={closeForm} activeOpacity={0.85}>
+                  <Text style={styles.retryButtonText}>Discard rejected submission</Text>
+                </TouchableOpacity>
+              </> : <TouchableOpacity style={styles.primaryAction} onPress={() => void handleSubmit()} activeOpacity={0.85}>
+                <Text style={styles.primaryActionText}>{submitting ? 'Retrying…' : 'Retry same submission'}</Text>
+              </TouchableOpacity>}
+            </View>
           ) : null}
 
           {step === 'done' ? (
             <View style={styles.stateBox}>
               <Text style={styles.stateTitle}>Incident logged</Text>
               <Text style={styles.stateBody}>
-                The report was saved as verified. You can open it now or return
-                to the queue.
+                {intakeChannel === 'hotline_call'
+                  ? "The caller's account was recorded and is waiting for review. It remains private."
+                  : publicAvailable
+                  ? 'Your on-site observation was confirmed and its screened public report was published.'
+                  : publicationStatus === 'sensitive'
+                  ? 'Your on-site observation was confirmed and marked sensitive. Screened text, location detail, and photos remain hidden.'
+                  : 'Your on-site observation was recorded.'}
               </Text>
               {createdReportId ? (
                 <TouchableOpacity
