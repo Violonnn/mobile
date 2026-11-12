@@ -2,6 +2,7 @@ import type { Href } from 'expo-router';
 import { getActiveSession, logout } from './auth';
 import { supabase } from './supabase';
 import { fetchActiveOfficialAccess } from './officialRegistration';
+import { isAuthorizationFailure } from './adminInvitePolicy';
 
 /** Destinations after a valid session is resolved by role/status. */
 export type PortalDestination = Href;
@@ -62,14 +63,73 @@ export async function resolveSessionDestination(): Promise<PortalDestination | n
   return '/(main)/home' as Href;
 }
 
+export type ActiveAdminAccessResult =
+  | { status: 'allowed'; userId: string }
+  | { status: 'denied' }
+  | { status: 'error'; message: string };
+
+function readPostgresErrorDetails(error: unknown): {
+  code: string | null;
+} {
+  if (!error || typeof error !== 'object') return { code: null };
+  const record = error as { code?: unknown };
+  return {
+    code: typeof record.code === 'string' ? record.code : null,
+  };
+}
+
+/** Keep network failures retryable while treating explicit access denials as denied. */
+export async function checkActiveAdminAccess(): Promise<ActiveAdminAccessResult> {
+  try {
+    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError) {
+      const details = readPostgresErrorDetails(sessionError);
+      if (isAuthorizationFailure(details.code, null)) {
+        return { status: 'denied' };
+      }
+      return {
+        status: 'error',
+        message: 'Could not check administrator access. Check your connection and retry.',
+      };
+    }
+
+    let session = sessionData.session;
+    if (!session) return { status: 'denied' };
+
+    const expiresAt = session.expires_at ?? 0;
+    if (expiresAt * 1000 - Date.now() < 60_000) {
+      const { data: refreshedData, error: refreshError } =
+        await supabase.auth.refreshSession();
+      if (!refreshError && refreshedData.session) session = refreshedData.session;
+    }
+
+    const { data: isAdmin, error: adminError, status: adminStatus } =
+      await supabase.rpc('am_i_admin');
+    if (adminError) {
+      const details = readPostgresErrorDetails(adminError);
+      if (isAuthorizationFailure(details.code, adminStatus)) {
+        return { status: 'denied' };
+      }
+      return {
+        status: 'error',
+        message: 'Could not check administrator access. Check your connection and retry.',
+      };
+    }
+
+    if (!isAdmin) return { status: 'denied' };
+    return { status: 'allowed', userId: session.user.id };
+  } catch {
+    return {
+      status: 'error',
+      message: 'Could not check administrator access. Check your connection and retry.',
+    };
+  }
+}
+
 /** True when the current session is an active administrator. */
 export async function requireActiveAdmin(): Promise<boolean> {
-  const session = await getActiveSession();
-  if (!session) return false;
-
-  const { data: isAdmin, error } = await supabase.rpc('am_i_admin');
-  if (error || !isAdmin) return false;
-  return true;
+  const result = await checkActiveAdminAccess();
+  return result.status === 'allowed';
 }
 
 /**

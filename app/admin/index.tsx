@@ -1,308 +1,354 @@
-// app/admin/index.tsx — Admin Overview dashboard.
-// Real invitation metrics + recent rows only (no fake analytics).
-
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
-  View,
-  Text,
-  Image,
-  ScrollView,
-  TouchableOpacity,
-  ActivityIndicator,
-  Alert,
   RefreshControl,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  View,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
-import { adminStyles as styles } from '../../styles/screens/admin.styles';
-import { colors } from '../../styles/theme';
-import { logout } from '../../lib/auth';
+import { useFocusEffect, useRouter } from 'expo-router';
+import AdminInviteFormSheet from '../../components/admin/AdminInviteFormSheet';
+import AdminPageHeader from '../../components/admin/AdminPageHeader';
+import { AdminDashboardDataSkeleton } from '../../components/ui/AdminScreenSkeletons';
+import { useAccessibilityLayout } from '../../hooks/useAccessibilityLayout';
+import { useAdminInvites } from '../../context/AdminInvitesContext';
+import { formatInviteKind } from '../../lib/invites';
 import {
-  formatInviteKind,
-  listOfficialInvites,
-  type InviteListItem,
-} from '../../lib/invites';
+  isInviteExpiringSoon,
+  summarizeInvitesByRole,
+  type AdminInviteRoleFilter,
+} from '../../lib/adminInvitePolicy';
+import { adminColors, adminStyles as styles } from '../../styles/screens/admin.styles';
+import { colors } from '../../styles/theme';
 
-function formatShortDate(value: string): string {
-  try {
-    return new Date(value).toLocaleDateString(undefined, {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    });
-  } catch {
-    return value;
-  }
-}
+type RoleShortcut = Exclude<AdminInviteRoleFilter, 'all'>;
 
-/** Sort key: prefer used_at when present, otherwise created_at. */
-function inviteRecencyTimestamp(invite: InviteListItem): number {
-  const raw = invite.used_at ?? invite.created_at;
-  const time = Date.parse(raw);
-  return Number.isNaN(time) ? 0 : time;
-}
+type RoleTool = {
+  key: RoleShortcut;
+  label: string;
+  icon: 'person-outline' | 'business-outline' | 'people-outline';
+  pending: number;
+  registered: number;
+};
 
-export default function AdminOverviewScreen() {
+export default function AdminDashboardScreen() {
   const router = useRouter();
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [loggingOut, setLoggingOut] = useState(false);
-  const [activeInvites, setActiveInvites] = useState<InviteListItem[]>([]);
-  const [usedInvites, setUsedInvites] = useState<InviteListItem[]>([]);
-  const [listError, setListError] = useState('');
+  const { width } = useWindowDimensions();
+  const { isLargeText } = useAccessibilityLayout();
+  const compactLayout = width < 360 || isLargeText;
+  const {
+    active,
+    used,
+    loading,
+    refreshing,
+    error,
+    lastLoadedAt,
+    now,
+    reload,
+    refreshAfterMutation,
+  } = useAdminInvites();
+  const [createVisible, setCreateVisible] = useState(false);
+  const hasSnapshot = lastLoadedAt !== null;
 
-  const loadInvites = useCallback(async () => {
-    const { active, used, error } = await listOfficialInvites();
-    if (error) {
-      setListError(error);
-      setActiveInvites([]);
-      setUsedInvites([]);
-      return;
-    }
-    setListError('');
-    setActiveInvites(active);
-    setUsedInvites(used);
-  }, []);
+  const roleCounts = useMemo(
+    () => summarizeInvitesByRole(active, used, now, formatInviteKind),
+    [active, used, now],
+  );
+  const expiringSoonCount = useMemo(
+    () => active.filter((invite) => isInviteExpiringSoon(invite.expires_at, now)).length,
+    [active, now],
+  );
+  const roleTools: RoleTool[] = useMemo(
+    () => [
+      {
+        ...roleCounts[0],
+        icon: 'person-outline',
+      },
+      {
+        ...roleCounts[1],
+        icon: 'business-outline',
+      },
+      {
+        ...roleCounts[2],
+        icon: 'people-outline',
+      },
+    ],
+    [roleCounts],
+  );
 
-  useEffect(() => {
-    let cancelled = false;
+  const openInviteRecords = useCallback(
+    (
+      group: 'pending' | 'registered',
+      role: RoleShortcut | 'all',
+      expiry: 'any' | 'soon',
+    ) => {
+      router.push({
+        pathname: '/admin/invitations',
+        params: { group, role, expiry, search: '' },
+      });
+    },
+    [router],
+  );
 
-    (async () => {
-      await loadInvites();
-      if (!cancelled) setLoading(false);
-    })();
+  useFocusEffect(
+    useCallback(() => {
+      void reload();
+    }, [reload]),
+  );
 
-    return () => {
-      cancelled = true;
-    };
-  }, [loadInvites]);
-
-  const recentInvites = useMemo(() => {
-    const combined = [...activeInvites, ...usedInvites];
-    combined.sort(
-      (left, right) =>
-        inviteRecencyTimestamp(right) - inviteRecencyTimestamp(left),
-    );
-    return combined.slice(0, 3);
-  }, [activeInvites, usedInvites]);
-
-  async function handleRefresh() {
-    setRefreshing(true);
-    await loadInvites();
-    setRefreshing(false);
-  }
-
-  async function handleLogout() {
-    setLoggingOut(true);
-    try {
-      const { error } = await logout();
-      if (error) throw new Error(error);
-      router.replace('/');
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Could not log out.';
-      Alert.alert('Logout failed', message);
-    } finally {
-      setLoggingOut(false);
-    }
-  }
-
-  function openInvitations() {
-    router.push('/admin/invitations');
-  }
-
-  if (loading) {
-    return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <StatusBar style="dark" />
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.themeSoft} />
-        </View>
-      </SafeAreaView>
-    );
-  }
+  const retrySnapshot = useCallback(() => {
+    void reload({ force: true });
+  }, [reload]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar style="dark" />
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
-        }
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.headerRow}>
-          <View style={styles.headerIdentity}>
-            <View style={styles.brandMark}>
-              <Image
-                source={require('../../assets/images/mingla.png')}
-                style={styles.brandMarkImage}
-                accessibilityLabel="DisasterLink"
-              />
-            </View>
-            <View style={styles.headerTextGroup}>
-              <Text style={styles.brandLabel}>DisasterLink</Text>
-              <Text style={styles.title}>Admin workspace</Text>
-            </View>
-          </View>
+      <AdminPageHeader
+        title="Admin"
+        action={
           <TouchableOpacity
-            style={styles.logoutButton}
-            onPress={handleLogout}
-            disabled={loggingOut}
+            style={styles.iconAction}
+            onPress={() => router.push('/admin/settings')}
             activeOpacity={0.8}
             accessibilityRole="button"
-            accessibilityLabel="Log out"
+            accessibilityLabel="Open Settings"
           >
-            {loggingOut ? (
-              <ActivityIndicator size="small" color={colors.text} />
-            ) : (
-              <Text style={styles.logoutButtonText}>Log out</Text>
-            )}
+            <Ionicons name="settings-outline" size={22} color={colors.navigationActive} />
           </TouchableOpacity>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Invitation activity</Text>
-          <Text style={styles.sectionHint}>
-            Live counts from official invite links. Tap a tile to manage them.
-          </Text>
-
-          {listError ? (
-            <View style={styles.listGap}>
-              <Text style={styles.errorText}>{listError}</Text>
-              <TouchableOpacity
-                style={styles.retryButton}
-                onPress={handleRefresh}
-                activeOpacity={0.85}
-                accessibilityRole="button"
-                accessibilityLabel="Retry loading invites"
-              >
-                <Text style={styles.retryButtonText}>Retry</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <View style={styles.metricsRow}>
-              <TouchableOpacity
-                style={styles.metricTile}
-                onPress={openInvitations}
-                activeOpacity={0.85}
-                accessibilityRole="button"
-                accessibilityLabel="Active invites"
-              >
-                <View style={styles.metricTileTop}>
-                  <Text style={styles.metricValue}>{activeInvites.length}</Text>
-                  <View style={styles.metricArrow}>
-                    <Ionicons
-                      name="arrow-forward"
-                      size={14}
-                      color={colors.themeSoft}
-                    />
-                  </View>
-                </View>
-                <Text style={styles.metricLabel}>Active invites</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.metricTile}
-                onPress={openInvitations}
-                activeOpacity={0.85}
-                accessibilityRole="button"
-                accessibilityLabel="Used invites"
-              >
-                <View style={styles.metricTileTop}>
-                  <Text style={styles.metricValue}>{usedInvites.length}</Text>
-                  <View style={styles.metricArrow}>
-                    <Ionicons
-                      name="arrow-forward"
-                      size={14}
-                      color={colors.themeSoft}
-                    />
-                  </View>
-                </View>
-                <Text style={styles.metricLabel}>Used invites</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-        </View>
-
-        <View style={styles.section}>
-          <View style={styles.cardHeaderRow}>
-            <Text style={styles.sectionTitle}>Recent invitations</Text>
+        }
+      />
+      <ScrollView
+        contentContainerStyle={styles.dashboardScrollContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={retrySnapshot}
+            tintColor={colors.navigationActive}
+            colors={[colors.navigationActive]}
+          />
+        }
+      >
+        {error && hasSnapshot ? (
+          <View style={[styles.errorPanel, styles.dashboardInset]}>
+            <Text style={styles.sectionError}>{error}</Text>
             <TouchableOpacity
-              style={styles.linkAction}
-              onPress={openInvitations}
-              activeOpacity={0.85}
+              style={styles.retryButton}
+              onPress={retrySnapshot}
               accessibilityRole="button"
-              accessibilityLabel="View all invitations"
+              accessibilityLabel="Retry refreshing invitation summary"
             >
-              <Text style={styles.linkActionText}>View all</Text>
+              <Text style={styles.retryButtonText}>Retry</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
+
+        <View style={styles.accessPanel}>
+          <Text style={styles.accessPanelTitle}>Official access</Text>
+          <View style={[styles.accessStages, compactLayout ? styles.accessStagesStacked : null]}>
+            <TouchableOpacity
+              style={[styles.accessStagePending, compactLayout ? styles.accessStageStacked : null]}
+              onPress={() => openInviteRecords('pending', 'all', 'any')}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel={
+                'Pending invitations, ' +
+                (hasSnapshot ? active.length : loading ? 'loading' : 'unavailable') +
+                '. View pending invitations.'
+              }
+            >
+              <Text
+                style={[styles.stageCount, !hasSnapshot && styles.stageCountUnavailable]}
+                accessibilityElementsHidden
+                importantForAccessibility="no"
+              >
+                {hasSnapshot ? active.length : '—'}
+              </Text>
+              <View style={styles.stageLabelRow}>
+                <Text style={styles.stageLabel}>Pending</Text>
+                <Ionicons name="arrow-forward-outline" size={16} color={colors.navigationActive} />
+              </View>
+            </TouchableOpacity>
+            <View
+              style={[
+                styles.accessMetricDivider,
+                compactLayout ? styles.accessMetricDividerHorizontal : null,
+              ]}
+              accessibilityElementsHidden
+              importantForAccessibility="no"
+            />
+            <TouchableOpacity
+              style={[
+                styles.accessStageRegistered,
+                compactLayout ? styles.accessStageStacked : null,
+              ]}
+              onPress={() => openInviteRecords('registered', 'all', 'any')}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel={
+                'Registered invitations, ' +
+                (hasSnapshot ? used.length : loading ? 'loading' : 'unavailable') +
+                '. View registered invitations.'
+              }
+            >
+              <Text
+                style={[styles.stageCountRegistered, !hasSnapshot && styles.stageCountUnavailable]}
+                accessibilityElementsHidden
+                importantForAccessibility="no"
+              >
+                {hasSnapshot ? used.length : '—'}
+              </Text>
+              <Text style={[styles.stageLabel, styles.stageLabelRegistered]}>Registered</Text>
             </TouchableOpacity>
           </View>
 
-          {listError ? (
-            <Text style={styles.errorText}>{listError}</Text>
-          ) : recentInvites.length === 0 ? (
-            <Text style={styles.emptyText}>No invitations yet.</Text>
-          ) : (
-            <View style={styles.recentList}>
-              {recentInvites.map((invite, index) => {
-                const isUsed = invite.list_group === 'used';
-                const isLast = index === recentInvites.length - 1;
-                const dateLabel = isUsed
-                  ? `Used ${formatShortDate(invite.used_at ?? invite.created_at)}`
-                  : `Created ${formatShortDate(invite.created_at)}`;
+          {!hasSnapshot && error ? (
+            <Text style={styles.accessError}>Refresh the summary to see invitation counts.</Text>
+          ) : null}
 
-                return (
-                  <View
-                    key={invite.id}
-                    style={[styles.recentRow, isLast && styles.recentRowLast]}
-                  >
-                    <View style={styles.recentRowTop}>
-                      <Text style={styles.recentKind} numberOfLines={1}>
-                        {formatInviteKind(invite.role, invite.barangay_id)}
-                        {invite.barangay_name ? ` · ${invite.barangay_name}` : ''}
-                      </Text>
-                      <View
-                        style={[
-                          styles.statusChip,
-                          isUsed ? styles.statusChipUsed : styles.statusChipActive,
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.statusChipText,
-                            isUsed
-                              ? styles.statusChipTextUsed
-                              : styles.statusChipTextActive,
-                          ]}
-                        >
-                          {isUsed ? 'Used' : 'Active'}
-                        </Text>
-                      </View>
-                    </View>
-                    <Text style={styles.recentEmail} numberOfLines={1}>
-                      {invite.invited_email}
-                    </Text>
-                    <Text style={styles.recentDate}>{dateLabel}</Text>
-                  </View>
-                );
-              })}
-            </View>
-          )}
+          <TouchableOpacity
+            style={styles.heroButton}
+            onPress={() => setCreateVisible(true)}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Create a new invite"
+          >
+            <Ionicons name="add-outline" size={20} color={colors.white} />
+            <Text style={styles.primaryButtonText}>New invite</Text>
+          </TouchableOpacity>
         </View>
 
-        <TouchableOpacity
-          style={styles.primaryButton}
-          onPress={openInvitations}
-          activeOpacity={0.85}
-          accessibilityRole="button"
-          accessibilityLabel="Create invitation"
-        >
-          <Text style={styles.primaryButtonText}>Create invitation</Text>
-        </TouchableOpacity>
+        {!hasSnapshot && loading ? (
+          <AdminDashboardDataSkeleton />
+        ) : !hasSnapshot ? (
+          <View style={[styles.errorPanel, styles.dashboardInset]}>
+            <Text style={styles.sectionError}>
+              Invitation expiry and role summaries are unavailable until a list loads.
+            </Text>
+            <TouchableOpacity
+              style={styles.retryButton}
+              onPress={retrySnapshot}
+              accessibilityRole="button"
+              accessibilityLabel="Retry loading invitation summary"
+            >
+              <Text style={styles.retryButtonText}>Retry</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={styles.dashboardSections}>
+            {expiringSoonCount > 0 ? (
+              <View
+                style={[
+                  styles.attentionStrip,
+                  styles.attentionStripWarm,
+                  compactLayout ? styles.attentionStripCompact : null,
+                ]}
+              >
+                <View style={styles.attentionStripContent}>
+                  <View style={styles.attentionAccent} />
+                  <Ionicons name="time-outline" size={19} color={adminColors.attentionInk} />
+                  <Text style={styles.attentionStripText}>
+                    {expiringSoonCount} expiring in 48h
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={[
+                    styles.attentionReview,
+                    compactLayout ? styles.attentionReviewCompact : null,
+                  ]}
+                  onPress={() => openInviteRecords('pending', 'all', 'soon')}
+                  activeOpacity={0.8}
+                  accessibilityRole="button"
+                  accessibilityLabel="Review pending invites expiring within 48 hours"
+                >
+                  <Text style={styles.attentionReviewText}>Review</Text>
+                  <Ionicons name="chevron-forward-outline" size={17} color={colors.navigationActive} />
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={styles.attentionZero}>
+                <Ionicons name="checkmark-circle-outline" size={19} color={adminColors.registeredInk} />
+                <Text style={styles.attentionZeroText}>No invites expiring soon</Text>
+              </View>
+            )}
+
+            <View style={styles.roleSection}>
+              <Text style={styles.roleSectionTitle}>By role</Text>
+              {!compactLayout ? (
+                <Text style={styles.roleLegend}>Pending / Registered</Text>
+              ) : null}
+              <View style={[styles.roleTools, compactLayout ? styles.roleToolsStacked : null]}>
+                {roleTools.map((role, index) => (
+                  <React.Fragment key={role.key}>
+                    <TouchableOpacity
+                      style={[styles.roleTool, compactLayout ? styles.roleToolStacked : null]}
+                      onPress={() => openInviteRecords('pending', role.key, 'any')}
+                      activeOpacity={0.8}
+                      accessibilityRole="button"
+                      accessibilityLabel={
+                        role.label +
+                        ', ' +
+                        role.pending +
+                        ' pending and ' +
+                        role.registered +
+                        ' registered invites. View pending.'
+                      }
+                    >
+                      <View
+                        style={[
+                          styles.roleToolIdentity,
+                          compactLayout ? styles.roleToolIdentityStacked : null,
+                        ]}
+                      >
+                        <Ionicons name={role.icon} size={22} color={colors.navigationActive} />
+                        <Text style={styles.roleToolLabel}>{role.label}</Text>
+                      </View>
+                      {compactLayout ? (
+                        <View style={styles.roleToolCountsStacked}>
+                          <View style={styles.roleToolCountLine}>
+                            <Text style={styles.roleToolCountLabel}>Pending</Text>
+                            <Text style={styles.roleToolPending}>{role.pending}</Text>
+                          </View>
+                          <View style={styles.roleToolCountLine}>
+                            <Text style={styles.roleToolCountLabel}>Registered</Text>
+                            <Text style={styles.roleToolRegistered}>{role.registered}</Text>
+                          </View>
+                        </View>
+                      ) : (
+                        <View style={styles.roleToolCounts}>
+                          <Text style={styles.roleToolPending}>{role.pending}</Text>
+                          <Text style={styles.roleToolSeparator}>/</Text>
+                          <Text style={styles.roleToolRegistered}>{role.registered}</Text>
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                    {index < roleTools.length - 1 ? (
+                      <View
+                        style={[
+                          styles.roleDivider,
+                          compactLayout ? styles.roleDividerStacked : null,
+                        ]}
+                      />
+                    ) : null}
+                  </React.Fragment>
+                ))}
+              </View>
+            </View>
+          </View>
+        )}
       </ScrollView>
+
+      {createVisible ? (
+        <AdminInviteFormSheet
+          visible
+          onRequestClose={() => setCreateVisible(false)}
+          onCreated={refreshAfterMutation}
+        />
+      ) : null}
     </SafeAreaView>
   );
 }

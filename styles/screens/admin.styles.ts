@@ -1,499 +1,928 @@
-// styles/screens/admin.styles.ts
-// Shared styles for the admin portal: Overview, Invitations, and Accounts.
-
 import { StyleSheet } from 'react-native';
 import { colors, fonts, fontSizes, radius, spacing } from '../theme';
-import { adminNavMetrics } from '../components/adminBottomNav.styles';
+import { officialNavMetrics } from '../components/officialBottomNav.styles';
 
-/** Extra bottom padding so scroll content clears the fixed admin bottom bar. */
-const BOTTOM_BAR_CLEARANCE = adminNavMetrics.barHeight + spacing.lg;
+export const adminColors = {
+  canvas: colors.white,
+  accessPanel: '#E8F1F5',
+  panelBlue: '#EAF3FC',
+  panelMint: '#ECFDF5',
+  panelWarm: '#FBF0E4',
+  registeredInk: '#047857',
+  attentionInk: '#885B2F',
+};
 
-// Soft wash of the nav highlight blue for light fills (tiles, chips, marks).
-const navBlueSoft = 'rgba(170, 192, 220, 0.28)';
+const bottomBarClearance = officialNavMetrics.barHeight + spacing.lg;
 
 export const adminStyles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
-  },
-  loadingContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: adminColors.canvas,
   },
   scrollContent: {
+    width: '100%',
+    maxWidth: 640,
+    alignSelf: 'center',
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    // Clear the fixed AdminBottomNav + home-indicator overlap.
-    paddingBottom: BOTTOM_BAR_CLEARANCE + spacing.xl,
+    paddingTop: spacing.sm,
+    paddingBottom: bottomBarClearance + spacing.xl,
     gap: spacing.lg,
   },
-
-  // ---- Identity header ----
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.md,
+  dashboardScrollContent: {
+    width: '100%',
+    maxWidth: 640,
+    alignSelf: 'center',
+    paddingBottom: bottomBarClearance + spacing.xl,
+    gap: spacing.lg,
   },
-  headerIdentity: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
+  dashboardInset: {
+    marginHorizontal: spacing.lg,
   },
-  brandMark: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.md,
-    backgroundColor: navBlueSoft,
-    alignItems: 'center',
-    justifyContent: 'center',
+  dashboardSections: {
+    paddingHorizontal: spacing.lg,
+    gap: spacing.lg,
   },
-  brandMarkImage: {
-    width: 32,
-    height: 32,
-    borderRadius: radius.sm,
-  },
-  headerTextGroup: {
-    flex: 1,
-    gap: 2,
-  },
-  brandLabel: {
-    fontFamily: fonts.semibold,
-    fontSize: fontSizes.sm,
-    color: colors.themeSoft,
-  },
-  title: {
-    fontFamily: fonts.extrabold,
-    fontSize: fontSizes.xl,
-    color: colors.text,
-    letterSpacing: -0.4,
-  },
-  subtitle: {
-    fontFamily: fonts.regular,
-    fontSize: fontSizes.sm,
-    color: colors.textMuted,
-  },
-  logoutButton: {
-    minHeight: 44,
-    minWidth: 44,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.full,
-    backgroundColor: colors.white,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  logoutButtonText: {
-    fontFamily: fonts.semibold,
-    fontSize: fontSizes.sm,
-    color: colors.text,
-  },
-
-  // ---- Flat sections (Overview activity / recent — no card chrome) ----
-  section: {
-    gap: spacing.md,
-  },
-
-  // ---- Cards ----
-  card: {
-    backgroundColor: colors.white,
-    borderRadius: radius.xl,
-    padding: spacing.lg,
-    gap: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  cardHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
-  },
-  sectionTitle: {
-    fontFamily: fonts.bold,
-    fontSize: fontSizes.lg,
-    color: colors.text,
-  },
-  sectionHint: {
-    fontFamily: fonts.regular,
-    fontSize: fontSizes.sm,
-    color: colors.textMuted,
-    lineHeight: 20,
-  },
-  linkAction: {
-    minHeight: 44,
-    justifyContent: 'center',
-    paddingHorizontal: spacing.xs,
-  },
-  linkActionText: {
-    fontFamily: fonts.semibold,
-    fontSize: fontSizes.sm,
-    color: colors.themeSoft,
-  },
-
-  // ---- Metric tiles (Overview) ----
-  metricsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.md,
-  },
-  metricTile: {
-    flexGrow: 1,
-    flexBasis: '42%',
-    minWidth: 132,
-    backgroundColor: navBlueSoft,
-    borderRadius: radius.lg,
-    padding: spacing.md,
-    gap: spacing.xs,
-    minHeight: 96,
-  },
-  metricTileTop: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-  },
-  metricValue: {
-    fontFamily: fonts.extrabold,
-    fontSize: fontSizes.xxl,
-    color: colors.text,
-    letterSpacing: -0.6,
-  },
-  metricLabel: {
+  sectionError: {
     fontFamily: fonts.medium,
     fontSize: fontSizes.sm,
-    color: colors.textMuted,
-    lineHeight: 18,
+    color: colors.unverified,
   },
-  metricArrow: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+  pageHeaderShell: {
+    width: '100%',
+    maxWidth: 640,
+    alignSelf: 'center',
+    zIndex: 10,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.md,
     backgroundColor: colors.white,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
-
-  // ---- Recent invitation rows (Overview) ----
-  recentList: {
-    gap: 0,
-  },
-  recentRow: {
-    paddingVertical: spacing.md,
-    gap: spacing.xs,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  recentRowLast: {
-    borderBottomWidth: 0,
-    paddingBottom: 0,
-  },
-  recentRowTop: {
+  pageHeader: {
+    width: '100%',
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
-    justifyContent: 'space-between',
     gap: spacing.sm,
   },
-  recentKind: {
+  pageHeaderIdentity: {
+    flexGrow: 1,
+    flexBasis: 180,
+    minWidth: 160,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  pageHeaderMark: {
+    width: 42,
+    height: 42,
+  },
+  pageHeaderCopy: {
     flex: 1,
-    fontFamily: fonts.bold,
-    fontSize: fontSizes.md,
-    color: colors.text,
+    minWidth: 0,
+    gap: 0,
   },
-  recentEmail: {
-    fontFamily: fonts.regular,
-    fontSize: fontSizes.sm,
-    color: colors.textMuted,
-  },
-  recentDate: {
-    fontFamily: fonts.regular,
-    fontSize: fontSizes.xs,
-    color: colors.textMuted,
-  },
-  statusChip: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: radius.full,
-  },
-  statusChipActive: {
-    backgroundColor: navBlueSoft,
-  },
-  statusChipUsed: {
-    backgroundColor: '#ECFDF5',
-  },
-  statusChipText: {
+  pageHeaderTitle: {
     fontFamily: fonts.semibold,
-    fontSize: fontSizes.xs,
+    fontSize: 22,
+    letterSpacing: -0.45,
+    color: colors.navigationActive,
   },
-  statusChipTextActive: {
-    color: colors.themeSoft,
+  pageHeaderSubtitle: {
+    fontFamily: fonts.regular,
+    fontSize: 12,
+    color: colors.textMuted,
   },
-  statusChipTextUsed: {
-    color: '#047857',
-  },
-
-  // ---- Primary CTA ----
-  primaryButton: {
-    backgroundColor: colors.themeSoft,
-    borderRadius: radius.lg,
-    paddingVertical: spacing.md,
+  pageHeaderAction: {
+    minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 48,
   },
-  primaryButtonDisabled: {
-    opacity: 0.55,
+  headerAction: {
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.xs,
+  },
+  headerActionText: {
+    fontFamily: fonts.semibold,
+    fontSize: fontSizes.sm,
+    color: colors.navigationActive,
+  },
+  iconAction: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  accessPanel: {
+    minHeight: 232,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.lg,
+    gap: spacing.md,
+    backgroundColor: adminColors.accessPanel,
+  },
+  accessPanelTitle: {
+    fontFamily: fonts.semibold,
+    fontSize: 32,
+    letterSpacing: -0.7,
+    color: colors.navigationActive,
+  },
+  accessStages: {
+    minHeight: 88,
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    gap: spacing.md,
+  },
+  accessStagesStacked: {
+    flexDirection: 'column',
+  },
+  accessStagePending: {
+    flex: 1,
+    minWidth: 0,
+    justifyContent: 'center',
+    gap: spacing.xs,
+    paddingVertical: spacing.xs,
+  },
+  accessStageRegistered: {
+    flexGrow: 0,
+    flexBasis: 132,
+    minWidth: 0,
+    justifyContent: 'center',
+    gap: spacing.xs,
+    paddingVertical: spacing.xs,
+  },
+  accessStageStacked: {
+    flexGrow: 0,
+    flexBasis: 'auto',
+    minWidth: 0,
+    alignSelf: 'stretch',
+  },
+  accessMetricDivider: {
+    width: StyleSheet.hairlineWidth,
+    minHeight: 68,
+    alignSelf: 'center',
+    backgroundColor: 'rgba(15,32,68,0.2)',
+  },
+  accessMetricDividerHorizontal: {
+    width: '100%',
+    height: StyleSheet.hairlineWidth,
+    minHeight: 0,
+  },
+  stageCount: {
+    fontFamily: fonts.extrabold,
+    fontSize: 56,
+    color: colors.navigationActive,
+    fontVariant: ['tabular-nums'],
+  },
+  stageCountRegistered: {
+    fontFamily: fonts.bold,
+    fontSize: 34,
+    color: colors.navigationActive,
+    fontVariant: ['tabular-nums'],
+  },
+  stageCountUnavailable: {
+    color: colors.textMuted,
+  },
+  stageLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  stageLabel: {
+    fontFamily: fonts.semibold,
+    fontSize: fontSizes.md,
+    color: colors.navigationActive,
+  },
+  stageLabelRegistered: {
+    color: colors.textMuted,
+  },
+  accessError: {
+    fontFamily: fonts.medium,
+    fontSize: fontSizes.sm,
+    color: colors.unverified,
+  },
+  heroButton: {
+    minHeight: 48,
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.md,
+    backgroundColor: colors.navigationActive,
+  },
+  primaryButton: {
+    minHeight: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.lg,
+    backgroundColor: colors.navigationActive,
   },
   primaryButtonText: {
     fontFamily: fonts.semibold,
     fontSize: fontSizes.md,
     color: colors.white,
+    textAlign: 'center',
   },
-
-  // ---- Form fields (Invitations) ----
-  roleRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
-  roleChip: {
-    minHeight: 44,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.full,
-    backgroundColor: navBlueSoft,
-    borderWidth: 1,
-    borderColor: 'transparent',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  roleChipSelected: {
-    backgroundColor: colors.themeSoft,
-    borderColor: colors.themeSoft,
-  },
-  roleChipText: {
-    fontFamily: fonts.semibold,
-    fontSize: fontSizes.sm,
-    color: colors.themeSoft,
-  },
-  roleChipTextSelected: {
-    color: colors.white,
-  },
-  fieldLabel: {
-    fontFamily: fonts.semibold,
-    fontSize: fontSizes.sm,
-    color: colors.text,
-  },
-  textInput: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.lg,
-    backgroundColor: colors.white,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    fontFamily: fonts.regular,
-    fontSize: fontSizes.md,
-    color: colors.text,
-    minHeight: 48,
-  },
-  textInputError: {
-    borderColor: '#DC2626',
-  },
-  selectBox: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.lg,
-    backgroundColor: colors.white,
-    overflow: 'hidden',
-  },
-  selectOption: {
-    minHeight: 44,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    justifyContent: 'center',
-  },
-  selectOptionSelected: {
-    backgroundColor: navBlueSoft,
-  },
-  selectOptionText: {
-    fontFamily: fonts.medium,
-    fontSize: fontSizes.md,
-    color: colors.text,
-  },
-  successBox: {
-    backgroundColor: '#ECFDF5',
-    borderRadius: radius.lg,
+  errorPanel: {
     padding: spacing.md,
     gap: spacing.sm,
+    borderRadius: radius.lg,
+    backgroundColor: '#FEF2F2',
     borderWidth: 1,
-    borderColor: '#A7F3D0',
-  },
-  successTitle: {
-    fontFamily: fonts.semibold,
-    fontSize: fontSizes.sm,
-    color: '#047857',
-  },
-  successLink: {
-    fontFamily: fonts.regular,
-    fontSize: fontSizes.sm,
-    color: colors.text,
-  },
-  copyButton: {
-    alignSelf: 'flex-start',
-    minHeight: 44,
-    justifyContent: 'center',
-    backgroundColor: colors.text,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-  },
-  copyButtonText: {
-    fontFamily: fonts.semibold,
-    fontSize: fontSizes.sm,
-    color: colors.white,
-  },
-  errorText: {
-    fontFamily: fonts.medium,
-    fontSize: fontSizes.sm,
-    color: '#DC2626',
-  },
-  emptyText: {
-    fontFamily: fonts.regular,
-    fontSize: fontSizes.sm,
-    color: colors.textMuted,
+    borderColor: '#FECACA',
   },
   retryButton: {
-    alignSelf: 'flex-start',
     minHeight: 44,
+    alignSelf: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
     borderRadius: radius.md,
-    backgroundColor: navBlueSoft,
+    backgroundColor: adminColors.panelBlue,
   },
   retryButtonText: {
     fontFamily: fonts.semibold,
     fontSize: fontSizes.sm,
-    color: colors.themeSoft,
+    color: colors.navigationActive,
   },
-
-  // ---- Invite list rows (Invitations) ----
-  inviteRow: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.lg,
-    padding: spacing.md,
-    gap: 6,
+  attentionStrip: {
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
   },
-  inviteRowActive: {
-    backgroundColor: colors.white,
+  attentionStripWarm: {
+    backgroundColor: adminColors.panelWarm,
+    borderLeftWidth: 3,
+    borderLeftColor: adminColors.attentionInk,
   },
-  inviteRowUsed: {
-    backgroundColor: '#F8FAFC',
+  attentionStripCompact: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    gap: spacing.xs,
   },
-  inviteRowTop: {
+  attentionStripContent: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  attentionAccent: {
+    width: 3,
+    height: 18,
+    backgroundColor: adminColors.attentionInk,
+  },
+  attentionStripText: {
+    flex: 1,
+    fontFamily: fonts.semibold,
+    fontSize: fontSizes.md,
+    color: adminColors.attentionInk,
+  },
+  attentionReview: {
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.sm,
+  },
+  attentionReviewCompact: {
+    alignSelf: 'stretch',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(136,91,47,0.28)',
+  },
+  attentionReviewText: {
+    fontFamily: fonts.semibold,
+    fontSize: fontSizes.sm,
+    color: colors.navigationActive,
+  },
+  attentionZero: {
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  attentionZeroText: {
+    flex: 1,
+    minWidth: 0,
+    fontFamily: fonts.medium,
+    fontSize: fontSizes.md,
+    color: adminColors.registeredInk,
+  },
+  roleSection: {
+    gap: spacing.sm,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderColor: '#CBD5E1',
+  },
+  roleSectionTitle: {
+    fontFamily: fonts.bold,
+    fontSize: 20,
+    color: colors.navigationActive,
+  },
+  roleLegend: {
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.sm,
+    color: colors.textMuted,
+  },
+  roleTools: {
+    minHeight: 116,
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderColor: '#CBD5E1',
+  },
+  roleToolsStacked: {
+    flexDirection: 'column',
+  },
+  roleTool: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 110,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.xs,
+    paddingVertical: spacing.sm,
+  },
+  roleToolStacked: {
+    flex: 0,
+    minHeight: 0,
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    gap: spacing.sm,
+    paddingVertical: spacing.md,
+  },
+  roleToolIdentity: {
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  roleToolIdentityStacked: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    minWidth: 0,
+  },
+  roleToolLabel: {
+    flexShrink: 1,
+    minWidth: 0,
+    fontFamily: fonts.semibold,
+    fontSize: fontSizes.md,
+    color: colors.navigationActive,
+    textAlign: 'center',
+  },
+  roleToolCounts: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  roleToolCountsStacked: {
+    width: '100%',
+    gap: spacing.xs,
+  },
+  roleToolCountLine: {
+    minHeight: 28,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: spacing.sm,
   },
-  inviteKind: {
+  roleToolCountLabel: {
     flex: 1,
-    fontFamily: fonts.bold,
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.sm,
+    color: colors.textMuted,
+  },
+  roleToolPending: {
+    fontFamily: fonts.semibold,
     fontSize: fontSizes.md,
+    color: colors.navigationActive,
+    fontVariant: ['tabular-nums'],
+  },
+  roleToolRegistered: {
+    fontFamily: fonts.semibold,
+    fontSize: fontSizes.md,
+    color: adminColors.registeredInk,
+    fontVariant: ['tabular-nums'],
+  },
+  roleToolSeparator: {
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.md,
+    color: colors.textMuted,
+  },
+  roleDivider: {
+    width: StyleSheet.hairlineWidth,
+    marginVertical: spacing.sm,
+    backgroundColor: '#CBD5E1',
+  },
+  roleDividerStacked: {
+    width: 'auto',
+    height: StyleSheet.hairlineWidth,
+    marginVertical: 0,
+    backgroundColor: '#CBD5E1',
+  },
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  searchField: {
+    flex: 1,
+    minHeight: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  searchInput: {
+    flex: 1,
+    minWidth: 0,
+    paddingVertical: spacing.sm,
+    fontFamily: fonts.regular,
+    fontSize: 16,
     color: colors.text,
+  },
+  filterButton: {
+    minWidth: 48,
+    minHeight: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.md,
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  segmentControl: {
+    minHeight: 50,
+    flexDirection: 'row',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  segmentControlStacked: {
+    flexDirection: 'column',
+    borderBottomWidth: 0,
+  },
+  segmentButton: {
+    flex: 1,
+    minHeight: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  segmentButtonStacked: {
+    flex: 0,
+    flexDirection: 'row',
+  },
+  segmentButtonActive: {
+    borderBottomColor: colors.navigationActive,
+  },
+  segmentLabel: {
+    fontFamily: fonts.medium,
+    fontSize: fontSizes.md,
+    color: colors.textMuted,
+  },
+  segmentLabelActive: {
+    fontFamily: fonts.semibold,
+    color: colors.navigationActive,
+  },
+  segmentCount: {
+    textAlign: 'center',
+    fontFamily: fonts.semibold,
+    fontSize: fontSizes.sm,
+    color: colors.textMuted,
+    fontVariant: ['tabular-nums'],
+  },
+  segmentCountUnknown: {
+    color: colors.textMuted,
+  },
+  activeFilters: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  filterChip: {
+    minHeight: 34,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.md,
+    backgroundColor: adminColors.panelBlue,
+  },
+  filterChipText: {
+    fontFamily: fonts.medium,
+    fontSize: fontSizes.sm,
+    color: colors.navigationActive,
+  },
+  clearFiltersButton: {
+    minHeight: 40,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.sm,
+  },
+  clearFiltersText: {
+    fontFamily: fonts.semibold,
+    fontSize: fontSizes.sm,
+    color: colors.navigationActive,
+    textDecorationLine: 'underline',
+  },
+  keyboardAvoiding: {
+    flex: 1,
+  },
+  listContent: {
+    flexGrow: 1,
+    width: '100%',
+    maxWidth: 640,
+    alignSelf: 'center',
+    paddingBottom: bottomBarClearance + spacing.xl,
+    backgroundColor: colors.white,
+  },
+  invitationListHeader: {
+    gap: spacing.md,
+    marginBottom: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+  },
+  inviteCard: {
+    width: '100%',
+    flexDirection: 'column',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    backgroundColor: colors.white,
+  },
+  inviteDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.border,
+  },
+  inviteHeader: {
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.md,
+  },
+  inviteAvatar: {
+    borderWidth: 0,
+    backgroundColor: adminColors.accessPanel,
+  },
+  inviteAvatarText: {
+    color: colors.navigationActive,
+  },
+  inviteMainCopy: {
+    flex: 1,
+    minWidth: 0,
+    gap: spacing.xs,
+  },
+  inviteHeaderTop: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+  },
+  inviteEmail: {
+    flex: 1,
+    minWidth: 0,
+    fontFamily: fonts.semibold,
+    fontSize: fontSizes.md,
+    color: colors.navigationActive,
+  },
+  inviteStatusLine: {
+    minHeight: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  inviteStatusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: radius.full,
+  },
+  inviteStatusDotPending: {
+    backgroundColor: colors.navigationActive,
+  },
+  inviteStatusDotRegistered: {
+    backgroundColor: adminColors.registeredInk,
+  },
+  inviteStatusDotExpiring: {
+    backgroundColor: adminColors.attentionInk,
+  },
+  inviteStatusText: {
+    fontFamily: fonts.semibold,
+    fontSize: fontSizes.sm,
+  },
+  inviteStatusPendingText: {
+    color: colors.navigationActive,
+  },
+  inviteStatusRegisteredText: {
+    color: adminColors.registeredInk,
+  },
+  inviteStatusExpiringText: {
+    color: adminColors.attentionInk,
+  },
+  inviteScope: {
+    fontFamily: fonts.medium,
+    fontSize: fontSizes.sm,
+    color: colors.text,
+  },
+  inviteMetaRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    columnGap: spacing.md,
+    rowGap: spacing.xs,
   },
   inviteMeta: {
     fontFamily: fonts.regular,
     fontSize: fontSizes.sm,
     color: colors.textMuted,
   },
+  inviteDetails: {
+    marginLeft: 56,
+    marginTop: spacing.sm,
+    paddingTop: spacing.sm,
+    gap: spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
+  },
+  inviteError: {
+    fontFamily: fonts.medium,
+    fontSize: fontSizes.sm,
+    color: colors.unverified,
+  },
   revokeButton: {
     minHeight: 44,
+    alignSelf: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.md,
     borderRadius: radius.md,
     backgroundColor: '#FEF2F2',
   },
   revokeButtonText: {
     fontFamily: fonts.semibold,
-    fontSize: fontSizes.xs,
-    color: '#DC2626',
+    fontSize: fontSizes.sm,
+    color: colors.unverified,
   },
-  listGap: {
-    gap: spacing.sm,
-  },
-
-  // ---- Accounts placeholder ----
-  emptyStateCard: {
-    backgroundColor: colors.white,
-    borderRadius: radius.xl,
-    padding: spacing.xl,
+  emptyState: {
     alignItems: 'center',
     gap: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.xl,
   },
-  emptyStateIcon: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: navBlueSoft,
+  emptyStateMark: {
+    width: 44,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
+    borderRadius: radius.full,
+    backgroundColor: adminColors.panelBlue,
   },
   emptyStateTitle: {
-    fontFamily: fonts.bold,
+    fontFamily: fonts.semibold,
     fontSize: fontSizes.lg,
-    color: colors.text,
+    color: colors.navigationActive,
     textAlign: 'center',
   },
   emptyStateBody: {
+    maxWidth: 320,
     fontFamily: fonts.regular,
-    fontSize: fontSizes.sm,
+    fontSize: fontSizes.md,
     color: colors.textMuted,
     textAlign: 'center',
-    lineHeight: 20,
   },
-  capabilityList: {
+  filterBackdrop: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(15,32,68,0.35)',
+  },
+  filterDismissArea: {
+    flex: 1,
+  },
+  filterSheet: {
     width: '100%',
-    marginTop: spacing.sm,
-    gap: 0,
+    maxWidth: 640,
+    maxHeight: '85%',
+    alignSelf: 'center',
+    padding: spacing.lg,
+    gap: spacing.lg,
+    borderTopLeftRadius: radius.xxl,
+    borderTopRightRadius: radius.xxl,
+    backgroundColor: colors.white,
   },
-  capabilityRow: {
+  filterSheetContent: {
+    gap: spacing.md,
+    paddingBottom: spacing.sm,
+  },
+  filterSheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+  },
+  filterSheetTitle: {
+    fontFamily: fonts.semibold,
+    fontSize: fontSizes.xl,
+    color: colors.navigationActive,
+  },
+  filterGroup: {
+    gap: spacing.sm,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  filterGroupTitle: {
+    fontFamily: fonts.semibold,
+    fontSize: fontSizes.md,
+    color: colors.navigationActive,
+  },
+  filterOption: {
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.sm,
+  },
+  filterOptionSelected: {
+    backgroundColor: adminColors.panelBlue,
+  },
+  filterOptionText: {
+    flex: 1,
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.md,
+    color: colors.text,
+  },
+  filterOptionTextSelected: {
+    fontFamily: fonts.semibold,
+    color: colors.navigationActive,
+  },
+  filterActions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  filterAction: {
+    flex: 1,
+    minHeight: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.md,
+  },
+  filterActionSecondary: {
+    backgroundColor: adminColors.panelBlue,
+  },
+  filterActionPrimary: {
+    backgroundColor: colors.navigationActive,
+  },
+  filterActionText: {
+    fontFamily: fonts.semibold,
+    fontSize: fontSizes.md,
+    color: colors.navigationActive,
+  },
+  filterActionPrimaryText: {
+    color: colors.white,
+  },
+  identityArea: {
+    gap: spacing.md,
+    paddingBottom: spacing.lg,
+    borderBottomWidth: 3,
+    borderBottomColor: adminColors.accessPanel,
+  },
+  identityRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    paddingVertical: spacing.md,
-    borderTopWidth: 1,
+  },
+  identityAvatar: {
+    borderWidth: 0,
+    backgroundColor: adminColors.accessPanel,
+  },
+  identityAvatarText: {
+    color: colors.navigationActive,
+  },
+  identityCopy: {
+    flex: 1,
+    minWidth: 0,
+    gap: spacing.xs,
+  },
+  identityName: {
+    fontFamily: fonts.semibold,
+    fontSize: fontSizes.lg,
+    color: colors.navigationActive,
+  },
+  identityEmail: {
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.sm,
+    color: colors.textMuted,
+  },
+  identityRole: {
+    alignSelf: 'flex-start',
+    fontFamily: fonts.medium,
+    fontSize: fontSizes.sm,
+    color: colors.textMuted,
+  },
+  identityState: {
+    gap: spacing.sm,
+    paddingTop: spacing.xs,
+  },
+  identityStateText: {
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.sm,
+    color: colors.unverified,
+  },
+  settingsGroup: {
+    gap: spacing.xs,
+  },
+  settingsGroupTitle: {
+    fontFamily: fonts.semibold,
+    fontSize: fontSizes.md,
+    color: colors.navigationActive,
+  },
+  settingsPanel: {
+    borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.border,
   },
-  capabilityIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#F8FAFC',
+  settingsRow: {
+    minHeight: 60,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  settingsRowLast: {
+    borderBottomWidth: 0,
+  },
+  settingsRowIcon: {
+    width: 28,
+    height: 28,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  capabilityTextGroup: {
+  settingsRowCopy: {
     flex: 1,
-    gap: 2,
+    minWidth: 0,
   },
-  capabilityTitle: {
+  settingsRowTitle: {
+    fontFamily: fonts.medium,
+    fontSize: fontSizes.md,
+    color: colors.text,
+  },
+  settingsVersion: {
+    fontFamily: fonts.medium,
+    fontSize: fontSizes.sm,
+    color: colors.textMuted,
+  },
+  logoutArea: {
+    marginTop: spacing.sm,
+    paddingTop: spacing.xs,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
+  },
+  logoutButton: {
+    minHeight: 56,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    gap: spacing.md,
+  },
+  logoutButtonText: {
     fontFamily: fonts.semibold,
     fontSize: fontSizes.md,
-    color: colors.textMuted,
+    color: colors.unverified,
   },
-  capabilityHint: {
-    fontFamily: fonts.regular,
-    fontSize: fontSizes.xs,
-    color: colors.textMuted,
+  logoutError: {
+    paddingTop: spacing.sm,
+    fontFamily: fonts.medium,
+    fontSize: fontSizes.sm,
+    color: colors.unverified,
   },
 });

@@ -1,7 +1,6 @@
 // components/navigation/AdminBottomNav.tsx
-// Dedicated admin portal bottom bar: Overview | Invites | Accounts.
-// Styled like the resident BottomNav (soft-blue active circle) but without
-// resident-only behavior (Report action, profile fetch, notifications).
+// Admin's three destinations use the official portal's floating bar geometry
+// without importing role state or operational behavior.
 
 import React, { useCallback, memo } from 'react';
 import { View, Text, Pressable } from 'react-native';
@@ -10,10 +9,10 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import type { BottomTabBarProps } from 'expo-router/js-tabs';
 import {
-  adminBottomNavStyles as styles,
-  adminNavColors,
-  adminNavMetrics,
-} from '../../styles/components/adminBottomNav.styles';
+  officialBottomNavStyles as styles,
+  officialNavColors,
+  officialNavMetrics,
+} from '../../styles/components/officialBottomNav.styles';
 
 type IoniconName = keyof typeof Ionicons.glyphMap;
 
@@ -27,7 +26,7 @@ type TabConfig = {
 const ADMIN_TABS: TabConfig[] = [
   {
     name: 'index',
-    label: 'Overview',
+    label: 'Dashboard',
     activeIcon: 'grid',
     inactiveIcon: 'grid-outline',
   },
@@ -38,10 +37,10 @@ const ADMIN_TABS: TabConfig[] = [
     inactiveIcon: 'mail-outline',
   },
   {
-    name: 'accounts',
-    label: 'Accounts',
-    activeIcon: 'people',
-    inactiveIcon: 'people-outline',
+    name: 'settings',
+    label: 'Settings',
+    activeIcon: 'settings',
+    inactiveIcon: 'settings-outline',
   },
 ];
 
@@ -69,21 +68,11 @@ const NavItem = memo(function NavItem({
     >
       <View style={styles.itemContent}>
         <View style={styles.iconHolder}>
-          {focused ? (
-            <View style={styles.activeCircle}>
-              <Ionicons
-                name={config.activeIcon}
-                size={adminNavMetrics.activeIconSize}
-                color={adminNavColors.iconActive}
-              />
-            </View>
-          ) : (
-            <Ionicons
-              name={config.inactiveIcon}
-              size={adminNavMetrics.iconSize}
-              color={adminNavColors.iconInactive}
-            />
-          )}
+          <Ionicons
+            name={focused ? config.activeIcon : config.inactiveIcon}
+            size={focused ? officialNavMetrics.activeIconSize : officialNavMetrics.iconSize}
+            color={focused ? officialNavColors.iconActive : officialNavColors.iconInactive}
+          />
         </View>
         <Text
           style={[styles.label, focused && styles.labelActive]}
@@ -119,14 +108,16 @@ export default function AdminBottomNav({ state, emitter, navigateToTab }: Bottom
     [emitter, navigateToTab, state.routes, currentRouteName],
   );
 
+  // The legacy Accounts route immediately redirects to Settings and has no nav item.
+  if (currentRouteName === 'accounts') return null;
+
   return (
     <View
       style={[
         styles.wrapper,
         {
-          // Extend under the home indicator so the white bar fills the safe area.
-          bottom: -insets.bottom,
-          height: adminNavMetrics.barHeight + insets.bottom,
+          bottom: 0,
+          height: officialNavMetrics.barHeight + insets.bottom,
         },
       ]}
       pointerEvents="box-none"
@@ -134,7 +125,7 @@ export default function AdminBottomNav({ state, emitter, navigateToTab }: Bottom
       <View
         style={[
           styles.bar,
-          { height: adminNavMetrics.barHeight + insets.bottom },
+          { height: officialNavMetrics.barHeight + insets.bottom },
         ]}
       >
         <View style={styles.row}>

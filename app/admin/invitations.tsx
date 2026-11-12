@@ -1,529 +1,516 @@
-// app/admin/invitations.tsx — Official invite create / list / revoke.
-// Same workflow as the former admin.tsx, restyled for the portal shell.
-
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  ActivityIndicator,
   Alert,
-  RefreshControl,
+  FlatList,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
+  RefreshControl,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import * as Clipboard from 'expo-clipboard';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { adminStyles as styles } from '../../styles/screens/admin.styles';
-import { colors } from '../../styles/theme';
-import { fetchBarangays, type BarangayOption } from '../../lib/barangays';
+import { Ionicons } from '@expo/vector-icons';
+import AdminInviteFiltersSheet from '../../components/admin/AdminInviteFiltersSheet';
+import AdminInviteFormSheet from '../../components/admin/AdminInviteFormSheet';
+import AdminInviteRow from '../../components/admin/AdminInviteRow';
+import AdminPageHeader from '../../components/admin/AdminPageHeader';
+import { AdminInviteListSkeleton } from '../../components/ui/AdminScreenSkeletons';
+import { useAdminInvites } from '../../context/AdminInvitesContext';
+import { useAccessibilityLayout } from '../../hooks/useAccessibilityLayout';
 import {
-  buildInviteDeepLink,
-  createOfficialInvite,
+  filterAdminInvites,
+  isInviteExpiringSoon,
+  type AdminInviteExpiryFilter,
+  type AdminInviteGroupFilter,
+  type AdminInviteRoleFilter,
+} from '../../lib/adminInvitePolicy';
+import {
   formatInviteKind,
-  listOfficialInvites,
+  formatInviteScopeLabel,
   revokeOfficialInvite,
   type InviteListItem,
-  type InviteRole,
 } from '../../lib/invites';
-import { maskInvitePhone } from '../../lib/officialRegistration';
-import { sanitizePhoneInput } from '../../lib/validation/phone';
-import LabeledInput from '../../components/register/LabeledInput';
+import { adminStyles as styles } from '../../styles/screens/admin.styles';
+import { colors } from '../../styles/theme';
 
-type InviteKind = 'mayor' | 'mdrrmo' | 'bdrrmo';
-
-function formatDate(value: string): string {
-  try {
-    return new Date(value).toLocaleString();
-  } catch {
-    return value;
-  }
+function firstParam(value: string | string[] | undefined): string {
+  if (Array.isArray(value)) return value[0] ?? '';
+  return value ?? '';
 }
 
-function StatusChip({ used }: { used: boolean }) {
-  return (
-    <View
-      style={[
-        styles.statusChip,
-        used ? styles.statusChipUsed : styles.statusChipActive,
-      ]}
-    >
-      <Text
-        style={[
-          styles.statusChipText,
-          used ? styles.statusChipTextUsed : styles.statusChipTextActive,
-        ]}
-      >
-        {used ? 'Used' : 'Active'}
-      </Text>
-    </View>
-  );
+function parseGroup(value: string): AdminInviteGroupFilter {
+  return value === 'registered' || value === 'used' ? 'registered' : 'pending';
+}
+
+function parseRole(value: string): AdminInviteRoleFilter {
+  if (value === 'mayor' || value === 'mdrrmo' || value === 'bdrrmo') return value;
+  return 'all';
+}
+
+function roleName(role: AdminInviteRoleFilter): string {
+  switch (role) {
+    case 'mayor':
+      return 'Mayor';
+    case 'mdrrmo':
+      return 'MDRRMO';
+    case 'bdrrmo':
+      return 'BDRRMO';
+    default:
+      return 'All roles';
+  }
 }
 
 export default function AdminInvitationsScreen() {
-  const [loadingLists, setLoadingLists] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [creating, setCreating] = useState(false);
+  const router = useRouter();
+  const { isLargeText } = useAccessibilityLayout();
+  const params = useLocalSearchParams<{
+    group?: string | string[];
+    role?: string | string[];
+    expiry?: string | string[];
+    search?: string | string[];
+  }>();
+  const {
+    active,
+    used,
+    loading,
+    refreshing,
+    error,
+    lastLoadedAt,
+    now,
+    reload,
+    removeActiveInvite,
+    refreshAfterMutation,
+  } = useAdminInvites();
 
-  const [inviteKind, setInviteKind] = useState<InviteKind>('mayor');
-  const [invitedEmail, setInvitedEmail] = useState('');
-  const [invitedPhone, setInvitedPhone] = useState('');
-  const [barangays, setBarangays] = useState<BarangayOption[]>([]);
-  const [selectedBarangayId, setSelectedBarangayId] = useState<string | null>(
-    null,
+  const group = parseGroup(firstParam(params.group));
+  const role = parseRole(firstParam(params.role));
+  const expiry: AdminInviteExpiryFilter =
+    group === 'pending' && firstParam(params.expiry) === 'soon' ? 'soon' : 'any';
+  const search = firstParam(params.search).slice(0, 120);
+  const hasSnapshot = lastLoadedAt !== null;
+  const [filterVisible, setFilterVisible] = useState(false);
+  const [sheetVisible, setSheetVisible] = useState(false);
+  const [revokePendingId, setRevokePendingId] = useState<string | null>(null);
+  const [revokeErrors, setRevokeErrors] = useState<Record<string, string>>({});
+  const revokeLockRef = useRef(false);
+  const mountedRef = useRef(true);
+  const revokeGenerationRef = useRef(0);
+
+  useFocusEffect(
+    useCallback(() => {
+      void reload();
+    }, [reload]),
   );
-  const [barangayError, setBarangayError] = useState('');
-
-  const [activeInvites, setActiveInvites] = useState<InviteListItem[]>([]);
-  const [usedInvites, setUsedInvites] = useState<InviteListItem[]>([]);
-  const [listError, setListError] = useState('');
-  const [createError, setCreateError] = useState('');
-  const [emailError, setEmailError] = useState('');
-  const [phoneError, setPhoneError] = useState('');
-  const [generatedLink, setGeneratedLink] = useState('');
-  const [copyFeedback, setCopyFeedback] = useState('');
-
-  const loadInvites = useCallback(async () => {
-    const { active, used, error } = await listOfficialInvites();
-    if (error) {
-      setListError(error);
-      setActiveInvites([]);
-      setUsedInvites([]);
-      return;
-    }
-    setListError('');
-    setActiveInvites(active);
-    setUsedInvites(used);
-  }, []);
 
   useEffect(() => {
-    let cancelled = false;
-
-    (async () => {
-      const [barangayResult] = await Promise.all([
-        fetchBarangays(),
-        loadInvites(),
-      ]);
-
-      if (cancelled) return;
-
-      if (barangayResult.error) {
-        setBarangayError(barangayResult.error);
-      } else {
-        setBarangays(barangayResult.barangays);
-      }
-      setLoadingLists(false);
-    })();
-
+    mountedRef.current = true;
     return () => {
-      cancelled = true;
+      mountedRef.current = false;
+      revokeGenerationRef.current += 1;
     };
-  }, [loadInvites]);
+  }, []);
 
-  async function handleRefresh() {
-    setRefreshing(true);
-    await loadInvites();
-    setRefreshing(false);
-  }
-
-  async function handleCreateInvite() {
-    if (creating) return;
-
-    setCreateError('');
-    setEmailError('');
-    setPhoneError('');
-    setCopyFeedback('');
-    setGeneratedLink('');
-
-    const email = invitedEmail.trim().toLowerCase();
-    if (!email || !email.includes('@')) {
-      setEmailError('Enter the invitee government email address.');
-      return;
-    }
-
-    const phoneDigits = invitedPhone.replace(/\D/g, '');
-    if (!phoneDigits) {
-      setPhoneError(
-        'Enter a Globe, TM, or DITO mobile number for SMS verification.',
-      );
-      return;
-    }
-
-    let role: InviteRole = 'mayor';
-    let barangayId: string | null = null;
-
-    if (inviteKind === 'mayor') {
-      role = 'mayor';
-    } else if (inviteKind === 'mdrrmo') {
-      role = 'officer';
-      barangayId = null;
-    } else {
-      role = 'officer';
-      if (!selectedBarangayId) {
-        setCreateError('Select a barangay for the BDRRMO invite.');
-        return;
-      }
-      barangayId = selectedBarangayId;
-    }
-
-    setCreating(true);
-    try {
-      const result = await createOfficialInvite({
+  const pendingInvites = active;
+  const registeredInvites = used;
+  const groupInvites = group === 'pending' ? pendingInvites : registeredInvites;
+  const rows = useMemo(
+    () =>
+      filterAdminInvites({
+        pendingInvites,
+        registeredInvites,
+        group,
         role,
-        invitedEmail: email,
-        invitedPhone: phoneDigits,
-        barangayId,
+        expiry,
+        search,
+        now,
+        formatInviteKind,
+      }),
+    [pendingInvites, registeredInvites, group, role, expiry, search, now],
+  );
+  const hasFilters = role !== 'all' || expiry === 'soon' || search.trim().length > 0;
+  const hasSearch = search.trim().length > 0;
+  const countText = (count: number) => (hasSnapshot ? String(count) : loading ? '…' : '—');
+
+  const handleRefresh = useCallback(() => {
+    void reload({ force: true });
+  }, [reload]);
+
+  const clearFilters = useCallback(() => {
+    router.setParams({
+      group,
+      role: 'all',
+      expiry: 'any',
+      search: '',
+    });
+  }, [group, router]);
+
+  const openFilters = useCallback(() => {
+    Keyboard.dismiss();
+    setFilterVisible(true);
+  }, []);
+
+  const openCreateSheet = useCallback(() => {
+    Keyboard.dismiss();
+    setSheetVisible(true);
+  }, []);
+
+  const applyFilters = useCallback(
+    (nextRole: AdminInviteRoleFilter, nextExpiry: AdminInviteExpiryFilter) => {
+      router.setParams({
+        role: nextRole,
+        expiry: group === 'pending' ? nextExpiry : 'any',
       });
+      setFilterVisible(false);
+    },
+    [group, router],
+  );
 
-      if (result.emailError) setEmailError(result.emailError);
-      if (result.phoneError) setPhoneError(result.phoneError);
-
-      if (result.error || !result.token) {
-        if (!result.emailError && !result.phoneError) {
-          setCreateError(result.error ?? 'Could not create invite.');
-        } else if (result.requiresManualReview) {
-          setCreateError(
-            'Manual review required. See docs/admin-invite-recovery.md before issuing a new invite.',
-          );
-        }
-        return;
-      }
-
-      const link = buildInviteDeepLink(result.token);
-      setGeneratedLink(link);
-      setInvitedEmail('');
-      setInvitedPhone('');
-      await loadInvites();
-      Alert.alert(
-        'Invite created',
-        'Copy the link now. The raw token is only shown once. Only the invited email and phone can register with it.',
-      );
-    } finally {
-      setCreating(false);
-    }
-  }
-
-  async function handleCopyLink() {
-    if (!generatedLink) return;
-    await Clipboard.setStringAsync(generatedLink);
-    setCopyFeedback('Link copied to clipboard.');
-  }
-
-  function handleRevoke(invite: InviteListItem) {
+  const confirmRevoke = useCallback((invite: InviteListItem) => {
+    if (!mountedRef.current || revokeLockRef.current) return;
+    const actionGeneration = revokeGenerationRef.current;
+    const scopeLabel = formatInviteScopeLabel(invite);
+    setRevokeErrors((currentErrors) => ({ ...currentErrors, [invite.id]: '' }));
     Alert.alert(
       'Revoke invite?',
-      `Revoke the ${formatInviteKind(invite.role, invite.barangay_id)} invite? This cannot be undone.`,
+      'Revoke the ' + scopeLabel + ' invitation for ' + invite.invited_email + '? This cannot be undone.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Revoke',
           style: 'destructive',
-          onPress: async () => {
-            const { error } = await revokeOfficialInvite(invite.id);
-            if (error) {
-              Alert.alert('Revoke failed', error);
+          onPress: () => {
+            if (
+              !mountedRef.current ||
+              actionGeneration !== revokeGenerationRef.current ||
+              revokeLockRef.current
+            ) {
               return;
             }
-            await loadInvites();
+            revokeLockRef.current = true;
+            setRevokePendingId(invite.id);
+            void (async () => {
+              try {
+                const result = await revokeOfficialInvite(invite.id);
+                if (
+                  !mountedRef.current ||
+                  actionGeneration !== revokeGenerationRef.current
+                ) {
+                  return;
+                }
+                if (result.error) {
+                  setRevokeErrors((currentErrors) => ({
+                    ...currentErrors,
+                    [invite.id]: result.error ?? 'Could not revoke invite.',
+                  }));
+                  return;
+                }
+
+                removeActiveInvite(invite.id);
+                await refreshAfterMutation();
+              } catch {
+                if (
+                  mountedRef.current &&
+                  actionGeneration === revokeGenerationRef.current
+                ) {
+                  setRevokeErrors((currentErrors) => ({
+                    ...currentErrors,
+                    [invite.id]: 'Could not revoke invite. Check your connection and retry.',
+                  }));
+                }
+              } finally {
+                revokeLockRef.current = false;
+                if (
+                  mountedRef.current &&
+                  actionGeneration === revokeGenerationRef.current
+                ) {
+                  setRevokePendingId(null);
+                }
+              }
+            })();
           },
         },
       ],
     );
-  }
+  }, [refreshAfterMutation, removeActiveInvite]);
 
-  if (loadingLists) {
-    return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <StatusBar style="dark" />
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.themeSoft} />
+  const listHeader = (
+    <View style={styles.invitationListHeader}>
+      <View style={styles.searchRow}>
+        <View style={styles.searchField}>
+          <Ionicons name="search-outline" size={20} color={colors.textMuted} />
+          <TextInput
+            style={styles.searchInput}
+            value={search}
+            onChangeText={(value) => router.setParams({ search: value.slice(0, 120) })}
+            placeholder="Search email, barangay, or role"
+            placeholderTextColor={colors.textMuted}
+            autoCapitalize="none"
+            autoCorrect={false}
+            maxLength={120}
+            returnKeyType="search"
+            onSubmitEditing={() => Keyboard.dismiss()}
+            accessibilityLabel="Search invitations by email, barangay, or role"
+          />
+          {hasSearch ? (
+            <TouchableOpacity
+              onPress={() => router.setParams({ search: '' })}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Clear invitation search"
+            >
+              <Ionicons name="close-circle" size={19} color={colors.textMuted} />
+            </TouchableOpacity>
+          ) : null}
         </View>
-      </SafeAreaView>
+        <TouchableOpacity
+          style={styles.filterButton}
+          onPress={openFilters}
+          activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel={
+            hasFilters
+              ? 'Edit invitation filters. ' + (role !== 'all' ? roleName(role) + ' role, ' : '') +
+                (expiry === 'soon' ? 'expiring within 48 hours' : 'any expiry')
+              : 'Filter invitations'
+          }
+        >
+          <Ionicons name="options-outline" size={20} color={colors.navigationActive} />
+        </TouchableOpacity>
+      </View>
+
+      <View
+        style={[
+          styles.segmentControl,
+          isLargeText ? styles.segmentControlStacked : null,
+        ]}
+        accessibilityRole="tablist"
+      >
+        {([
+          { group: 'pending', label: 'Pending', count: pendingInvites.length },
+          { group: 'registered', label: 'Registered', count: registeredInvites.length },
+        ] as const).map((option) => {
+          const selected = group === option.group;
+          const accessibleCount = hasSnapshot
+            ? ', count ' + option.count
+            : ', count ' + (loading ? 'loading' : 'unavailable');
+          return (
+            <TouchableOpacity
+              key={option.group}
+              style={[
+                styles.segmentButton,
+                isLargeText ? styles.segmentButtonStacked : null,
+                selected && styles.segmentButtonActive,
+              ]}
+              onPress={() =>
+                router.setParams({
+                  group: option.group,
+                  expiry: option.group === 'pending' ? expiry : 'any',
+                })
+              }
+              activeOpacity={0.8}
+              accessibilityRole="tab"
+              accessibilityState={{ selected }}
+              accessibilityLabel={option.label + ' invites' + accessibleCount}
+            >
+              <Text style={[styles.segmentLabel, selected && styles.segmentLabelActive]}>
+                {option.label}
+              </Text>
+              <Text style={[styles.segmentCount, !hasSnapshot && styles.segmentCountUnknown]}>
+                {countText(option.count)}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      {hasFilters ? (
+        <View style={styles.activeFilters}>
+          {role !== 'all' ? (
+            <View style={styles.filterChip}>
+              <Text style={styles.filterChipText}>Role: {roleName(role)}</Text>
+              <TouchableOpacity
+                onPress={() => router.setParams({ role: 'all' })}
+                hitSlop={7}
+                accessibilityRole="button"
+                accessibilityLabel="Remove role filter"
+              >
+                <Ionicons name="close-circle" size={17} color={colors.navigationActive} />
+              </TouchableOpacity>
+            </View>
+          ) : null}
+          {expiry === 'soon' ? (
+            <View style={styles.filterChip}>
+              <Text style={styles.filterChipText}>Expiring in 48h</Text>
+              <TouchableOpacity
+                onPress={() => router.setParams({ expiry: 'any' })}
+                hitSlop={7}
+                accessibilityRole="button"
+                accessibilityLabel="Remove expiry filter"
+              >
+                <Ionicons name="close-circle" size={17} color={colors.navigationActive} />
+              </TouchableOpacity>
+            </View>
+          ) : null}
+          <TouchableOpacity
+            style={styles.clearFiltersButton}
+            onPress={clearFilters}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+          >
+            <Text style={styles.clearFiltersText}>Clear filters</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
+
+      {error && hasSnapshot ? (
+        <View style={styles.errorPanel}>
+          <Text style={styles.sectionError}>{error}</Text>
+          <TouchableOpacity
+            style={styles.retryButton}
+            onPress={handleRefresh}
+            accessibilityRole="button"
+            accessibilityLabel="Retry refreshing invites"
+          >
+            <Text style={styles.retryButtonText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
+    </View>
+  );
+
+  let emptyState = null;
+  if (loading && !hasSnapshot) {
+    emptyState = <AdminInviteListSkeleton />;
+  } else if (error && !hasSnapshot) {
+    emptyState = (
+      <View style={styles.emptyState}>
+        <View style={styles.emptyStateMark}>
+          <Ionicons name="cloud-offline-outline" size={24} color={colors.navigationActive} />
+        </View>
+        <Text style={styles.emptyStateTitle}>Invites could not be loaded</Text>
+        <Text style={styles.emptyStateBody}>{error}</Text>
+        <TouchableOpacity
+          style={styles.retryButton}
+          onPress={handleRefresh}
+          accessibilityRole="button"
+        >
+          <Text style={styles.retryButtonText}>Retry</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  } else if (groupInvites.length > 0 && rows.length === 0) {
+    emptyState = (
+      <View style={styles.emptyState}>
+        <View style={styles.emptyStateMark}>
+          <Ionicons name="search-outline" size={24} color={colors.navigationActive} />
+        </View>
+        <Text style={styles.emptyStateTitle}>No matching invites</Text>
+        <Text style={styles.emptyStateBody}>
+          Change or clear the search and filters to see more invitation records.
+        </Text>
+        <TouchableOpacity
+          style={styles.retryButton}
+          onPress={clearFilters}
+          accessibilityRole="button"
+        >
+          <Text style={styles.retryButtonText}>Clear filters</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  } else if (groupInvites.length === 0) {
+    emptyState = (
+      <View style={styles.emptyState}>
+        <View style={styles.emptyStateMark}>
+          <Ionicons name="mail-outline" size={24} color={colors.navigationActive} />
+        </View>
+        <Text style={styles.emptyStateTitle}>
+          {group === 'pending' ? 'No pending invites' : 'No registered invites'}
+        </Text>
+        <Text style={styles.emptyStateBody}>
+          {group === 'pending'
+            ? 'New invitations will appear here after they are created.'
+            : 'Invitations appear here after an invited person registers.'}
+        </Text>
+      </View>
     );
   }
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar style="dark" />
+      <AdminPageHeader
+        title="Invites"
+        action={
+          <TouchableOpacity
+            style={styles.headerAction}
+            onPress={openCreateSheet}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Create a new invite"
+          >
+            <Ionicons name="add-outline" size={19} color={colors.navigationActive} />
+            <Text style={styles.headerActionText}>New invite</Text>
+          </TouchableOpacity>
+        }
+      />
       <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.keyboardAvoiding}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={0}
       >
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="handled"
+        <FlatList
+          data={rows}
+          keyExtractor={(invite) => invite.id}
+          contentContainerStyle={styles.listContent}
+          ListHeaderComponent={listHeader}
+          ListEmptyComponent={emptyState ?? undefined}
+          renderItem={({ item }) => (
+            <AdminInviteRow
+              invite={item}
+              expiringSoon={
+                item.list_group === 'active' &&
+                isInviteExpiringSoon(item.expires_at, now)
+              }
+              onRevoke={item.list_group === 'active' ? () => confirmRevoke(item) : undefined}
+              revokePending={revokePendingId === item.id}
+              revokeError={revokeErrors[item.id] || null}
+            />
+          )}
+          ItemSeparatorComponent={() => <View style={styles.inviteDivider} />}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              tintColor={colors.navigationActive}
+              colors={[colors.navigationActive]}
+            />
           }
           showsVerticalScrollIndicator={false}
-        >
-          <View style={styles.headerTextGroup}>
-            <Text style={styles.title}>Invitations</Text>
-            <Text style={styles.subtitle}>
-              Create and manage official invite links
-            </Text>
-          </View>
-
-          <View style={styles.card}>
-            <Text style={styles.sectionTitle}>Create invitation</Text>
-            <View style={styles.listGap}>
-              <Text style={styles.sectionHint}>
-                1. Link is only visible after first creation. Copy it immediately.
-              </Text>
-              <Text style={styles.sectionHint}>
-                2. No domain — any email is accepted.
-              </Text>
-              <Text style={styles.sectionHint}>
-                3. Phone number limited to Globe / TM / DITO.
-              </Text>
-            </View>
-
-            <LabeledInput
-              label="Invited government email"
-              leadingIcon="mail-outline"
-              value={invitedEmail}
-              onChangeText={(text) => {
-                setInvitedEmail(text);
-                if (emailError) setEmailError('');
-                if (createError) setCreateError('');
-              }}
-              placeholder="name@minglanilla.gov.ph"
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="email-address"
-              editable={!creating}
-              error={emailError}
-            />
-
-            <LabeledInput
-              label="Invited mobile (Globe / TM / DITO)"
-              leadingPrefix="+63"
-              value={invitedPhone}
-              onChangeText={(text) => {
-                setInvitedPhone(sanitizePhoneInput(text));
-                if (phoneError) setPhoneError('');
-                if (createError) setCreateError('');
-              }}
-              placeholder="9XX XXX XXXX"
-              keyboardType="phone-pad"
-              editable={!creating}
-              error={phoneError}
-            />
-
-            <View style={styles.roleRow}>
-              {(
-                [
-                  { key: 'mayor', label: 'Mayor' },
-                  { key: 'mdrrmo', label: 'MDRRMO' },
-                  { key: 'bdrrmo', label: 'BDRRMO' },
-                ] as const
-              ).map((option) => {
-                const selected = inviteKind === option.key;
-                return (
-                  <TouchableOpacity
-                    key={option.key}
-                    style={[styles.roleChip, selected && styles.roleChipSelected]}
-                    onPress={() => setInviteKind(option.key)}
-                    activeOpacity={0.85}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected }}
-                    accessibilityLabel={option.label}
-                  >
-                    <Text
-                      style={[
-                        styles.roleChipText,
-                        selected && styles.roleChipTextSelected,
-                      ]}
-                    >
-                      {option.label}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-
-            {inviteKind === 'bdrrmo' && (
-              <View style={styles.listGap}>
-                <Text style={styles.fieldLabel}>Barangay</Text>
-                {barangayError ? (
-                  <Text style={styles.errorText}>{barangayError}</Text>
-                ) : (
-                  <View style={styles.selectBox}>
-                    {barangays.map((barangay) => {
-                      const selected = selectedBarangayId === barangay.id;
-                      return (
-                        <TouchableOpacity
-                          key={barangay.id}
-                          style={[
-                            styles.selectOption,
-                            selected && styles.selectOptionSelected,
-                          ]}
-                          onPress={() => setSelectedBarangayId(barangay.id)}
-                          activeOpacity={0.8}
-                          accessibilityRole="button"
-                          accessibilityState={{ selected }}
-                          accessibilityLabel={barangay.name}
-                        >
-                          <Text style={styles.selectOptionText}>
-                            {barangay.name}
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                )}
-              </View>
-            )}
-
-            {!!createError && <Text style={styles.errorText}>{createError}</Text>}
-
-            <TouchableOpacity
-              style={[
-                styles.primaryButton,
-                creating && styles.primaryButtonDisabled,
-              ]}
-              onPress={handleCreateInvite}
-              disabled={creating}
-              activeOpacity={0.85}
-              accessibilityRole="button"
-              accessibilityLabel="Generate invite link"
-            >
-              {creating ? (
-                <ActivityIndicator color={colors.white} />
-              ) : (
-                <Text style={styles.primaryButtonText}>Generate invite link</Text>
-              )}
-            </TouchableOpacity>
-
-            {!!generatedLink && (
-              <View style={styles.successBox}>
-                <Text style={styles.successTitle}>One-time invite link</Text>
-                <Text style={styles.successLink} selectable>
-                  {generatedLink}
-                </Text>
-                <TouchableOpacity
-                  style={styles.copyButton}
-                  onPress={handleCopyLink}
-                  activeOpacity={0.85}
-                  accessibilityRole="button"
-                  accessibilityLabel="Copy invite link"
-                >
-                  <Text style={styles.copyButtonText}>Copy link</Text>
-                </TouchableOpacity>
-                {!!copyFeedback && (
-                  <Text style={styles.successTitle}>{copyFeedback}</Text>
-                )}
-              </View>
-            )}
-          </View>
-
-          <View style={styles.card}>
-            <Text style={styles.sectionTitle}>Active invitations</Text>
-            {listError ? (
-              <View style={styles.listGap}>
-                <Text style={styles.errorText}>{listError}</Text>
-                <TouchableOpacity
-                  style={styles.retryButton}
-                  onPress={handleRefresh}
-                  activeOpacity={0.85}
-                  accessibilityRole="button"
-                  accessibilityLabel="Retry loading invites"
-                >
-                  <Text style={styles.retryButtonText}>Retry</Text>
-                </TouchableOpacity>
-              </View>
-            ) : activeInvites.length === 0 ? (
-              <Text style={styles.emptyText}>No active invite links.</Text>
-            ) : (
-              <View style={styles.listGap}>
-                {activeInvites.map((invite) => (
-                  <View
-                    key={invite.id}
-                    style={[styles.inviteRow, styles.inviteRowActive]}
-                  >
-                    <View style={styles.inviteRowTop}>
-                      <Text style={styles.inviteKind}>
-                        {formatInviteKind(invite.role, invite.barangay_id)}
-                      </Text>
-                      <StatusChip used={false} />
-                    </View>
-                    <Text style={styles.inviteMeta}>
-                      Email: {invite.invited_email}
-                    </Text>
-                    <Text style={styles.inviteMeta}>
-                      Phone: {maskInvitePhone(invite.invited_phone)}
-                    </Text>
-                    {!!invite.barangay_name && (
-                      <Text style={styles.inviteMeta}>
-                        Barangay: {invite.barangay_name}
-                      </Text>
-                    )}
-                    <Text style={styles.inviteMeta}>
-                      Created: {formatDate(invite.created_at)}
-                    </Text>
-                    <Text style={styles.inviteMeta}>
-                      Expires: {formatDate(invite.expires_at)}
-                    </Text>
-                    <TouchableOpacity
-                      style={styles.revokeButton}
-                      onPress={() => handleRevoke(invite)}
-                      activeOpacity={0.8}
-                      accessibilityRole="button"
-                      accessibilityLabel="Revoke invite"
-                    >
-                      <Text style={styles.revokeButtonText}>Revoke</Text>
-                    </TouchableOpacity>
-                  </View>
-                ))}
-              </View>
-            )}
-          </View>
-
-          <View style={styles.card}>
-            <Text style={styles.sectionTitle}>Used invitations</Text>
-            {listError ? (
-              <Text style={styles.errorText}>{listError}</Text>
-            ) : usedInvites.length === 0 ? (
-              <Text style={styles.emptyText}>No used invite links yet.</Text>
-            ) : (
-              <View style={styles.listGap}>
-                {usedInvites.map((invite) => (
-                  <View
-                    key={invite.id}
-                    style={[styles.inviteRow, styles.inviteRowUsed]}
-                  >
-                    <View style={styles.inviteRowTop}>
-                      <Text style={styles.inviteKind}>
-                        {formatInviteKind(invite.role, invite.barangay_id)}
-                      </Text>
-                      <StatusChip used />
-                    </View>
-                    <Text style={styles.inviteMeta}>
-                      Email: {invite.invited_email}
-                    </Text>
-                    <Text style={styles.inviteMeta}>
-                      Phone: {maskInvitePhone(invite.invited_phone)}
-                    </Text>
-                    {!!invite.barangay_name && (
-                      <Text style={styles.inviteMeta}>
-                        Barangay: {invite.barangay_name}
-                      </Text>
-                    )}
-                    <Text style={styles.inviteMeta}>
-                      Created: {formatDate(invite.created_at)}
-                    </Text>
-                    <Text style={styles.inviteMeta}>
-                      Used: {invite.used_at ? formatDate(invite.used_at) : '—'}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-            )}
-          </View>
-        </ScrollView>
+          keyboardShouldPersistTaps="handled"
+        />
       </KeyboardAvoidingView>
+
+      {filterVisible ? (
+        <AdminInviteFiltersSheet
+          group={group}
+          role={role}
+          expiry={expiry}
+          onClose={() => setFilterVisible(false)}
+          onApply={applyFilters}
+        />
+      ) : null}
+      {sheetVisible ? (
+        <AdminInviteFormSheet
+          visible
+          onRequestClose={() => setSheetVisible(false)}
+          onCreated={refreshAfterMutation}
+        />
+      ) : null}
     </SafeAreaView>
   );
 }
