@@ -42,6 +42,7 @@ type ThreadComment = {
 type Props = {
   /** Report thread target. Provide either reportId or announcementId. */
   reportId?: string;
+  incidentCaseId?: string;
   /** Announcement thread target. Provide either reportId or announcementId. */
   announcementId?: string;
   /** Pop the keyboard once the section is ready (comment-button flow). */
@@ -111,6 +112,7 @@ function CommentRow({
 
 export default function CommentsSection({
   reportId,
+  incidentCaseId,
   announcementId,
   autoFocus = false,
   highlighted = false,
@@ -120,12 +122,13 @@ export default function CommentsSection({
   showInitialLoader = true,
   moderationMode = 'none',
 }: Props) {
-  const targetId = announcementId ?? reportId ?? null;
+  const targetId = announcementId ?? incidentCaseId ?? reportId ?? null;
   const isAnnouncement = Boolean(announcementId);
   const includeHidden = moderationMode === 'scoped';
 
-  const reportThread = useComments(isAnnouncement ? null : reportId ?? null, {
+  const reportThread = useComments(isAnnouncement ? null : incidentCaseId ?? reportId ?? null, {
     includeHidden,
+    targetKind: incidentCaseId ? 'incident' : 'report',
   });
   const announcementThread = useAnnouncementComments(
     isAnnouncement ? announcementId ?? null : null,

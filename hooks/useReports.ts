@@ -11,6 +11,7 @@ import { supabase } from '../lib/supabase';
 import { useRealtimeChannelName } from './useRealtimeChannelName';
 
 type UseReportsOptions = {
+  ownOnly?: boolean;
   /** Avoid loading an inactive resident feed tab until the resident opens it. */
   enabled?: boolean;
   /** Subscribe to live database changes. Defaults to true (used by the map). */
@@ -32,6 +33,7 @@ type UseReportsOptions = {
 };
 
 export function useReports({
+  ownOnly = false,
   enabled = true,
   realtime = true,
   barangayId = null,
@@ -67,6 +69,7 @@ export function useReports({
 
     const request = (async () => {
       const { reports: fetched, error: fetchError } = await fetchMapReports({
+        ownOnly,
         barangayId,
         includePending,
         loadAll,
@@ -89,13 +92,14 @@ export function useReports({
 
     loadRequestRef.current = request;
     return request;
-  }, [barangayId, enabled, includeLatestActivity, includeMediaSummaries, includePending, limit, loadAll]);
+  }, [barangayId, enabled, includeLatestActivity, includeMediaSummaries, includePending, limit, loadAll, ownOnly]);
 
   const loadMore = useCallback(async () => {
     if (!enabled || !limit || loadAll || loadingMore || !hasMore) return;
     setLoadingMore(true);
     const serverReportCount = reportsRef.current.filter((report) => !report.isPending).length;
     const result = await fetchMapReports({
+      ownOnly,
       barangayId,
       includePending: false,
       includeLatestActivity,
@@ -114,7 +118,7 @@ export function useReports({
       result.reports.forEach((report) => byId.set(report.id, report));
       return [...byId.values()];
     });
-  }, [barangayId, enabled, hasMore, includeLatestActivity, includeMediaSummaries, limit, loadAll, loadingMore]);
+  }, [barangayId, enabled, hasMore, includeLatestActivity, includeMediaSummaries, limit, loadAll, loadingMore, ownOnly]);
 
   // Decide how to react to a live `reports` change. Inserts, deletes, and edits
   // to pin-relevant fields (title/description/status) trigger a full reload
@@ -123,6 +127,12 @@ export function useReports({
   // Leaflet rebuild — so social activity stays cheap.
   const handleRealtimeChange = useCallback(
     (payload: RealtimePostgresChangesPayload<Record<string, unknown>>) => {
+      // Claims and review outcomes can change the resident lifecycle without
+      // changing the legacy status or engagement counters.
+      if (ownOnly) {
+        void load();
+        return;
+      }
       if (payload.eventType !== 'UPDATE') {
         void load();
         return;
@@ -186,7 +196,7 @@ export function useReports({
         ),
       );
     },
-    [load],
+    [load, ownOnly],
   );
 
   useFocusEffect(
@@ -218,12 +228,17 @@ export function useReports({
         },
         handleRealtimeChange,
       )
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'notifications' },
+        () => { if (ownOnly) void load(); },
+      )
       .subscribe();
 
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [enabled, realtime, channelName, handleRealtimeChange, barangayId]);
+  }, [enabled, realtime, channelName, handleRealtimeChange, barangayId, load, ownOnly]);
 
   return {
     reports,

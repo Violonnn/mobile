@@ -73,10 +73,12 @@ function isMissingCommentProjectionField(errorMessage: string | undefined): bool
  */
 export async function fetchPrioritizedReportComments(
   reportId: string,
+  targetKind: 'report' | 'incident' = 'report',
 ): Promise<{ comments: ReportComment[]; error: string | null }> {
+  // incident_comment_details exposes the incident id through its report_id column.
   const baseQuery = () =>
     supabase
-      .from('report_comments')
+      .from(targetKind === 'incident' ? 'incident_comment_details' : 'report_comments')
       .select(COMMENT_SELECT)
       .eq('report_id', reportId)
       .eq('is_hidden', false)
@@ -89,9 +91,9 @@ export async function fetchPrioritizedReportComments(
   ]);
 
   if (officialResult.error || latestResult.error) {
-    const roleColumnMissing =
+    const roleColumnMissing = targetKind === 'report' && (
       isMissingCommentProjectionField(officialResult.error?.message) ||
-      isMissingCommentProjectionField(latestResult.error?.message);
+      isMissingCommentProjectionField(latestResult.error?.message));
     if (roleColumnMissing) {
       // During a rolling migration, load the legacy view immediately instead
       // of breaking every comment thread. Roles default safely to resident.
@@ -140,9 +142,10 @@ export async function fetchTopLevelComments(
   reportId: string,
   limit: number,
   includeHidden = false,
+  targetKind: 'report' | 'incident' = 'report',
 ): Promise<CommentPage> {
   let query = supabase
-    .from('report_comments')
+    .from(targetKind === 'incident' ? 'incident_comment_details' : 'report_comments')
     .select(COMMENT_SELECT, { count: 'exact' })
     .eq('report_id', reportId)
     .is('parent_comment_id', null)
@@ -151,7 +154,7 @@ export async function fetchTopLevelComments(
   if (!includeHidden) query = query.eq('is_hidden', false);
   const { data, error, count } = await query;
 
-  if (error && isMissingCommentProjectionField(error.message)) {
+  if (targetKind === 'report' && error && isMissingCommentProjectionField(error.message)) {
     let legacyQuery = supabase
       .from('report_comments')
       .select(LEGACY_COMMENT_SELECT, { count: 'exact' })
@@ -189,9 +192,10 @@ export async function fetchCommentReplies(
   parentCommentId: string,
   limit: number,
   includeHidden = false,
+  targetKind: 'report' | 'incident' = 'report',
 ): Promise<CommentPage> {
   let query = supabase
-    .from('report_comments')
+    .from(targetKind === 'incident' ? 'incident_comment_details' : 'report_comments')
     .select(COMMENT_SELECT, { count: 'exact' })
     .eq('report_id', reportId)
     .eq('parent_comment_id', parentCommentId)
@@ -200,7 +204,7 @@ export async function fetchCommentReplies(
   if (!includeHidden) query = query.eq('is_hidden', false);
   const { data, error, count } = await query;
 
-  if (error && isMissingCommentProjectionField(error.message)) {
+  if (targetKind === 'report' && error && isMissingCommentProjectionField(error.message)) {
     let legacyQuery = supabase
       .from('report_comments')
       .select(LEGACY_COMMENT_SELECT, { count: 'exact' })
@@ -234,16 +238,18 @@ export async function addReportComment(
   reportId: string,
   body: string,
   parentCommentId: string | null = null,
+  targetKind: 'report' | 'incident' = 'report',
 ): Promise<{ error: string | null }> {
   const trimmed = body.trim();
   if (!trimmed) return { error: 'Write a comment first.' };
+  if (trimmed.length > 2000) return { error: 'Use 2,000 characters or fewer.' };
 
   const session = await getActiveSession();
   const userId = session?.user?.id;
   if (!userId) return { error: 'Sign in to comment.' };
 
-  const { error } = await supabase.from('comments').insert({
-    report_id: reportId,
+  const { error } = await supabase.from(targetKind === 'incident' ? 'incident_comments' : 'comments').insert({
+    [targetKind === 'incident' ? 'incident_case_id' : 'report_id']: reportId,
     user_id: userId,
     body: trimmed,
     parent_comment_id: parentCommentId,

@@ -509,7 +509,8 @@ export const reportStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: spacing.sm,
-    paddingHorizontal: spacing.md,
+    paddingLeft: spacing.md,
+    paddingRight: spacing.xs,
     paddingTop: spacing.md,
     paddingBottom: 12,
     borderBottomWidth: 1,
@@ -531,10 +532,9 @@ export const reportStyles = StyleSheet.create({
     color: reportColors.textLight,
   },
   residentBarangayPickerClose: {
-    width: 40,
-    height: 40,
-    marginTop: -5,
-    marginRight: -5,
+    width: 44,
+    height: 44,
+    flexShrink: 0,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1127,21 +1127,28 @@ export const reportStyles = StyleSheet.create({
   },
 
   // --- Review ---
+  reviewStepTitle: {
+    fontFamily: fonts.bold,
+    fontSize: fontSizes.xl,
+    lineHeight: 26,
+    color: reportColors.text,
+  },
   reviewTimeline: {
     position: 'relative',
     gap: 8,
     marginTop: 5,
-    marginBottom: 8,
+    marginBottom: spacing.md,
   },
   reviewTimelineLine: {
     position: 'absolute',
     top: 28,
-    bottom: 34,
+    bottom: -spacing.sm,
     left: 17,
     width: 1,
     backgroundColor: '#C9D8EC',
   },
   reviewSection: {
+    position: 'relative',
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 12,
@@ -1165,7 +1172,7 @@ export const reportStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: spacing.sm,
-    minHeight: 20,
+    minHeight: 35,
     marginBottom: 2,
   },
   reviewSectionHeaderLargeText: {
@@ -1175,6 +1182,7 @@ export const reportStyles = StyleSheet.create({
   reviewSectionTitle: {
     fontFamily: fonts.semibold,
     fontSize: 13,
+    lineHeight: 18,
     color: reportColors.text,
     flexShrink: 1,
   },

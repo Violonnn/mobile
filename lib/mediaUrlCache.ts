@@ -3,6 +3,8 @@ import { buildMediaCacheKey } from './mediaPolicy';
 
 const SIGNED_URL_LIFETIME_SECONDS = 60 * 60;
 const REFRESH_BUFFER_MS = 60 * 1000;
+const PUBLIC_SIGNED_URL_LIFETIME_SECONDS = 60;
+const PUBLIC_REFRESH_BUFFER_MS = 10 * 1000;
 
 type CachedSignedUrl = {
   url: string;
@@ -13,10 +15,10 @@ const signedUrlCache = new Map<string, CachedSignedUrl>();
 
 export { buildMediaCacheKey } from './mediaPolicy';
 
-function readCachedUrl(cacheKey: string, now: number): string | null {
+function readCachedUrl(cacheKey: string, now: number, refreshBufferMs: number): string | null {
   const cached = signedUrlCache.get(cacheKey);
   if (!cached) return null;
-  if (cached.expiresAt - REFRESH_BUFFER_MS <= now) {
+  if (cached.expiresAt - refreshBufferMs <= now) {
     signedUrlCache.delete(cacheKey);
     return null;
   }
@@ -33,6 +35,12 @@ export async function resolveSignedMediaUrls(params: {
   const urls = new Map<string, string>();
   const missingPaths: string[] = [];
   const now = Date.now();
+  const signedUrlLifetimeSeconds = params.variant.startsWith('public-photo')
+    ? PUBLIC_SIGNED_URL_LIFETIME_SECONDS
+    : SIGNED_URL_LIFETIME_SECONDS;
+  const refreshBufferMs = params.variant.startsWith('public-photo')
+    ? PUBLIC_REFRESH_BUFFER_MS
+    : REFRESH_BUFFER_MS;
 
   for (const storagePath of uniquePaths) {
     const cacheKey = buildMediaCacheKey(
@@ -40,7 +48,7 @@ export async function resolveSignedMediaUrls(params: {
       storagePath,
       params.variant,
     );
-    const cachedUrl = readCachedUrl(cacheKey, now);
+    const cachedUrl = readCachedUrl(cacheKey, now, refreshBufferMs);
     if (cachedUrl) {
       urls.set(storagePath, cachedUrl);
     } else {
@@ -52,23 +60,41 @@ export async function resolveSignedMediaUrls(params: {
 
   const { data, error } = await supabase.storage
     .from(params.bucket)
-    .createSignedUrls(missingPaths, SIGNED_URL_LIFETIME_SECONDS);
+    .createSignedUrls(missingPaths, signedUrlLifetimeSeconds);
 
-  if (error) return { urls, error: error.message };
+  const isPublicPhotoVariant = params.variant.startsWith('public-photo');
+  if (error && !isPublicPhotoVariant) return { urls, error: error.message };
 
-  const expiresAt = now + SIGNED_URL_LIFETIME_SECONDS * 1000;
+  const expiresAt = now + signedUrlLifetimeSeconds * 1000;
+  const signedPaths = new Set<string>();
+  const requestedPaths = new Set(missingPaths);
+  let publicSigningFailure = false;
   (data ?? []).forEach((signedRow, index) => {
-    const storagePath = missingPaths[index];
-    if (!storagePath || !signedRow.signedUrl) return;
+    const responsePath = (signedRow as { path?: unknown }).path;
+    const storagePath = isPublicPhotoVariant
+      ? typeof responsePath === 'string' ? responsePath : null
+      : typeof responsePath === 'string' ? responsePath : missingPaths[index];
+    const rowError = (signedRow as { error?: unknown }).error;
+    if (!storagePath || !requestedPaths.has(storagePath) || signedPaths.has(storagePath) || !signedRow.signedUrl || rowError) {
+      if (isPublicPhotoVariant) publicSigningFailure = true;
+      return;
+    }
 
     signedUrlCache.set(
       buildMediaCacheKey(params.bucket, storagePath, params.variant),
       { url: signedRow.signedUrl, expiresAt },
     );
     urls.set(storagePath, signedRow.signedUrl);
+    signedPaths.add(storagePath);
   });
 
-  return { urls, error: null };
+  const hasPublicSigningFailure = isPublicPhotoVariant && (
+    Boolean(error) || publicSigningFailure || signedPaths.size !== missingPaths.length
+  );
+  return {
+    urls,
+    error: hasPublicSigningFailure ? 'Some approved photos could not be loaded. Refresh to try again.' : null,
+  };
 }
 
 /** Signed URLs are temporary credentials and must not survive sign-out. */

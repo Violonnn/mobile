@@ -22,6 +22,17 @@ export type InAppNotification = {
   actor: NotificationActor | null;
 };
 
+/** Unknown entity types stay in the inbox; IDs are never treated as route text. */
+export function notificationTarget(notification: Pick<InAppNotification, 'relatedEntityType' | 'relatedEntityId'>): {
+  kind: 'report' | 'incident'; id: string;
+} | null {
+  const id = notification.relatedEntityId;
+  if (!id || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) return null;
+  if (notification.relatedEntityType === 'report') return { kind: 'report', id };
+  if (notification.relatedEntityType === 'incident' || notification.relatedEntityType === 'incident_case') return { kind: 'incident', id };
+  return null;
+}
+
 type NotificationRow = {
   id: unknown;
   type: unknown;

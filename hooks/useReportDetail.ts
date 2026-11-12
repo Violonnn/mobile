@@ -80,7 +80,15 @@ export function useReportDetail(
   if (sourceReport !== previousSourceReport) {
     setPreviousSourceReport(sourceReport);
     if (sourceReport) {
-      setReport(cachedSourceReport ?? sourceReport);
+      // Fresh lifecycle facts take precedence over cached detail. Keep only the
+      // previously loaded evidence so a claim/transfer update needs no re-signing.
+      setReport(cachedSourceReport ? {
+        ...sourceReport,
+        media: cachedSourceReport.media,
+        mediaDetailLoaded: cachedSourceReport.mediaDetailLoaded,
+        mediaError: cachedSourceReport.mediaError,
+      } : sourceReport);
+      setRefreshVersion((current) => current + 1);
     }
     setRefreshError(null);
   }

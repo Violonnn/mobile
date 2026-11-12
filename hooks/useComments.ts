@@ -25,9 +25,10 @@ export type ReplyPageState = {
 
 export function useComments(
   reportId: string | null,
-  options?: { includeHidden?: boolean },
+  options?: { includeHidden?: boolean; targetKind?: 'report' | 'incident' },
 ) {
   const includeHidden = options?.includeHidden ?? false;
+  const targetKind = options?.targetKind ?? 'report';
   const [comments, setComments] = useState<ReportComment[]>([]);
   const [totalComments, setTotalComments] = useState(0);
   const [commentLimit, setCommentLimit] = useState(INITIAL_COMMENT_COUNT);
@@ -39,10 +40,11 @@ export function useComments(
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [previousReportId, setPreviousReportId] = useState(reportId);
+  const threadKey = `${targetKind}:${reportId ?? 'none'}`;
+  const [previousThreadKey, setPreviousThreadKey] = useState(threadKey);
 
-  if (reportId !== previousReportId) {
-    setPreviousReportId(reportId);
+  if (threadKey !== previousThreadKey) {
+    setPreviousThreadKey(threadKey);
     setComments([]);
     setTotalComments(0);
     setCommentLimit(INITIAL_COMMENT_COUNT);
@@ -56,7 +58,7 @@ export function useComments(
   }, [replyPages]);
 
   // Unique channel name so reopening a sheet never collides with a stale channel.
-  const channelName = useRealtimeChannelName(`comments-${reportId ?? 'none'}`);
+  const channelName = useRealtimeChannelName(`${targetKind}-comments-${reportId ?? 'none'}`);
 
   const load = useCallback(async () => {
     if (!reportId) return;
@@ -64,7 +66,7 @@ export function useComments(
       comments: fetched,
       total,
       error: fetchError,
-    } = await fetchTopLevelComments(reportId, commentLimit, includeHidden);
+    } = await fetchTopLevelComments(reportId, commentLimit, includeHidden, targetKind);
     setLoading(false);
     setLoadingMore(false);
     if (fetchError) {
@@ -74,7 +76,7 @@ export function useComments(
     setError(null);
     setComments(fetched);
     setTotalComments(total);
-  }, [reportId, commentLimit, includeHidden]);
+  }, [reportId, commentLimit, includeHidden, targetKind]);
 
   const loadReplies = useCallback(
     async (parentCommentId: string, limit: number) => {
@@ -97,6 +99,7 @@ export function useComments(
         parentCommentId,
         limit,
         includeHidden,
+        targetKind,
       );
       setReplyPages((current) => {
         const next = new Map(current);
@@ -110,7 +113,7 @@ export function useComments(
         return next;
       });
     },
-    [reportId, includeHidden],
+    [reportId, includeHidden, targetKind],
   );
 
   const reloadVisible = useCallback(async () => {
@@ -140,8 +143,8 @@ export function useComments(
         {
           event: '*',
           schema: 'public',
-          table: 'comments',
-          filter: `report_id=eq.${reportId}`,
+          table: targetKind === 'incident' ? 'incident_comments' : 'comments',
+          filter: `${targetKind === 'incident' ? 'incident_case_id' : 'report_id'}=eq.${reportId}`,
         },
         () => void reloadVisible(),
       )
@@ -150,7 +153,7 @@ export function useComments(
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [reportId, channelName, reloadVisible]);
+  }, [reportId, channelName, reloadVisible, targetKind]);
 
   const loadMoreComments = useCallback(() => {
     if (loadingMore || comments.length >= totalComments) return;
@@ -190,6 +193,7 @@ export function useComments(
         reportId,
         body,
         parentCommentId,
+        targetKind,
       );
       if (!submitError) {
         await load();
@@ -202,7 +206,7 @@ export function useComments(
       setSubmitting(false);
       return { error: submitError };
     },
-    [reportId, load, loadReplies, replyPages],
+    [reportId, load, loadReplies, replyPages, targetKind],
   );
 
   return {

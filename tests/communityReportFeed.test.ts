@@ -203,3 +203,15 @@ test('status filtering covers every workflow stage', () => {
     ['escalated'],
   );
 });
+
+test('active official community results retain transfers and exclude terminal closures', () => {
+  const sections = buildCommunityReportSections([
+    createReport('transfer', { status: 'escalated' }),
+    createReport('closed', { status: 'closed' }),
+    createReport('resolved', { status: 'resolved' }),
+  ], {
+    barangayCenter: BARANGAY_CENTER, barangayId: BARANGAY_ID,
+    searchQuery: '', scope: 'barangay', sort: 'activity', statusFilter: 'active',
+  });
+  assert.deepEqual(sections[0].data.map((item) => item.report.id), ['transfer']);
+});

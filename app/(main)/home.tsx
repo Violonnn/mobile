@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import OfficialUpdatesCarousel from '../../components/home/OfficialUpdatesCarousel';
 import NearbyReportsPanel from '../../components/home/NearbyReportsPanel';
+import PublicIncidentDetail from '../../components/report/PublicIncidentDetail';
 import ReminderForYouCarousel from '../../components/home/ReminderForYouCarousel';
 import QuickAccessModal, {
   type QuickAccessType,
@@ -31,7 +32,7 @@ import { useNotifications } from '../../context/NotificationsContext';
 import { useResidentData } from '../../context/ResidentDataContext';
 import { useAnnouncements } from '../../hooks/useAnnouncements';
 import { useAccessibilityLayout } from '../../hooks/useAccessibilityLayout';
-import { useReports } from '../../hooks/useReports';
+import { usePublicIncidents } from '../../hooks/usePublicIncidents';
 import { getNearbyReportsGpsWithTimeout, type GpsPosition } from '../../lib/location';
 import {
   distanceInMeters,
@@ -62,7 +63,6 @@ export default function HomeScreen() {
     profileInitialLoading,
     refreshProfile,
     residentBarangayId,
-    barangayNamesById,
     hotlines,
     facilities,
     centers,
@@ -91,6 +91,8 @@ export default function HomeScreen() {
   const [quickAccessType, setQuickAccessType] = useState<QuickAccessType | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [isNearbyMapGestureActive, setIsNearbyMapGestureActive] = useState(false);
+  const [openedIncidentId, setOpenedIncidentId] = useState<string | null>(null);
+  const [openedPublicReportId, setOpenedPublicReportId] = useState<string | null>(null);
   const [officialUpdatesPromptVisible, setOfficialUpdatesPromptVisible] = useState(false);
   const [isHeaderCollapsed, setIsHeaderCollapsed] = useState(false);
   const shouldShowWelcome = welcome === '1' && Boolean(profile) && !profileInitialLoading;
@@ -108,15 +110,12 @@ export default function HomeScreen() {
     refresh: refreshAnnouncements,
   } = useAnnouncements({ limit: 6, realtime: false });
   const {
-    reports,
+    incidents,
     loading: reportsLoading,
     error: reportsError,
     reload: reloadReports,
-  } = useReports({
-    realtime: false,
-    limit: 12,
-    includeMediaSummaries: false,
-  });
+    patchEngagement,
+  } = usePublicIncidents();
 
   const loadCurrentLocation = useCallback(async (force = false) => {
     const locationIsFresh = Date.now() - locationLoadedAtRef.current < 5 * 60_000;
@@ -177,22 +176,21 @@ export default function HomeScreen() {
     return () => subscription.remove();
   }, [loadCurrentLocation, reloadReports]);
 
-  const activeReports = useMemo(
-    () => reports.filter((report) => report.status.trim().toLocaleLowerCase() !== 'resolved'),
-    [reports],
-  );
   const nearbyReports = useMemo(() => {
-    if (!currentLocation) return [];
-
-    return activeReports
-      .map((report) => ({
-        report,
-        distance: distanceInMeters(currentLocation, report),
-      }))
-      .filter(({ distance }) => distance <= NEARBY_REPORT_RADIUS_METERS)
+    const residentBarangayName = barangay.trim().toLocaleLowerCase();
+    return incidents
+      .filter((incident) => incident.publicStatus !== 'resolved')
+      .map((incident) => {
+        const location = incident.exactLocation ?? incident.approximateArea;
+        const distance = location && currentLocation ? distanceInMeters(currentLocation, location) : null;
+        // Coarse records have no map point, but still belong in the barangay list.
+        const isLocalBarangay = Boolean(residentBarangayName) && incident.barangayName.trim().toLocaleLowerCase() === residentBarangayName;
+        return { incident, distance: distance ?? Number.POSITIVE_INFINITY, include: distance !== null ? distance <= NEARBY_REPORT_RADIUS_METERS : isLocalBarangay };
+      })
+      .filter((item) => item.include)
       .sort((first, second) => first.distance - second.distance)
-      .map(({ report }) => report);
-  }, [activeReports, currentLocation]);
+      .map(({ incident }) => incident);
+  }, [incidents, currentLocation, barangay]);
   const officialUpdateAnnouncements = useMemo(
     () =>
       announcements
@@ -234,9 +232,6 @@ export default function HomeScreen() {
 
   const locationValue = barangay ? `${barangay}, Minglanilla` : 'Minglanilla, Cebu';
   const goToOfficialUpdates = () => router.push('/(main)/feed?tab=official');
-  const openReportInMap = (reportId: string) => {
-    router.push({ pathname: '/(main)/map', params: { reportId } });
-  };
   const quickAccessLoading =
     quickAccessType === 'hotlines'
       ? hotlinesLoading || (!hotlinesLoaded && !hotlinesError)
@@ -409,12 +404,14 @@ export default function HomeScreen() {
 
         <View style={styles.headerBody}>
           <NearbyReportsPanel
-            reports={nearbyReports}
+            incidents={nearbyReports}
             loading={reportsLoading || nearbyLocationLoading}
             error={reportsError ?? nearbyLocationError}
             userLocation={currentLocation}
-            barangayNamesById={barangayNamesById}
-            onOpenReport={openReportInMap}
+            onOpenIncident={(incidentCaseId, publicReportId) => {
+              setOpenedIncidentId(incidentCaseId);
+              setOpenedPublicReportId(publicReportId ?? null);
+            }}
             onRetry={retryNearbyReports}
             onGestureActiveChange={setIsNearbyMapGestureActive}
           />
@@ -558,6 +555,32 @@ export default function HomeScreen() {
         onRetry={retryQuickAccess}
         onOpenMap={openResourceInMap}
       />
+      {openedIncidentId && (
+        <PublicIncidentDetail
+          key={`${openedIncidentId}-${openedPublicReportId ?? 'incident'}`}
+          incidentCaseId={openedIncidentId}
+          reportId={openedPublicReportId ?? undefined}
+          context="home"
+          onClose={() => { setOpenedIncidentId(null); setOpenedPublicReportId(null); }}
+          onEngagementChange={patchEngagement}
+          onOpenCommunity={(incidentCaseId) => {
+            setOpenedIncidentId(null);
+            setOpenedPublicReportId(null);
+            router.push({
+              pathname: '/(main)/feed',
+              params: { incidentId: incidentCaseId, openRequest: `${incidentCaseId}-${Date.now()}`, focus: 'comments' },
+            });
+          }}
+          onViewOnMap={(incidentCaseId, publicReportId) => {
+            setOpenedIncidentId(null);
+            setOpenedPublicReportId(null);
+            router.push({
+              pathname: '/(main)/map',
+              params: { incidentId: incidentCaseId, publicReportId, openRequest: `${incidentCaseId}-${Date.now()}` },
+            });
+          }}
+        />
+      )}
 
       <WelcomeModal
         visible={showWelcome}

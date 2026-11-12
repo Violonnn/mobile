@@ -7,20 +7,21 @@ import {
 import { supabase } from '../lib/supabase';
 import { useRealtimeChannelName } from './useRealtimeChannelName';
 
-/** Read-only, three-comment summary used only by the resident map details. */
+/** Read-only, three-comment summary used by resident map and Home details. */
 export function usePrioritizedReportComments(
-  reportId: string | null,
+  targetId: string | null,
   refreshSignal = 0,
+  targetKind: 'report' | 'incident' = 'report',
 ) {
   const [comments, setComments] = useState<ReportComment[]>([]);
-  const [loading, setLoading] = useState(Boolean(reportId));
+  const [loading, setLoading] = useState(Boolean(targetId));
   const [error, setError] = useState<string | null>(null);
   const channelName = useRealtimeChannelName(
-    `map-comment-highlights-${reportId ?? 'none'}`,
+    `map-comment-highlights-${targetId ?? 'none'}`,
   );
 
   const load = useCallback(async () => {
-    if (!reportId) {
+    if (!targetId) {
       setComments([]);
       setLoading(false);
       setError(null);
@@ -28,12 +29,12 @@ export function usePrioritizedReportComments(
     }
 
     setLoading(true);
-    const result = await fetchPrioritizedReportComments(reportId);
+    const result = await fetchPrioritizedReportComments(targetId, targetKind);
     setLoading(false);
     setError(result.error);
     if (result.error) return;
     setComments(result.comments);
-  }, [reportId]);
+  }, [targetId, targetKind]);
 
   useEffect(() => {
     const loadTimer = setTimeout(() => void load(), 0);
@@ -41,7 +42,9 @@ export function usePrioritizedReportComments(
   }, [load, refreshSignal]);
 
   useEffect(() => {
-    if (!reportId) return;
+    // Incident comments are refreshed by the parent's public-record poll instead
+    // of subscribing residents to the incident discussion table.
+    if (!targetId || targetKind !== 'report') return;
 
     const channel = supabase
       .channel(channelName)
@@ -51,7 +54,7 @@ export function usePrioritizedReportComments(
           event: '*',
           schema: 'public',
           table: 'comments',
-          filter: `report_id=eq.${reportId}`,
+          filter: `report_id=eq.${targetId}`,
         },
         () => void load(),
       )
@@ -60,7 +63,7 @@ export function usePrioritizedReportComments(
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [channelName, load, reportId]);
+  }, [channelName, load, targetId, targetKind]);
 
   return { comments, loading, error, reload: load };
 }

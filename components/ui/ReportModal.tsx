@@ -28,6 +28,7 @@ import AttachmentsStep from '../report/AttachmentsStep';
 import SuccessStep from '../report/SuccessStep';
 import ReviewStep from '../report/ReviewStep';
 import ReportBarangayPicker from '../report/ReportBarangayPicker';
+import OutsideCoverageNotice from '../report/OutsideCoverageNotice';
 
 type Props = {
   visible: boolean;
@@ -84,19 +85,20 @@ export default function ReportModal({ visible, onClose, onSubmitted }: Props) {
   const handleDone = useCallback(() => {
     setBarangayPickerVisible(false);
     onClose();
-    if (submittedIdRef.current) {
+    if (submittedIdRef.current && !flow.outsideCoverage) {
       const submittedReportId = submittedIdRef.current;
       submittedIdRef.current = null;
       onSubmitted?.(submittedReportId);
     }
-  }, [onClose, onSubmitted]);
+    submittedIdRef.current = null;
+  }, [onClose, onSubmitted, flow.outsideCoverage]);
 
   const handleSubmit = useCallback(async () => {
     await flow.submit();
   }, [flow]);
 
   const canDismissDeliveredReport =
-    flow.step === 'success' && flow.syncStatus === 'synced';
+    flow.step === 'success' && (flow.syncStatus === 'synced' || flow.outsideCoverage);
   const stepContainsMap = flow.step === 'location' || flow.step === 'review';
 
   // Capture the queued id so "Done" can navigate to the map afterwards.
@@ -285,6 +287,12 @@ export default function ReportModal({ visible, onClose, onSubmitted }: Props) {
                       title={flow.title}
                       description={flow.description}
                       locationNote={flow.locationNote}
+                      showReporterName={flow.showReporterName}
+                      onToggleReporterName={flow.setShowReporterName}
+                      showReporterAvatar={flow.showReporterAvatar}
+                      onToggleReporterAvatar={flow.setShowReporterAvatar}
+                      allowExactLocation={flow.allowExactLocation}
+                      onToggleExactLocation={flow.setAllowExactLocation}
                       error={flow.error}
                       submitting={flow.submitting}
                       onEditLocation={flow.editLocation}
@@ -294,7 +302,8 @@ export default function ReportModal({ visible, onClose, onSubmitted }: Props) {
                     />
                   )}
 
-                  {flow.step === 'success' && (
+                  {flow.step === 'success' && flow.outsideCoverage && <OutsideCoverageNotice onClose={handleDone} />}
+                  {flow.step === 'success' && !flow.outsideCoverage && (
                     <SuccessStep
                       address={flow.address}
                       position={flow.position}

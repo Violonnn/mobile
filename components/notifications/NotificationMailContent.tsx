@@ -67,6 +67,15 @@ function actionText(item: NotificationDisplayItem): string {
 }
 
 function iconForType(type: string): IconPresentation {
+  const workflowIcons: Record<string, React.ComponentProps<typeof Ionicons>['name']> = {
+    report_review_started: 'search', report_rerouted: 'navigate', report_linked: 'link',
+    report_not_confirmed: 'help-circle', report_rejected: 'close-circle', report_outside_coverage: 'location',
+    report_forwarded: 'arrow-forward-circle', report_transfer_accepted: 'shield-checkmark',
+    report_withdrawn: 'alert-circle', report_progress: 'pulse', incident_support_requested: 'people',
+    incident_support_responded: 'checkmark-circle', mayor_update_requested: 'mail', mayor_update_answered: 'mail-open',
+  };
+  const workflowIcon = workflowIcons[type];
+  if (workflowIcon) return { name: workflowIcon, foreground: colors.primary, background: colors.primaryLight };
   if (type === 'report_verified') {
     return {
       name: 'eye',
@@ -108,7 +117,7 @@ function iconForType(type: string): IconPresentation {
   }
 
   return {
-    name: 'create',
+    name: 'notifications',
     foreground: colors.primary,
     background: colors.primaryLight,
   };

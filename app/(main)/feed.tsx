@@ -1,9 +1,8 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   RefreshControl,
-  SectionList,
   FlatList,
   Text,
   TextInput,
@@ -18,36 +17,30 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AnnouncementEngagementProvider } from '../../components/official/AnnouncementEngagementProvider';
 import OfficialAnnouncementPostCard from '../../components/official/OfficialAnnouncementPostCard';
-import { ReportDetailCard } from '../../components/report/ReportDetailCard';
-import { ReportEngagementProvider } from '../../components/report/ReportEngagementProvider';
+import PublicIncidentFeed, { type PublicReportStatusFilter } from '../../components/report/PublicIncidentFeed';
 import ResidentBottomSheet from '../../components/ui/ResidentBottomSheet';
 import { FeedScreenSkeleton } from '../../components/ui/ResidentScreenSkeletons';
 import { useResidentData } from '../../context/ResidentDataContext';
 import { useAnnouncements } from '../../hooks/useAnnouncements';
-import { useReports } from '../../hooks/useReports';
+import { usePublicIncidents } from '../../hooks/usePublicIncidents';
 import {
   formatAnnouncementOfficeLabel,
   type AnnouncementRecord,
 } from '../../lib/announcements';
-import {
-  buildCommunityReportSections,
-  type CommunityReportScope,
-  type CommunityReportSort,
-  type CommunityReportStatusFilter,
-} from '../../lib/communityReportFeed';
+import type { CommunityReportSort } from '../../lib/communityReportFeed';
 import {
   buildOfficialUpdateFeed,
   type OfficialUpdateFeedScope,
 } from '../../lib/officialAnnouncementFeed';
-import { normalizeSearchText, type Coordinate } from '../../lib/reportProximity';
+import { normalizeSearchText } from '../../lib/reportProximity';
 import { feedStyles as styles } from '../../styles/screens/feed.styles';
 import { getResidentBottomNavigationHeight } from '../../styles/components/bottomNav.styles';
 import { colors } from '../../styles/theme';
 
 type FeedTab = 'official' | 'community';
+type CommunityReportScope = 'barangay' | 'municipality';
 type FeedOrder = 'latest' | 'oldest';
 
-const COMMUNITY_PAGE_SIZE = 6;
 const OFFICIAL_PAGE_SIZE = 6;
 
 function matchesAnnouncementSearch(
@@ -58,24 +51,6 @@ function matchesAnnouncementSearch(
   return normalizeSearchText(
     `${announcement.title} ${announcement.body} ${announcement.author.roleLabel}`,
   ).includes(searchQuery);
-}
-
-function getCommunitySectionCopy(
-  scope: CommunityReportScope,
-  barangay: string,
-  municipality: string,
-): { title: string; subtitle: string } {
-  if (scope === 'barangay') {
-    return {
-      title: barangay === 'your area' ? 'Your barangay' : barangay,
-      subtitle: 'Reports routed to your barangay response team',
-    };
-  }
-
-  return {
-    title: `Across ${municipality}`,
-    subtitle: `Reports from every barangay in ${municipality}`,
-  };
 }
 
 function getOfficialSectionCopy(
@@ -103,34 +78,22 @@ export default function FeedScreen() {
   const { fontScale } = useWindowDimensions();
   const bottomNavigationPadding =
     getResidentBottomNavigationHeight(fontScale) + insets.bottom + 16;
-  const { reportId, openRequest, tab } = useLocalSearchParams<{
+  const { reportId, incidentId, openRequest, tab, focus } = useLocalSearchParams<{
     reportId?: string | string[];
+    incidentId?: string | string[];
     openRequest?: string | string[];
     tab?: string | string[];
+    focus?: string | string[];
   }>();
+  const requestedFocusComments = (Array.isArray(focus) ? focus[0] : focus) === 'comments';
   const requestedReportId = Array.isArray(reportId) ? reportId[0] : reportId;
+  const requestedIncidentId = Array.isArray(incidentId) ? incidentId[0] : incidentId;
   const requestedOpenKey = Array.isArray(openRequest) ? openRequest[0] : openRequest;
   const requestedTab = Array.isArray(tab) ? tab[0] : tab;
   const [activeTab, setActiveTab] = useState<FeedTab>(
     requestedTab === 'official' ? 'official' : 'community',
   );
-  const handledRequestedScopeKey = useRef<string | undefined>(undefined);
   const { profile, barangays, profileInitialLoading, refreshProfile } = useResidentData();
-  const {
-    reports,
-    error: reportsError,
-    loading: reportsLoading,
-    loadingMore: reportsLoadingMore,
-    hasMore: hasMoreServerReports,
-    reload,
-    loadMore: loadMoreReports,
-  } = useReports({
-    enabled: activeTab === 'community',
-    realtime: false,
-    limit: 15,
-    includeMediaSummaries: true,
-    includeLatestActivity: true,
-  });
   const {
     announcements,
     error: announcementsError,
@@ -151,27 +114,20 @@ export default function FeedScreen() {
     return barangays.find((item) => normalizeSearchText(item.name) === normalizedBarangay) ?? null;
   }, [barangays, profile?.barangay]);
   const barangayId = matchingBarangay?.id ?? null;
-  const barangayCenter = useMemo<Coordinate | null>(
-    () =>
-      matchingBarangay?.latitude != null && matchingBarangay.longitude != null
-        ? { latitude: matchingBarangay.latitude, longitude: matchingBarangay.longitude }
-        : null,
-    [matchingBarangay],
-  );
   const [searchVisible, setSearchVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterVisible, setFilterVisible] = useState(false);
   const [communityScope, setCommunityScope] = useState<CommunityReportScope>('barangay');
   const [communityOrder, setCommunityOrder] = useState<CommunityReportSort>('activity');
-  const [statusFilter, setStatusFilter] = useState<CommunityReportStatusFilter>('all');
+  const [statusFilter, setStatusFilter] = useState<PublicReportStatusFilter>('all');
   const [draftCommunityOrder, setDraftCommunityOrder] = useState<CommunityReportSort>('activity');
-  const [draftStatusFilter, setDraftStatusFilter] = useState<CommunityReportStatusFilter>('all');
-  const [visibleCommunityLimit, setVisibleCommunityLimit] = useState(COMMUNITY_PAGE_SIZE);
+  const [draftStatusFilter, setDraftStatusFilter] = useState<PublicReportStatusFilter>('all');
   const [officialScope, setOfficialScope] = useState<OfficialUpdateFeedScope>('priority');
   const [officialOrder, setOfficialOrder] = useState<FeedOrder>('latest');
   const [draftOfficialOrder, setDraftOfficialOrder] = useState<FeedOrder>('latest');
   const [visibleOfficialLimit, setVisibleOfficialLimit] = useState(OFFICIAL_PAGE_SIZE);
   const [refreshing, setRefreshing] = useState(false);
+  const publicFeed = usePublicIncidents({ barangayId: communityScope === 'barangay' ? barangayId : null, enabled: activeTab === 'community' });
 
   useFocusEffect(
     useCallback(() => {
@@ -190,75 +146,17 @@ export default function FeedScreen() {
 
   useEffect(() => {
     if (!requestedReportId) return;
-
-    // Wait for the tab route to finish focusing before opening its requested post.
-    const frameId = requestAnimationFrame(() => setActiveTab('community'));
-    return () => cancelAnimationFrame(frameId);
-  }, [requestedReportId, requestedOpenKey]);
-
-  const normalizedQuery = searchQuery.trim().toLocaleLowerCase();
+    // Private submissions live in Your contributions, including notification links.
+    router.replace({ pathname: '/(main)/map', params: { reportId: requestedReportId, fromNotification: '1' } });
+  }, [requestedReportId, requestedOpenKey, router]);
 
   useEffect(() => {
-    if (!requestedReportId || !barangayId) return;
-    const requestedScopeKey = requestedOpenKey ?? requestedReportId;
-    if (handledRequestedScopeKey.current === requestedScopeKey) return;
+    if (!requestedIncidentId) return;
+    const frame = requestAnimationFrame(() => setActiveTab('community'));
+    return () => cancelAnimationFrame(frame);
+  }, [requestedIncidentId]);
 
-    const requestedReport = reports.find((report) => report.id === requestedReportId);
-    if (!requestedReport) return;
-    if (requestedReport.barangay_id === barangayId) {
-      handledRequestedScopeKey.current = requestedScopeKey;
-      return;
-    }
-
-    // Reports opened from a map or notification must remain reachable even
-    // when they belong to another barangay.
-    const frameId = requestAnimationFrame(() => {
-      handledRequestedScopeKey.current = requestedScopeKey;
-      setCommunityScope('municipality');
-      setVisibleCommunityLimit(COMMUNITY_PAGE_SIZE);
-    });
-    return () => cancelAnimationFrame(frameId);
-  }, [barangayId, reports, requestedReportId, requestedOpenKey]);
-
-  const communitySections = useMemo(
-    () =>
-      buildCommunityReportSections(reports, {
-        barangayCenter,
-        barangayId,
-        requestedReportId,
-        searchQuery: normalizedQuery,
-        scope: communityScope,
-        sort: communityOrder,
-        statusFilter,
-      }),
-    [
-      barangayCenter,
-      barangayId,
-      communityOrder,
-      communityScope,
-      normalizedQuery,
-      reports,
-      requestedReportId,
-      statusFilter,
-    ],
-  );
-
-  const communityReportCount = communitySections[0]?.data.length ?? 0;
-  const displayedCommunitySections = useMemo(
-    () =>
-      communitySections.map((section) => ({
-        ...section,
-        data: section.data.slice(0, visibleCommunityLimit),
-      })),
-    [communitySections, visibleCommunityLimit],
-  );
-  const hasMoreCommunityReports =
-    visibleCommunityLimit < communityReportCount || hasMoreServerReports;
-  const communitySectionCopy = getCommunitySectionCopy(
-    communityScope,
-    barangay,
-    municipality,
-  );
+  const normalizedQuery = searchQuery.trim().toLocaleLowerCase();
 
   const filteredAnnouncements = useMemo(() => {
     const searchMatches = announcements.filter((announcement) =>
@@ -308,7 +206,7 @@ export default function FeedScreen() {
     setRefreshing(true);
     try {
       if (activeTab === 'community') {
-        await reload();
+        await publicFeed.reload();
       } else {
         await refreshAnnouncements();
       }
@@ -329,51 +227,12 @@ export default function FeedScreen() {
     if (activeTab === 'community') {
       setCommunityOrder(draftCommunityOrder);
       setStatusFilter(draftStatusFilter);
-      setVisibleCommunityLimit(COMMUNITY_PAGE_SIZE);
     } else {
       setOfficialOrder(draftOfficialOrder);
       setVisibleOfficialLimit(OFFICIAL_PAGE_SIZE);
     }
 
     setFilterVisible(false);
-  };
-
-  const openReportOnMap = useCallback(
-    (targetReportId: string) => {
-      router.navigate({
-        pathname: '/(main)/map',
-        params: { reportId: targetReportId },
-      });
-    },
-    [router],
-  );
-
-  const confirmCommunityScopeChange = () => {
-    const switchingToMunicipality = communityScope === 'barangay';
-    const destination = switchingToMunicipality
-      ? `Across ${municipality}`
-      : barangay === 'your area'
-        ? 'your barangay'
-        : barangay;
-
-    Alert.alert(
-      `Switch to ${destination}?`,
-      switchingToMunicipality
-        ? `Your feed will show community reports from all barangays in ${municipality}.`
-        : `Your feed will show only reports from ${destination}.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Switch feed',
-          onPress: () => {
-            setCommunityScope(
-              switchingToMunicipality ? 'municipality' : 'barangay',
-            );
-            setVisibleCommunityLimit(COMMUNITY_PAGE_SIZE);
-          },
-        },
-      ],
-    );
   };
 
   const confirmOfficialScopeChange = () => {
@@ -400,22 +259,10 @@ export default function FeedScreen() {
     );
   };
 
-  const initialLoading =
-    profileInitialLoading ||
-    (activeTab === 'community'
-      ? reportsLoading && reports.length === 0
-      : announcementsLoading && announcements.length === 0);
-  const activeError =
-    activeTab === 'community'
-      ? reports.length === 0
-        ? reportsError
-        : null
-      : announcements.length === 0
-        ? announcementsError
-        : null;
+  const initialLoading = profileInitialLoading || (announcementsLoading && announcements.length === 0);
+  const activeError = announcements.length === 0 ? announcementsError : null;
 
   return (
-    <ReportEngagementProvider reports={reports}>
       <AnnouncementEngagementProvider announcements={announcements}>
         <View style={styles.screen}>
           <StatusBar style="dark" />
@@ -457,7 +304,6 @@ export default function FeedScreen() {
                   value={searchQuery}
                   onChangeText={(value) => {
                     setSearchQuery(value);
-                    setVisibleCommunityLimit(COMMUNITY_PAGE_SIZE);
                     setVisibleOfficialLimit(OFFICIAL_PAGE_SIZE);
                   }}
                   placeholder="Search updates and reports"
@@ -469,7 +315,6 @@ export default function FeedScreen() {
                   <TouchableOpacity
                     onPress={() => {
                       setSearchQuery('');
-                      setVisibleCommunityLimit(COMMUNITY_PAGE_SIZE);
                       setVisibleOfficialLimit(OFFICIAL_PAGE_SIZE);
                     }}
                   >
@@ -506,113 +351,36 @@ export default function FeedScreen() {
           </View>
 
           {activeTab === 'community' ? (
-            <SectionList
-              style={styles.scrollView}
-              contentContainerStyle={[
-                styles.communityListContent,
-                { paddingBottom: bottomNavigationPadding },
-              ]}
-              sections={initialLoading || activeError ? [] : displayedCommunitySections}
-              keyExtractor={(item) => item.report.id}
-              stickySectionHeadersEnabled={false}
-              showsVerticalScrollIndicator={false}
-              keyboardShouldPersistTaps="handled"
-              initialNumToRender={5}
-              maxToRenderPerBatch={5}
-              windowSize={7}
-              refreshControl={
-                <RefreshControl
-                  refreshing={refreshing}
-                  onRefresh={handleRefresh}
-                  tintColor={colors.primary}
-                  colors={[colors.primary]}
-                />
+            <PublicIncidentFeed
+              incidents={publicFeed.incidents}
+              loading={profileInitialLoading || publicFeed.loading}
+              error={publicFeed.error}
+              loadingMore={publicFeed.loadingMore}
+              hasMore={publicFeed.hasMore}
+              onLoadMore={() => void publicFeed.loadMore()}
+              onRefresh={() => void handleRefresh()}
+              refreshing={refreshing}
+              searchQuery={searchQuery}
+              statusFilter={statusFilter}
+              sort={communityOrder}
+              title={communityScope === 'barangay' ? barangay : 'Across ' + municipality}
+              subtitle={communityScope === 'barangay' ? 'Confirmed reports and official updates in your barangay' : 'Confirmed community reports from every barangay'}
+              onChangeScope={() => setCommunityScope((scope) => scope === 'barangay' ? 'municipality' : 'barangay')}
+              bottomPadding={bottomNavigationPadding}
+              requestedIncidentId={requestedIncidentId}
+              requestedOpenKey={requestedOpenKey}
+              requestedFocusComments={requestedFocusComments}
+              onEngagementChange={publicFeed.patchEngagement}
+              onViewOnMap={(targetIncidentId, targetReportId) =>
+                router.navigate({
+                  pathname: '/(main)/map',
+                  params: {
+                    incidentId: targetIncidentId,
+                    publicReportId: targetReportId,
+                    openRequest: `${targetIncidentId}-${Date.now()}`,
+                  },
+                })
               }
-              ListHeaderComponent={
-                !initialLoading && !activeError ? (
-                  <View style={styles.reportSectionHeader}>
-                    <View style={styles.reportSectionTitleRow}>
-                      <Text style={styles.reportSectionTitle}>
-                        {communitySectionCopy.title}
-                      </Text>
-                      <TouchableOpacity
-                        style={styles.feedScopeSwitch}
-                        onPress={confirmCommunityScopeChange}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Switch feed to ${
-                          communityScope === 'barangay'
-                            ? `Across ${municipality}`
-                            : barangay
-                        }`}
-                      >
-                        <Ionicons name="swap-horizontal" size={18} color={colors.primary} />
-                      </TouchableOpacity>
-                    </View>
-                    <Text style={styles.reportSectionSubtitle}>
-                      {communitySectionCopy.subtitle}
-                    </Text>
-                  </View>
-                ) : undefined
-              }
-              ListFooterComponent={
-                hasMoreCommunityReports ? (
-                  <TouchableOpacity
-                    style={styles.seeMoreButton}
-                    onPress={() => {
-                      const nextLimit = visibleCommunityLimit + COMMUNITY_PAGE_SIZE;
-                      setVisibleCommunityLimit(nextLimit);
-                      if (nextLimit >= communityReportCount && hasMoreServerReports) {
-                        void loadMoreReports();
-                      }
-                    }}
-                    disabled={reportsLoadingMore}
-                    accessibilityRole="button"
-                    accessibilityLabel="See more community reports"
-                  >
-                    {reportsLoadingMore ? (
-                      <ActivityIndicator color={colors.primary} />
-                    ) : (
-                      <Ionicons name="add" size={21} color={colors.text} />
-                    )}
-                  </TouchableOpacity>
-                ) : undefined
-              }
-              ListEmptyComponent={
-                initialLoading ? (
-                  <FeedScreenSkeleton variant="community" />
-                ) : activeError ? (
-                  <View style={styles.stateBlock}>
-                    <Ionicons name="cloud-offline-outline" size={28} color={colors.textMuted} />
-                    <Text style={styles.stateTitle}>Feed unavailable</Text>
-                    <Text style={styles.stateText}>{activeError}</Text>
-                    <TouchableOpacity style={styles.retryButton} onPress={handleRefresh}>
-                      <Text style={styles.retryText}>Try again</Text>
-                    </TouchableOpacity>
-                  </View>
-                ) : (
-                  <View style={styles.stateBlockCompact}>
-                    <Ionicons name="documents-outline" size={27} color={colors.textMuted} />
-                    <Text style={styles.stateTitle}>No community reports found</Text>
-                    <Text style={styles.stateText}>
-                      Pull down to refresh or adjust the feed filters.
-                    </Text>
-                  </View>
-                )
-              }
-              renderItem={({ item, index, section }) => (
-                <ReportDetailCard
-                  report={item.report}
-                  isLast={index === section.data.length - 1}
-                  variant="residentFeed"
-                  detailCacheScope={profile?.id}
-                  openRequestKey={
-                    item.report.id === requestedReportId
-                      ? requestedOpenKey ?? requestedReportId
-                      : undefined
-                  }
-                  onViewOnMap={openReportOnMap}
-                />
-              )}
             />
           ) : (
             <FlatList
@@ -777,13 +545,12 @@ export default function FeedScreen() {
                       {(
                         [
                           ['all', 'All'],
-                          ['active', 'Active'],
-                          ['unverified', 'Under review'],
-                          ['verified', 'Verified'],
-                          ['escalated', 'Escalated'],
+                          ['confirmed', 'Confirmed'],
+                          ['response_ongoing', 'Response ongoing'],
+                          ['withdrawn', 'Corrections'],
                           ['resolved', 'Resolved'],
                         ] as const satisfies readonly (readonly [
-                          CommunityReportStatusFilter,
+                          PublicReportStatusFilter,
                           string,
                         ])[]
                       ).map(([option, label]) => (
@@ -837,6 +604,5 @@ export default function FeedScreen() {
 
         </View>
       </AnnouncementEngagementProvider>
-    </ReportEngagementProvider>
   );
 }

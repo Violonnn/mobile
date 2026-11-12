@@ -2,7 +2,7 @@ import { AppState, type AppStateStatus } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
 import { supabase } from './supabase';
 import { getActiveSession } from './auth';
-import { readEdgeFunctionErrorMessage } from './edgeFunctionErrors';
+import { isOutsideCoverageError, readEdgeFunctionErrorCode, readEdgeFunctionErrorMessage } from './edgeFunctionErrors';
 import {
   deletePersistedReportMedia,
   isTransientMediaUploadError,
@@ -100,7 +100,7 @@ function scheduleDeliveryValidation(
 async function syncReport(
   report: QueuedReport,
   userId: string,
-): Promise<{ synced: boolean; error: string | null; retryable: boolean }> {
+): Promise<{ synced: boolean; error: string | null; retryable: boolean; terminalErrorCode?: 'outside_coverage' }> {
   const uploaded: {
     id: string;
     type: 'photo' | 'video';
@@ -190,12 +190,16 @@ async function syncReport(
           addressText: report.addressText || undefined,
           // Omit for legacy queue rows so the server uses centroid fallback.
           barangayId: report.barangayId || undefined,
+          showReporterName: report.showReporterName === true,
+          showReporterAvatar: report.showReporterAvatar === true,
+          allowExactLocation: report.allowExactLocation === true,
           media: uploaded,
         },
       },
     );
 
     if (error) {
+      const errorCode = await readEdgeFunctionErrorCode(error, response);
       const message = await readEdgeFunctionErrorMessage(
         error,
         response,
@@ -204,7 +208,8 @@ async function syncReport(
       return {
         synced: false,
         error: message,
-        retryable: isTransientMediaUploadError(message),
+        retryable: !isOutsideCoverageError(errorCode) && isTransientMediaUploadError(message),
+        terminalErrorCode: isOutsideCoverageError(errorCode) ? 'outside_coverage' : undefined,
       };
     }
 
@@ -255,7 +260,7 @@ export async function flushReportQueue(): Promise<void> {
       automaticRetryTimer = null;
     }
 
-    const pending = await getPendingReports();
+    const pending = (await getPendingReports()).filter((report) => !report.terminalErrorCode);
     if (pending.length === 0) {
       resetAutomaticRetry();
       return;
@@ -285,7 +290,7 @@ export async function flushReportQueue(): Promise<void> {
       await updateQueuedReport(report.id, { lastError: undefined });
       emitChange();
 
-      const { synced, error, retryable } = await syncReport(report, userId);
+      const { synced, error, retryable, terminalErrorCode } = await syncReport(report, userId);
       if (synced) {
         clearDeliveryValidation(report.id);
         await markQueuedReportSynced(report.id, new Date().toISOString());
@@ -299,6 +304,7 @@ export async function flushReportQueue(): Promise<void> {
           deliveryDelayedAt:
             report.deliveryDelayedAt ?? new Date().toISOString(),
           lastError: retryable ? undefined : (error ?? 'Sync failed.'),
+          terminalErrorCode,
         });
         emitChange();
         // Keep going: one failing report must not block the rest of the

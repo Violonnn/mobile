@@ -41,6 +41,25 @@ export async function readEdgeFunctionErrorMessage(
   return fallback;
 }
 
+/** Read machine-readable rejection codes without consuming the response body. */
+export async function readEdgeFunctionErrorCode(error: unknown, response: Response | undefined): Promise<string | null> {
+  const context = error instanceof FunctionsHttpError && error.context instanceof Response ? error.context : undefined;
+  for (const candidate of [context, response]) {
+    if (!candidate) continue;
+    try {
+      const body = await candidate.clone().json() as { code?: unknown };
+      if (typeof body.code === 'string') return body.code;
+    } catch {
+      // Connection failures and older functions may not have a JSON error code.
+    }
+  }
+  return null;
+}
+
+export function isOutsideCoverageError(code: string | null | undefined): boolean {
+  return code === 'outside_coverage';
+}
+
 export type EdgeFunctionMeta = {
   sendCount?: number;
   maxSends?: number;

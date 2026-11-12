@@ -19,6 +19,7 @@ import Swipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useNotifications } from '../../context/NotificationsContext';
+import { notificationTarget } from '../../lib/notifications';
 import {
   groupNotificationsByDate,
   type NotificationDateSection,
@@ -128,19 +129,19 @@ export default function NotificationsModal({
         void setReadState(item.remoteId, true);
       }
 
-      if (item.relatedEntityType !== 'report' || !item.relatedEntityId) return;
-
-      const reportId = item.relatedEntityId;
+      const target = notificationTarget(item);
+      if (!target) return;
       closeScreen(() => {
-        if (pathname.startsWith('/official')) {
-          router.push(`/official/${reportId}` as Href);
+        if (pathname.startsWith('/official') && target.kind === 'report') {
+          router.push(`/official/${target.id}` as Href);
           return;
         }
 
-        router.push({
-          pathname: '/(main)/map',
-          params: { reportId, fromNotification: '1' },
-        });
+        if (target.kind === 'report') {
+          router.push({ pathname: '/(main)/map', params: { reportId: target.id, fromNotification: '1' } });
+          return;
+        }
+        router.push({ pathname: '/(main)/feed', params: { incidentId: target.id, openRequest: item.id } });
       });
     },
     [closeScreen, pathname, router, setReadState],

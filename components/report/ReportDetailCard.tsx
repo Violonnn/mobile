@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { setVideoCacheSizeAsync, useVideoPlayer, VideoView } from 'expo-video';
 import { Image } from 'expo-image';
 import React, { useEffect, useRef, useState } from 'react';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import {
     Modal,
     Platform,
@@ -18,15 +19,17 @@ import {
     Text,
     TouchableOpacity,
     View,
+    useWindowDimensions,
 } from 'react-native';
 import { useKeyboardHeight } from '../../hooks/useKeyboardHeight';
 import { useReportDetail } from '../../hooks/useReportDetail';
 import { useShareSheetGuard } from '../../hooks/useShareSheetGuard';
 import { formatPublishedAt } from '../../lib/formatTime';
-import { formatIncidentType } from '../../lib/incidentTypes';
+import { formatIncidentType, incidentTypeTone } from '../../lib/incidentTypes';
 import {
     formatReporterName,
     formatReportLocation,
+    getMapReportPresentation,
     type MapReportMarker,
     type ReportMediaAttachment,
 } from '../../lib/reports';
@@ -35,6 +38,8 @@ import ResidentBottomSheet from '../ui/ResidentBottomSheet';
 import { ReportDetailSheetSkeleton } from '../ui/ResidentScreenSkeletons';
 import RemoteMediaImage from '../media/RemoteMediaImage';
 import CommentsSection from './CommentsSection';
+import IncidentCategoryCard from './IncidentCategoryCard';
+import ResidentReportProgress from './ResidentReportProgress';
 import { useReportEngagement } from './ReportEngagementProvider';
 import { ReporterAvatar } from './ReporterAvatar';
 
@@ -60,41 +65,64 @@ function residentStatusLabel(status: string): string {
   return 'Under review';
 }
 
-/** Keep the resident feed's incident label as easy to scan as its status label. */
-function residentIncidentTypeColor(incidentType: MapReportMarker['incidentType']): string {
-  if (incidentType === 'fire') return '#DC2626';
-  if (incidentType === 'flood') return '#2563EB';
-  if (incidentType === 'road_crash') return '#D97706';
-  if (incidentType === 'medical') return '#7C3AED';
-  return colors.textMuted;
-}
-
 /** Shared status and incident tags used by resident community report views. */
 export function CommunityReportTags({
   report,
+  statusPresentation,
 }: {
-  report: Pick<MapReportMarker, 'status' | 'incidentType' | 'incidentTypeOther'>;
+  report: Pick<MapReportMarker, 'status' | 'incidentType' | 'incidentTypeOther' | 'lifecycle'>;
+  statusPresentation?: { label: string; color: string; backgroundColor?: string };
 }) {
-  const statusColor =
-    report.status === 'resolved'
-      ? '#15805F'
-      : report.status === 'verified'
-        ? colors.primary
-        : report.status === 'escalated'
-          ? colors.escalated
-          : '#A16207';
-  const incidentTypeColor = residentIncidentTypeColor(report.incidentType);
+  statusPresentation = statusPresentation ?? getMapReportPresentation(report);
+  const statusColor = statusPresentation.color;
+
+  return (
+    <IncidentTagRow
+      statusLabel={statusPresentation?.label ?? residentStatusLabel(report.status)}
+      statusColor={statusColor}
+      statusBackgroundColor={statusPresentation?.backgroundColor}
+      incidentType={report.incidentType}
+      incidentTypeLabel={formatIncidentType(report.incidentType, report.incidentTypeOther)}
+    />
+  );
+}
+
+/** Status pill + washed incident-type pill, shared by own reports and public incident posts. */
+export function IncidentTagRow({
+  statusLabel: label,
+  statusColor,
+  statusBackgroundColor,
+  incidentType,
+  incidentTypeLabel,
+}: {
+  statusLabel: string;
+  statusColor: string;
+  statusBackgroundColor?: string;
+  incidentType: string | null | undefined;
+  incidentTypeLabel: string;
+}) {
+  const typeTone = incidentTypeTone(incidentType);
 
   return (
     <View style={residentFeedStyles.statusRow}>
-      <View style={[residentFeedStyles.statusPill, { borderColor: statusColor }]}>
-        <Text style={[residentFeedStyles.statusText, { color: statusColor }]}>
-          {residentStatusLabel(report.status)}
-        </Text>
+      <View
+        style={[
+          residentFeedStyles.statusPill,
+          { borderColor: statusColor, backgroundColor: statusBackgroundColor ?? colors.card },
+        ]}
+      >
+        <View style={[residentFeedStyles.statusDot, { backgroundColor: statusColor }]} />
+        <Text numberOfLines={2} ellipsizeMode="tail" style={[residentFeedStyles.statusText, { color: statusColor }]}>{label}</Text>
       </View>
-      <View style={[residentFeedStyles.statusPill, { borderColor: incidentTypeColor }]}>
-        <Text style={[residentFeedStyles.statusText, { color: incidentTypeColor }]}>
-          {formatIncidentType(report.incidentType, report.incidentTypeOther)}
+      <View
+        style={[
+          residentFeedStyles.statusPill,
+          { borderColor: typeTone.color, backgroundColor: typeTone.softColor },
+        ]}
+      >
+        <Ionicons name={typeTone.icon} size={12} color={typeTone.color} style={residentFeedStyles.statusIcon} />
+        <Text numberOfLines={2} ellipsizeMode="tail" style={[residentFeedStyles.statusText, { color: typeTone.color }]}>
+          {incidentTypeLabel}
         </Text>
       </View>
     </View>
@@ -173,6 +201,7 @@ export function CollageCellContent({ item }: { item: ReportMediaAttachment }) {
       source={{ uri: thumbnailUrl }}
       style={reportDetailStyles.collageImage}
       contentFit="cover"
+      cachePolicy="none"
     />
   );
 }
@@ -292,6 +321,7 @@ export function EngagementActionsRow({
   hideShare = false,
   onToggleUpvote,
   onCommentPress,
+  onShare,
 }: {
   upvoteCount: number;
   commentCount: number;
@@ -301,6 +331,7 @@ export function EngagementActionsRow({
   hideShare?: boolean;
   onToggleUpvote?: () => void;
   onCommentPress?: () => void;
+  onShare?: () => void;
 }) {
   return (
     <View
@@ -366,7 +397,10 @@ export function EngagementActionsRow({
         <TouchableOpacity
           style={reportDetailStyles.engagementButton}
           activeOpacity={0.7}
-          onPress={(event) => event.stopPropagation?.()}
+          onPress={(event) => {
+            event.stopPropagation?.();
+            onShare?.();
+          }}
           accessibilityRole="button"
           accessibilityLabel="Share"
         >
@@ -547,10 +581,20 @@ function ReportMetaHeader({
 export function ReportMediaPreviewModal({
   preview,
   onClose,
+  footer,
+  onImageError,
+  onImageLoad,
+  onImageLoadEnd,
 }: {
   preview: ReportMediaAttachment | null;
   onClose: () => void;
+  footer?: React.ReactNode;
+  onImageError?: () => void;
+  onImageLoad?: () => void;
+  onImageLoadEnd?: () => void;
 }) {
+  const { height: screenHeight } = useWindowDimensions();
+  const screeningImageHeight = Math.max(180, Math.min(screenHeight * 0.42, 360));
   return (
     <Modal
       visible={preview != null}
@@ -563,18 +607,35 @@ export function ReportMediaPreviewModal({
       <View style={reportDetailStyles.previewOverlay}>
         <Pressable style={reportDetailStyles.previewBackdropTap} onPress={onClose} />
 
-        <View style={reportDetailStyles.previewContent}>
-          <TouchableOpacity
-            style={reportDetailStyles.previewClose}
-            onPress={onClose}
-            hitSlop={12}
-            accessibilityRole="button"
-            accessibilityLabel="Close preview"
-          >
-            <Ionicons name="close" size={22} color={colors.white} />
-          </TouchableOpacity>
+        <SafeAreaView style={reportDetailStyles.previewSafeArea}>
+          <View style={reportDetailStyles.previewContent}>
+            <TouchableOpacity
+              style={reportDetailStyles.previewClose}
+              onPress={onClose}
+              hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel="Close preview"
+            >
+              <Ionicons name="close" size={22} color={colors.white} />
+            </TouchableOpacity>
 
-          {preview?.type === 'photo' ? (
+            {preview?.type === 'photo' && footer ? (
+              <ScrollView
+                style={reportDetailStyles.screeningPreviewScroll}
+                contentContainerStyle={reportDetailStyles.screeningPreviewContent}
+              >
+                <Image
+                  key={preview.id}
+                  source={{ uri: preview.url }}
+                  style={[reportDetailStyles.previewImage, { height: screeningImageHeight }]}
+                  contentFit="contain"
+                  onError={onImageError}
+                  onLoad={onImageLoad}
+                  onLoadEnd={onImageLoadEnd}
+                />
+                <View style={reportDetailStyles.previewFooter}>{footer}</View>
+              </ScrollView>
+            ) : preview?.type === 'photo' ? (
             preview.displayStoragePath || preview.storagePath ? (
               <RemoteMediaImage
                 bucket={preview.bucket ?? 'report-media'}
@@ -590,16 +651,20 @@ export function ReportMediaPreviewModal({
                 source={{ uri: preview.url }}
                 style={reportDetailStyles.previewImage}
                 contentFit="contain"
+                onError={onImageError}
+                onLoad={onImageLoad}
+                onLoadEnd={onImageLoadEnd}
               />
             )
-          ) : preview ? (
+            ) : preview ? (
             preview.detailUrlResolved !== false ? (
               <RemoteVideoPreview uri={preview.url} />
             ) : (
               <VideoPlaceholder />
             )
-          ) : null}
-        </View>
+            ) : null}
+          </View>
+        </SafeAreaView>
       </View>
     </Modal>
   );
@@ -630,6 +695,7 @@ type ReportDetailContentProps = {
   showIncidentType?: boolean;
   /** Uses the bordered status and incident tags from the resident Community feed. */
   showCommunityTags?: boolean;
+  statusPresentation?: { label: string; color: string; backgroundColor?: string };
   /** Hide the report date/time and location beneath the resident name. */
   showReporterMetadata?: boolean;
   /** Vertically align a metadata-free resident name with its avatar. */
@@ -654,6 +720,7 @@ export function ReportDetailContent({
   showStatus = false,
   showIncidentType = true,
   showCommunityTags = false,
+  statusPresentation,
   showReporterMetadata = true,
   centerReporterName = false,
   showActivityDates = false,
@@ -699,7 +766,12 @@ export function ReportDetailContent({
             onOpenGallery={handleOpenGallery}
           />
         )
-      ) : null}
+      ) : (
+        <IncidentCategoryCard
+          incidentType={report.incidentType}
+          incidentTypeOther={report.incidentTypeOther}
+        />
+      )}
 
       {report.mediaError ? (
         <Text style={reportDetailStyles.detailRefreshError}>
@@ -711,7 +783,7 @@ export function ReportDetailContent({
 
       <View style={reportDetailStyles.detailCard}>
         {showCommunityTags ? (
-          <CommunityReportTags report={report} />
+          <CommunityReportTags report={report} statusPresentation={statusPresentation} />
         ) : showIncidentType ? (
           <View style={reportDetailStyles.incidentTypePill}>
             <Ionicons name="warning-outline" size={14} color={colors.navigationActive} />
@@ -738,11 +810,13 @@ export function ResidentFeedReportContent({
   onRequestExpand,
   onRequestComments,
   onShareReport,
+  statusPresentation,
 }: {
   report: MapReportMarker;
   onRequestExpand?: () => void;
   onRequestComments: () => void;
   onShareReport: () => void;
+  statusPresentation?: { label: string; color: string; backgroundColor?: string };
 }) {
   const { getState, toggleUpvote } = useReportEngagement();
   const { upvoteCount, commentCount, hasUpvoted } = getState(report);
@@ -799,13 +873,13 @@ export function ResidentFeedReportContent({
           </Text>
         </View>
       ) : (
-        <View style={residentFeedStyles.mediaPlaceholder}>
-          <Ionicons name="image-outline" size={30} color={colors.textMuted} />
-          <Text style={residentFeedStyles.mediaPlaceholderText}>No media attached</Text>
-        </View>
+        <IncidentCategoryCard
+          incidentType={report.incidentType}
+          incidentTypeOther={report.incidentTypeOther}
+        />
       )}
 
-      <CommunityReportTags report={report} />
+      <CommunityReportTags report={report} statusPresentation={statusPresentation} />
 
       <View style={residentFeedStyles.actionRow}>
         <View style={residentFeedStyles.engagementActions}>
@@ -1050,6 +1124,8 @@ export function ReportDetailCard({
                     </Text>
                   ) : null}
 
+                  {detailCacheScope === detailReport.reporter.id && <ResidentReportProgress report={detailReport} refreshSignal={refreshVersion} />}
+
                   {onViewOnMap ? (
                     <TouchableOpacity
                       style={reportDetailStyles.mapActionButton}
@@ -1090,7 +1166,7 @@ export function ReportDetailCard({
   );
 }
 
-const residentFeedStyles = StyleSheet.create({
+export const residentFeedStyles = StyleSheet.create({
   reportContent: {
     gap: spacing.sm,
   },
@@ -1129,18 +1205,35 @@ const residentFeedStyles = StyleSheet.create({
     color: colors.textMuted,
   },
   statusRow: {
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
     flexWrap: 'wrap',
   },
   statusPill: {
+    maxWidth: '100%',
+    flexShrink: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
     paddingHorizontal: 10,
-    paddingVertical: 3,
+    paddingVertical: 4,
     borderWidth: 1,
-    borderRadius: 6,
+    borderRadius: radius.full,
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    flexShrink: 0,
+    borderRadius: 3,
+  },
+  statusIcon: {
+    flexShrink: 0,
   },
   statusText: {
+    minWidth: 0,
+    flexShrink: 1,
     fontFamily: fonts.medium,
     fontSize: 11,
   },
@@ -1508,15 +1601,32 @@ export const reportDetailStyles = StyleSheet.create({
     ...StyleSheet.absoluteFill,
   },
   previewContent: {
+    width: '100%',
     borderRadius: radius.lg,
     overflow: 'hidden',
     backgroundColor: '#111827',
     maxHeight: '80%',
     zIndex: 1,
   },
+  previewSafeArea: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  screeningPreviewScroll: {
+    maxHeight: '100%',
+  },
+  screeningPreviewContent: {
+    paddingTop: 46,
+    paddingBottom: spacing.md,
+  },
   previewImage: {
     width: '100%',
     height: 360,
+  },
+  previewFooter: {
+    padding: spacing.md,
+    gap: spacing.xs,
+    backgroundColor: colors.card,
   },
   previewVideo: {
     width: '100%',

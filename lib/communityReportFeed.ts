@@ -13,7 +13,8 @@ export type CommunityReportStatusFilter =
   | 'unverified'
   | 'verified'
   | 'escalated'
-  | 'resolved';
+  | 'resolved'
+  | 'closed';
 export type CommunityReportSectionId = CommunityReportScope;
 
 export type CommunityReportFeedItem = {
@@ -64,7 +65,7 @@ function reportMatchesStatus(
 ): boolean {
   const normalizedStatus = report.status.trim().toLocaleLowerCase();
 
-  if (statusFilter === 'active') return normalizedStatus !== 'resolved';
+  if (statusFilter === 'active') return normalizedStatus !== 'resolved' && normalizedStatus !== 'closed';
   if (statusFilter === 'all') return true;
   return normalizedStatus === statusFilter;
 }

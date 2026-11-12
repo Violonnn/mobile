@@ -243,7 +243,7 @@ export const homeStyles = StyleSheet.create({
     lineHeight: 16,
   },
   nearbyActiveReportTitle: {
-    fontFamily: homeFonts.semibold,
+    fontFamily: homeFonts.bold,
     fontSize: 24,
     lineHeight: 27,
     color: homeColors.headingInk,

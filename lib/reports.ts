@@ -14,6 +14,7 @@ import { isIncidentType, type IncidentType } from './incidentTypes';
 import { isProfilePhotoSchemaMissing } from './schemaCompatibility';
 import { resolveSignedMediaUrls } from './mediaUrlCache';
 import { colors } from '../styles/theme';
+import { deriveLifecycle, lifecycleColor, residentLabel, residentStageTone, type LifecycleFacts, type LifecycleSummary } from './reportLifecycle';
 
 export type ReportMediaAttachment = {
   id: string;
@@ -41,6 +42,11 @@ export type MapReportReporter = {
 };
 
 export type MapReportMarker = {
+  lifecycle?: LifecycleSummary;
+  incidentCaseId?: string | null;
+  reviewReasonCode?: string | null;
+  publicSummary?: string | null;
+  publicCorrection?: string | null;
   id: string;
   title: string;
   description: string;
@@ -78,47 +84,113 @@ export type ReportStatusPresentation = {
   nextAction: string;
 };
 
-/** Shared resident-facing colors and copy for each report workflow status. */
+/** Resident-facing presentation: washed stage colors shared by Home, Map and Community. */
+export function getLifecyclePresentation(summary: LifecycleSummary): ReportStatusPresentation {
+  const activeStep = summary.primaryStage === 'resolved' ? 3
+    : summary.primaryStage === 'response_ongoing' ? 2
+    : summary.primaryStage === 'confirmed' ? 1 : 0;
+  const tone = residentStageTone(summary);
+  return {
+    label: residentLabel(summary, { barangayName: null }),
+    color: tone.color, backgroundColor: tone.softColor,
+    activeStep,
+    nextAction: summary.primaryStage === 'resolved'
+      ? summary.summaryMissing ? 'Outcome summary not yet posted' : 'Review the official outcome below'
+      : summary.primaryStage === 'sending' ? 'Waiting to send your report'
+      : summary.primaryStage === 'jurisdiction_check' ? 'MDRRMO is checking the responsible office'
+      : summary.primaryStage === 'being_assessed' ? 'Awaiting an official field finding'
+      : summary.primaryStage === 'awaiting_review' ? 'Waiting for the responsible office to start review'
+      : summary.primaryStage === 'under_review' ? 'The responsible office is reviewing your report'
+      : summary.primaryStage === 'response_ongoing' ? 'A qualifying response action has been recorded'
+      : summary.primaryStage === 'confirmed' ? 'No response action recorded yet'
+      : 'See the report outcome below',
+  };
+}
+
+/** Resident palette for map reports, including rows that only have legacy status. */
+export function getMapReportPresentation(
+  report: Pick<MapReportMarker, 'status' | 'lifecycle'>,
+): ReportStatusPresentation {
+  if (report.lifecycle) return getLifecyclePresentation(report.lifecycle);
+
+  const normalizedStatus = report.status.trim().toLocaleLowerCase();
+  const legacyStatus = normalizedStatus === 'verified' || normalizedStatus === 'escalated'
+    || normalizedStatus === 'resolved' || normalizedStatus === 'closed'
+    ? normalizedStatus
+    : 'unverified';
+  const summary = deriveLifecycle({
+    status: legacyStatus,
+    reviewOutcome: null,
+    reviewClaimedByName: null,
+    reviewClaimedAt: null,
+    jurisdictionStatus: null,
+    incidentVerification: null,
+    incidentState: null,
+    coordination: null,
+    leadOffice: null,
+    municipalFinding: null,
+    hasQualifyingResponseAction: false,
+    legacyResolution: legacyStatus === 'resolved',
+    withdrawn: false,
+    legacyEscalation: legacyStatus === 'escalated',
+  });
+  return getLifecyclePresentation(summary);
+}
+
+export type ResidentTimelineEntry = {
+  occurredAt: string;
+  entryType: string;
+  publicText: string;
+  responsibleOfficeLabel: string;
+};
+
+export async function fetchResidentReportTimeline(reportId: string): Promise<{ entries: ResidentTimelineEntry[]; error: string | null }> {
+  try {
+    const { data, error } = await supabase.rpc('list_resident_report_timeline', { p_report_id: reportId });
+    return { entries: ((data ?? []) as Record<string, unknown>[]).map((row) => ({
+      occurredAt: String(row.occurred_at), entryType: String(row.entry_type),
+      publicText: String(row.public_text), responsibleOfficeLabel: String(row.responsible_office_label),
+    })), error: error?.message ?? null };
+  } catch {
+    return { entries: [], error: 'Could not load your report timeline. Try again.' };
+  }
+}
+
+async function addResidentLifecycle(reports: MapReportMarker[]): Promise<{ reports: MapReportMarker[]; error: string | null }> {
+  const reportIds = reports.filter((report) => !report.isPending).map((report) => report.id);
+  const stateRows = new Map<string, Record<string, unknown>>();
+  for (const batch of chunkItems(reportIds, REPORT_PAGE_SIZE)) {
+    const { data, error } = await supabase.rpc('list_resident_report_states', { p_report_ids: batch });
+    if (error) return { reports: [], error: `Could not load report progress: ${error.message}` };
+    for (const row of (data ?? []) as Record<string, unknown>[]) stateRows.set(String(row.report_id), row);
+  }
+  return { reports: reports.map((report) => {
+    const state = stateRows.get(report.id);
+    if (!state && !report.isPending) return report;
+    const facts = state?.lifecycle_facts as LifecycleFacts | undefined;
+    return { ...report,
+      lifecycle: facts ? deriveLifecycle(facts) : { primaryStage: 'sending' as const, coordinationBadge: null, summaryMissing: false },
+      incidentCaseId: state?.incident_case_id ? String(state.incident_case_id) : null,
+      reviewReasonCode: state?.review_reason_code ? String(state.review_reason_code) : null,
+      publicSummary: state?.public_summary ? String(state.public_summary) : null,
+      publicCorrection: state?.public_correction ? String(state.public_correction) : null,
+    };
+  }), error: null };
+}
+
+/** @deprecated Prefer getLifecyclePresentation with the recorded lifecycle facts. */
 export function getReportStatusPresentation(status: string): ReportStatusPresentation {
   const normalizedStatus = status.trim().toLocaleLowerCase();
-
-  if (normalizedStatus === 'resolved') {
-    return {
-      label: 'Resolved',
-      color: '#426F65',
-      backgroundColor: '#E7F3EF',
-      activeStep: 3,
-      nextAction: 'Report closed by the response team',
-    };
-  }
-
-  if (normalizedStatus === 'escalated') {
-    return {
-      label: 'Municipal review',
-      color: colors.escalated,
-      backgroundColor: '#FFF0E8',
-      activeStep: 2,
-      nextAction: 'Municipal response team assessment',
-    };
-  }
-
-  if (normalizedStatus === 'verified') {
-    return {
-      label: 'Confirmed',
-      color: '#356E66',
-      backgroundColor: '#E9F5F1',
-      activeStep: 1,
-      nextAction: 'Barangay response team assessment',
-    };
-  }
-
-  return {
-    label: 'Under review',
-    color: '#B33443',
-    backgroundColor: '#FFF0F1',
-    activeStep: 0,
-    nextAction: 'Barangay verification',
-  };
+  const legacyStatus = normalizedStatus === 'verified' || normalizedStatus === 'escalated'
+    || normalizedStatus === 'resolved' || normalizedStatus === 'closed' ? normalizedStatus : 'unverified';
+  const summary = deriveLifecycle({
+    status: legacyStatus, reviewOutcome: null, reviewClaimedByName: null, reviewClaimedAt: null,
+    jurisdictionStatus: null, incidentVerification: null, incidentState: null, coordination: null,
+    leadOffice: null, municipalFinding: null, hasQualifyingResponseAction: false,
+    legacyResolution: legacyStatus === 'resolved', withdrawn: false, legacyEscalation: legacyStatus === 'escalated',
+  });
+  // Official dashboards still call this legacy helper, so it keeps the official status colors.
+  return { ...getLifecyclePresentation(summary), color: lifecycleColor(summary), backgroundColor: colors.primaryLight };
 }
 
 export type SubmitReportInput = {
@@ -136,6 +208,9 @@ export type SubmitReportInput = {
   /** Resident-confirmed barangay used for BDRRMO routing. */
   barangayId: string;
   media: CapturedMedia[];
+  showReporterName?: boolean;
+  showReporterAvatar?: boolean;
+  allowExactLocation?: boolean;
 };
 
 const REPORT_MEDIA_BUCKET = 'report-media';
@@ -248,6 +323,7 @@ export function formatReportLocation(report: MapReportMarker): string {
 
 /** Fetch pins for the interactive map (includes reporter, location, media). */
 export async function fetchMapReports(options?: {
+  ownOnly?: boolean;
   barangayId?: string | null;
   includePending?: boolean;
   /** Read every RLS-authorized page. Intended for virtualized list screens. */
@@ -263,6 +339,8 @@ export async function fetchMapReports(options?: {
   reports: MapReportMarker[];
   error: string | null;
 }> {
+  const session = options?.ownOnly ? await getActiveSession() : null;
+  if (options?.ownOnly && !session?.user.id) return { reports: [], error: 'Sign in to view your reports.' };
   const fetchRows = async (selectFields: string) => {
     const rows: Record<string, unknown>[] = [];
     let pageStart = 0;
@@ -273,6 +351,8 @@ export async function fetchMapReports(options?: {
         .select(selectFields)
         .order('created_at', { ascending: false })
         .order('id', { ascending: true });
+
+      if (options?.ownOnly) reportQuery = reportQuery.eq('reporter_id', session!.user.id);
 
       if (options?.barangayId) {
         reportQuery = reportQuery.eq('barangay_id', options.barangayId);
@@ -469,6 +549,7 @@ export async function fetchMapReports(options?: {
     const serverIds = new Set(serverReports.map((r) => r.id));
     const { profile } = await fetchMyProfile();
     pendingMarkers = pending
+      .filter((queued) => !queued.terminalErrorCode)
       .filter((queued) => !serverIds.has(queued.id))
       .filter(
         (queued) =>
@@ -523,7 +604,7 @@ export async function fetchMapReports(options?: {
     (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
   );
 
-  return { reports, error: null };
+  return addResidentLifecycle(reports);
 }
 
 /**
@@ -533,13 +614,18 @@ export async function fetchMapReports(options?: {
  */
 export async function fetchMapReportById(
   reportId: string,
+  options?: { ownOnly?: boolean },
 ): Promise<{ report: MapReportMarker | null; error: string | null }> {
-  const fetchReport = (selectFields: string) =>
-    supabase
+  const session = options?.ownOnly ? await getActiveSession() : null;
+  if (options?.ownOnly && !session?.user.id) return { report: null, error: 'Sign in to view your report.' };
+  const fetchReport = (selectFields: string) => {
+    let query = supabase
       .from('reports_map')
       .select(selectFields)
-      .eq('id', reportId)
-      .maybeSingle();
+      .eq('id', reportId);
+    if (options?.ownOnly) query = query.eq('reporter_id', session!.user.id);
+    return query.maybeSingle();
+  };
 
   let reportResult = await fetchReport(REPORTS_MAP_SELECT);
   if (reportResult.error && isProfilePhotoSchemaMissing(reportResult.error.message)) {
@@ -645,8 +731,7 @@ export async function fetchMapReportById(
 
   const activityResult = await activityPromise;
 
-  return {
-    report: {
+  const lifecycleResult = await addResidentLifecycle([{
       id: String(row.id),
       title: String(row.title ?? ''),
       description: String(row.description ?? ''),
@@ -677,9 +762,8 @@ export async function fetchMapReportById(
       mediaDetailLoaded: true,
       upvoteCount: Number(row.upvote_count ?? 0),
       commentCount: Number(row.comment_count ?? 0),
-    },
-    error: null,
-  };
+    }]);
+  return { report: lifecycleResult.reports[0] ?? null, error: lifecycleResult.error };
 }
 
 /**
@@ -746,6 +830,9 @@ export async function enqueueResidentReport(
         input.incidentType === 'other' ? incidentTypeOther : undefined,
       addressText,
       barangayId,
+      showReporterName: input.showReporterName === true,
+      showReporterAvatar: input.showReporterAvatar === true,
+      allowExactLocation: input.allowExactLocation === true,
       media,
       status: 'pending',
       createdAt: new Date().toISOString(),

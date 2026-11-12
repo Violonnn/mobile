@@ -38,6 +38,10 @@ export type QueuedReport = {
    * queue records (pre-feature) still deserialize and sync via centroid fallback.
    */
   barangayId?: string;
+  /** Sharing choices persist through offline delivery; old rows default private. */
+  showReporterName?: boolean;
+  showReporterAvatar?: boolean;
+  allowExactLocation?: boolean;
   media: QueuedMedia[];
   status: QueuedReportStatus;
   createdAt: string;
@@ -45,6 +49,8 @@ export type QueuedReport = {
   /** Set when delivery is offline, fails, or exceeds the validation window. */
   deliveryDelayedAt?: string;
   lastError?: string;
+  /** A coverage rejection is final; reconnect/foreground must not resubmit it. */
+  terminalErrorCode?: 'outside_coverage';
 };
 
 async function readAll(): Promise<QueuedReport[]> {

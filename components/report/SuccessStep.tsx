@@ -50,7 +50,7 @@ export default function SuccessStep({
   const failed = syncStatus === 'failed';
   const delayed = syncStatus === 'delayed';
   const statusTitle = synced
-    ? 'Sent'
+    ? 'Received'
     : failed
       ? 'Report not sent yet'
       : delayed

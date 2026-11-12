@@ -61,11 +61,12 @@ export default function MainLayout() {
     <ResidentDataProvider>
       <NotificationsProvider>
         <View style={{ flex: 1 }}>
+          {/* SDK 58 replaces the ignored freezeOnBlur option with React Activity. */}
           <Tabs
+            activityEnabled
             screenOptions={{
               headerShown: false,
               animation: 'none',
-              freezeOnBlur: true,
               sceneStyle: { backgroundColor: colors.background },
             }}
             tabBar={(props) => <BottomNav {...props} />}

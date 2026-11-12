@@ -16,6 +16,7 @@ import {
 } from '../../styles/screens/report.styles';
 import { useAccessibilityLayout } from '../../hooks/useAccessibilityLayout';
 import ReportMapPreview from './ReportMapPreview';
+import ReportSharingSwitches from './ReportSharingSwitches';
 
 type Props = {
   address: ReadableAddress | null;
@@ -27,6 +28,12 @@ type Props = {
   title: string;
   description: string;
   locationNote: string;
+  showReporterName: boolean;
+  onToggleReporterName: (value: boolean) => void;
+  showReporterAvatar: boolean;
+  onToggleReporterAvatar: (value: boolean) => void;
+  allowExactLocation: boolean;
+  onToggleExactLocation: (value: boolean) => void;
   error: string | null;
   submitting: boolean;
   onEditLocation: () => void;
@@ -39,17 +46,20 @@ function ReviewSection({
   icon,
   title,
   onEdit,
+  isLast = false,
   children,
 }: {
-  icon: 'location' | 'images' | 'document-text';
+  icon: 'location' | 'images' | 'document-text' | 'eye-outline';
   title: string;
-  onEdit: () => void;
+  onEdit?: () => void;
+  isLast?: boolean;
   children: React.ReactNode;
 }) {
   const { isLargeText } = useAccessibilityLayout();
 
   return (
     <View style={styles.reviewSection}>
+      {!isLast ? <View style={styles.reviewTimelineLine} /> : null}
       <View style={styles.reviewTimelineIcon}>
         <Ionicons name={icon} size={18} color={reportColors.white} />
       </View>
@@ -61,13 +71,15 @@ function ReviewSection({
           ]}
         >
           <Text style={styles.reviewSectionTitle}>{title}</Text>
-          <TouchableOpacity
-            style={styles.reviewEditButton}
-            onPress={onEdit}
-            accessibilityRole="button"
-          >
-            <Text style={styles.reviewEditText}>Edit</Text>
-          </TouchableOpacity>
+          {onEdit ? (
+            <TouchableOpacity
+              style={styles.reviewEditButton}
+              onPress={onEdit}
+              accessibilityRole="button"
+            >
+              <Text style={styles.reviewEditText}>Edit</Text>
+            </TouchableOpacity>
+          ) : null}
         </View>
         {children}
       </View>
@@ -85,6 +97,12 @@ export default function ReviewStep({
   title,
   description,
   locationNote,
+  showReporterName,
+  onToggleReporterName,
+  showReporterAvatar,
+  onToggleReporterAvatar,
+  allowExactLocation,
+  onToggleExactLocation,
   error,
   submitting,
   onEditLocation,
@@ -96,13 +114,12 @@ export default function ReviewStep({
 
   return (
     <View style={styles.stepContent}>
-      <Text style={styles.residentStepTitle}>Check it once,{`\n`}then send</Text>
+      <Text style={styles.reviewStepTitle}>Review your report</Text>
       <Text style={styles.residentStepSubtitle}>
         You can still edit any section.
       </Text>
 
       <View style={styles.reviewTimeline}>
-        <View style={styles.reviewTimelineLine} />
         <ReviewSection icon="location" title="Location" onEdit={onEditLocation}>
           <View
             style={[
@@ -167,6 +184,18 @@ export default function ReviewStep({
           {locationNote.trim() ? (
             <Text style={styles.reviewSecondaryText}>{locationNote.trim()}</Text>
           ) : null}
+        </ReviewSection>
+
+        <ReviewSection icon="eye-outline" title="Public visibility (optional)" isLast>
+          <ReportSharingSwitches
+            showReporterName={showReporterName}
+            onToggleReporterName={onToggleReporterName}
+            showReporterAvatar={showReporterAvatar}
+            onToggleReporterAvatar={onToggleReporterAvatar}
+            allowExactLocation={allowExactLocation}
+            onToggleExactLocation={onToggleExactLocation}
+            disabled={submitting}
+          />
         </ReviewSection>
       </View>
 

@@ -3,7 +3,13 @@ import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-na
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 
-import { getReportStatusPresentation } from '../../lib/reports';
+import {
+  RESIDENT_STAGE_TONES,
+  residentLabel,
+  residentProgressSteps,
+  residentStepTone,
+  type LifecycleSummary,
+} from '../../lib/reportLifecycle';
 import { colors, fonts, radius } from '../../styles/theme';
 
 const COMPLETED_TIMELINE_COLOR = 'rgba(15, 32, 68, 0.14)';
@@ -20,10 +26,14 @@ type TimelineStep = {
 };
 
 type ReportStatusTimelineProps = {
-  status: string;
+  lifecycle?: LifecycleSummary;
+  /** @deprecated Use the fact-derived lifecycle for resident reports. */
+  status?: string;
   barangayLabel?: string;
   /** Uses full status colors for completed resident workflow stages. */
   useStatusProgressColors?: boolean;
+  /** Public incident posts are read by neighbors, so the first step reads "Reported". */
+  audience?: 'reporter' | 'public';
   style?: StyleProp<ViewStyle>;
 };
 
@@ -38,16 +48,22 @@ export function residentReportStatusIconName(status: string): TimelineIconName {
 function timelineIconName(label: string): TimelineIconName {
   if (label === 'Under review') return 'time-outline';
   if (label === 'Confirmed') return 'location-outline';
+  if (label === 'Response ongoing') return 'car-outline';
+  if (label === 'Received' || label === 'Reported') return 'checkmark-done-outline';
+  if (label === 'Being assessed') return 'search-outline';
+  if (label === 'Linked') return 'link-outline';
+  if (label === 'Correction posted') return 'alert-outline';
   if (label === 'Municipal review') return 'document-text-outline';
-  return 'checkmark';
+  if (label === 'Resolved') return 'checkmark';
+  return 'time-outline';
 }
 
 function buildTimeline(status: string, barangayLabel: string): TimelineStep[] {
   const normalizedStatus = status.trim().toLocaleLowerCase();
-  const underReviewColor = getReportStatusPresentation('unverified').color;
-  const confirmedColor = getReportStatusPresentation('verified').color;
-  const municipalReviewColor = getReportStatusPresentation('escalated').color;
-  const resolvedColor = getReportStatusPresentation('resolved').color;
+  const underReviewColor = residentStepTone('Under review').color;
+  const confirmedColor = residentStepTone('Confirmed').color;
+  const municipalReviewColor = RESIDENT_STAGE_TONES.correction.color;
+  const resolvedColor = residentStepTone('Resolved').color;
   const underReviewStep: TimelineStep = {
     label: 'Under review',
     name: barangayLabel,
@@ -57,14 +73,14 @@ function buildTimeline(status: string, barangayLabel: string): TimelineStep[] {
   };
   const confirmedStep: TimelineStep = {
     label: 'Confirmed',
-    name: 'Response ongoing',
+    name: 'Incident confirmed',
     complete: false,
     current: false,
     color: confirmedColor,
   };
   const resolvedStep: TimelineStep = {
     label: 'Resolved',
-    name: 'Awaiting response',
+    name: '',
     complete: false,
     current: false,
     color: resolvedColor,
@@ -99,8 +115,8 @@ function buildTimeline(status: string, barangayLabel: string): TimelineStep[] {
         current: false,
       },
       {
-        label: 'Municipal review',
-        name: 'Requiring Municipal Assistance',
+        label: 'Forwarded to MDRRMO',
+        name: 'Acceptance not recorded',
         complete: false,
         current: true,
         color: municipalReviewColor,
@@ -157,16 +173,28 @@ function getStageDisplayColor(
 }
 
 export default function ReportStatusTimeline({
-  status,
+  status = 'unverified',
+  lifecycle,
   barangayLabel = 'Barangay review',
   useStatusProgressColors = false,
+  audience = 'reporter',
   style,
 }: ReportStatusTimelineProps) {
-  const timeline = useMemo(() => buildTimeline(status, barangayLabel), [barangayLabel, status]);
+  const timeline = useMemo(() => {
+    if (!lifecycle) return buildTimeline(status, barangayLabel);
+    return residentProgressSteps(lifecycle, audience).map((step) => ({
+      label: step.label,
+      name: step.detail,
+      complete: step.complete,
+      current: step.current,
+      color: residentStepTone(step.label).color,
+    }));
+  }, [audience, barangayLabel, status, lifecycle]);
   const currentTimelineIndex = timeline.findIndex((step) => step.current);
 
   return (
-    <View style={[styles.timeline, style]}>
+    <View style={style}>
+    <View style={styles.timeline}>
       {timeline.map((step, index) => {
         const previousStep = timeline[index - 1];
         const nextStep = timeline[index + 1];
@@ -223,6 +251,7 @@ export default function ReportStatusTimeline({
             <Text
               style={[
                 styles.label,
+                lifecycle && { fontSize: timeline.length > 3 ? 12 : 14 },
                 shouldUseStageColor ? { color: step.color } : step.complete && styles.completeText,
               ]}
             >
@@ -242,6 +271,8 @@ export default function ReportStatusTimeline({
           </View>
         );
       })}
+    </View>
+    {lifecycle?.coordinationBadge ? <Text style={styles.coordinationNote}>{residentLabel(lifecycle, { barangayName: barangayLabel === 'Barangay review' ? null : barangayLabel })}</Text> : null}
     </View>
   );
 }
@@ -298,4 +329,5 @@ const styles = StyleSheet.create({
   completeText: {
     opacity: 0.34,
   },
+  coordinationNote: { fontFamily: fonts.regular, fontSize: 11, lineHeight: 16, color: colors.textMuted, textAlign: 'center' },
 });

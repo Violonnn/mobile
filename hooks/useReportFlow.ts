@@ -22,6 +22,7 @@ import { enqueueResidentReport } from '../lib/reports';
 import { getQueuedReport } from '../lib/reportQueue';
 import { flushReportQueue, onReportQueueChange } from '../lib/reportQueueFlush';
 import { fetchBarangays, type BarangayOption } from '../lib/barangays';
+import { isOutsideCoverageError } from '../lib/edgeFunctionErrors';
 
 // Resident review is explicit so nothing is submitted from the details form.
 export type ReportStep =
@@ -95,6 +96,9 @@ export function useReportFlow(active: boolean) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [locationNote, setLocationNote] = useState('');
+  const [showReporterName, setShowReporterName] = useState(false);
+  const [showReporterAvatar, setShowReporterAvatar] = useState(false);
+  const [allowExactLocation, setAllowExactLocation] = useState(false);
   const [incidentType, setIncidentTypeState] = useState<IncidentType | null>(null);
   const [incidentTypeOther, setIncidentTypeOther] = useState('');
   const [media, setMedia] = useState<CapturedMedia[]>([]);
@@ -107,6 +111,7 @@ export function useReportFlow(active: boolean) {
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('syncing');
   const [syncError, setSyncError] = useState<string | null>(null);
   const [syncCanRetry, setSyncCanRetry] = useState(true);
+  const [outsideCoverage, setOutsideCoverage] = useState(false);
 
   const submitLock = useRef(false);
   // Keep a resident's manual barangay pick across GPS retries / pin moves.
@@ -215,6 +220,9 @@ export function useReportFlow(active: boolean) {
     setTitle('');
     setDescription('');
     setLocationNote('');
+    setShowReporterName(false);
+    setShowReporterAvatar(false);
+    setAllowExactLocation(false);
     setIncidentTypeState(null);
     setIncidentTypeOther('');
     setMedia([]);
@@ -225,6 +233,7 @@ export function useReportFlow(active: boolean) {
     setSyncStatus('syncing');
     setSyncError(null);
     setSyncCanRetry(true);
+    setOutsideCoverage(false);
     submitLock.current = false;
   }, []);
 
@@ -584,6 +593,9 @@ export function useReportFlow(active: boolean) {
         incidentType === 'other' ? incidentTypeOther : undefined,
       media,
       barangayId: selectedBarangayId,
+      showReporterName,
+      showReporterAvatar,
+      allowExactLocation,
     });
 
     setSubmitting(false);
@@ -607,6 +619,9 @@ export function useReportFlow(active: boolean) {
     devicePosition,
     address,
     locationNote,
+    showReporterName,
+    showReporterAvatar,
+    allowExactLocation,
     incidentType,
     incidentTypeOther,
     media,
@@ -638,6 +653,14 @@ export function useReportFlow(active: boolean) {
         return;
       }
 
+      if (isOutsideCoverageError(queued.terminalErrorCode)) {
+        setOutsideCoverage(true);
+        setSyncStatus('failed');
+        setSyncError(queued.lastError ?? 'This location is outside DisasterLink coverage.');
+        setSyncCanRetry(false);
+        return;
+      }
+
       if (queued.lastError) {
         setSyncStatus('failed');
         setSyncError(queued.lastError);
@@ -664,12 +687,12 @@ export function useReportFlow(active: boolean) {
   }, [step, queuedReportId]);
 
   const retrySync = useCallback(() => {
-    if (!queuedReportId) return;
+    if (!queuedReportId || !syncCanRetry || outsideCoverage) return;
     setSyncStatus('syncing');
     setSyncError(null);
     setSyncCanRetry(true);
     void flushReportQueue();
-  }, [queuedReportId]);
+  }, [queuedReportId, syncCanRetry, outsideCoverage]);
 
   return {
     step,
@@ -715,6 +738,12 @@ export function useReportFlow(active: boolean) {
     setDescription: updateDescription,
     locationNote,
     setLocationNote,
+    showReporterName,
+    setShowReporterName,
+    showReporterAvatar,
+    setShowReporterAvatar,
+    allowExactLocation,
+    setAllowExactLocation,
     incidentType,
     setIncidentType,
     incidentTypeOther,
@@ -733,6 +762,7 @@ export function useReportFlow(active: boolean) {
     syncStatus,
     syncError,
     syncCanRetry,
+    outsideCoverage,
     retrySync,
     queuedReportId,
     maxPhotos: MAX_PHOTOS,
