@@ -12,11 +12,25 @@ import { getOtpDimensions } from '../../lib/layout';
 
 const OTP_LENGTH = 6;
 
-type Props = { value: string; onChange: (v: string) => void; hasError?: boolean };
+type Props = {
+  value: string;
+  onChange: (v: string) => void;
+  hasError?: boolean;
+  availableWidth?: number;
+};
 
-export default function OTPInput({ value, onChange, hasError = false }: Props) {
+export default function OTPInput({
+  value,
+  onChange,
+  hasError = false,
+  availableWidth,
+}: Props) {
   const hiddenInputRef = useRef<TextInputInstance>(null);
-  const { boxWidth, boxHeight, gap, fontSize } = getOtpDimensions(OTP_LENGTH);
+  const { boxWidth, boxHeight, gap, fontSize } = getOtpDimensions(
+    OTP_LENGTH,
+    56,
+    availableWidth,
+  );
 
   const handlePress = () => {
     hiddenInputRef.current?.focus();

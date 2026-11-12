@@ -16,6 +16,10 @@ import {
 } from "../_shared/iprogsms.ts";
 import { GENERIC_SERVER_ERROR, jsonResponse } from "../_shared/http.ts";
 import {
+  isTimestampInFuture,
+  isVerifiedSmsChallengeUsable,
+} from "../_shared/official-invite-policy.ts";
+import {
   isSupportedCarrier,
   isValidE164Phone,
   isValidName,
@@ -361,21 +365,22 @@ async function handleVerify(
     return jsonResponse({ error: GENERIC_OTP_ERROR }, 400);
   }
 
-  if (challenge.verified_at) {
-    return jsonResponse({ success: true, verified: true }, 200);
-  }
-
-  if (new Date(challenge.expires_at).getTime() <= Date.now()) {
+  if (!isTimestampInFuture(challenge.expires_at)) {
     return jsonResponse({ error: GENERIC_OTP_ERROR }, 400);
   }
 
-  if ((challenge.failed_attempts as number) >= OTP_MAX_FAILED_ATTEMPTS) {
+  const failedAttempts = challenge.failed_attempts;
+  if (
+    !Number.isInteger(failedAttempts) ||
+    failedAttempts < 0 ||
+    failedAttempts >= OTP_MAX_FAILED_ATTEMPTS
+  ) {
     return jsonResponse({ error: GENERIC_OTP_ERROR }, 400);
   }
 
   const codeHash = await sha256Hex(code);
   if (codeHash !== challenge.otp_hash) {
-    const nextAttempts = (challenge.failed_attempts as number) + 1;
+    const nextAttempts = failedAttempts + 1;
     await client
       .from("official_sms_challenges")
       .update({ failed_attempts: nextAttempts })
@@ -383,14 +388,27 @@ async function handleVerify(
     return jsonResponse({ error: GENERIC_OTP_ERROR }, 400);
   }
 
-  const { error: verifyError } = await client
+  if (isVerifiedSmsChallengeUsable(challenge)) {
+    return jsonResponse({ success: true, verified: true }, 200);
+  }
+
+  // Recheck expiry at the write boundary to avoid accepting a code that
+  // expired while the hash was being compared.
+  const verifiedAt = new Date().toISOString();
+  const { data: verifiedChallenge, error: verifyError } = await client
     .from("official_sms_challenges")
-    .update({ verified_at: new Date().toISOString() })
-    .eq("id", challenge.id);
+    .update({ verified_at: verifiedAt })
+    .eq("id", challenge.id)
+    .gt("expires_at", verifiedAt)
+    .select("id")
+    .maybeSingle();
 
   if (verifyError) {
     console.error("official-invite-registration: verify update failed", verifyError);
     return jsonResponse({ error: GENERIC_SERVER_ERROR }, 500);
+  }
+  if (!verifiedChallenge) {
+    return jsonResponse({ error: GENERIC_OTP_ERROR }, 400);
   }
 
   return jsonResponse({ success: true, verified: true }, 200);
@@ -434,19 +452,26 @@ async function handleRegister(
   const email = invite.invited_email.trim().toLowerCase();
 
   // Require a live verified SMS challenge for this invite + phone.
-  const { data: challenge } = await client
+  const { data: challenge, error: challengeError } = await client
     .from("official_sms_challenges")
     .select("id, verified_at, expires_at")
     .eq("invite_id", invite.id)
     .eq("phone", phone)
-    .not("verified_at", "is", null)
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
 
-  if (!challenge?.verified_at) {
+  if (challengeError) {
+    console.error("official-invite-registration: challenge lookup failed", challengeError);
+    return jsonResponse({ error: GENERIC_SERVER_ERROR }, 500);
+  }
+
+  if (!challenge || !isVerifiedSmsChallengeUsable(challenge)) {
     return jsonResponse(
-      { error: "Verify your mobile number before creating the account." },
+      {
+        error: "Verification expired. Send a new code before creating the account.",
+        code: "verification_required",
+      },
       400,
     );
   }
@@ -508,6 +533,39 @@ async function handleRegister(
     return jsonResponse({ error: GENERIC_REGISTER_ERROR }, 409);
   }
 
+  // The latest challenge must still be the proof checked above immediately
+  // before creating Auth, even if a newer code was requested in the meantime.
+  const { data: latestChallenge, error: latestChallengeError } = await client
+    .from("official_sms_challenges")
+    .select("id, verified_at, expires_at")
+    .eq("invite_id", invite.id)
+    .eq("phone", phone)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (latestChallengeError) {
+    console.error(
+      "official-invite-registration: final challenge lookup failed",
+      latestChallengeError,
+    );
+    return jsonResponse({ error: GENERIC_SERVER_ERROR }, 500);
+  }
+
+  if (
+    !latestChallenge ||
+    latestChallenge.id !== challenge.id ||
+    !isVerifiedSmsChallengeUsable(latestChallenge)
+  ) {
+    return jsonResponse(
+      {
+        error: "Verification expired. Send a new code before creating the account.",
+        code: "verification_required",
+      },
+      400,
+    );
+  }
+
   // Create Auth user already confirmed so email/password sign-in works.
   // Confirm Email stays globally enabled for other flows; this is server-side.
   const { data: created, error: createError } = await client.auth.admin.createUser({
@@ -526,7 +584,41 @@ async function handleRegister(
   }
 
   const userId = created.user.id;
-  const verifiedAt = challenge.verified_at;
+  const { data: confirmedChallenge, error: confirmedChallengeError } = await client
+    .from("official_sms_challenges")
+    .select("id, verified_at, expires_at")
+    .eq("invite_id", invite.id)
+    .eq("phone", phone)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (
+    confirmedChallengeError ||
+    !confirmedChallenge ||
+    confirmedChallenge.id !== latestChallenge.id ||
+    !isVerifiedSmsChallengeUsable(confirmedChallenge)
+  ) {
+    if (confirmedChallengeError) {
+      console.error(
+        "official-invite-registration: post-create challenge lookup failed",
+        confirmedChallengeError,
+      );
+    }
+    await client.auth.admin.deleteUser(userId);
+    if (confirmedChallengeError) {
+      return jsonResponse({ error: GENERIC_SERVER_ERROR }, 500);
+    }
+    return jsonResponse(
+      {
+        error: "Verification expired. Send a new code before creating the account.",
+        code: "verification_required",
+      },
+      400,
+    );
+  }
+
+  const verifiedAt = confirmedChallenge.verified_at;
 
   const { error: profileError } = await client.from("app_profiles").insert({
     id: userId,
@@ -561,6 +653,8 @@ async function handleRegister(
     .eq("id", invite.id)
     .is("used_at", null)
     .is("revoked_at", null)
+    .is("reserved_at", null)
+    .gt("expires_at", new Date().toISOString())
     .select("id")
     .maybeSingle();
 

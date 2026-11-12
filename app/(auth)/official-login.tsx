@@ -13,15 +13,18 @@ import {
   TouchableWithoutFeedback,
   View,
 } from 'react-native';
+import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import FieldError from '../../components/register/FieldError';
 import { useAccessSwitch } from '../../hooks/useAccessSwitch';
 import { useOfficialLoginFlow } from '../../hooks/useOfficialLoginFlow';
 import { loginColors, loginStyles as styles } from '../../styles/screens/login.styles';
+import { colors, fonts, fontSizes } from '../../styles/theme';
 
-/** Official sign-in only. Registration remains invite-URL only. */
+/** Official sign-in with an invite-only registration entry. */
 export default function OfficialLoginScreen() {
+  const router = useRouter();
   const [emailFocused, setEmailFocused] = useState(false);
   const [passwordFocused, setPasswordFocused] = useState(false);
   const flow = useOfficialLoginFlow();
@@ -156,6 +159,15 @@ export default function OfficialLoginScreen() {
                   </Text>
                 </TouchableOpacity>
 
+                <TouchableOpacity
+                  style={localStyles.useInvitationButton}
+                  onPress={() => router.push('/invite')}
+                  activeOpacity={0.75}
+                  accessibilityRole="button"
+                >
+                  <Text style={localStyles.useInvitationText}>Use invitation</Text>
+                </TouchableOpacity>
+
               </View>
             </View>
           </ScrollView>
@@ -226,5 +238,16 @@ const localStyles = StyleSheet.create({
   },
   residentAccessArrow: {
     marginRight: 8,
+  },
+  useInvitationButton: {
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 4,
+  },
+  useInvitationText: {
+    fontFamily: fonts.semibold,
+    fontSize: fontSizes.md,
+    color: colors.navigationActive,
   },
 });

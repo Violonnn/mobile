@@ -22,11 +22,18 @@ export function responsiveLoginImageHeight(): number {
   return Math.min(max, Math.round(SCREEN_HEIGHT * ratio));
 }
 
-export function getOtpDimensions(boxCount = 6, horizontalPadding = 56) {
+export function getOtpDimensions(
+  boxCount = 6,
+  horizontalPadding = 56,
+  containerWidth?: number,
+) {
   const gap = layout.isCompactWidth ? 6 : 8;
-  const availableWidth = SCREEN_WIDTH - horizontalPadding;
+  const measuredWidth =
+    typeof containerWidth === 'number' && Number.isFinite(containerWidth) && containerWidth > 0
+      ? containerWidth
+      : SCREEN_WIDTH - horizontalPadding;
   const totalGap = gap * (boxCount - 1);
-  const boxWidth = Math.floor((availableWidth - totalGap) / boxCount);
+  const boxWidth = Math.floor((measuredWidth - totalGap) / boxCount);
   const boxHeight = Math.min(Math.round(boxWidth * 1.12), layout.isSmallScreen ? 46 : 54);
   const fontSize = Math.min(24, Math.max(16, Math.round(boxWidth * 0.4)));
   return { boxWidth, boxHeight, gap, fontSize };

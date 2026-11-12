@@ -1,6 +1,7 @@
 import { supabase } from './supabase';
 import {
   parseEdgeFunctionMeta,
+  readEdgeFunctionErrorCode,
   readEdgeFunctionErrorMessage,
 } from './edgeFunctionErrors';
 import { isValidName, normalizeName } from './validation/name';
@@ -22,6 +23,34 @@ export type OfficialSmsSendResult = {
   cooldownSeconds?: number;
   limitReached?: boolean;
 };
+
+type EdgeFunctionResponseError = {
+  context?: unknown;
+};
+
+async function readEdgeFunctionMetaFromError(
+  error: unknown,
+  response: Response | undefined,
+) {
+  const context =
+    error && typeof error === 'object'
+      ? (error as EdgeFunctionResponseError).context
+      : undefined;
+  const contextResponse = context instanceof Response ? context : undefined;
+
+  for (const candidate of [contextResponse, response]) {
+    if (!candidate) continue;
+    try {
+      const payload = await candidate.clone().json();
+      const meta = parseEdgeFunctionMeta(payload);
+      if (Object.values(meta).some((value) => value !== undefined)) return meta;
+    } catch {
+      // A connection failure may have no readable response body.
+    }
+  }
+
+  return {};
+}
 
 const GENERIC_REGISTER_ERROR =
   'Registration could not be completed. Check your details and invite, then try again.';
@@ -124,12 +153,13 @@ export async function sendOfficialInviteSmsOtp(
   const meta = parseEdgeFunctionMeta(data);
 
   if (error) {
+    const responseMeta = await readEdgeFunctionMetaFromError(error, response);
     const message = await readEdgeFunctionErrorMessage(
       error,
       response,
       'Unable to send verification code. Please try again.',
     );
-    return { error: message, ...meta };
+    return { error: message, ...meta, ...responseMeta };
   }
 
   if (data?.error) {
@@ -187,7 +217,11 @@ export async function registerOfficialAccount(input: {
   middleName: string;
   password: string;
   confirmPassword: string;
-}): Promise<{ scope: OfficialAccessScope | null; error: string | null }> {
+}): Promise<{
+  scope: OfficialAccessScope | null;
+  error: string | null;
+  verificationRequired?: boolean;
+}> {
   const passwordErrors = validateOfficialPasswordForm({
     password: input.password,
     confirmPassword: input.confirmPassword,
@@ -225,18 +259,22 @@ export async function registerOfficialAccount(input: {
   );
 
   if (error) {
-    const message = await readEdgeFunctionErrorMessage(
-      error,
-      response,
-      GENERIC_REGISTER_ERROR,
-    );
-    return { scope: null, error: message };
+    const [message, errorCode] = await Promise.all([
+      readEdgeFunctionErrorMessage(error, response, GENERIC_REGISTER_ERROR),
+      readEdgeFunctionErrorCode(error, response),
+    ]);
+    return {
+      scope: null,
+      error: message,
+      verificationRequired: errorCode === 'verification_required',
+    };
   }
 
   if (data?.error || !data?.success || !data?.email) {
     return {
       scope: null,
       error: data?.error ? String(data.error) : GENERIC_REGISTER_ERROR,
+      verificationRequired: data?.code === 'verification_required',
     };
   }
 

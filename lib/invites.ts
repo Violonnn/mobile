@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { normalizePHContactNumber, validatePHNumber } from './validation/phone';
+import { isAuthorizationFailure } from './adminInvitePolicy';
 
 export type InviteRole = 'mayor' | 'officer';
 
@@ -174,17 +175,26 @@ export async function listOfficialInvites(): Promise<{
   active: InviteListItem[];
   used: InviteListItem[];
   error: string | null;
+  errorCode: string | null;
+  accessDenied: boolean;
 }> {
-  const { data, error } = await supabase.rpc('list_official_invites');
+  const { data, error, status } = await supabase.rpc('list_official_invites');
 
   if (error) {
-    return { active: [], used: [], error: error.message };
+    const errorCode = typeof error.code === 'string' ? error.code : null;
+    return {
+      active: [],
+      used: [],
+      error: 'Could not load invitations. Check your connection and retry.',
+      errorCode,
+      accessDenied: isAuthorizationFailure(errorCode, status),
+    };
   }
 
   const rows = (data ?? []) as InviteListItem[];
   const active = rows.filter((row) => row.list_group === 'active');
   const used = rows.filter((row) => row.list_group === 'used');
-  return { active, used, error: null };
+  return { active, used, error: null, errorCode: null, accessDenied: false };
 }
 
 export async function revokeOfficialInvite(

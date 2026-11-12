@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, Keyboard } from 'react-native';
+import { Keyboard } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { extractInviteToken, maskInviteToken } from '../lib/inviteToken';
 import {
@@ -34,72 +34,45 @@ function firstParam(value: string | string[] | undefined): string {
 
 type InitialInviteTokenState = {
   rawToken: string;
-  maskedToken: string;
-  inviteUnavailable: boolean;
-  validatingToken: boolean;
-  tokenError: string;
+  error: string;
 };
 
 function parseInitialInviteToken(
   value: string | string[] | undefined,
 ): InitialInviteTokenState {
-  const paramToken = firstParam(value).trim();
-  if (!paramToken) {
-    return {
-      rawToken: '',
-      maskedToken: '',
-      inviteUnavailable: true,
-      validatingToken: false,
-      tokenError: 'This invite is unavailable. Open a valid invite link to register.',
-    };
-  }
+  const paramToken = firstParam(value);
+  if (!paramToken) return { rawToken: '', error: '' };
 
   const extracted = extractInviteToken(paramToken);
   if (extracted.error || !extracted.token) {
-    return {
-      rawToken: '',
-      maskedToken: '',
-      inviteUnavailable: true,
-      validatingToken: false,
-      tokenError:
-        extracted.error ??
-        'This invite is unavailable. It may be invalid, expired, used, or revoked.',
-    };
+    return { rawToken: '', error: extracted.error ?? 'This invite link or token is not valid.' };
   }
 
-  return {
-    rawToken: extracted.token,
-    maskedToken: maskInviteToken(extracted.token),
-    inviteUnavailable: false,
-    validatingToken: true,
-    tokenError: '',
-  };
+  return { rawToken: extracted.token, error: '' };
 }
 
-/**
- * Invite-only official registration (4 steps):
- * Invite → SMS verify → Details → Password/create account.
- * Raw token stays in memory — never rendered or persisted.
- */
+type TokenErrorKind = 'retry' | 'unavailable' | null;
+
+/** Invite-only official registration with explicit, user-controlled SMS actions. */
 export function useOfficialRegistrationFlow() {
   const params = useLocalSearchParams<{ token?: string | string[] }>();
-  const [initialInviteToken] = useState(() => parseInitialInviteToken(params.token));
+  const [initialRouteToken] = useState(() => parseInitialInviteToken(params.token));
 
   const [step, setStep] = useState<RegistrationStep>(0);
-  const [inviteUnavailable, setInviteUnavailable] = useState(
-    initialInviteToken.inviteUnavailable,
+  const [entryVisible, setEntryVisible] = useState(!initialRouteToken.rawToken);
+  const [entryValue, setEntryValue] = useState('');
+  const [entryError, setEntryError] = useState(initialRouteToken.error);
+  const [rawToken, setRawToken] = useState(initialRouteToken.rawToken);
+  const [maskedToken, setMaskedToken] = useState(
+    initialRouteToken.rawToken ? maskInviteToken(initialRouteToken.rawToken) : '',
   );
-
-  // Raw opaque token — in-memory only.
-  const [rawToken] = useState(initialInviteToken.rawToken);
-  const [maskedToken] = useState(initialInviteToken.maskedToken);
-  const [validatedInvite, setValidatedInvite] = useState<ValidatedInvite | null>(
-    null,
-  );
-  const [validatingToken, setValidatingToken] = useState(
-    initialInviteToken.validatingToken,
-  );
-  const [tokenError, setTokenError] = useState(initialInviteToken.tokenError);
+  const [validatedInvite, setValidatedInvite] = useState<ValidatedInvite | null>(null);
+  const [validatingToken, setValidatingToken] = useState(!!initialRouteToken.rawToken);
+  const [inviteUnavailable, setInviteUnavailable] = useState(false);
+  const [tokenError, setTokenError] = useState('');
+  const [tokenErrorKind, setTokenErrorKind] = useState<TokenErrorKind>(null);
+  const [validationNonce, setValidationNonce] = useState(0);
+  const [flowVersion, setFlowVersion] = useState(0);
 
   const [phoneVerified, setPhoneVerified] = useState(false);
   const [lastName, setLastName] = useState('');
@@ -122,21 +95,19 @@ export function useOfficialRegistrationFlow() {
   const [sendingOtp, setSendingOtp] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-
   const [resendCooldown, setResendCooldown] = useState(0);
   const [otpSendCount, setOtpSendCount] = useState(0);
-  /** null = inactive; 1–10 = counting down on Invite step. */
-  const [autoContinueSeconds, setAutoContinueSeconds] = useState<number | null>(
-    null,
-  );
+  const [otpMaxSends, setOtpMaxSends] = useState(OTP_MAX_SENDS_PER_SESSION);
+  const [serverLimitReached, setServerLimitReached] = useState(false);
 
-  /** Auto-continue runs only on the first successful Invite open — not when returning. */
-  const autoContinueUsedRef = useRef(false);
-  /** First SMS send is triggered when entering the Verify step. */
-  const initialSmsSentRef = useRef(false);
+  // Generation changes invalidate every response from a previous token/screen.
+  const requestGenerationRef = useRef(0);
+  const sendLockRef = useRef<number | null>(null);
+  const verifyLockRef = useRef<number | null>(null);
+  const submitLockRef = useRef<number | null>(null);
+  const routeParamRef = useRef(firstParam(params.token));
 
-  const otpLimitReached = otpSendCount >= OTP_MAX_SENDS_PER_SESSION;
-
+  const otpLimitReached = serverLimitReached || otpSendCount >= otpMaxSends;
   const canProceedFromInvite =
     !!validatedInvite && !validatingToken && !inviteUnavailable && !tokenError;
 
@@ -147,45 +118,174 @@ export function useOfficialRegistrationFlow() {
     ? maskInviteEmail(validatedInvite.invited_email)
     : '';
 
-  // Parse + validate the incoming invite token once on mount.
+  const resetSensitiveFlowState = useCallback(() => {
+    setStep(0);
+    setRawToken('');
+    setMaskedToken('');
+    setValidatedInvite(null);
+    setValidatingToken(false);
+    setInviteUnavailable(false);
+    setTokenError('');
+    setTokenErrorKind(null);
+    setPhoneVerified(false);
+    setLastName('');
+    setFirstName('');
+    setMiddleName('');
+    setPassword('');
+    setConfirmPassword('');
+    setOtp('');
+    setLastNameError('');
+    setFirstNameError('');
+    setMiddleNameError('');
+    setPasswordError('');
+    setConfirmPasswordError('');
+    setOtpError('');
+    setFormError('');
+    setSubmitting(false);
+    setVerifyingOtp(false);
+    setSendingOtp(false);
+    setResendCooldown(0);
+    setOtpSendCount(0);
+    setOtpMaxSends(OTP_MAX_SENDS_PER_SESSION);
+    setServerLimitReached(false);
+    setShowPassword(false);
+    setShowConfirmPassword(false);
+    sendLockRef.current = null;
+    verifyLockRef.current = null;
+    submitLockRef.current = null;
+    setEntryValue('');
+    setEntryError('');
+  }, []);
+
+  const resetToEntry = useCallback((message = '') => {
+    requestGenerationRef.current += 1;
+    setFlowVersion(requestGenerationRef.current);
+    resetSensitiveFlowState();
+    setEntryVisible(true);
+    setEntryError(message);
+  }, [resetSensitiveFlowState]);
+
+  const beginTokenValidation = useCallback((token: string) => {
+    requestGenerationRef.current += 1;
+    setFlowVersion(requestGenerationRef.current);
+    resetSensitiveFlowState();
+    setEntryVisible(false);
+    setRawToken(token);
+    setMaskedToken(maskInviteToken(token));
+    setValidatingToken(true);
+    setValidationNonce((current) => current + 1);
+  }, [resetSensitiveFlowState]);
+
+  // Accept a new Router token as a complete flow replacement, including when
+  // this route stays mounted while a different invitation is opened.
+  useEffect(() => {
+    const routeToken = firstParam(params.token);
+    if (routeToken === routeParamRef.current) return;
+    routeParamRef.current = routeToken;
+
+    if (!routeToken) {
+      resetToEntry();
+      return;
+    }
+
+    const extracted = extractInviteToken(routeToken);
+    if (extracted.error || !extracted.token) {
+      resetToEntry(extracted.error ?? 'This invite link or token is not valid.');
+      return;
+    }
+
+    beginTokenValidation(extracted.token);
+  }, [beginTokenValidation, params.token, resetToEntry]);
+
   useEffect(() => {
     if (!rawToken) return;
 
     let cancelled = false;
-    (async () => {
-      const { invite, error } = await validateInviteToken(rawToken);
-      if (cancelled) return;
+    const requestGeneration = requestGenerationRef.current;
+    const token = rawToken;
 
-      setValidatingToken(false);
-      if (error) {
-        setInviteUnavailable(true);
-        setTokenError('Could not validate this invite. Please try again.');
-        return;
+    const validateCurrentToken = async () => {
+      try {
+        const result = await validateInviteToken(token);
+        if (cancelled || requestGeneration !== requestGenerationRef.current) return;
+
+        if (result.error) {
+          setValidatedInvite(null);
+          setInviteUnavailable(false);
+          setTokenError('Could not validate this invite. Check your connection and retry.');
+          setTokenErrorKind('retry');
+          return;
+        }
+
+        if (!result.invite) {
+          setValidatedInvite(null);
+          setInviteUnavailable(true);
+          setTokenError(
+            'This invite is unavailable. It may be invalid, expired, used, or revoked.',
+          );
+          setTokenErrorKind('unavailable');
+          return;
+        }
+
+        setValidatedInvite(result.invite);
+        setInviteUnavailable(false);
+        setTokenError('');
+        setTokenErrorKind(null);
+      } catch {
+        if (cancelled || requestGeneration !== requestGenerationRef.current) return;
+        setValidatedInvite(null);
+        setInviteUnavailable(false);
+        setTokenError('Could not validate this invite. Check your connection and retry.');
+        setTokenErrorKind('retry');
+      } finally {
+        if (!cancelled && requestGeneration === requestGenerationRef.current) {
+          setValidatingToken(false);
+        }
       }
-      if (!invite) {
-        setInviteUnavailable(true);
-        setTokenError(
-          'This invite is unavailable. It may be invalid, expired, used, or revoked.',
-        );
-        return;
-      }
+    };
 
-      setValidatedInvite(invite);
-      setTokenError('');
-    })();
-
+    void validateCurrentToken();
     return () => {
       cancelled = true;
     };
-  }, [rawToken]);
+  }, [rawToken, validationNonce]);
 
   useEffect(() => {
     if (resendCooldown <= 0) return;
     const timer = setTimeout(() => {
-      setResendCooldown((prev) => Math.max(0, prev - 1));
+      setResendCooldown((previous) => Math.max(0, previous - 1));
     }, 1000);
     return () => clearTimeout(timer);
   }, [resendCooldown]);
+
+  useEffect(() => {
+    return () => {
+      requestGenerationRef.current += 1;
+    };
+  }, []);
+
+  const handleEntryValueChange = useCallback((value: string) => {
+    setEntryValue(value);
+    setEntryError('');
+  }, []);
+
+  const acceptInviteInput = useCallback(() => {
+    const extracted = extractInviteToken(entryValue);
+    if (extracted.error || !extracted.token) {
+      setEntryError(extracted.error ?? 'This invite link or token is not valid.');
+      return;
+    }
+    beginTokenValidation(extracted.token);
+  }, [beginTokenValidation, entryValue]);
+
+  const retryValidation = useCallback(() => {
+    if (!rawToken) return;
+    setValidatingToken(true);
+    setInviteUnavailable(false);
+    setTokenError('');
+    setTokenErrorKind(null);
+    setValidationNonce((current) => current + 1);
+  }, [rawToken]);
 
   const handleLastNameChange = useCallback((text: string) => {
     setLastNameError('');
@@ -223,127 +323,138 @@ export function useOfficialRegistrationFlow() {
   }, []);
 
   const sendSmsCode = useCallback(async (): Promise<boolean> => {
-    if (!rawToken) {
+    if (sendLockRef.current !== null) return false;
+    if (resendCooldown > 0 || otpLimitReached) {
+      setStep(1);
+      return false;
+    }
+    if (!rawToken || !validatedInvite) {
       setOtpError('This invite is unavailable.');
       return false;
     }
 
+    const requestGeneration = requestGenerationRef.current;
+    sendLockRef.current = requestGeneration;
     setSendingOtp(true);
     setOtpError('');
+    const token = rawToken;
 
     try {
-      const result = await sendOfficialInviteSmsOtp(rawToken);
+      const result = await sendOfficialInviteSmsOtp(token);
+      if (requestGeneration !== requestGenerationRef.current) return false;
+
+      if (typeof result.sendCount === 'number') setOtpSendCount(result.sendCount);
+      if (typeof result.maxSends === 'number') setOtpMaxSends(result.maxSends);
+      if (typeof result.cooldownSeconds === 'number') {
+        setResendCooldown(result.cooldownSeconds);
+      }
+      if (typeof result.limitReached === 'boolean') {
+        setServerLimitReached(result.limitReached);
+      }
+
       if (result.error) {
         setOtpError(result.error);
-        if (result.cooldownSeconds) {
-          setResendCooldown(result.cooldownSeconds);
-        }
-        if (typeof result.sendCount === 'number') {
-          setOtpSendCount(result.sendCount);
-        }
         return false;
       }
 
-      setOtpSendCount(result.sendCount ?? otpSendCount + 1);
-      setResendCooldown(result.cooldownSeconds ?? OTP_COOLDOWN_SECONDS);
+      if (typeof result.sendCount !== 'number') {
+        setOtpSendCount((current) => current + 1);
+      }
+      if (typeof result.cooldownSeconds !== 'number') {
+        setResendCooldown(OTP_COOLDOWN_SECONDS);
+      }
       return true;
+    } catch {
+      if (requestGeneration === requestGenerationRef.current) {
+        setOtpError('Could not send the verification code. Check your connection and retry.');
+      }
+      return false;
     } finally {
-      setSendingOtp(false);
+      if (sendLockRef.current === requestGeneration) {
+        sendLockRef.current = null;
+        if (requestGeneration === requestGenerationRef.current) {
+          setSendingOtp(false);
+        }
+      }
     }
-  }, [otpSendCount, rawToken]);
+  }, [otpLimitReached, rawToken, resendCooldown, validatedInvite]);
 
-  const goToVerifyStep = useCallback(async () => {
-    if (!validatedInvite || inviteUnavailable || validatingToken) return;
-    setAutoContinueSeconds(null);
+  const goToVerifyStep = useCallback(async (): Promise<boolean> => {
+    if (!canProceedFromInvite) return false;
+    if (phoneVerified) {
+      setStep(2);
+      return true;
+    }
+
     setStep(1);
     setOtp('');
     setOtpError('');
-    setPhoneVerified(false);
-
-    if (!initialSmsSentRef.current) {
-      initialSmsSentRef.current = true;
-      await sendSmsCode();
+    if (sendLockRef.current !== null || resendCooldown > 0 || otpLimitReached) {
+      return false;
     }
-  }, [
-    inviteUnavailable,
-    sendSmsCode,
-    validatedInvite,
-    validatingToken,
-  ]);
+    return sendSmsCode();
+  }, [canProceedFromInvite, otpLimitReached, phoneVerified, resendCooldown, sendSmsCode]);
 
-  // Soft auto-continue on Invite step: once only, on first ready open.
-  useEffect(() => {
-    if (step !== 0 || !canProceedFromInvite) {
-      const resetTimer = setTimeout(() => setAutoContinueSeconds(null), 0);
-      return () => clearTimeout(resetTimer);
+  const submitOtp = useCallback(async (): Promise<boolean> => {
+    if (verifyLockRef.current !== null || sendingOtp) return false;
+    if (phoneVerified) {
+      setStep(2);
+      return true;
     }
-
-    if (autoContinueUsedRef.current) {
-      const resetTimer = setTimeout(() => setAutoContinueSeconds(null), 0);
-      return () => clearTimeout(resetTimer);
+    if (!rawToken) {
+      setOtpError('This invite is unavailable.');
+      return false;
     }
-
-    autoContinueUsedRef.current = true;
-    const startTimer = setTimeout(() => setAutoContinueSeconds(10), 0);
-    const timer = setInterval(() => {
-      setAutoContinueSeconds((prev) => {
-        if (prev == null) return null;
-        if (prev <= 1) return 0;
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => {
-      clearTimeout(startTimer);
-      clearInterval(timer);
-    };
-  }, [step, canProceedFromInvite]);
-
-  // When countdown reaches 0, advance automatically to SMS verify.
-  useEffect(() => {
-    if (step !== 0 || !canProceedFromInvite) return;
-    if (autoContinueSeconds !== 0) return;
-    const continueTimer = setTimeout(() => void goToVerifyStep(), 0);
-    return () => clearTimeout(continueTimer);
-  }, [autoContinueSeconds, canProceedFromInvite, goToVerifyStep, step]);
-
-  const submitOtp = useCallback(async () => {
-    if (verifyingOtp) return;
     if (otp.length !== 6) {
       setOtpError('Enter the 6-digit code from your SMS.');
-      return;
+      return false;
     }
 
+    const requestGeneration = requestGenerationRef.current;
+    verifyLockRef.current = requestGeneration;
     setVerifyingOtp(true);
     setOtpError('');
     Keyboard.dismiss();
+    const token = rawToken;
+    const code = otp;
 
     try {
-      const result = await verifyOfficialInviteSmsOtp({
-        token: rawToken,
-        code: otp,
-      });
-
+      const result = await verifyOfficialInviteSmsOtp({ token, code });
+      if (requestGeneration !== requestGenerationRef.current) return false;
       if (result.error) {
         setOtpError(result.error);
-        return;
+        return false;
       }
 
       setPhoneVerified(true);
       setStep(2);
-    } catch (err: unknown) {
-      const message =
-        err instanceof Error ? err.message : 'Could not verify the code.';
-      setOtpError(message);
+      return true;
+    } catch {
+      if (requestGeneration === requestGenerationRef.current) {
+        setOtpError('Could not verify the code. Check your connection and retry.');
+      }
+      return false;
     } finally {
-      setVerifyingOtp(false);
+      if (verifyLockRef.current === requestGeneration) {
+        verifyLockRef.current = null;
+        if (requestGeneration === requestGenerationRef.current) {
+          setVerifyingOtp(false);
+        }
+      }
     }
-  }, [otp, rawToken, verifyingOtp]);
+  }, [otp, phoneVerified, rawToken, sendingOtp]);
 
   const resendOtp = useCallback(async () => {
-    if (sendingOtp || resendCooldown > 0 || otpLimitReached) return;
-    await sendSmsCode();
-  }, [otpLimitReached, resendCooldown, sendSmsCode, sendingOtp]);
+    if (
+      phoneVerified ||
+      sendLockRef.current !== null ||
+      resendCooldown > 0 ||
+      otpLimitReached
+    ) {
+      return false;
+    }
+    return sendSmsCode();
+  }, [otpLimitReached, phoneVerified, resendCooldown, sendSmsCode]);
 
   const submitDetails = useCallback(() => {
     if (!phoneVerified) {
@@ -352,12 +463,7 @@ export function useOfficialRegistrationFlow() {
       return;
     }
 
-    const fieldErrors = validateOfficialDetailsForm({
-      lastName,
-      firstName,
-      middleName,
-    });
-
+    const fieldErrors = validateOfficialDetailsForm({ lastName, firstName, middleName });
     setLastNameError(fieldErrors.lastName ?? '');
     setFirstNameError(fieldErrors.firstName ?? '');
     setMiddleNameError(fieldErrors.middleName ?? '');
@@ -368,29 +474,28 @@ export function useOfficialRegistrationFlow() {
   }, [firstName, lastName, middleName, phoneVerified]);
 
   const submitPassword = useCallback(async (): Promise<boolean> => {
-    if (submitting) return false;
+    if (submitLockRef.current !== null) return false;
     if (!validatedInvite || !rawToken || !phoneVerified) {
-      setFormError('This invite is unavailable.');
-      setInviteUnavailable(true);
-      setStep(0);
+      setFormError('This invite is unavailable. Verify your mobile number again.');
+      setStep(1);
       return false;
     }
 
-    const passwordErrors = validateOfficialPasswordForm({
-      password,
-      confirmPassword,
-    });
+    const passwordErrors = validateOfficialPasswordForm({ password, confirmPassword });
     setPasswordError(passwordErrors.password ?? '');
     setConfirmPasswordError(passwordErrors.confirmPassword ?? '');
     setFormError('');
     if (Object.keys(passwordErrors).length > 0) return false;
 
+    const requestGeneration = requestGenerationRef.current;
+    submitLockRef.current = requestGeneration;
     setSubmitting(true);
     Keyboard.dismiss();
+    const token = rawToken;
 
     try {
       const result = await registerOfficialAccount({
-        token: rawToken,
+        token,
         lastName,
         firstName,
         middleName,
@@ -398,22 +503,39 @@ export function useOfficialRegistrationFlow() {
         confirmPassword,
       });
 
+      if (requestGeneration !== requestGenerationRef.current) return false;
       if (result.error || !result.scope) {
+        if (result.verificationRequired) {
+          setPhoneVerified(false);
+          setOtp('');
+          setOtpError(
+            'Your verification expired. Send a new code, then continue with your saved details.',
+          );
+          setPassword('');
+          setConfirmPassword('');
+          setPasswordError('');
+          setConfirmPasswordError('');
+          setStep(1);
+          return false;
+        }
+
         setFormError(result.error ?? 'Registration could not be completed.');
-        Alert.alert('Registration failed', result.error ?? 'Please try again.');
         return false;
       }
 
-      // Navigation is handled by the screen so beforeRemove can allow the leave.
       return true;
-    } catch (err: unknown) {
-      const message =
-        err instanceof Error ? err.message : 'Registration could not be completed.';
-      setFormError(message);
-      Alert.alert('Registration failed', message);
+    } catch {
+      if (requestGeneration === requestGenerationRef.current) {
+        setFormError('Registration could not be completed. Check your connection and try again.');
+      }
       return false;
     } finally {
-      setSubmitting(false);
+      if (submitLockRef.current === requestGeneration) {
+        submitLockRef.current = null;
+        if (requestGeneration === requestGenerationRef.current) {
+          setSubmitting(false);
+        }
+      }
     }
   }, [
     confirmPassword,
@@ -423,7 +545,6 @@ export function useOfficialRegistrationFlow() {
     password,
     phoneVerified,
     rawToken,
-    submitting,
     validatedInvite,
   ]);
 
@@ -433,7 +554,6 @@ export function useOfficialRegistrationFlow() {
       return true;
     }
     if (step === 2) {
-      // Leaving details after SMS verify — stay verified, return to OTP step.
       setStep(1);
       return true;
     }
@@ -441,17 +561,24 @@ export function useOfficialRegistrationFlow() {
       setStep(0);
       return true;
     }
-
-    // Step 0 (Invite root) — screen confirms leave so splash/stack can exit cleanly.
     return false;
   }, [step]);
 
   return {
     step,
+    entryVisible,
+    entryValue,
+    entryError,
+    flowVersion,
+    handleEntryValueChange,
+    acceptInviteInput,
+    resetToEntry,
+    retryValidation,
     inviteUnavailable,
     validatingToken,
     maskedToken,
     tokenError,
+    tokenErrorKind,
     validatedInvite,
     scopeLabel: validatedInvite ? formatInviteScopeLabel(validatedInvite) : '',
     maskedPhone,
@@ -476,8 +603,9 @@ export function useOfficialRegistrationFlow() {
     showPassword,
     showConfirmPassword,
     resendCooldown,
+    otpSendCount,
+    otpMaxSends,
     otpLimitReached,
-    autoContinueSeconds,
     passwordMinLength: OFFICIAL_PASSWORD_MIN_LENGTH,
     canProceedFromInvite,
     handleLastNameChange,
@@ -486,8 +614,9 @@ export function useOfficialRegistrationFlow() {
     handlePasswordChange,
     handleConfirmPasswordChange,
     handleOtpChange,
-    toggleShowPassword: () => setShowPassword((prev) => !prev),
-    toggleShowConfirmPassword: () => setShowConfirmPassword((prev) => !prev),
+    toggleShowPassword: () => setShowPassword((previous) => !previous),
+    toggleShowConfirmPassword: () =>
+      setShowConfirmPassword((previous) => !previous),
     goToVerifyStep,
     submitDetails,
     submitPassword,
