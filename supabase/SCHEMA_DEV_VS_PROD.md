@@ -9,6 +9,81 @@ Read alongside [SECURITY.md](../SECURITY.md), which covers the resident phone/OT
 
 ## Apply order
 
+Phase 4 resident/public cutover (5 November 2026) is **applied locally and to
+hosted project `wkblsbtypaxvdgvkiopc` for owner-authorized Expo Go testing**:
+`20261105000100_resident_public_cutover.sql`. It replaces resident source-report
+access with limited public incident RPCs, adds incident discussion/support,
+owner-only lifecycle/timeline projections, office snapshots, and safe response
+notifications. Its 708 local pgTAP assertions and public-schema SQL lint pass.
+All 13 hosted catalog/grant checks and read-only authenticated-role checks pass;
+the 19 checked routine definitions match the tested local database fingerprint
+`dd265846275cc59dcbcdf3f1377fb537`. Report/incident/evidence fingerprints and
+existing audit/notification counts are unchanged. No hosted test fixtures were
+created. The final dry run is up to date. Phone/R5 acceptance remains pending;
+this is controlled testing, not operational release. Restart Metro and follow
+[the Phase 4 phone checklist](../docs/phase4-expo-go-test-checklist.md).
+
+New photo approval is intentionally disabled by the server and client until
+location metadata removal is proven. Existing approvals are revoked; revocation
+and sensitivity/location controls remain available. Free-text legacy source
+comments require explicit lead-office screening before copying to the public
+incident discussion. Mayor raw reports/evidence are unavailable; role-checked
+aggregate charts remain usable while the Phase 5 replacements are pending.
+
+Phase 3 official workflow (31 October 2026): migrations
+`20261102000000_official_workflow_cutover.sql`,
+`20261102000100_scope_official_edit_attribution.sql`, and
+`20261102000200_keep_closed_reports_private.sql` are applied **locally and to
+hosted project `wkblsbtypaxvdgvkiopc`** for owner-authorized Expo Go testing.
+These migrations append the
+report-map lifecycle columns; add authenticated, server-paginated office queues;
+retain BDRRMO/supporter reads after transfer; scope content/location edits to the
+lead-office rules; and add service-only atomic jurisdiction intake/routing.
+No new table is introduced, and the Phase 2 operational-table RLS remains active.
+
+The updated `create-report` function is deployed as version **7**, ACTIVE, with
+JWT verification enabled; the Phase 3 migrations were applied first. The
+existing `.env` targets this project, so restart Metro with `npm start -- --clear`
+and reload Expo Go for manual testing. Thirteen hosted catalog/permission checks
+pass, the routine fingerprint matches the tested local database, and existing
+report/incident counts and states are unchanged. The final migration dry run is
+up to date. G1/manuscript/R5 gates and authenticated visual/phone acceptance
+remain pending before operational release. Version enforcement stays off.
+Phase 3 has 513 passing local pgTAP assertions, including 49 new queue, routing,
+and post-transfer authorization checks. Its public-schema SQL checker is clean.
+
+Phase 2 report-response foundation (30 October 2026): migrations
+`20261101000000`–`20261101001200` are implemented and applied **locally and to
+hosted project `wkblsbtypaxvdgvkiopc`**. The updated `create-official-report`
+function is deployed as version 6, ACTIVE, with JWT verification enabled.
+The enum migration must commit before the remaining migrations use `closed`
+and the new notification values. Deploy all ordered migrations before deploying
+the updated `create-official-report` Edge Function. The new Edge Function requires
+the atomic channel-aware RPC and deliberately has no direct-insert fallback.
+
+Owner confirmed Phase 1 phone acceptance before the hosted rollout. All 27
+report statuses were preserved; nine incidents, two pending legacy transfers,
+and five historical municipal findings were reconciled. Sixteen hosted checks
+pass, and the Phase 2 routine-definition fingerprint matches the tested local
+database. The deployment generated no notification or history rows. No hosted
+test fixtures were inserted. See `docs/report-response-flow-plan.md` and
+`docs/changelogs.md` for the deployment record. Repeat a phone workflow against
+the deployed backend to record the post-deployment smoke test.
+
+For any additional environment, review the backfill's status reconciliation
+and outstanding legacy-escalation query. A historical escalation without a
+barangay stops the migration and must be routed first. No backfill invents
+MDRRMO acceptance or outcome summaries. Public incident/storage cutover remains
+in Phase 4; the Mayor activity chart retains four status buckets until Phase 5.
+
+Local verification:
+
+```bash
+npm run test:rls
+node --no-warnings --experimental-strip-types scripts/verify-report-flow-concurrency.ts
+npx supabase db lint --local --schema public --level error
+```
+
 Migrations are timestamp-ordered and must run in sequence:
 
 ```bash

@@ -101,10 +101,31 @@ o Map Search and Overlay Legend.
 Disaster Reporting and Management
 o GPS and Photo Upload requirements for residents.
 
-o Two-tier Verification: Confirmation call from BDRRMO and MDRRMO re-
-verification.
+o Evidence-based BDRRMO review and verification. Reporter contact is optional
+and never confirmation by itself. A hotline caller's account is recorded,
+not confirmed; only an official's own on-site observation starts confirmed.
+MDRRMO checks uncertain jurisdiction without verifying it and re-verifies a
+confirmed case only after accepting a transfer; support does not change lead.
+The office owns the incident. Response ongoing requires a recorded qualifying
+response action; dispatch confirmation requires who confirmed and how.
+See `docs/verification-operating-rules.md` for the operating agreement and
+required BDRRMO, MDRRMO, and adviser sign-offs before Phase 3 goes live.
 
-o Upvoting, commenting, and misinformation flagging of user reports.
+Implementation status, 31 October 2026: Phase 3 official workflow code is in
+the working tree; its three migrations and `create-report` version 7 are also
+deployed to hosted Supabase at the owner's request for Expo Go manual testing.
+The existing `.env` targets that backend. Restart Metro with
+`npm start -- --clear` and reload Expo Go to begin the test scenarios.
+Automated checks do not replace authenticated visual/phone acceptance, G1,
+manuscript alignment, or R5. The incident-level public presentation described
+below remains the planned Phase 4 cutover; Mayor request actions remain Phase 5.
+
+o Incident-level public discussion and support for confirmed incidents.
+Unconfirmed reports and original evidence remain private to the reporter and
+authorized operational officials. The public record uses approximate areas;
+each derivative photo needs explicit approval and privacy screening. Sensitive
+incidents have barangay-only locations and no public evidence. An exact public
+location requires an audited safety-message reason on a non-sensitive case.
 o Contribution Reports Management
 Community Communication Feed
 o Integrated Feed UI for announcements and user reports.
@@ -117,14 +138,16 @@ xix
 
 Analytics and Administrative Tools
 o System Admin Panel: Municipality and User Management.
-o Mayor’s Dashboard: Visual analytics for resolved/unresolved incidents and
-overall status logs of the municipality.
+o Mayor’s Dashboard: Visual analytics, limited pending-case summaries, official
+incident timelines, and public-approved photos, without private contacts or raw
+evidence. One tracked office-level update request may be open per target, with
+acknowledgment and an answer, and no repeated notifications.
 o Incident Documentation: One-click PDF Export for official reports.
 
 # roughsummary
 1. Notification built in: local and push notification (outside the app)
 2. When user use report button, the system will ask for permission to use their location and camera, system use that location (convert to readable), then they can fill up following required details about short caption title, their description or their situation of their report, photos (3 max, at least 1 required) and videos (captures all user's sent video's duration, max is 30 seconds overall and at least 1 video). Photo and Video is only allowed live capture not in the gallery. 
-3. The report is posted as unverified first, BDRMMO can verify it via a call or just straight mark it as verified, it should display the one who verified it and BDRMMO can escalate it to MDRMMO re verifies if it barangay cant handle it
+3. Reports start private and unconfirmed. BDRRMO claims and reviews evidence; a reporter call is optional and does not itself confirm. Review may verify, link, request field assessment, record could-not-confirm, or reject with a reason. BDRRMO may request support (keeping lead) or transfer lead only after MDRRMO accepts. MDRRMO records the municipal finding on transfer. All actions record the officer; the office owns the incident. This is the target flow for later phases, not a claim that Phase 1 changes the current lifecycle.
 4. BDRMMO MAYOR MDRMMO official can post their own announcement; BDRMMO for barangay level announcement, MDRMMO and MAYOR for municipail level announcement. BDRMMO and MDRMMO shares the same screen but validated or limited by role whereas the mayor is different different screen.
 5. BDRMMO MAYOR MDRMMO official creates their account through an invite link. For example: 
 Mayor invite:
@@ -149,13 +172,13 @@ Hence 1 table for officials.
 - Location (auto GPS)
 - Title + description
 - Photo/video required
-- Status: "unverified" → BDRRMO calls to verify
+- Status: unconfirmed → claimed review → evidence-based verification or another recorded review outcome. A call is optional and never sufficient by itself.
 
 Official Report:
 - Location (auto GPS)
 - Title + description
 - Photo/video (optional, they're already trusted)
-- Status: "verified" (auto-trusted, they verified it)
+- Intake: an official's own field observation starts confirmed; a hotline caller's account starts recorded and unconfirmed, then follows normal claim and review.
 - Can edit later if details change
 13. In feed, it must display based the reports in a social media algorithm way; users can upvote (1 upvote per user) which reflect to the report post, then they can also comment/reply in the said post. At the same time they can also flag the post or comment misinformation, spam, inappropriate. The officials can hide/remove the comment itself from the residents. They can also share the report link. 
 14. officials can have evacuation center disaply in the map: 
@@ -220,4 +243,4 @@ PDF should include:
                                                            
   The key is to make execution.md a contract: the execution
   agent should only need to inspect details necessary to   
-  implement—not decide what the feature is supposed to do. 
+  implement—not decide what the feature is supposed to do.
