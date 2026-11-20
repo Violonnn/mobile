@@ -1,14 +1,18 @@
-// Adapts safe official-queue records to the resident report-post presentation.
-// Card taps open Report operations; the chat icon opens the same screen focused
-// on the comments section (not the resident "Report details" popup).
+// Adapts safe official-queue records to community report posts. BDRRMO opens
+// the resident-style post sheet, while the default official view opens Report Operations.
 import React from 'react';
 import { Pressable } from 'react-native';
 import {
+  ReportDetailCard,
   ReportDetailContent,
   ResidentFeedReportContent,
   reportDetailStyles,
 } from '../report/ReportDetailCard';
 import { officialLabel, lifecycleColor } from '../../lib/reportLifecycle';
+import {
+  scopedLifecyclePresentation,
+  type ScopedOfficialAudience,
+} from '../../lib/reportPresentation';
 import type { OfficialReportQueueItem } from '../../lib/officialReports';
 import { formatReportLocation, type MapReportMarker } from '../../lib/reports';
 import { useShareSheetGuard } from '../../hooks/useShareSheetGuard';
@@ -41,15 +45,43 @@ export default function OfficialReportPostCard({
   isLast = false,
   onPress,
   onCommentPress,
+  audience,
+  openPostDetails = false,
 }: {
   report: OfficialReportQueueItem;
   variant?: 'officialCommunity' | 'residentFeed';
   isLast?: boolean;
   onPress: () => void;
   onCommentPress: () => void;
+  /** Opens the resident-style full report post instead of Report Operations. */
+  openPostDetails?: boolean;
+  /** Opts selected official community feeds into scoped stage and office labels. */
+  audience?: ScopedOfficialAudience;
 }) {
   const post = officialQueueItemToPost(report);
-  const statusPresentation = { label: officialLabel(report.lifecycle, { claimedByName: report.lifecycleFacts.reviewClaimedByName, claimedAt: report.lifecycleFacts.reviewClaimedAt }), color: lifecycleColor(report.lifecycle) };
+  const scoped = audience
+    ? scopedLifecyclePresentation(report.lifecycle, {
+        audience,
+        barangayName: report.barangayName,
+        leadOffice: report.lifecycleFacts.leadOffice,
+        claimedByName: report.lifecycleFacts.reviewClaimedByName,
+        claimedAt: report.lifecycleFacts.reviewClaimedAt,
+      })
+    : null;
+  const statusPresentation = scoped
+    ? {
+        label: scoped.stageLabel,
+        color: scoped.tone.color,
+        backgroundColor: scoped.tone.softColor,
+        coordinationLabel: scoped.coordinationLabel,
+      }
+    : {
+        label: officialLabel(report.lifecycle, {
+          claimedByName: report.lifecycleFacts.reviewClaimedByName,
+          claimedAt: report.lifecycleFacts.reviewClaimedAt,
+        }),
+        color: lifecycleColor(report.lifecycle),
+      };
   const { shareSafely, canOpenCard } = useShareSheetGuard();
 
   const shareReport = () => {
@@ -58,6 +90,18 @@ export default function OfficialReportPostCard({
       title: post.title,
     });
   };
+
+  if (openPostDetails) {
+    return (
+      <ReportDetailCard
+        report={post}
+        isLast={isLast}
+        variant="residentFeed"
+        statusPresentation={statusPresentation}
+        showCommunityTags
+      />
+    );
+  }
 
   return (
     <Pressable

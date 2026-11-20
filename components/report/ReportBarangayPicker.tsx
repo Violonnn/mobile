@@ -4,6 +4,7 @@ import {
   FlatList,
   Modal,
   Pressable,
+  ScrollView,
   Text,
   TouchableOpacity,
   View,
@@ -22,6 +23,7 @@ type Props = {
   selectedBarangayId: string | null;
   loading: boolean;
   error: string | null;
+  embedded?: boolean;
   onSelect: (barangayId: string) => void;
   onRetry: () => void;
   onClose: () => void;
@@ -33,33 +35,59 @@ export default function ReportBarangayPicker({
   selectedBarangayId,
   loading,
   error,
+  embedded = false,
   onSelect,
   onRetry,
   onClose,
 }: Props) {
   if (!visible) return null;
 
-  return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType='slide'
-      onRequestClose={onClose}
-      presentationStyle='overFullScreen'
-    >
-      <View style={styles.residentBarangayPickerOverlay}>
-        <Pressable
-          style={styles.residentBarangayPickerBackdrop}
-          onPress={onClose}
-          accessibilityRole='button'
-          accessibilityLabel='Close barangay picker'
-        />
+  function renderBarangayOption(item: BarangayOption) {
+    const selected = selectedBarangayId === item.id;
+    return (
+      <TouchableOpacity
+        key={item.id}
+        style={[
+          styles.residentBarangayPickerOption,
+          selected && styles.residentBarangayPickerOptionSelected,
+        ]}
+        onPress={() => {
+          onSelect(item.id);
+          onClose();
+        }}
+        accessibilityRole='button'
+        accessibilityState={{ selected }}
+        accessibilityLabel={`Select ${item.name}`}
+      >
+        <View style={styles.residentBarangayPickerOptionIcon}>
+          <Ionicons name='location-outline' size={18} color={reportColors.primary} />
+        </View>
+        <Text
+          style={[
+            styles.residentBarangayPickerOptionText,
+            selected && styles.residentBarangayPickerOptionTextSelected,
+          ]}
+        >
+          {item.name}
+        </Text>
+        {selected ? (
+          <Ionicons name='checkmark-circle' size={21} color={reportColors.primary} />
+        ) : (
+          <Ionicons name='chevron-forward' size={19} color={reportColors.textLight} />
+        )}
+      </TouchableOpacity>
+    );
+  }
 
-        <View style={styles.residentBarangayPickerCard}>
+  const pickerCard = (
+    <View style={[
+      styles.residentBarangayPickerCard,
+      embedded && styles.residentBarangayPickerEmbeddedCard,
+    ]}>
           <View style={styles.residentBarangayPickerHeader}>
             <View style={styles.residentBarangayPickerHeading}>
               <Text style={styles.residentBarangayPickerTitle}>
-                Change barangay
+                {selectedBarangayId ? 'Change barangay' : 'Select barangay'}
               </Text>
               <Text style={styles.residentBarangayPickerSubtitle}>
                 Select the response area for this incident.
@@ -107,7 +135,25 @@ export default function ReportBarangayPicker({
                 </TouchableOpacity>
               </View>
             )
-            : (
+            : embedded ? (
+              <ScrollView
+                style={styles.residentBarangayPickerEmbeddedList}
+                contentContainerStyle={styles.residentBarangayPickerList}
+                nestedScrollEnabled
+                keyboardShouldPersistTaps='handled'
+                showsVerticalScrollIndicator={false}
+              >
+                {barangays.length > 0
+                  ? barangays.map(renderBarangayOption)
+                  : (
+                    <View style={styles.residentBarangayPickerState}>
+                      <Text style={styles.residentBarangayPickerStateText}>
+                        No barangays are available right now.
+                      </Text>
+                    </View>
+                  )}
+              </ScrollView>
+            ) : (
               <FlatList
                 data={barangays}
                 keyExtractor={(barangay) => barangay.id}
@@ -120,59 +166,32 @@ export default function ReportBarangayPicker({
                     </Text>
                   </View>
                 }
-                renderItem={({ item }) => {
-                  const selected = selectedBarangayId === item.id;
-                  return (
-                    <TouchableOpacity
-                      style={[
-                        styles.residentBarangayPickerOption,
-                        selected && styles.residentBarangayPickerOptionSelected,
-                      ]}
-                      onPress={() => {
-                        onSelect(item.id);
-                        onClose();
-                      }}
-                      accessibilityRole='button'
-                      accessibilityState={{ selected }}
-                      accessibilityLabel={`Select ${item.name}`}
-                    >
-                      <View style={styles.residentBarangayPickerOptionIcon}>
-                        <Ionicons
-                          name='location-outline'
-                          size={18}
-                          color={reportColors.primary}
-                        />
-                      </View>
-                      <Text
-                        style={[
-                          styles.residentBarangayPickerOptionText,
-                          selected &&
-                          styles.residentBarangayPickerOptionTextSelected,
-                        ]}
-                      >
-                        {item.name}
-                      </Text>
-                      {selected
-                        ? (
-                          <Ionicons
-                            name='checkmark-circle'
-                            size={21}
-                            color={reportColors.primary}
-                          />
-                        )
-                        : (
-                          <Ionicons
-                            name='chevron-forward'
-                            size={19}
-                            color={reportColors.textLight}
-                          />
-                        )}
-                    </TouchableOpacity>
-                  );
-                }}
+                renderItem={({ item }) => renderBarangayOption(item)}
               />
             )}
-        </View>
+    </View>
+  );
+
+  if (embedded) {
+    return <View style={styles.residentBarangayPickerEmbeddedWrap}>{pickerCard}</View>;
+  }
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType='slide'
+      onRequestClose={onClose}
+      presentationStyle='overFullScreen'
+    >
+      <View style={styles.residentBarangayPickerOverlay}>
+        <Pressable
+          style={styles.residentBarangayPickerBackdrop}
+          onPress={onClose}
+          accessibilityRole='button'
+          accessibilityLabel='Close barangay picker'
+        />
+        {pickerCard}
       </View>
     </Modal>
   );

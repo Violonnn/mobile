@@ -166,7 +166,6 @@ export function AdminSettingsIdentitySkeleton() {
         <View style={styles.identityCopy}>
           <SkeletonBlock style={styles.identityName} />
           <SkeletonBlock style={styles.identityEmail} />
-          <SkeletonBlock style={styles.identityRole} />
         </View>
       </SkeletonGroup>
     </View>
@@ -416,14 +415,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    paddingBottom: spacing.lg,
-    borderBottomWidth: 3,
-    borderBottomColor: '#E8F1F5',
+    paddingBottom: spacing.md,
   },
   identityAvatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 92,
+    height: 92,
+    borderRadius: 46,
   },
   identityCopy: {
     flex: 1,
@@ -431,17 +428,12 @@ const styles = StyleSheet.create({
   },
   identityName: {
     width: '70%',
-    height: 18,
+    height: 24,
     borderRadius: 2,
   },
   identityEmail: {
     width: '92%',
-    height: 14,
-    borderRadius: 2,
-  },
-  identityRole: {
-    width: 140,
-    height: 13,
+    height: 18,
     borderRadius: 2,
   },
 });

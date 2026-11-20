@@ -29,6 +29,7 @@ type Props = {
   movedDistanceMeters?: number;
   maximumDistanceMeters?: number;
   adjustingPin?: boolean;
+  onBack?: () => void;
   onRetry: () => void;
   onConfirmOnMap?: () => void;
   onCancelPinAdjustment?: () => void;
@@ -89,6 +90,7 @@ export default function LocationStep({
   movedDistanceMeters = 0,
   maximumDistanceMeters = 150,
   adjustingPin = false,
+  onBack,
   onRetry,
   onConfirmOnMap,
   onCancelPinAdjustment,
@@ -116,6 +118,17 @@ export default function LocationStep({
   if (residentLayout) {
     return (
       <View style={styles.stepContent}>
+        {onBack ? (
+          <TouchableOpacity
+            style={styles.residentStepBack}
+            onPress={onBack}
+            accessibilityRole="button"
+            accessibilityLabel="Back to report details"
+          >
+            <Ionicons name="chevron-back" size={18} color={reportColors.primary} />
+            <Text style={styles.residentStepBackText}>Back to details</Text>
+          </TouchableOpacity>
+        ) : null}
         <Text style={styles.residentStepTitle}>Confirm where{`\n`}it happened</Text>
         <Text style={styles.residentStepSubtitle}>
           Location helps the nearest team respond.

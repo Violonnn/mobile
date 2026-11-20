@@ -15,6 +15,10 @@ export default function OperationTimelineStep({
   defaultExpanded = false,
   collapsible = true,
   utility = false,
+  showSummary = true,
+  compactCurrentStep = false,
+  compactHeading = false,
+  mediumSummary = false,
   children,
 }: {
   title: string;
@@ -25,6 +29,10 @@ export default function OperationTimelineStep({
   defaultExpanded?: boolean;
   collapsible?: boolean;
   utility?: boolean;
+  showSummary?: boolean;
+  compactCurrentStep?: boolean;
+  compactHeading?: boolean;
+  mediumSummary?: boolean;
   children: React.ReactNode;
 }) {
   const [expanded, setExpanded] = useState<boolean | null>(null);
@@ -32,10 +40,18 @@ export default function OperationTimelineStep({
   const open = current || !collapsible || (expanded ?? defaultExpanded);
   const heading = (
     <>
-      <View style={operationStyles.rowCopy}>
+      <View style={[operationStyles.rowCopy, compactHeading && operationStyles.rowCopyCompact]}>
         {current && <Text style={operationStyles.eyebrow}>CURRENT STEP</Text>}
         <Text style={styles.sectionTitle}>{title}</Text>
-        <Text style={operationStyles.caption}>{summary}</Text>
+        {showSummary ? (
+          <Text style={[
+            operationStyles.caption,
+            compactHeading && operationStyles.summaryTitle,
+            mediumSummary && operationStyles.summaryMedium,
+          ]}>
+            {summary}
+          </Text>
+        ) : null}
       </View>
       {!current && collapsible && (
         <Ionicons
@@ -73,14 +89,16 @@ export default function OperationTimelineStep({
       <View
         style={[
           utility ? operationStyles.section : operationStyles.stepContent,
+          !utility && compactHeading && operationStyles.stepContentCompact,
           current && operationStyles.currentStepContent,
+          current && compactCurrentStep && operationStyles.currentStepContentCompact,
         ]}
       >
         {current || !collapsible
-          ? <View style={operationStyles.stepHeading}>{heading}</View>
+          ? <View style={[operationStyles.stepHeading, compactHeading && operationStyles.stepHeadingCompact]}>{heading}</View>
           : (
             <TouchableOpacity
-              style={operationStyles.stepHeading}
+              style={[operationStyles.stepHeading, compactHeading && operationStyles.stepHeadingCompact]}
               accessibilityRole='button'
               accessibilityState={{ expanded: open }}
               onPress={() => setExpanded(!open)}

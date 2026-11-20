@@ -15,6 +15,7 @@ import { isProfilePhotoSchemaMissing } from './schemaCompatibility';
 import { resolveSignedMediaUrls } from './mediaUrlCache';
 import { colors } from '../styles/theme';
 import { deriveLifecycle, lifecycleColor, residentLabel, residentStageTone, type LifecycleFacts, type LifecycleSummary } from './reportLifecycle';
+import { scopedLifecyclePresentation } from './reportPresentation';
 
 export type ReportMediaAttachment = {
   id: string;
@@ -74,6 +75,8 @@ export type MapReportMarker = {
   commentCount: number;
   /** True while the report is still only in the local offline queue. */
   isPending?: boolean;
+  /** Owner consent on queued reports; server-backed choices are loaded by authenticated RPC. */
+  allowExactLocation?: boolean;
 };
 
 export type ReportStatusPresentation = {
@@ -82,36 +85,52 @@ export type ReportStatusPresentation = {
   backgroundColor: string;
   activeStep: number;
   nextAction: string;
+  coordinationLabel?: string | null;
 };
 
 /** Resident-facing presentation: washed stage colors shared by Home, Map and Community. */
-export function getLifecyclePresentation(summary: LifecycleSummary): ReportStatusPresentation {
+export function getLifecyclePresentation(
+  summary: LifecycleSummary,
+  useScopedPresentation = false,
+): ReportStatusPresentation {
   const activeStep = summary.primaryStage === 'resolved' ? 3
     : summary.primaryStage === 'response_ongoing' ? 2
     : summary.primaryStage === 'confirmed' ? 1 : 0;
   const tone = residentStageTone(summary);
+  const scopedPresentation = useScopedPresentation
+    ? scopedLifecyclePresentation(summary, { audience: 'resident' })
+    : null;
+  const nextAction = summary.primaryStage === 'resolved'
+    ? summary.summaryMissing ? 'Outcome summary not yet posted' : 'Review the official outcome below'
+    : summary.primaryStage === 'sending' ? 'Waiting to send your report'
+    : summary.primaryStage === 'jurisdiction_check' ? useScopedPresentation
+      ? 'MITCOM is checking the responsible office'
+      : 'MDRRMO is checking the responsible office'
+    : summary.primaryStage === 'being_assessed' ? 'Awaiting an official field finding'
+    : summary.primaryStage === 'awaiting_review' ? 'Waiting for the responsible office to start review'
+    : summary.primaryStage === 'under_review' ? 'The responsible office is reviewing your report'
+    : summary.primaryStage === 'response_ongoing' ? 'A qualifying response action has been recorded'
+    : summary.primaryStage === 'confirmed' ? 'No response action recorded yet'
+    : 'See the report outcome below';
   return {
-    label: residentLabel(summary, { barangayName: null }),
+    label: scopedPresentation?.stageLabel ?? residentLabel(summary, { barangayName: null }),
     color: tone.color, backgroundColor: tone.softColor,
     activeStep,
-    nextAction: summary.primaryStage === 'resolved'
-      ? summary.summaryMissing ? 'Outcome summary not yet posted' : 'Review the official outcome below'
-      : summary.primaryStage === 'sending' ? 'Waiting to send your report'
-      : summary.primaryStage === 'jurisdiction_check' ? 'MDRRMO is checking the responsible office'
-      : summary.primaryStage === 'being_assessed' ? 'Awaiting an official field finding'
-      : summary.primaryStage === 'awaiting_review' ? 'Waiting for the responsible office to start review'
-      : summary.primaryStage === 'under_review' ? 'The responsible office is reviewing your report'
-      : summary.primaryStage === 'response_ongoing' ? 'A qualifying response action has been recorded'
-      : summary.primaryStage === 'confirmed' ? 'No response action recorded yet'
-      : 'See the report outcome below',
+    nextAction,
+    ...(scopedPresentation
+      ? { coordinationLabel: scopedPresentation.coordinationLabel }
+      : {}),
   };
 }
 
 /** Resident palette for map reports, including rows that only have legacy status. */
 export function getMapReportPresentation(
   report: Pick<MapReportMarker, 'status' | 'lifecycle'>,
+  audience?: 'resident',
 ): ReportStatusPresentation {
-  if (report.lifecycle) return getLifecyclePresentation(report.lifecycle);
+  if (report.lifecycle) {
+    return getLifecyclePresentation(report.lifecycle, audience === 'resident');
+  }
 
   const normalizedStatus = report.status.trim().toLocaleLowerCase();
   const legacyStatus = normalizedStatus === 'verified' || normalizedStatus === 'escalated'
@@ -134,7 +153,7 @@ export function getMapReportPresentation(
     withdrawn: false,
     legacyEscalation: legacyStatus === 'escalated',
   });
-  return getLifecyclePresentation(summary);
+  return getLifecyclePresentation(summary, audience === 'resident');
 }
 
 export type ResidentTimelineEntry = {
@@ -144,13 +163,33 @@ export type ResidentTimelineEntry = {
   responsibleOfficeLabel: string;
 };
 
+const SYSTEM_GENERATED_TIMELINE_OFFICE_MESSAGES = new Set([
+  'routing_changed', 'jurisdiction_checked', 'incident_created', 'transfer_requested',
+  'transfer_accepted', 'request_returned', 'support_requested', 'support_accepted', 'request_cancelled',
+]);
+
 export async function fetchResidentReportTimeline(reportId: string): Promise<{ entries: ResidentTimelineEntry[]; error: string | null }> {
   try {
     const { data, error } = await supabase.rpc('list_resident_report_timeline', { p_report_id: reportId });
-    return { entries: ((data ?? []) as Record<string, unknown>[]).map((row) => ({
-      occurredAt: String(row.occurred_at), entryType: String(row.entry_type),
-      publicText: String(row.public_text), responsibleOfficeLabel: String(row.responsible_office_label),
-    })), error: error?.message ?? null };
+    const entries = ((data ?? []) as Record<string, unknown>[]).map((row) => {
+      const entryType = String(row.entry_type);
+      const rawPublicText = String(row.public_text);
+      // Keep authored progress and correction text intact while updating system office labels.
+      const publicText = SYSTEM_GENERATED_TIMELINE_OFFICE_MESSAGES.has(entryType)
+        ? rawPublicText.replace(/\b(?:MDRRMO|MDRMMO)\b/gi, 'MITCOM')
+        : rawPublicText;
+
+      return {
+        occurredAt: String(row.occurred_at),
+        entryType,
+        publicText: entryType === 'incident_created' && /^incident recorded\.?$/i.test(publicText.trim())
+          ? 'Officials opened an incident case'
+          : publicText,
+        responsibleOfficeLabel: String(row.responsible_office_label).replace(/\b(?:MDRRMO|MDRMMO)\b/gi, 'MITCOM'),
+      };
+    });
+
+    return { entries, error: error?.message ?? null };
   } catch {
     return { entries: [], error: 'Could not load your report timeline. Try again.' };
   }
@@ -596,6 +635,7 @@ export async function fetchMapReports(options?: {
         upvoteCount: 0,
         commentCount: 0,
         isPending: true,
+        allowExactLocation: queued.allowExactLocation === true,
         mediaDetailLoaded: true,
       }));
   }

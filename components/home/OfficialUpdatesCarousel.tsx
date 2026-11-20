@@ -111,14 +111,23 @@ export default function OfficialUpdatesCarousel({
             >
               <HomeUpdateCard
                 announcement={announcement}
-                label={announcement.scope === 'municipal' ? 'Municipal update' : 'Barangay update'}
                 onPress={onOpenAnnouncement}
               />
             </Animated.View>
           </View>
         );
 
-        return <View key={announcement.id}>{card}</View>;
+        return (
+          <View
+            key={announcement.id}
+            style={[
+              { width: cardWidth },
+              announcement.media.length === 0 && styles.officialUpdatesNoMediaItem,
+            ]}
+          >
+            {card}
+          </View>
+        );
       })}
       <View style={[styles.officialUpdatesEndControlWrap, { width: cardWidth }]}>
         <Pressable

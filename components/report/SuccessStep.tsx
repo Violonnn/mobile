@@ -1,5 +1,10 @@
 import React, { useEffect } from 'react';
-import { ActivityIndicator, View, Text, TouchableOpacity } from 'react-native';
+import {
+  ActivityIndicator,
+  View,
+  Text,
+  TouchableOpacity,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, {
   useAnimatedStyle,
@@ -13,6 +18,7 @@ import type { SyncStatus } from '../../hooks/useReportFlow';
 type Props = {
   address: ReadableAddress | null;
   position: GpsPosition | null;
+  destinationBarangayName: string | null;
   syncStatus: SyncStatus;
   syncError: string | null;
   canRetry: boolean;
@@ -23,6 +29,7 @@ type Props = {
 export default function SuccessStep({
   address,
   position,
+  destinationBarangayName,
   syncStatus,
   syncError,
   canRetry,
@@ -50,18 +57,20 @@ export default function SuccessStep({
   const failed = syncStatus === 'failed';
   const delayed = syncStatus === 'delayed';
   const statusTitle = synced
-    ? 'Received'
+    ? destinationBarangayName
+      ? `Sent to Brgy. ${destinationBarangayName}`
+      : 'Report sent'
     : failed
       ? 'Report not sent yet'
       : delayed
         ? 'Still sending report'
         : 'Sending report...';
-  const statusMessage = synced
-    ? 'Your complete report has been received.'
-    : failed
-      ? syncError ?? 'We could not send your report. Please try again.'
-      : delayed
-        ? 'This is taking longer than expected. You can continue using the app while we try again automatically.'
+  const statusMessage = failed
+    ? syncError ?? 'We could not send your report. Please try again.'
+    : delayed
+      ? 'This is taking longer than expected. You can continue using the app while we try again automatically.'
+      : synced
+        ? null
         : 'Please keep this screen open while we send your report.';
 
   return (
@@ -87,9 +96,13 @@ export default function SuccessStep({
           </View>
         )}
 
-        <Text style={styles.successTitle}>{statusTitle}</Text>
+        <Text style={styles.successTitle}>
+          {statusTitle}
+        </Text>
         <Text style={styles.successAddress}>{locationText}</Text>
-        <Text style={styles.deliveryStatusMessage}>{statusMessage}</Text>
+        {statusMessage ? (
+          <Text style={styles.deliveryStatusMessage}>{statusMessage}</Text>
+        ) : null}
         {failed && canRetry ? (
           <TouchableOpacity
             style={[styles.primaryButton, styles.residentPrimaryButton]}

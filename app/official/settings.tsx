@@ -199,7 +199,7 @@ export default function OfficialSettingsScreen() {
             currentProfile ? { ...currentProfile, avatar_path: avatarPath } : currentProfile,
           );
         }}
-        roleVariant={officialKind === 'Mayor' ? 'mayor' : 'mdrrmo'}
+        roleVariant={officialKind === 'Mayor' ? 'mayor' : 'mitcom'}
       />
     );
   }
@@ -340,7 +340,7 @@ export default function OfficialSettingsScreen() {
               <View style={styles.settingsActionCopy}>
                 <Text style={styles.settingsActionTitle}>Local report intake</Text>
                 <Text style={styles.settingsActionMeta}>
-                  Review, verify, resolve locally, or hand off to MDRRMO
+                  Review, verify, resolve locally, or hand off to MITCOM
                 </Text>
               </View>
               <Ionicons name="shield-checkmark-outline" size={20} color={colors.textMuted} />

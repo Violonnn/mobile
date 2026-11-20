@@ -45,7 +45,9 @@ type Props = {
   /** Shared with the resident feed so an opened report is not fetched twice. */
   detailCacheScope?: string | null;
   commentMode?: 'interactive' | 'prioritizedReadOnly';
-  statusPresentation?: (report: MapReportMarker) => Pick<ReportStatusPresentation, 'label' | 'color' | 'backgroundColor'> | null;
+  statusPresentation?: (report: MapReportMarker) => Pick<ReportStatusPresentation, 'label' | 'color' | 'backgroundColor' | 'coordinationLabel'> | null;
+  /** Opts resident and BDRRMO/MITCOM maps into the current presentation rules. */
+  useScopedPresentation?: boolean;
   onOpenCommunityReport?: (reportId: string) => void;
   /**
    * Resident map: once a report belongs to a public incident, its discussion
@@ -60,11 +62,13 @@ const LIST_PAGE_SIZE = 5;
 function ShrunkReportCard({
   report,
   statusPresentation,
+  useScopedPresentation = false,
   onPress,
   onCommentPress,
 }: {
   report: MapReportMarker;
   statusPresentation?: Pick<ReportStatusPresentation, 'label' | 'color' | 'backgroundColor'>;
+  useScopedPresentation?: boolean;
   onPress: () => void;
   onCommentPress: () => void;
 }) {
@@ -102,7 +106,11 @@ function ShrunkReportCard({
                 </Text>
               </View>
               <Text style={styles.listDate}>{formatPublishedAt(report.created_at)}</Text>
-              <CommunityReportTags report={report} statusPresentation={statusPresentation} />
+              <CommunityReportTags
+                report={report}
+                statusPresentation={statusPresentation}
+                useScopedPresentation={useScopedPresentation}
+              />
               <Text style={styles.listDescription}>
                 {report.description || 'No description provided.'}
               </Text>
@@ -156,6 +164,7 @@ export default function ReportMapDetailSheet({
   detailCacheScope,
   commentMode = 'interactive',
   statusPresentation,
+  useScopedPresentation = false,
   onOpenCommunityReport,
   onOpenCommunityIncident,
 }: Props) {
@@ -357,6 +366,7 @@ export default function ReportMapDetailSheet({
                   <ShrunkReportCard
                     report={report}
                     statusPresentation={statusPresentation?.(report) ?? undefined}
+                    useScopedPresentation={useScopedPresentation}
                     onPress={() => {
                       setShowingAllMedia(false);
                       setSelectedId(report.id);
@@ -416,6 +426,7 @@ export default function ReportMapDetailSheet({
                   <ReportDetailContent
                     report={detailReport}
                     statusPresentation={statusPresentation?.(detailReport) ?? undefined}
+                    useScopedPresentation={useScopedPresentation}
                     showingAllMedia={showingAllMedia || autoShowAllMedia}
                     onShowingAllMediaChange={setShowingAllMedia}
                     onRequestComments={
@@ -430,7 +441,7 @@ export default function ReportMapDetailSheet({
                     <Text style={styles.refreshError}>{refreshError}</Text>
                   ) : null}
 
-                  {detailCacheScope === detailReport.reporter.id && <ResidentReportProgress report={detailReport} refreshSignal={refreshVersion} />}
+                  {detailCacheScope === detailReport.reporter.id && <ResidentReportProgress report={detailReport} refreshSignal={refreshVersion} useScopedPresentation={useScopedPresentation} />}
 
                   {/* Inline thread — mounted (and live) only while details are open. */}
                   {!detailReport.isPending ? (

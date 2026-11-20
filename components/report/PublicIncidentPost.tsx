@@ -2,13 +2,13 @@
 // Home, Community, Map callouts and the detail sheet compose these so every
 // surface uses the same screened title, caption, colors and tags.
 import { Ionicons } from '@expo/vector-icons';
-import React from 'react';
 import { Image } from 'expo-image';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { formatPublishedAt } from '../../lib/formatTime';
 import { incidentTypeTone } from '../../lib/incidentTypes';
 import {
+  publicIncidentHasMapLocation,
   publicIncidentStatusLabel,
   publicIncidentTone,
   type PublicIncident,
@@ -20,6 +20,8 @@ import {
   IncidentTagRow,
   residentFeedStyles,
 } from './ReportDetailCard';
+
+export { publicIncidentHasMapLocation };
 
 /** Screened title, or the category when officials have not published a post yet. */
 export function publicIncidentTitle(incident: PublicIncident): string {
@@ -33,16 +35,12 @@ export function publicIncidentCaption(incident: PublicIncident): string {
   return 'No public description has been posted.';
 }
 
-/** The most important official text: corrections first, then outcome, then progress. */
+/** Keep the established outcome foremost, then corrections and other progress. */
 export function publicIncidentLatestUpdate(incident: PublicIncident): { label: string; text: string } | null {
-  if (incident.publicCorrection) return { label: 'Correction', text: incident.publicCorrection };
   if (incident.publicSummary) return { label: 'Outcome', text: incident.publicSummary };
+  if (incident.publicCorrection) return { label: 'Correction', text: incident.publicCorrection };
   if (incident.latestPublicUpdate) return { label: 'Official update', text: incident.latestPublicUpdate };
   return null;
-}
-
-export function publicIncidentHasMapLocation(incident: PublicIncident): boolean {
-  return Boolean(incident.approximateArea || incident.exactLocation);
 }
 
 /** Approved public photos only. Original evidence is never substituted here. */
@@ -63,13 +61,7 @@ export function publicIncidentMedia(incident: PublicIncident): ReportMediaAttach
   return photos;
 }
 
-export function PublicIncidentHeader({
-  incident,
-  trailing,
-}: {
-  incident: PublicIncident;
-  trailing?: React.ReactNode;
-}) {
+export function PublicIncidentHeader({ incident }: { incident: PublicIncident }) {
   const typeTone = incidentTypeTone(incident.incidentType);
   const postedAt = incident.confirmedAt ?? incident.lastPublicUpdateAt;
   const isResidentReport = Boolean(incident.reportId);
@@ -87,17 +79,19 @@ export function PublicIncidentHeader({
         </View>
       )}
       <View style={residentFeedStyles.reporterDetails}>
-        <View style={residentFeedStyles.reporterNameRow}>
+        <View style={[residentFeedStyles.reporterNameRow, styles.reporterNameLine]}>
           <Text style={residentFeedStyles.reporterName} numberOfLines={1}>
             {reporterLabel}
           </Text>
+          <Text style={styles.reporterMetaDot}>·</Text>
+          <Text style={styles.barangayLabel} numberOfLines={1}>
+            Brgy. {incident.barangayName}
+          </Text>
         </View>
-        <Text style={residentFeedStyles.createdAtText} numberOfLines={1}>
-          Brgy. {incident.barangayName}
-          {postedAt ? ` · ${formatPublishedAt(postedAt)}` : ''}
+        <Text style={styles.reportDate} numberOfLines={1}>
+          {postedAt ? formatPublishedAt(postedAt) : ''}
         </Text>
       </View>
-      {trailing}
     </View>
   );
 }
@@ -205,6 +199,25 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: radius.full,
+  },
+  reporterNameLine: {
+    gap: 2,
+  },
+  barangayLabel: {
+    flexShrink: 1,
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.md,
+    color: colors.textMuted,
+  },
+  reporterMetaDot: {
+    fontFamily: fonts.semibold,
+    fontSize: fontSizes.md,
+    color: colors.textMuted,
+  },
+  reportDate: {
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.md,
+    color: colors.textMuted,
   },
   landmarkRow: {
     flexDirection: 'row',

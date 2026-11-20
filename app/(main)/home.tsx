@@ -16,6 +16,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import OfficialUpdatesCarousel from '../../components/home/OfficialUpdatesCarousel';
+import { AnnouncementEngagementProvider } from '../../components/official/AnnouncementEngagementProvider';
 import NearbyReportsPanel from '../../components/home/NearbyReportsPanel';
 import PublicIncidentDetail from '../../components/report/PublicIncidentDetail';
 import ReminderForYouCarousel from '../../components/home/ReminderForYouCarousel';
@@ -90,7 +91,6 @@ export default function HomeScreen() {
   const [showWelcome, setShowWelcome] = useState(false);
   const [quickAccessType, setQuickAccessType] = useState<QuickAccessType | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [isNearbyMapGestureActive, setIsNearbyMapGestureActive] = useState(false);
   const [openedIncidentId, setOpenedIncidentId] = useState<string | null>(null);
   const [openedPublicReportId, setOpenedPublicReportId] = useState<string | null>(null);
   const [officialUpdatesPromptVisible, setOfficialUpdatesPromptVisible] = useState(false);
@@ -115,7 +115,7 @@ export default function HomeScreen() {
     error: reportsError,
     reload: reloadReports,
     patchEngagement,
-  } = usePublicIncidents();
+  } = usePublicIncidents({ loadAll: true });
 
   const loadCurrentLocation = useCallback(async (force = false) => {
     const locationIsFresh = Date.now() - locationLoadedAtRef.current < 5 * 60_000;
@@ -179,7 +179,9 @@ export default function HomeScreen() {
   const nearbyReports = useMemo(() => {
     const residentBarangayName = barangay.trim().toLocaleLowerCase();
     return incidents
-      .filter((incident) => incident.publicStatus !== 'resolved')
+      .filter((incident) =>
+        incident.publicStatus === 'confirmed' || incident.publicStatus === 'response_ongoing',
+      )
       .map((incident) => {
         const location = incident.exactLocation ?? incident.approximateArea;
         const distance = location && currentLocation ? distanceInMeters(currentLocation, location) : null;
@@ -382,7 +384,6 @@ export default function HomeScreen() {
           },
         ]}
         showsVerticalScrollIndicator={false}
-        scrollEnabled={!isNearbyMapGestureActive}
         scrollEventThrottle={16}
         onScroll={({ nativeEvent }) => {
           const shouldCollapseHeader = nativeEvent.contentOffset.y > 72;
@@ -413,7 +414,6 @@ export default function HomeScreen() {
               setOpenedPublicReportId(publicReportId ?? null);
             }}
             onRetry={retryNearbyReports}
-            onGestureActiveChange={setIsNearbyMapGestureActive}
           />
 
           <View style={styles.quickAccessSection}>
@@ -502,9 +502,6 @@ export default function HomeScreen() {
             <View style={styles.sectionHeaderRow}>
               <View style={styles.sectionHeadingCopy}>
                 <Text style={styles.sectionTitle}>What you should know</Text>
-                <Text style={styles.sectionSubtitle}>
-                  Latest reports and announcements in Minglanilla
-                </Text>
               </View>
             </View>
             {announcementsLoading ? (
@@ -520,14 +517,16 @@ export default function HomeScreen() {
                 <Text style={styles.stateText}>No recent updates yet</Text>
               </View>
             ) : (
-              <OfficialUpdatesCarousel
-                announcements={officialUpdateAnnouncements}
-                cardWidth={officialUpdateCardWidth}
-                carouselWidth={officialUpdatesCarouselWidth}
-                trailingSpace={officialUpdateCarouselTrailingSpace}
-                onOpenAnnouncement={goToOfficialUpdates}
-                onRequestMore={() => setOfficialUpdatesPromptVisible(true)}
-              />
+              <AnnouncementEngagementProvider announcements={officialUpdateAnnouncements}>
+                <OfficialUpdatesCarousel
+                  announcements={officialUpdateAnnouncements}
+                  cardWidth={officialUpdateCardWidth}
+                  carouselWidth={officialUpdatesCarouselWidth}
+                  trailingSpace={officialUpdateCarouselTrailingSpace}
+                  onOpenAnnouncement={goToOfficialUpdates}
+                  onRequestMore={() => setOfficialUpdatesPromptVisible(true)}
+                />
+              </AnnouncementEngagementProvider>
             )}
           </View>
 

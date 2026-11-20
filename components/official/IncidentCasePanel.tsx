@@ -3,6 +3,7 @@ import { Alert, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
   addPublicSummary,
+  formatIncidentOfficeLabel,
   type IncidentAction,
   type IncidentCaseDetail,
   recordIncidentFinding,
@@ -10,6 +11,7 @@ import {
   requestMunicipalSupport,
 } from '../../lib/incidentCases';
 import type { OfficialKind } from '../../lib/officialReports';
+import { formatIncidentEventTitle } from '../../lib/reportContactFlow';
 import { reportOperationsStyles as operationStyles } from '../../styles/components/reportOperations.styles';
 import ResourceFormSheet from './ResourceFormSheet';
 import { officialStyles as styles } from '../../styles/screens/official.styles';
@@ -51,10 +53,14 @@ export default function IncidentCasePanel(
     currentReportId,
     onLogActivity,
     assessmentRequested = false,
+    useScopedOfficeLabels = false,
+    historyAndVisibilityInOverflow = false,
   }: {
     incident: IncidentCaseDetail;
     onLogActivity?: () => void;
     assessmentRequested?: boolean;
+    useScopedOfficeLabels?: boolean;
+    historyAndVisibilityInOverflow?: boolean;
     currentReportId?: string;
     viewerKind: OfficialKind;
     allowedActions: IncidentAction[];
@@ -262,14 +268,20 @@ export default function IncidentCasePanel(
     return (
       <WorkflowHistoryRow
         key={event.id}
-        title={event.eventType.replace(/_/g, ' ')}
+        title={useScopedOfficeLabels
+          ? formatIncidentEventTitle(event.eventType)
+          : event.eventType.replace(/_/g, ' ')}
         eventType={event.eventType}
         timestamp={event.occurredAt || event.createdAt}
         actorName={event.actorName}
-        officeLabel={event.officeLabel}
+        officeLabel={formatIncidentOfficeLabel(
+          event.officeLabel,
+          useScopedOfficeLabels ? 'MITCOM' : 'MDRRMO',
+        )}
         details={event.details}
         publicText={event.publicText}
         note={event.note}
+        municipalOfficeDisplayName={useScopedOfficeLabels ? 'MITCOM' : 'MDRRMO'}
       />
     );
   }
@@ -290,16 +302,35 @@ export default function IncidentCasePanel(
     );
   const showResponse = incident.verification === 'confirmed' ||
     incident.confirmedAt != null;
-  const leadLabel = incident.leadOffice === 'municipal'
-    ? 'MDRRMO'
-    : 'Brgy. ' + (incident.barangayName ?? 'assigned barangay') + ' BDRRMO';
-  const coordinationLabel = {
-    local: 'Local response',
-    support_requested: 'Support requested - awaiting acceptance',
-    support_active: 'Support active',
-    transfer_requested: 'Transfer requested - current lead remains in charge',
-    municipal_lead: 'Municipal lead',
-  }[incident.coordination];
+  const leadDescription = incident.leadOffice === 'municipal'
+    ? 'Lead: MITCOM'
+    : `Lead: Brgy. ${incident.barangayName ?? 'assigned barangay'}`;
+  const assessmentSummary = active && needsFinding
+    ? incident.verification === 'pending'
+      ? 'Assess the incident; it is not yet confirmed'
+      : null
+    : incident.verification === 'not_confirmed'
+      ? 'Assessment closed without confirmation'
+      : 'Assessment recorded';
+  const pendingRequests = incident.supportRequests.filter((request) =>
+    request.status === 'requested'
+  );
+  const incomingRequestDescription = pendingRequests.length === 1
+    ? '1 request awaiting your response'
+    : `${pendingRequests.length} requests awaiting your response`;
+  const hasPendingSupportRequest = pendingRequests.some((request) =>
+    request.kind === 'support'
+  );
+  const hasPendingTransferRequest = pendingRequests.some((request) =>
+    request.kind === 'transfer'
+  );
+  const canRespondToPendingRequests = viewerKind === 'MDRRMO' &&
+    allowedActions.includes('respond_request') && pendingRequests.length > 0;
+  const incomingRequestTitle = hasPendingSupportRequest && hasPendingTransferRequest
+    ? 'Respond to support and lead transfer requests'
+    : hasPendingTransferRequest
+    ? 'Respond to lead transfer request'
+    : 'Respond to support request';
   function activityEntry() {
     if (!active || !allowedActions.includes('log_event')) return null;
     return (
@@ -310,11 +341,11 @@ export default function IncidentCasePanel(
       />
     );
   }
-  function coordinationTools() {
+  function coordinationTools(showLeadDescription = true) {
     return (
       <>
         {incident.publicCorrection && (
-          <Text style={styles.subtitle}>
+          <Text style={[styles.subtitle, operationStyles.minimumText]}>
             Public correction: {incident.publicCorrection}
           </Text>
         )}
@@ -323,30 +354,36 @@ export default function IncidentCasePanel(
             Previous outcome: {incident.publicSummary}
           </Text>
         )}
-        <Text style={operationStyles.caption}>
-          Lead: {leadLabel}. {coordinationLabel}.
-        </Text>
         {(allowedActions.includes('request_support') ||
           allowedActions.includes('request_transfer')) && (
           <WorkflowActionRow
             title='Coordinate response'
-            description='Request support or transfer the lead'
             icon='people-outline'
             onPress={() => setTask('coordination')}
           />
         )}
-        {incident.supportRequests.length > 0 && (
+        {canRespondToPendingRequests ? (
+          <>
+            <Text style={operationStyles.caption}>
+              {showLeadDescription
+                ? leadDescription
+                : incomingRequestDescription}
+            </Text>
+            <WorkflowButton
+              label={incomingRequestTitle}
+              onPress={() => setTask('requests')}
+            />
+          </>
+        ) : incident.supportRequests.length > 0 ? (
           <WorkflowActionRow
             title='Support & transfer requests'
-            description={String(
-              incident.supportRequests.filter((request) =>
-                request.status === 'requested'
-              ).length,
-            ) + ' awaiting a response'}
+            description={showLeadDescription
+              ? leadDescription
+              : `${pendingRequests.length} awaiting a response`}
             icon='swap-horizontal-outline'
             onPress={() => setTask('requests')}
           />
-        )}
+        ) : null}
         {allowedActions.includes('post_progress') &&
           incident.verification === 'confirmed' && (
           <WorkflowActionRow
@@ -363,38 +400,27 @@ export default function IncidentCasePanel(
       {showAssessment && (
         <OperationTimelineStep
           title='Field assessment'
-          summary={active && needsFinding
-            ? (incident.verification === 'pending'
-              ? 'Assess the incident; it is not yet confirmed'
-              : 'Record the municipal finding')
-            : incident.verification === 'not_confirmed'
-            ? 'Assessment closed without confirmation'
-            : 'Assessment recorded'}
+          summary={assessmentSummary ?? ''}
           icon='search-outline'
+          showSummary={assessmentSummary !== null}
           current={currentPhase === 'assessment'}
           last={!showResponse && active}
           collapsible={active && needsFinding}
         >
           {currentPhase === 'assessment' && (
             <>
-              {allowedActions.includes('record_finding')
-                ? (
-                  <WorkflowButton
-                    label='Record field finding'
-                    onPress={() => {
-                      setFindingPublicationLoading(true);
-                      setFindingReviews([]);
-                      setFindingDrafts({});
-                      setError(null);
-                      setTask('finding');
-                    }}
-                  />
-                )
-                : (
-                  <Text style={operationStyles.caption}>
-                    {leadLabel} is responsible for recording the field finding.
-                  </Text>
-                )}
+              {allowedActions.includes('record_finding') ? (
+                <WorkflowButton
+                  label='Record field finding'
+                  onPress={() => {
+                    setFindingPublicationLoading(true);
+                    setFindingReviews([]);
+                    setFindingDrafts({});
+                    setError(null);
+                    setTask('finding');
+                  }}
+                />
+              ) : null}
               {coordinationTools()}
               {activityEntry()}
             </>
@@ -410,28 +436,18 @@ export default function IncidentCasePanel(
             ? 'Response action recorded'
             : 'Confirmed incident - no response action recorded'}
           icon='people-outline'
+          showSummary={false}
           current={currentPhase === 'response'}
           last={active && !readyToResolve}
         >
           {currentPhase === 'response'
             ? (
               <>
-                {coordinationTools()}
-                {!allowedActions.includes('request_support') &&
-                  !allowedActions.includes('request_transfer') &&
-                  !allowedActions.includes('resolve') && (
-                  <Text style={operationStyles.caption}>
-                    {leadLabel} manages response coordination and resolution.
-                  </Text>
-                )}
+                {coordinationTools(false)}
                 {activityEntry()}
               </>
             )
-            : (
-              <Text style={operationStyles.caption}>
-                Lead: {leadLabel}. {coordinationLabel}.
-              </Text>
-            )}
+            : null}
         </OperationTimelineStep>
       )}
       {(readyToResolve || !active) && (
@@ -447,12 +463,12 @@ export default function IncidentCasePanel(
           collapsible={false}
         >
           {incident.publicCorrection && (
-            <Text style={styles.subtitle}>
+            <Text style={[styles.subtitle, operationStyles.minimumText]}>
               Correction: {incident.publicCorrection}
             </Text>
           )}
           {incident.publicSummary && (
-            <Text style={styles.subtitle}>{incident.publicSummary}</Text>
+            <Text style={[styles.subtitle, operationStyles.minimumText]}>{incident.publicSummary}</Text>
           )}
           {readyToResolve && (
             <>
@@ -478,45 +494,54 @@ export default function IncidentCasePanel(
           )}
         </OperationTimelineStep>
       )}
-      <OperationTimelineStep
-        title='Incident history'
-        collapsible={false}
-        summary={String(incident.events.length) + ' recorded events'}
-        icon='time-outline'
-        utility
-      >
-        {sortedEvents.length === 0 && (
-          <Text style={operationStyles.caption}>No activity recorded yet.</Text>
-        )}
-        {sortedEvents.slice(0, 3).map(historyRow)}
-        {sortedEvents.length > 0 && (
-          <WorkflowActionRow
-            title='View all incident activity'
-            icon='time-outline'
-            onPress={() => setTask('history')}
-          />
-        )}
-        {currentReportId && currentReportId !== incident.sourceReportId && (
-          <WorkflowActionRow
-            title='View source report'
-            description='This report is linked to an incident'
-            icon='link-outline'
-            onPress={() =>
-              router.push({
-                pathname: '/official/[id]',
-                params: { id: incident.sourceReportId },
-              })}
-          />
-        )}
-        {!active && incident.supportRequests.length > 0 && (
-          <WorkflowActionRow
-            title='Support & transfer history'
-            icon='swap-horizontal-outline'
-            onPress={() => setTask('requests')}
-          />
-        )}
-      </OperationTimelineStep>
-      {allowedActions.includes('publish_photo') && <WorkflowActionRow title='Public visibility' description='Review photo, location, and sensitive-case settings' icon='eye-outline' onPress={() => setTask('publication')} />}
+      {!historyAndVisibilityInOverflow && (
+        <OperationTimelineStep
+          title='Incident history'
+          collapsible={false}
+          summary={String(incident.events.length) + ' recorded events'}
+          icon='time-outline'
+          utility
+        >
+          {sortedEvents.length === 0 && (
+            <Text style={operationStyles.caption}>No activity recorded yet.</Text>
+          )}
+          {sortedEvents.slice(0, 3).map(historyRow)}
+          {sortedEvents.length > 0 && (
+            <WorkflowActionRow
+              title='View all incident activity'
+              icon='time-outline'
+              onPress={() => setTask('history')}
+            />
+          )}
+          {currentReportId && currentReportId !== incident.sourceReportId && (
+            <WorkflowActionRow
+              title='View source report'
+              description='This report is linked to an incident'
+              icon='link-outline'
+              onPress={() =>
+                router.push({
+                  pathname: '/official/[id]',
+                  params: { id: incident.sourceReportId },
+                })}
+            />
+          )}
+          {!active && incident.supportRequests.length > 0 && (
+            <WorkflowActionRow
+              title='Support & transfer history'
+              icon='swap-horizontal-outline'
+              onPress={() => setTask('requests')}
+            />
+          )}
+        </OperationTimelineStep>
+      )}
+      {!historyAndVisibilityInOverflow && allowedActions.includes('publish_photo') && (
+        <WorkflowActionRow
+          title='Public visibility'
+          description='Review photo, location, and sensitive-case settings'
+          icon='eye-outline'
+          onPress={() => setTask('publication')}
+        />
+      )}
       <ResourceFormSheet
         visible={task !== null}
         title={task ? taskTitles[task] : 'Incident response'}
@@ -537,31 +562,27 @@ export default function IncidentCasePanel(
       >
         {task === 'publication' && <IncidentPublicationPanel key={incident.id + String(incident.isSensitive) + incident.publicLocationMode} incident={incident} currentReportId={currentReportId} onChanged={onChanged} />}
         {task === 'coordination' && (
-          <>
-            <Text style={operationStyles.caption}>
-              Support keeps your office in charge. A transfer changes the lead
-              only after MDRRMO accepts.
-            </Text>
-            <WorkflowChoices
-              compact
-              label='Next step'
-              selected={choice}
-              onSelect={(value) => {
-                setChoice(value);
-                setFieldErrors({});
-              }}
-              disabled={busy}
-              values={[
-                { value: 'local', label: 'Respond locally' },
-                ...(allowedActions.includes('request_support')
-                  ? [{ value: 'support' as const, label: 'Request support' }]
-                  : []),
-                ...(allowedActions.includes('request_transfer')
-                  ? [{ value: 'transfer' as const, label: 'Transfer lead' }]
-                  : []),
-              ]}
-            />
-          </>
+          <WorkflowChoices
+            compact
+            stacked
+            hideLabel
+            label='Next step'
+            selected={choice}
+            onSelect={(value) => {
+              setChoice(value);
+              setFieldErrors({});
+            }}
+            disabled={busy}
+            values={[
+              { value: 'local', label: 'Respond locally' },
+              ...(allowedActions.includes('request_support')
+                ? [{ value: 'support' as const, label: 'Request support' }]
+                : []),
+              ...(allowedActions.includes('request_transfer')
+                ? [{ value: 'transfer' as const, label: 'Transfer lead' }]
+                : []),
+            ]}
+          />
         )}
         {(task === 'finding' || task === 'reopen' ||
           (task === 'coordination' && choice !== 'local')) && (
@@ -587,12 +608,14 @@ export default function IncidentCasePanel(
               const reportMedia = incident.media;
               return (
                 <View key={review.reportId} style={styles.card}>
-                  <Text style={styles.subtitle}>
+                  <Text style={[styles.subtitle, operationStyles.minimumText]}>
                     Screen public copy for {review.reportId === incident.sourceReportId ? 'the source report' : 'this linked report'}
                   </Text>
                   <ReportPublicationFields
                     sourceTitle={review.sourceTitle}
                     sourceDescription={review.sourceDescription}
+                    showSourceText={false}
+                    showPhotoGuidance={false}
                     acknowledged={draft.acknowledged}
                     onAcknowledgedChange={(value) => editFindingDraft(review.reportId, { acknowledged: value })}
                     photos={review.media.filter((item) => item.type === 'photo').map((item) => {
@@ -701,12 +724,6 @@ export default function IncidentCasePanel(
             />
           </>
         )}
-        {task === 'coordination' && choice === 'local' && (
-          <Text style={operationStyles.caption}>
-            Your office remains the lead. Record response actions as they
-            happen.
-          </Text>
-        )}
         {task === 'coordination' && choice !== 'local' && (
           <WorkflowButton
             label='Send request'
@@ -763,6 +780,7 @@ export default function IncidentCasePanel(
       <ResponseEventSheet
         visible={eventVisible}
         target={{ incidentCaseId: incident.id }}
+        municipalOfficeDisplayName={useScopedOfficeLabels ? 'MITCOM' : 'MDRRMO'}
         onClose={() => setEventVisible(false)}
         onLogged={onChanged}
       />

@@ -2,7 +2,7 @@ import { useState, type ComponentProps } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { Alert, Pressable, Text, View } from 'react-native';
 
-import { colors, fonts, radius, spacing } from '../../styles/theme';
+import { colors, fonts, fontSizes, radius, spacing } from '../../styles/theme';
 import { officialStyles as styles } from '../../styles/screens/official.styles';
 import { reportOperationsStyles as operationStyles } from '../../styles/components/reportOperations.styles';
 import { WorkflowNote } from './WorkflowForm';
@@ -61,25 +61,29 @@ export function PublicSourceText({
 export function PublicationDisclosureTiles({
   choices,
   disabled = false,
+  sensitive = false,
 }: {
   choices: PublicationDisclosureChoice[];
   disabled?: boolean;
+  sensitive?: boolean;
 }) {
   return (
     <View style={fieldStyles.disclosureSection}>
-      <Text style={styles.subtitle}>Public details</Text>
+      <Text style={[styles.subtitle, operationStyles.minimumText]}>Public details</Text>
       <View style={fieldStyles.disclosureTiles}>
         {choices.map((choice) => {
-          const checked = choice.allowed && choice.selected;
+          const checked = !sensitive && choice.allowed && choice.selected;
           const unavailable = !choice.allowed;
-          const status = unavailable ? 'Locked' : checked ? 'Visible' : 'Hidden';
-          const tileDisabled = disabled || unavailable;
+          const status = sensitive ? 'Hidden' : unavailable ? 'Locked' : checked ? 'Visible' : 'Hidden';
+          const tileDisabled = disabled || unavailable || sensitive;
           return (
             <Pressable
               key={choice.label}
               accessibilityRole="checkbox"
               accessibilityLabel={`${choice.label}, ${status.toLowerCase()}`}
-              accessibilityHint={unavailable
+              accessibilityHint={sensitive
+                ? 'This detail is hidden while the incident is marked sensitive.'
+                : unavailable
                 ? 'The resident did not allow this detail to be public.'
                 : 'Select to include this detail in the public report.'}
               accessibilityState={{ checked, disabled: tileDisabled }}
@@ -92,7 +96,7 @@ export function PublicationDisclosureTiles({
               ]}
             >
               <Ionicons
-                name={unavailable ? 'lock-closed-outline' : choice.icon}
+                name={unavailable || sensitive ? 'lock-closed-outline' : choice.icon}
                 size={20}
                 color={checked ? colors.primary : colors.textMuted}
               />
@@ -139,6 +143,8 @@ export default function ReportPublicationFields({
   onSensitivityReasonChange,
   showSensitiveChoice = true,
   showSensitiveReason = true,
+  showSourceText = true,
+  showPhotoGuidance = true,
   disabled = false,
 }: {
   sourceTitle: string;
@@ -164,6 +170,8 @@ export default function ReportPublicationFields({
   onSensitivityReasonChange: (value: string) => void;
   showSensitiveChoice?: boolean;
   showSensitiveReason?: boolean;
+  showSourceText?: boolean;
+  showPhotoGuidance?: boolean;
   disabled?: boolean;
 }) {
   const [unavailablePhotoIds, setUnavailablePhotoIds] = useState<string[]>([]);
@@ -197,43 +205,52 @@ export default function ReportPublicationFields({
       onChange: onApproveExactLocationChange,
     },
   ];
+  const sensitiveChoice = showSensitiveChoice ? (
+    <Pressable
+      accessibilityRole="checkbox"
+      accessibilityLabel="Mark this incident sensitive"
+      accessibilityHint="Hides the public report text, precise location, and photos. A safety reason is required."
+      accessibilityState={{ checked: sensitive, disabled }}
+      disabled={disabled}
+      onPress={() => {
+        onSensitiveChange(!sensitive);
+        if (!sensitive) onPhotoSelectionChange([]);
+      }}
+      style={[
+        fieldStyles.sensitiveChoice,
+        sensitive && fieldStyles.sensitiveChoiceSelected,
+      ]}
+    >
+      <Ionicons
+        name={sensitive ? 'shield-checkmark-outline' : 'shield-outline'}
+        size={20}
+        color={sensitive ? colors.danger : colors.textMuted}
+      />
+      <View style={fieldStyles.sensitiveCopy}>
+        <Text style={fieldStyles.choiceTitle}>Mark sensitive</Text>
+        <Text style={fieldStyles.choiceStatus}>
+          {sensitive ? 'Public details hidden' : 'Optional safety hold'}
+        </Text>
+      </View>
+      <Ionicons
+        name={sensitive ? 'checkmark-circle' : 'ellipse-outline'}
+        size={19}
+        color={sensitive ? colors.danger : colors.textMuted}
+      />
+    </Pressable>
+  ) : null;
 
   return (
     <View style={fieldStyles.container}>
-      {showSensitiveChoice ? (
-        <Pressable
-          accessibilityRole="checkbox"
-          accessibilityLabel="Mark this incident sensitive"
-          accessibilityHint="Hides the public report text, precise location, and photos. A safety reason is required."
-          accessibilityState={{ checked: sensitive, disabled }}
-          disabled={disabled}
-          onPress={() => {
-            onSensitiveChange(!sensitive);
-            if (!sensitive) onPhotoSelectionChange([]);
-          }}
-          style={[
-            fieldStyles.sensitiveChoice,
-            sensitive && fieldStyles.sensitiveChoiceSelected,
-          ]}
-        >
-          <Ionicons
-            name={sensitive ? 'shield-checkmark-outline' : 'shield-outline'}
-            size={20}
-            color={sensitive ? colors.danger : colors.textMuted}
-          />
-          <View style={fieldStyles.sensitiveCopy}>
-            <Text style={fieldStyles.choiceTitle}>Mark sensitive</Text>
-            <Text style={fieldStyles.choiceStatus}>
-              {sensitive ? 'Public details hidden' : 'Optional safety hold'}
-            </Text>
-          </View>
-          <Ionicons
-            name={sensitive ? 'checkmark-circle' : 'ellipse-outline'}
-            size={19}
-            color={sensitive ? colors.danger : colors.textMuted}
-          />
-        </Pressable>
+      {!sensitive && showSourceText ? (
+        <PublicSourceText title={sourceTitle} description={sourceDescription} />
       ) : null}
+      <PublicationDisclosureTiles
+        choices={disclosureChoices}
+        disabled={disabled}
+        sensitive={sensitive}
+      />
+      {sensitiveChoice}
 
       {sensitive ? (showSensitiveReason ? (
         <WorkflowNote
@@ -246,32 +263,34 @@ export default function ReportPublicationFields({
         />
       ) : null) : (
         <>
-          <PublicSourceText title={sourceTitle} description={sourceDescription} />
-          <PublicationDisclosureTiles choices={disclosureChoices} disabled={disabled} />
           {photos.length > 0 ? (
             <View style={fieldStyles.photoSection}>
-              <View style={fieldStyles.photoHeading}>
-                <Text style={styles.subtitle}>Photos</Text>
-                <Text style={fieldStyles.photoHint}>
-                  Tap a photo to inspect it full-size.
-                </Text>
-              </View>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Photo safety checklist"
-                accessibilityHint="Shows what must be excluded from public photos."
-                onPress={() => Alert.alert(
-                  'Photo safety checklist',
-                  'Exclude injured faces, children, house numbers, vehicle plates, contact details, and private notes. Tap each photo to inspect it full-size.',
-                  [{ text: 'Got it' }],
-                )}
-                style={fieldStyles.safetyHint}
-              >
-                <Ionicons name="information-circle-outline" size={17} color={colors.textMuted} />
-                <Text style={fieldStyles.safetyHintText}>Safety checklist</Text>
-                <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
-              </Pressable>
-              {photos.some((photo) => photo.publicApproved) ? (
+              {showPhotoGuidance ? (
+                <>
+                  <View style={fieldStyles.photoHeading}>
+                    <Text style={[styles.subtitle, operationStyles.minimumText]}>Photos</Text>
+                    <Text style={fieldStyles.photoHint}>
+                      Tap a photo to inspect it full-size.
+                    </Text>
+                  </View>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Photo safety checklist"
+                    accessibilityHint="Shows what must be excluded from public photos."
+                    onPress={() => Alert.alert(
+                      'Photo safety checklist',
+                      'Exclude injured faces, children, house numbers, vehicle plates, contact details, and private notes. Tap each photo to inspect it full-size.',
+                      [{ text: 'Got it' }],
+                    )}
+                    style={fieldStyles.safetyHint}
+                  >
+                    <Ionicons name="information-circle-outline" size={17} color={colors.textMuted} />
+                    <Text style={fieldStyles.safetyHintText}>Safety checklist</Text>
+                    <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
+                  </Pressable>
+                </>
+              ) : null}
+              {showPhotoGuidance && photos.some((photo) => photo.publicApproved) ? (
                 <Text style={fieldStyles.photoHint}>
                   Public photos stay selected here. Revoke them in Photo publication.
                 </Text>
@@ -399,11 +418,11 @@ const fieldStyles = {
     backgroundColor: colors.offWhite,
   } as const,
   sourceHeading: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: spacing.xs } as const,
-  sourceHeadingText: { color: colors.textMuted, fontFamily: fonts.medium, fontSize: 12 } as const,
-  sourceTitle: { color: colors.text, fontFamily: fonts.semibold, fontSize: 15, lineHeight: 21 } as const,
-  sourceDescription: { color: colors.text, fontFamily: fonts.regular, fontSize: 14, lineHeight: 20 } as const,
+  sourceHeadingText: { color: colors.textMuted, fontFamily: fonts.medium, fontSize: fontSizes.lg } as const,
+  sourceTitle: { color: colors.text, fontFamily: fonts.semibold, fontSize: fontSizes.lg, lineHeight: 22 } as const,
+  sourceDescription: { color: colors.text, fontFamily: fonts.regular, fontSize: fontSizes.lg, lineHeight: 22 } as const,
   sourceExpand: { minHeight: 44, flexDirection: 'row' as const, alignItems: 'center' as const, gap: spacing.xs, alignSelf: 'flex-start' as const, paddingHorizontal: spacing.xs } as const,
-  sourceExpandText: { color: colors.primary, fontFamily: fonts.semibold, fontSize: 12 } as const,
+  sourceExpandText: { color: colors.primary, fontFamily: fonts.semibold, fontSize: fontSizes.lg } as const,
   disclosureSection: { gap: spacing.xs } as const,
   disclosureTiles: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: spacing.xs },
   disclosureTile: {
@@ -415,15 +434,15 @@ const fieldStyles = {
     justifyContent: 'center' as const,
     gap: 2,
     padding: spacing.xs,
-    borderRadius: radius.md,
+    borderRadius: radius.sm,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.white,
   } as const,
   disclosureTileSelected: { borderColor: colors.primary, backgroundColor: colors.primaryLight } as const,
   disclosureTileLocked: { backgroundColor: colors.offWhite } as const,
-  disclosureLabel: { color: colors.text, fontFamily: fonts.semibold, fontSize: 12, textAlign: 'center' as const, flexShrink: 1 } as const,
-  disclosureStatus: { color: colors.textMuted, fontFamily: fonts.regular, fontSize: 10, textAlign: 'center' as const, flexShrink: 1 } as const,
+  disclosureLabel: { color: colors.text, fontFamily: fonts.semibold, fontSize: fontSizes.lg, textAlign: 'center' as const, flexShrink: 1 } as const,
+  disclosureStatus: { color: colors.textMuted, fontFamily: fonts.regular, fontSize: fontSizes.lg, textAlign: 'center' as const, flexShrink: 1 } as const,
   sensitiveChoice: {
     minHeight: 50,
     flexDirection: 'row' as const,
@@ -431,26 +450,26 @@ const fieldStyles = {
     gap: spacing.sm,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
-    borderRadius: radius.md,
+    borderRadius: radius.sm,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.white,
   } as const,
   sensitiveChoiceSelected: { borderColor: colors.danger, backgroundColor: colors.offWhite } as const,
   sensitiveCopy: { flex: 1, minWidth: 0, gap: 2 } as const,
-  choiceTitle: { color: colors.text, fontFamily: fonts.semibold, fontSize: 13 } as const,
-  choiceStatus: { color: colors.textMuted, fontFamily: fonts.regular, fontSize: 11 } as const,
+  choiceTitle: { color: colors.text, fontFamily: fonts.semibold, fontSize: fontSizes.lg } as const,
+  choiceStatus: { color: colors.textMuted, fontFamily: fonts.regular, fontSize: fontSizes.lg } as const,
   photoSection: { gap: spacing.xs, marginTop: spacing.xs } as const,
   photoHeading: { gap: 2 } as const,
   safetyHint: { minHeight: 44, flexDirection: 'row' as const, alignItems: 'center' as const, gap: spacing.xs, alignSelf: 'flex-start' as const, paddingHorizontal: spacing.xs } as const,
-  safetyHintText: { color: colors.textMuted, fontFamily: fonts.medium, fontSize: 12 } as const,
+  safetyHintText: { color: colors.textMuted, fontFamily: fonts.medium, fontSize: fontSizes.lg } as const,
   photoCard: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     gap: spacing.sm,
     minHeight: 74,
     padding: spacing.xs,
-    borderRadius: radius.md,
+    borderRadius: radius.sm,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.white,
@@ -461,10 +480,10 @@ const fieldStyles = {
   photoPlaceholder: { alignItems: 'center' as const, justifyContent: 'center' as const, backgroundColor: colors.offWhite } as const,
   photoCopy: { flex: 1, minWidth: 0, gap: 2 } as const,
   photoState: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 3 } as const,
-  photoStatus: { color: colors.textMuted, fontFamily: fonts.semibold, fontSize: 12 },
+  photoStatus: { color: colors.textMuted, fontFamily: fonts.semibold, fontSize: fontSizes.lg },
   photoStatusPublic: { color: colors.success },
   photoStatusSelected: { color: colors.primary },
-  photoHint: { color: colors.textMuted, fontFamily: fonts.regular, fontSize: 11, lineHeight: 15 } as const,
+  photoHint: { color: colors.textMuted, fontFamily: fonts.regular, fontSize: fontSizes.lg, lineHeight: 22 } as const,
   photoToggle: { minWidth: 44, minHeight: 44, alignItems: 'center' as const, justifyContent: 'center' as const } as const,
   acknowledgment: {
     minHeight: 44,
@@ -476,5 +495,5 @@ const fieldStyles = {
     backgroundColor: colors.offWhite,
   } as const,
   acknowledgmentChecked: { backgroundColor: colors.primaryLight } as const,
-  acknowledgmentText: { flex: 1, color: colors.text, fontFamily: fonts.medium, fontSize: 13, lineHeight: 18 } as const,
+  acknowledgmentText: { flex: 1, color: colors.text, fontFamily: fonts.medium, fontSize: fontSizes.lg, lineHeight: 22 } as const,
 };

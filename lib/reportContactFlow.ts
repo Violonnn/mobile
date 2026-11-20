@@ -1,4 +1,5 @@
 import type { HotlineRecord } from './resources';
+import type { ResponseEventType } from './officialReports';
 
 export type PendingReportCall = {
   kind: 'reporter' | 'hotline';
@@ -23,13 +24,61 @@ export type ResponseEventDetails = Record<string, string> | {
   services: ResponseServiceEntry[];
 };
 
+export const RESPONSE_EVENT_LABELS: Record<ResponseEventType, string> = {
+  reporter_call: 'Reporter call',
+  hotline_contacted: 'Hotline contacted',
+  assistance_requested: 'Assistance requested',
+  dispatch_confirmed: 'Dispatch confirmed',
+  responders_on_site: 'Responders on site',
+  assistance_given: 'Assistance given',
+  work_done: 'Work done',
+  external_info: 'External information',
+  internal_note: 'Internal note',
+};
+
+const incidentEventTitles: Record<string, string> = {
+  incident_created: 'Incident created',
+  report_linked: 'Report linked',
+  finding_recorded: 'Finding recorded',
+  support_requested: 'Support requested',
+  transfer_requested: 'Lead transfer requested',
+  support_accepted: 'Support accepted',
+  transfer_accepted: 'Lead transfer accepted',
+  request_returned: 'Request returned',
+  request_cancelled: 'Request cancelled',
+  resolved: 'Incident resolved',
+  summary_added: 'Outcome summary added',
+  reopened: 'Incident reopened',
+  withdrawn: 'Confirmation withdrawn',
+  legacy_handoff: 'Legacy handoff',
+  progress_update: 'Public progress update',
+  public_post_changed: 'Public post updated',
+  update_request_rerouted: 'Update request rerouted',
+  contact_logged: 'Response contact logged',
+};
+
+/** Use a clear title for known events and a readable fallback for newer ones. */
+export function formatIncidentEventTitle(eventType: string): string {
+  const normalizedType = eventType.trim();
+  const knownTitle = incidentEventTitles[normalizedType];
+  if (knownTitle) return knownTitle;
+  return normalizedType
+    .split('_')
+    .filter(Boolean)
+    .map((word) => `${word.charAt(0).toUpperCase()}${word.slice(1)}`)
+    .join(' ');
+}
+
 /** Keep the selected category visible alongside the specific provider. */
-export function responseServiceLabel(details: Record<string, unknown>): string {
+export function responseServiceLabel(
+  details: Record<string, unknown>,
+  municipalOfficeDisplayName = 'MDRRMO',
+): string {
   const labels: Record<string, string> = {
     bfp: 'BFP',
     pnp: 'PNP',
     rhu_ambulance: 'RHU / ambulance',
-    mdrrmo_rescue: 'MDRRMO rescue',
+    mdrrmo_rescue: `${municipalOfficeDisplayName} rescue`,
     bdrrmo_team: 'BDRRMO team',
   };
   const category = labels[String(details.service)] ?? 'Other service';

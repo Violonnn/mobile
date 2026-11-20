@@ -681,7 +681,7 @@ export function ResourceManagementContent({ header }: { header?: ReactNode }) {
           <View style={[styles.section, usesOptimizedDirectoryControls && styles.resourceDirectorySection]}>
             {!usesOptimizedDirectoryControls ? <ResourceSectionHeader title={isMayor ? 'Priority centers' : 'Evacuation centers'} count={centers.length} canAdd={isMdrrmo} onAdd={() => openCenterEditor(null)} /> : null}
             {barangaysError && isMdrrmo ? <Text style={styles.stateBody}>Barangays could not load: {barangaysError}</Text> : null}
-            {visibleCenters.length === 0 ? <View style={styles.stateBox}><Text style={styles.stateTitle}>{centers.length === 0 ? 'No centers yet' : 'No matching centers'}</Text><Text style={styles.stateBody}>{centers.length === 0 ? 'MDRRMO can add a center and assign its responsible barangay.' : 'Try a different search term.'}</Text></View> : visibleCenters.map((center) => {
+            {visibleCenters.length === 0 ? <View style={styles.stateBox}><Text style={styles.stateTitle}>{centers.length === 0 ? 'No centers yet' : 'No matching centers'}</Text><Text style={styles.stateBody}>{centers.length === 0 ? `${isMdrrmo || isBdrrmo ? 'MITCOM' : 'MDRRMO'} can add a center and assign its responsible barangay.` : 'Try a different search term.'}</Text></View> : visibleCenters.map((center) => {
               const canSetStatus = (isMdrrmo || isBdrrmo) && (!isBdrrmo || center.barangayId === scope.barangay_id);
               const canSetPriority = isMdrrmo || isMayor;
               const savingCenter = isSaving(`center:${center.id}`);

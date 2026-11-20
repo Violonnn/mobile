@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Text, TouchableOpacity, View, type ImageStyle, type StyleProp } from 'react-native';
 
 import type { ReportMediaAttachment } from '../../lib/reports';
-import { colors, fonts, spacing } from '../../styles/theme';
+import { colors, fonts, fontSizes, spacing } from '../../styles/theme';
 import { ReportMediaPreviewModal } from '../report/ReportDetailCard';
 
 export default function ScreenablePhotoPreview({
@@ -133,13 +133,13 @@ const photoSafetyRules: {
 
 const previewStyles = {
   footer: { gap: spacing.xs } as const,
-  heading: { color: colors.text, fontFamily: fonts.semibold, fontSize: 15 } as const,
-  body: { color: colors.textMuted, fontFamily: fonts.regular, fontSize: 13, lineHeight: 18 } as const,
+  heading: { color: colors.text, fontFamily: fonts.semibold, fontSize: fontSizes.lg, lineHeight: 22 } as const,
+  body: { color: colors.textMuted, fontFamily: fonts.regular, fontSize: fontSizes.lg, lineHeight: 22 } as const,
   rules: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: spacing.xs } as const,
   ruleChip: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 3, paddingHorizontal: spacing.xs, paddingVertical: 3, borderRadius: 9999, backgroundColor: colors.offWhite } as const,
-  ruleText: { color: colors.text, fontFamily: fonts.medium, fontSize: 11 } as const,
-  status: { color: colors.textMuted, fontFamily: fonts.regular, fontSize: 13 } as const,
+  ruleText: { color: colors.text, fontFamily: fonts.medium, fontSize: fontSizes.lg, lineHeight: 22 } as const,
+  status: { color: colors.textMuted, fontFamily: fonts.regular, fontSize: fontSizes.lg, lineHeight: 22 } as const,
   errorRow: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, gap: spacing.sm },
-  error: { color: colors.danger, fontFamily: fonts.regular, fontSize: 13, flexShrink: 1 } as const,
-  retry: { color: colors.navigationActive, fontFamily: fonts.semibold, fontSize: 14 } as const,
+  error: { color: colors.danger, fontFamily: fonts.regular, fontSize: fontSizes.lg, lineHeight: 22, flexShrink: 1 } as const,
+  retry: { color: colors.navigationActive, fontFamily: fonts.semibold, fontSize: fontSizes.lg, lineHeight: 22 } as const,
 };

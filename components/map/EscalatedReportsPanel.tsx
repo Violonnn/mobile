@@ -15,6 +15,7 @@ import {
   getMapReportPresentation,
   type MapReportMarker,
 } from '../../lib/reports';
+import { CommunityReportTags } from '../report/ReportDetailCard';
 import IncidentTypeBadge from '../report/IncidentTypeBadge';
 import { contributionStyles as styles } from '../../styles/components/yourContributions.styles';
 import { colors } from '../../styles/theme';
@@ -24,7 +25,11 @@ type Props = {
   hasMore?: boolean;
   loadingMore?: boolean;
   onLoadMore?: () => void;
-  reportPresentation?: (report: MapReportMarker) => { label: string; color: string } | null;
+  reportPresentation?: (report: MapReportMarker) => {
+    label: string;
+    color: string;
+    backgroundColor?: string;
+  } | null;
   loading: boolean;
   error: string | null;
   bottomInset: number;
@@ -42,6 +47,7 @@ type Props = {
   reviewAccessibilityVerb?: string;
   summaryText?: (count: number) => string;
   summaryColor?: string;
+  localResponseQueue?: boolean;
 };
 
 export default function EscalatedReportsPanel({
@@ -67,6 +73,7 @@ export default function EscalatedReportsPanel({
   reviewAccessibilityVerb = 'Review',
   summaryText = (count) => `${count} awaiting MDRRMO coordination`,
   summaryColor = colors.escalated,
+  localResponseQueue = false,
 }: Props) {
   return (
     <View style={styles.panel}>
@@ -86,7 +93,12 @@ export default function EscalatedReportsPanel({
         <View style={styles.headerRow}>
           <View style={styles.headerCopy}>
             <Text style={styles.eyebrow}>{queueTitle}</Text>
-            <Text style={styles.headerSubtitle}>
+            <Text
+              style={[
+                styles.headerSubtitle,
+                localResponseQueue && styles.localResponseHeaderSubtitle,
+              ]}
+            >
               {collapsed ? 'Drag up to view the response queue' : 'Drag down to maximize the map'}
             </Text>
           </View>
@@ -129,6 +141,28 @@ export default function EscalatedReportsPanel({
             {reports.map((report, index) => {
               const isLatest = index === 0;
               const statusPresentation = reportPresentation?.(report) ?? getMapReportPresentation(report);
+              const reviewAction = (
+                <TouchableOpacity
+                  style={styles.openAction}
+                  onPress={(event) => {
+                    event.stopPropagation();
+                    onReviewReport(report);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${reviewAccessibilityVerb} report: ${report.title}`}
+                >
+                  <Text style={styles.openActionText}>{reviewActionLabel}</Text>
+                  <Ionicons name="arrow-forward" size={18} color={colors.primary} />
+                </TouchableOpacity>
+              );
+              const engagementSummary = (
+                <View style={styles.engagementSummary}>
+                  <Ionicons name="arrow-up-outline" size={16} color={colors.textMuted} />
+                  <Text style={styles.engagementText}>{report.upvoteCount}</Text>
+                  <Ionicons name="chatbubble-outline" size={15} color={colors.textMuted} />
+                  <Text style={styles.engagementText}>{report.commentCount}</Text>
+                </View>
+              );
               return (
                 <TouchableOpacity
                   key={report.id}
@@ -138,25 +172,59 @@ export default function EscalatedReportsPanel({
                   accessibilityRole="button"
                   accessibilityLabel={`Locate ${statusPresentation.label.toLowerCase()} report: ${report.title}`}
                 >
-                  <View style={styles.dateStatusRow}>
-              <Ionicons name="warning-outline" size={18} color={statusPresentation.color} />
-              <Text style={[styles.statusText, { color: statusPresentation.color }]}>
-                {statusPresentation.label}
-              </Text>
-                    {isLatest ? <Text style={styles.latestBadge}>LATEST</Text> : null}
-                  </View>
+                  {localResponseQueue ? (
+                    <>
+                      <View style={styles.localResponseTitleDateRow}>
+                        <Text
+                          style={[styles.reportTitle, isLatest && styles.latestReportTitle]}
+                          numberOfLines={2}
+                        >
+                          {report.title || 'Untitled report'}
+                        </Text>
+                        <Text style={styles.localResponseDateText} numberOfLines={1}>
+                          {formatPublishedAt(report.created_at)}
+                        </Text>
+                      </View>
+                      <View style={styles.localResponseTagRow}>
+                        <View style={styles.localResponseTags}>
+                          <CommunityReportTags
+                            report={report}
+                            statusPresentation={statusPresentation}
+                            singleLine
+                          />
+                        </View>
+                        {isLatest ? <Text style={styles.latestBadge}>LATEST</Text> : null}
+                      </View>
+                    </>
+                  ) : (
+                    <>
+                      <View style={styles.dateStatusRow}>
+                        <Ionicons name="warning-outline" size={18} color={statusPresentation.color} />
+                        <Text style={[styles.statusText, { color: statusPresentation.color }]}>
+                          {statusPresentation.label}
+                        </Text>
+                        {isLatest ? <Text style={styles.latestBadge}>LATEST</Text> : null}
+                      </View>
 
-                  <Text style={[styles.reportTitle, isLatest && styles.latestReportTitle]}>
-                    {report.title || 'Untitled report'}
-                  </Text>
-                  <IncidentTypeBadge
-                    incidentType={report.incidentType}
-                    incidentTypeOther={report.incidentTypeOther}
-                  />
-                  <Text style={styles.dateText}>{formatPublishedAt(report.created_at)}</Text>
+                      <Text style={[styles.reportTitle, isLatest && styles.latestReportTitle]}>
+                        {report.title || 'Untitled report'}
+                      </Text>
+                      <IncidentTypeBadge
+                        incidentType={report.incidentType}
+                        incidentTypeOther={report.incidentTypeOther}
+                      />
+                      <Text style={styles.dateText}>{formatPublishedAt(report.created_at)}</Text>
+                    </>
+                  )}
                   <View style={styles.locationRow}>
                     <Ionicons name="location-outline" size={16} color={colors.textMuted} />
-                    <Text style={styles.locationText} numberOfLines={1}>
+                    <Text
+                      style={[
+                        styles.locationText,
+                        localResponseQueue && styles.localResponseLocationText,
+                      ]}
+                      numberOfLines={1}
+                    >
                       {formatReportLocation(report)}
                     </Text>
                   </View>
@@ -165,24 +233,8 @@ export default function EscalatedReportsPanel({
                   </Text>
 
                   <View style={styles.cardFooter}>
-                    <TouchableOpacity
-                      style={styles.openAction}
-                      onPress={(event) => {
-                        event.stopPropagation();
-                        onReviewReport(report);
-                      }}
-                      accessibilityRole="button"
-                      accessibilityLabel={`${reviewAccessibilityVerb} report: ${report.title}`}
-                    >
-                      <Text style={styles.openActionText}>{reviewActionLabel}</Text>
-                      <Ionicons name="arrow-forward" size={18} color={colors.primary} />
-                    </TouchableOpacity>
-                    <View style={styles.engagementSummary}>
-                      <Ionicons name="arrow-up-outline" size={16} color={colors.textMuted} />
-                      <Text style={styles.engagementText}>{report.upvoteCount}</Text>
-                      <Ionicons name="chatbubble-outline" size={15} color={colors.textMuted} />
-                      <Text style={styles.engagementText}>{report.commentCount}</Text>
-                    </View>
+                    {localResponseQueue ? engagementSummary : reviewAction}
+                    {localResponseQueue ? reviewAction : engagementSummary}
                   </View>
                 </TouchableOpacity>
               );

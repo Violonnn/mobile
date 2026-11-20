@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Animated,
   StyleSheet,
-  ScrollView,
   PanResponder,
   Text,
   TouchableOpacity,
@@ -13,7 +12,6 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { goBackOrReplace } from '../../lib/navigation';
 
 import InteractiveMap, {
   type MapFocusTarget,
@@ -26,18 +24,16 @@ import YourContributionsPanel, {
   type ContributionPanelState,
 } from '../../components/map/YourContributionsPanel';
 import { ReportEngagementProvider } from '../../components/report/ReportEngagementProvider';
-import PublicIncidentCard from '../../components/report/PublicIncidentCard';
 import PublicIncidentDetail from '../../components/report/PublicIncidentDetail';
-import ResidentBottomSheet from '../../components/ui/ResidentBottomSheet';
 import { useResidentData } from '../../context/ResidentDataContext';
 import { useReports } from '../../hooks/useReports';
-import { useIncidentSupport } from '../../hooks/useIncidentSupport';
 import { usePublicIncidents } from '../../hooks/usePublicIncidents';
 import { getGrantedMapGps, type GpsPosition } from '../../lib/location';
 import { getResidentMapTheme, type ResidentMapTheme } from '../../lib/mapPreferences';
 import { createMutableNumber } from '../../lib/mutableNumber';
 import { fetchMapReportById, type MapReportMarker } from '../../lib/reports';
-import type { PublicIncidentStatusFilter } from '../../lib/publicIncidents';
+import { getReportPublicationPreferences, subscribeToReportPublicationChanges } from '../../lib/reportPublication';
+import { publicIncidentHasMapLocation, type PublicIncidentStatusFilter } from '../../lib/publicIncidents';
 import { evacuationStatusLabel, facilityTypeLabel } from '../../lib/resources';
 import {
   getResidentBottomNavigationHeight,
@@ -59,22 +55,17 @@ export default function MapScreen() {
   const insets = useSafeAreaInsets();
   const { width: windowWidth, height: windowHeight, fontScale } = useWindowDimensions();
   const bottomNavigationHeight = getResidentBottomNavigationHeight(fontScale);
-  const { reportId, publicReportId, resourceId, resourceKind, fromNotification, incidentId, openRequest } = useLocalSearchParams<{
+  const { reportId, publicReportId, resourceId, resourceKind, incidentId, openRequest } = useLocalSearchParams<{
     reportId?: string | string[];
     publicReportId?: string | string[];
     resourceId?: string | string[];
     resourceKind?: string | string[];
-    fromNotification?: string | string[];
     incidentId?: string | string[];
     openRequest?: string | string[];
   }>();
-  const openedFromNotification = Array.isArray(fromNotification)
-    ? fromNotification[0] === '1'
-    : fromNotification === '1';
-  const { incidents, error: incidentsError, loading: incidentsLoading, reload: reloadIncidents, hasMore: hasMoreIncidents, loadMore: loadMoreIncidents, loadingMore: incidentsLoadingMore, patchEngagement } = usePublicIncidents();
+  const { incidents, error: incidentsError, loading: incidentsLoading, reload: reloadIncidents, patchEngagement } = usePublicIncidents({ loadAll: true });
   const [publicLayerVisible, setPublicLayerVisible] = useState(true);
   const [publicStatus, setPublicStatus] = useState<PublicIncidentStatusFilter>('all');
-  const [incidentListVisible, setIncidentListVisible] = useState(false);
   // selectedIncidentId opens the detail sheet; highlightedIncidentId drives the callout and pulsing marker.
   const [selectedIncidentId, setSelectedIncidentId] = useState<string | null>(null);
   const [selectedPublicReportId, setSelectedPublicReportId] = useState<string | null>(null);
@@ -84,11 +75,13 @@ export default function MapScreen() {
   const requestedPublicReportId = Array.isArray(publicReportId) ? publicReportId[0] : publicReportId;
   const requestedOpenKey = Array.isArray(openRequest) ? openRequest[0] : openRequest;
   const handledIncidentRequestRef = useRef<string | null>(null);
-  const { toggleSupport: toggleIncidentSupport, busyId: supportBusyId } = useIncidentSupport(patchEngagement);
-  const visibleIncidents = incidents.filter((incident) => publicStatus === 'all' || incident.publicStatus === publicStatus);
+  const eligiblePublicIncidents = incidents.filter(publicIncidentHasMapLocation);
+  const visibleIncidents = eligiblePublicIncidents.filter((incident) =>
+    publicStatus === 'all' || incident.publicStatus === publicStatus,
+  );
   const highlightedIncident = highlightedIncidentId
-    ? incidents.find((incident) => (incident.reportId ?? incident.incidentCaseId) === highlightedIncidentId)
-      ?? incidents.find((incident) => incident.incidentCaseId === highlightedIncidentId) ?? null
+    ? eligiblePublicIncidents.find((incident) => (incident.reportId ?? incident.incidentCaseId) === highlightedIncidentId)
+      ?? eligiblePublicIncidents.find((incident) => incident.incidentCaseId === highlightedIncidentId) ?? null
     : null;
   const {
     reports: loadedMarkers,
@@ -126,6 +119,10 @@ export default function MapScreen() {
   const [highlightedReportTranslateY] = useState(() => new Animated.Value(0));
   const [dragStartOffset] = useState(() => createMutableNumber());
   const [mapFilterVisible, setMapFilterVisible] = useState(false);
+  const shouldHideMapFilters =
+    fullReportVisible ||
+    selectedReportIds.length > 0 ||
+    Boolean(selectedIncidentId);
   const [layers, setLayers] = useState<MapLayerVisibility>({
     reports: true,
     facilities: true,
@@ -142,10 +139,64 @@ export default function MapScreen() {
   const [requestedOwnReport, setRequestedOwnReport] = useState<MapReportMarker | null>(null);
   const [requestedOwnError, setRequestedOwnError] = useState<string | null>(null);
   const [requestRetry, setRequestRetry] = useState(0);
+  const [ownExactLocationReportIds, setOwnExactLocationReportIds] = useState<Set<string>>(() => new Set());
+  const [ownLocationPreferencesError, setOwnLocationPreferencesError] = useState<string | null>(null);
+  const [publicationPreferenceRefresh, setPublicationPreferenceRefresh] = useState(0);
   const markers = useMemo(() => requestedOwnReport && requestedOwnReport.reporter.id === profile?.id && !loadedMarkers.some((report) => report.id === requestedOwnReport.id)
     ? [requestedOwnReport, ...loadedMarkers]
     : loadedMarkers, [loadedMarkers, requestedOwnReport, profile?.id]);
-  const unlocatedIncidents = visibleIncidents.filter((incident) => !incident.exactLocation && !incident.approximateArea);
+  useEffect(() => subscribeToReportPublicationChanges(() => {
+    setPublicationPreferenceRefresh((current) => current + 1);
+  }), []);
+  useEffect(() => {
+    let cancelled = false;
+    const allowedIds = new Set(markers
+      .filter((marker) => marker.isPending && marker.allowExactLocation === true)
+      .map((marker) => marker.id));
+    const serverReportIds = markers.filter((marker) => !marker.isPending).map((marker) => marker.id).sort();
+    setOwnExactLocationReportIds(new Set(allowedIds));
+    setOwnLocationPreferencesError(null);
+
+    async function loadOwnerLocationChoices() {
+      let choiceLoadFailed = false;
+      // Use the existing owner-only RPC in small batches so every lookup is
+      // authorized to this resident without flooding PostgREST.
+      for (let start = 0; start < serverReportIds.length; start += 8) {
+        const batch = serverReportIds.slice(start, start + 8);
+        const results = await Promise.all(batch.map(async (reportId) => ({
+          reportId,
+          ...await getReportPublicationPreferences(reportId),
+        })));
+        if (cancelled) return;
+        for (const result of results) {
+          if (result.error) choiceLoadFailed = true;
+          if (result.preferences?.allowExactLocation) allowedIds.add(result.reportId);
+        }
+        setOwnExactLocationReportIds(new Set(allowedIds));
+      }
+      if (!cancelled && choiceLoadFailed) {
+        setOwnLocationPreferencesError('Could not verify your location sharing choices. Some report pins are hidden. Tap to retry.');
+      }
+    }
+
+    void loadOwnerLocationChoices();
+    return () => { cancelled = true; };
+  }, [markers, publicationPreferenceRefresh]);
+
+  // Publicly shared reports use the privacy-limited, officially approved
+  // projection for corrected coordinates. Other own pins require the owner's
+  // explicit exact-location choice, read through the owner-only RPC.
+  const mapMarkers = useMemo(() => {
+    const exactLocationsByReportId = new Map(eligiblePublicIncidents
+      .filter((incident) => incident.reportId && incident.exactLocation)
+      .map((incident) => [incident.reportId as string, incident.exactLocation!]));
+    return markers.flatMap((marker) => {
+      const publicLocation = exactLocationsByReportId.get(marker.id);
+      if (!ownExactLocationReportIds.has(marker.id)) return [];
+      const location = publicLocation ?? marker;
+      return [{ ...marker, latitude: location.latitude, longitude: location.longitude }];
+    });
+  }, [eligiblePublicIncidents, markers, ownExactLocationReportIds]);
   const currentUserId = profile?.id ?? null;
 
   useEffect(() => {
@@ -174,12 +225,19 @@ export default function MapScreen() {
           setUserLocation(grantedLocation);
         },
       );
+      setPublicationPreferenceRefresh((current) => current + 1);
 
       return () => {
         active = false;
       };
     }, []),
   );
+
+  useEffect(() => {
+    if (mapFilterVisible && contributionPanelState !== 'collapsed') {
+      setMapFilterVisible(false);
+    }
+  }, [contributionPanelState, mapFilterVisible]);
 
   useEffect(() => {
     // Route state is external to React; apply it after commit to avoid a cascading render.
@@ -190,7 +248,7 @@ export default function MapScreen() {
       }
       if (handledRouteReportIdRef.current === requestedReportId) return;
 
-      const requestedReport = markers.find((marker) => marker.id === requestedReportId);
+      const requestedReport = mapMarkers.find((marker) => marker.id === requestedReportId);
       if (!requestedReport) return;
 
       handledRouteReportIdRef.current = requestedReportId;
@@ -207,7 +265,7 @@ export default function MapScreen() {
       router.setParams({ reportId: undefined });
     }, 0);
     return () => clearTimeout(routeSyncTimer);
-  }, [markers, requestedReportId, router]);
+  }, [mapMarkers, requestedReportId, router]);
 
   const facilityMarkers = useMemo<MapResourceMarker[]>(
     () =>
@@ -321,22 +379,18 @@ export default function MapScreen() {
       handledIncidentRequestRef.current = requestKey;
       router.setParams({ incidentId: undefined, publicReportId: undefined, openRequest: undefined });
 
-      const requestedIncident = incidents.find((incident) => requestedPublicReportId
+      const requestedIncident = eligiblePublicIncidents.find((incident) => requestedPublicReportId
         ? incident.reportId === requestedPublicReportId
         : incident.incidentCaseId === requestedIncidentId);
-      const point = requestedIncident?.exactLocation ?? requestedIncident?.approximateArea ?? null;
-      if (!requestedIncident || !point) {
-        setSelectedIncidentId(requestedIncidentId);
-        setSelectedPublicReportId(requestedPublicReportId ?? null);
-        return;
-      }
+      const point = requestedIncident?.exactLocation ?? null;
+      if (!requestedIncident || !point) return;
       setPublicLayerVisible(true);
       setPublicStatus('all');
       highlightPublicIncident(requestedIncident.incidentCaseId, [requestedIncident.reportId ?? requestedIncident.incidentCaseId], requestedIncident.reportId);
       setFocusTarget({ latitude: point.latitude, longitude: point.longitude });
     }, 0);
     return () => clearTimeout(routeSyncTimer);
-  }, [highlightPublicIncident, incidents, incidentsLoading, requestedIncidentId, requestedPublicReportId, requestedOpenKey, router]);
+  }, [eligiblePublicIncidents, highlightPublicIncident, incidentsLoading, requestedIncidentId, requestedPublicReportId, requestedOpenKey, router]);
 
   /** Discussion lives in Community; the map only links there. */
   const openCommunityIncident = useCallback((incidentCaseId: string) => {
@@ -360,15 +414,15 @@ export default function MapScreen() {
 
   const selectedReports = useMemo(() => {
     if (selectedReportIds.length === 0) return [];
-    const reportsById = new Map(markers.map((marker) => [marker.id, marker]));
+    const reportsById = new Map(mapMarkers.map((marker) => [marker.id, marker]));
     return selectedReportIds
       .map((id) => reportsById.get(id))
       .filter((marker): marker is MapReportMarker => marker != null);
-  }, [markers, selectedReportIds]);
+  }, [mapMarkers, selectedReportIds]);
 
   const highlightedReport = useMemo(
-    () => markers.find((marker) => marker.id === highlightedReportId) ?? null,
-    [highlightedReportId, markers],
+    () => mapMarkers.find((marker) => marker.id === highlightedReportId) ?? null,
+    [highlightedReportId, mapMarkers],
   );
 
   const contributions = useMemo(() => {
@@ -390,16 +444,18 @@ export default function MapScreen() {
   };
 
   const showContributionOnMap = (report: MapReportMarker) => {
+    const mapReport = mapMarkers.find((marker) => marker.id === report.id);
+    if (!mapReport) return;
     setLayers((current) => ({ ...current, reports: true }));
     setHighlightedResourceId(null);
     clearHighlightedIncident();
     setSelectedReportIds([]);
     setFullReportVisible(false);
-    setHighlightedReportId(report.id);
+    setHighlightedReportId(mapReport.id);
     setFocusTarget({
-      reportId: report.id,
-      latitude: report.latitude,
-      longitude: report.longitude,
+      reportId: mapReport.id,
+      latitude: mapReport.latitude,
+      longitude: mapReport.longitude,
     });
   };
 
@@ -449,6 +505,24 @@ export default function MapScreen() {
       }).start();
     },
     [contributionOffsets, contributionPanelStateIndex, contributionTranslateY],
+  );
+
+  useEffect(() => {
+    if (!shouldHideMapFilters) return;
+    setMapFilterVisible(false);
+    if (contributionPanelState !== 'collapsed') {
+      settleContributions('collapsed');
+    }
+  }, [contributionPanelState, settleContributions, shouldHideMapFilters]);
+
+  const handleMapFilterVisibilityChange = useCallback(
+    (visible: boolean) => {
+      if (visible && contributionPanelState !== 'collapsed') {
+        settleContributions('collapsed');
+      }
+      setMapFilterVisible(visible);
+    },
+    [contributionPanelState, settleContributions],
   );
 
   useFocusEffect(
@@ -586,7 +660,7 @@ export default function MapScreen() {
 
         <View style={styles.mapSection}>
           <InteractiveMap
-            markers={markers}
+            markers={mapMarkers}
             publicIncidents={publicLayerVisible ? visibleIncidents : []}
             highlightedPublicIncidentId={highlightedIncidentId ?? undefined}
             onPublicIncidentPress={highlightPublicIncident}
@@ -594,23 +668,21 @@ export default function MapScreen() {
             publicIncidentFilters={{
               visible: publicLayerVisible, onVisibilityChange: setPublicLayerVisible,
               status: publicStatus, onStatusChange: setPublicStatus,
-              unlocatedCount: unlocatedIncidents.length,
-              onOpenUnlocated: () => { setMapFilterVisible(false); setIncidentListVisible(true); },
             }}
             facilities={facilityMarkers}
             evacuationCenters={centerMarkers}
             layerVisibility={layers}
-            showLayerFilters
+            showLayerFilters={!shouldHideMapFilters}
             collapsibleLayerFilters
             showSearchBar
             compactLayerFilters
             layerPanelVisible={mapFilterVisible}
-            onLayerPanelVisibilityChange={setMapFilterVisible}
-            searchBarTopInset={insets.top + (openedFromNotification ? 62 : 12)}
-            layerFiltersTopInset={
-              insets.top + (error ? 126 : 76) + (openedFromNotification ? 50 : 0)
-            }
+            onLayerPanelVisibilityChange={handleMapFilterVisibilityChange}
+            showLayerPanelToggle={!shouldHideMapFilters}
+            searchBarTopInset={insets.top + 12}
+            layerFiltersTopInset={insets.top + (error ? 126 : 76)}
             userLocation={userLocation}
+            showUserLocationMarker={false}
             showZoomControls={false}
             showMapDetails={false}
             tone={mapTheme}
@@ -634,29 +706,17 @@ export default function MapScreen() {
               setHighlightedResourceId(resource.id);
             }}
           />
-          {(incidentsError || error || requestedOwnError) ? <TouchableOpacity
-            style={[styles.errorBanner, { top: insets.top + (openedFromNotification ? 120 : 70) }]}
-            onPress={() => { void reloadIncidents(); void reload(); setRequestRetry((value) => value + 1); }} accessibilityRole="button">
-            <Text accessibilityRole="alert" style={styles.errorText}>{requestedOwnError ?? 'Some map data could not refresh. Tap to retry.'}</Text>
+          {(incidentsError || error || requestedOwnError || ownLocationPreferencesError) ? <TouchableOpacity
+            style={[styles.errorBanner, { top: insets.top + 70 }]}
+            onPress={() => { void reloadIncidents(); void reload(); setRequestRetry((value) => value + 1); setPublicationPreferenceRefresh((value) => value + 1); }} accessibilityRole="button">
+            <Text accessibilityRole="alert" style={styles.errorText}>{requestedOwnError ?? ownLocationPreferencesError ?? 'Some map data could not refresh. Tap to retry.'}</Text>
           </TouchableOpacity> : null}
-          {openedFromNotification ? (
-            <TouchableOpacity
-              style={[styles.notificationBackButton, { top: insets.top + 8 }]}
-              onPress={() => goBackOrReplace(router, '/(main)/home')}
-              activeOpacity={0.82}
-              accessibilityRole="button"
-              accessibilityLabel="Back to notifications"
-            >
-              <Ionicons name="chevron-back" size={22} color={colors.text} />
-              <Text style={styles.notificationBackText}>Back</Text>
-            </TouchableOpacity>
-          ) : null}
-
         </View>
 
         {highlightedReport ? (
           <ResidentMapCallout
             report={highlightedReport}
+            useScopedPresentation
             bottomOffset={highlightedReportBottomOffset}
             onClose={clearHighlightedReport}
             onOpenDetails={openHighlightedReportDetails}
@@ -703,6 +763,7 @@ export default function MapScreen() {
             detailCacheScope={currentUserId}
             onReportPress={openContribution}
             onShowReportOnMap={showContributionOnMap}
+            canShowReportOnMap={(report) => mapMarkers.some((marker) => marker.id === report.id)}
             onRetry={() => void reload()}
             onBackFromReport={() => settleContributions('medium')}
             panelState={contributionPanelState}
@@ -724,32 +785,13 @@ export default function MapScreen() {
           reports={selectedReports}
           detailCacheScope={currentUserId}
           commentMode="interactive"
+          useScopedPresentation
           onOpenCommunityIncident={openCommunityIncident}
           onClose={() => {
             setFullReportVisible(false);
             setSelectedReportIds([]);
           }}
         />
-        <ResidentBottomSheet visible={incidentListVisible} onClose={() => setIncidentListVisible(false)}>
-          <ScrollView contentContainerStyle={publicStyles.sheet}>
-            <Text style={publicStyles.title}>Reports without public map pins</Text>
-            <Text style={publicStyles.caption}>These community reports keep their location private. They are also available in Community reports.</Text>
-            {incidentsLoading ? <Text>Loading incidents…</Text> : !unlocatedIncidents.length ? <Text>No incidents found.</Text> : null}
-            {unlocatedIncidents.map((incident, index) => (
-              <PublicIncidentCard
-                key={incident.reportId ?? incident.incidentCaseId}
-                incident={incident}
-                isLast={index === unlocatedIncidents.length - 1}
-                supportBusy={supportBusyId === incident.incidentCaseId}
-                onToggleSupport={() => void toggleIncidentSupport(incident.incidentCaseId)}
-                onRequestComments={() => { setIncidentListVisible(false); openCommunityIncident(incident.incidentCaseId); }}
-                onPress={() => { setIncidentListVisible(false); setSelectedIncidentId(incident.incidentCaseId); setSelectedPublicReportId(incident.reportId ?? null); }}
-              />
-            ))}
-            {hasMoreIncidents ? <TouchableOpacity style={publicStyles.toolbarButton} accessibilityRole="button" disabled={incidentsLoadingMore} onPress={() => void loadMoreIncidents()}><Text>{incidentsLoadingMore ? 'Loading…' : 'Load more incidents'}</Text></TouchableOpacity> : null}
-            {incidentsError ? <TouchableOpacity style={publicStyles.toolbarButton} accessibilityRole="button" onPress={() => void reloadIncidents()}><Text>{incidentsError} · Try again</Text></TouchableOpacity> : null}
-          </ScrollView>
-        </ResidentBottomSheet>
         {selectedIncidentId ? (
           <PublicIncidentDetail
             key={`${selectedIncidentId}-${selectedPublicReportId ?? 'incident'}`}

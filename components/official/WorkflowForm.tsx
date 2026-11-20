@@ -71,10 +71,10 @@ export function WorkflowButton(
     >
       <Text
         style={danger
-          ? styles.dangerActionText
+          ? [styles.dangerActionText, operationStyles.minimumText]
           : secondary
-          ? styles.secondaryActionText
-          : styles.primaryActionText}
+          ? [styles.secondaryActionText, operationStyles.minimumText]
+          : [styles.primaryActionText, operationStyles.minimumText]}
       >
         {label}
       </Text>
@@ -107,11 +107,12 @@ export function WorkflowNote(
 ) {
   return (
     <View>
-      <Text style={styles.subtitle}>{label}</Text>
+      <Text style={[styles.subtitle, operationStyles.minimumText]}>{label}</Text>
       <TextInput
         accessibilityLabel={label}
         style={[
           styles.noteInput,
+          operationStyles.minimumText,
           !multiline && operationStyles.singleLineInput,
           (invalid || Boolean(error)) && operationStyles.invalidField,
         ]}
@@ -140,6 +141,9 @@ export function WorkflowChoices<T extends string>(
     onSelect,
     disabled = false,
     compact = false,
+    stacked = false,
+    tightPadding = false,
+    hideLabel = false,
     error,
   }: {
     label: string;
@@ -153,6 +157,9 @@ export function WorkflowChoices<T extends string>(
     onSelect: (value: T) => void;
     disabled?: boolean;
     compact?: boolean;
+    stacked?: boolean;
+    tightPadding?: boolean;
+    hideLabel?: boolean;
     error?: string;
   },
 ) {
@@ -160,67 +167,75 @@ export function WorkflowChoices<T extends string>(
     ...choiceAppearances[option.value],
     ...option,
   }));
+  const renderChoice = (option: typeof displayedOptions[number]) => (
+    <TouchableOpacity
+      key={option.value}
+      accessibilityRole='radio'
+      accessibilityLabel={option.label}
+      accessibilityState={{
+        selected: selected === option.value,
+        checked: selected === option.value,
+        disabled,
+      }}
+      disabled={disabled}
+      onPress={() => onSelect(option.value)}
+      style={[
+        compact
+          ? [
+            operationStyles.chip,
+            stacked && operationStyles.chipStacked,
+            tightPadding && operationStyles.chipTightPadding,
+            selected === option.value && operationStyles.chipSelected,
+          ]
+          : selected === option.value
+          ? styles.primaryAction
+          : styles.secondaryAction,
+        operationStyles.choiceContent,
+        selected === option.value && option.tint &&
+        { borderColor: option.tint },
+        Boolean(error) && operationStyles.invalidField,
+      ]}
+    >
+      {option.icon && (
+        <Ionicons
+          name={option.icon}
+          size={18}
+          color={!compact && selected === option.value
+            ? colors.white
+            : option.tint ?? colors.navigationActive}
+        />
+      )}
+      <Text
+        style={compact
+          ? [
+            operationStyles.chipText,
+            stacked && operationStyles.chipTextStacked,
+            selected === option.value && operationStyles.chipTextSelected,
+          ]
+          : selected === option.value
+          ? styles.primaryActionText
+          : styles.secondaryActionText}
+      >
+        {option.label}
+      </Text>
+      {selected === option.value && (
+        <Ionicons
+          name='checkmark-circle'
+          size={17}
+          color={compact ? colors.navigationActive : colors.white}
+        />
+      )}
+    </TouchableOpacity>
+  );
   return (
     <View style={styles.actionColumn}>
-      <Text style={styles.subtitle}>{label}</Text>
-      <View style={compact ? operationStyles.chips : styles.actionColumn}>
-        {displayedOptions.map((option) => (
-          <TouchableOpacity
-            key={option.value}
-            accessibilityRole='radio'
-            accessibilityLabel={option.label}
-            accessibilityState={{
-              selected: selected === option.value,
-              checked: selected === option.value,
-              disabled,
-            }}
-            disabled={disabled}
-            onPress={() => onSelect(option.value)}
-            style={[
-              compact
-                ? [
-                  operationStyles.chip,
-                  selected === option.value && operationStyles.chipSelected,
-                ]
-                : selected === option.value
-                ? styles.primaryAction
-                : styles.secondaryAction,
-              operationStyles.choiceContent,
-              selected === option.value && option.tint &&
-              { borderColor: option.tint },
-              Boolean(error) && operationStyles.invalidField,
-            ]}
-          >
-            {option.icon && (
-              <Ionicons
-                name={option.icon}
-                size={18}
-                color={!compact && selected === option.value
-                  ? colors.white
-                  : option.tint ?? colors.navigationActive}
-              />
-            )}
-            <Text
-              style={compact
-                ? [
-                  operationStyles.chipText,
-                  selected === option.value && operationStyles.chipTextSelected,
-                ]
-                : selected === option.value
-                ? styles.primaryActionText
-                : styles.secondaryActionText}
-            >
-              {option.label}
-            </Text>
-            {selected === option.value && (
-              <Ionicons
-                name='checkmark-circle'
-                size={17}
-                color={compact ? colors.navigationActive : colors.white}
-              />
-            )}
-          </TouchableOpacity>
-        ))}
+      {hideLabel ? null : (
+        <Text style={[styles.subtitle, operationStyles.minimumText]}>{label}</Text>
+      )}
+      <View style={compact
+        ? stacked ? operationStyles.chipsStacked : operationStyles.chips
+        : styles.actionColumn}>
+        {displayedOptions.map(renderChoice)}
       </View>
       {error && (
         <Text style={operationStyles.fieldError} accessibilityRole='alert'>
@@ -241,6 +256,9 @@ export function WorkflowActionRow(
     tint = colors.navigationActive,
     error,
     showChevron = true,
+    emphasized = false,
+    descriptionMatchesTitle = false,
+    boxed = false,
   }: {
     title: string;
     description?: string;
@@ -250,12 +268,16 @@ export function WorkflowActionRow(
     onPress: () => void;
     disabled?: boolean;
     showChevron?: boolean;
+    emphasized?: boolean;
+    descriptionMatchesTitle?: boolean;
+    boxed?: boolean;
   },
 ) {
   return (
     <TouchableOpacity
       style={[
         operationStyles.row,
+        boxed && operationStyles.boxyActionRow,
         disabled && styles.actionDisabled,
         Boolean(error) && operationStyles.invalidField,
         Boolean(error) &&
@@ -266,11 +288,21 @@ export function WorkflowActionRow(
       accessibilityRole='button'
       accessibilityState={{ disabled }}
     >
-      <Ionicons name={icon} size={21} color={tint} />
-      <View style={operationStyles.rowCopy}>
-        <Text style={operationStyles.rowTitle}>{title}</Text>
+      <Ionicons name={icon} size={emphasized ? 24 : 21} color={tint} />
+      <View style={[
+        operationStyles.rowCopy,
+        emphasized && operationStyles.actionRowCopyEmphasized,
+        descriptionMatchesTitle && operationStyles.rowCopyCompact,
+      ]}>
+        <Text style={[operationStyles.rowTitle, emphasized && operationStyles.actionRowTextEmphasized]}>{title}</Text>
         {description && (
-          <Text style={operationStyles.caption}>{description}</Text>
+          <Text style={[
+            operationStyles.caption,
+            emphasized && operationStyles.actionRowDescriptionEmphasized,
+            descriptionMatchesTitle && operationStyles.actionRowDescriptionMatchesTitle,
+          ]}>
+            {description}
+          </Text>
         )}
         {error && (
           <Text style={operationStyles.fieldError} accessibilityRole='alert'>
@@ -327,9 +359,10 @@ export function WorkflowFeedback(
 
 /** Only descriptive event fields belong in the timeline; database IDs do not. */
 export function WorkflowEventDetails(
-  { details, compact = false }: {
+  { details, compact = false, municipalOfficeDisplayName = 'MDRRMO' }: {
     details: Record<string, unknown>;
     compact?: boolean;
+    municipalOfficeDisplayName?: string;
   },
 ) {
   const labels: Record<string, string> = {
@@ -421,11 +454,12 @@ export function WorkflowEventDetails(
                     operationStyles.historyDetailLabel,
                   ]}
                 >
-                  {responseServiceLabel(serviceDetails)}
+                  {responseServiceLabel(serviceDetails, municipalOfficeDisplayName)}
                 </Text>
                 <WorkflowEventDetails
                   details={visibleDetails}
                   compact={compact}
+                  municipalOfficeDisplayName={municipalOfficeDisplayName}
                 />
                 {typeof entry.note === 'string' && entry.note && (
                   <Text style={operationStyles.historyNote}>{entry.note}</Text>
@@ -449,8 +483,10 @@ export function WorkflowHistoryRow(
     note,
     publicText,
     eventType,
+    municipalOfficeDisplayName = 'MDRRMO',
   }: {
     eventType?: string;
+    municipalOfficeDisplayName?: string;
     title: string;
     timestamp: string | null;
     actorName?: string | null;
@@ -552,7 +588,11 @@ export function WorkflowHistoryRow(
       </View>
       {details && (
         <View style={operationStyles.historyDetails}>
-          <WorkflowEventDetails details={details} compact />
+          <WorkflowEventDetails
+            details={details}
+            compact
+            municipalOfficeDisplayName={municipalOfficeDisplayName}
+          />
         </View>
       )}
       {publicText && (

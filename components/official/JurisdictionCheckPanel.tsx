@@ -123,7 +123,7 @@ export function ReportRoutingPanel(
         <Text style={styles.sectionTitle}>
           {jurisdiction ? 'Jurisdiction check' : 'Wrong barangay?'}
         </Text>
-        <Text style={styles.subtitle}>
+        <Text style={[styles.subtitle, operationStyles.minimumText]}>
           {jurisdiction
             ? 'Check jurisdiction only. This does not verify the report.'
             : 'Move this report to the correct response office. The reporter will see the routing change.'}

@@ -72,3 +72,6 @@ export const spacing = {
   xl: 32,
   xxl: 48,
 };
+
+// Shared horizontal edge inset used by resident and BDRRMO screen content.
+export const screenEdgeInset = 12;

@@ -65,6 +65,8 @@ export const mdrrmoCommandStyles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 4,
   },
+  commandMapQueueTabs: { left: spacing.lg, justifyContent: 'flex-end' },
+  commandMapQueueTab: { flexShrink: 1, minWidth: 0 },
   mapQueueTabText: {
     fontFamily: fonts.semibold,
     fontSize: 10,
@@ -87,6 +89,7 @@ export const mdrrmoCommandStyles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 4,
   },
+  mapQueueViewBadge: { top: undefined, bottom: spacing.md, left: spacing.lg },
   mapEscalationDot: {
     width: 8,
     height: 8,
@@ -213,6 +216,21 @@ export const mdrrmoCommandStyles = StyleSheet.create({
     fontSize: fontSizes.xs,
     color: '#6D7B92',
   },
+  viewReportButton: {
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.sm,
+    backgroundColor: colors.navigationActive,
+  },
+  viewReportButtonText: {
+    fontFamily: fonts.semibold,
+    fontSize: fontSizes.md,
+    color: colors.white,
+  },
   incidentTimeline: {
     minHeight: 76,
     flexDirection: 'row',
@@ -272,6 +290,7 @@ export const mdrrmoCommandStyles = StyleSheet.create({
     padding: spacing.xl,
     backgroundColor: colors.white,
   },
+  commandActiveIncidentEmpty: { minHeight: 150 },
   activeIncidentEmptyIcon: {
     width: 58,
     height: 58,
@@ -318,12 +337,21 @@ export const mdrrmoCommandStyles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: '#D9E1EC',
   },
+  quickResponseScrollableActionsContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   quickResponseAction: {
     flex: 1,
     minWidth: 0,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 2,
+    paddingHorizontal: 2,
+  },
+  quickResponseScrollableAction: {
+    flex: 0,
+    width: 108,
     paddingHorizontal: 2,
   },
   quickResponseActionBorder: {
@@ -337,12 +365,22 @@ export const mdrrmoCommandStyles = StyleSheet.create({
     color: colors.text,
     textAlign: 'center',
   },
+  quickResponseBdrrmoActionLabel: {
+    fontFamily: fonts.medium,
+    fontSize: fontSizes.md,
+    lineHeight: 21,
+    color: colors.text,
+    textAlign: 'center',
+  },
 
   fieldUpdatesSection: {
     gap: 12,
     paddingHorizontal: spacing.lg,
     paddingTop: 12,
     paddingBottom: spacing.sm,
+  },
+  bdrrmoLocalUpdatesSection: {
+    gap: spacing.xs,
   },
   fieldUpdatesHeader: {
     flexDirection: 'row',
@@ -452,8 +490,8 @@ export const mdrrmoCommandStyles = StyleSheet.create({
   },
   fieldUpdateCardBody: {
     fontFamily: fonts.regular,
-    fontSize: fontSizes.sm,
-    lineHeight: 19,
+    fontSize: fontSizes.md,
+    lineHeight: 21,
     color: '#526078',
   },
   fieldUpdateMapAction: {

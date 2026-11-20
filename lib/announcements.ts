@@ -75,15 +75,27 @@ export function formatAnnouncementAuthorName(author: AnnouncementAuthor): string
 export function formatAnnouncementOfficeLabel(
   announcement: AnnouncementRecord,
   municipality?: string,
+  municipalRoleDisplayName = 'MDRRMO',
 ): string {
   if (announcement.author.roleLabel === 'BDRRMO') {
     const barangayName = announcement.barangayName?.trim();
     return barangayName ? `Brgy. ${barangayName}` : 'BDRRMO';
   }
   if (announcement.author.roleLabel === 'MDRRMO' && municipality?.trim()) {
-    return `MDRRMO ${municipality.trim()}`;
+    return `${municipalRoleDisplayName} ${municipality.trim()}`;
   }
-  return announcement.author.roleLabel;
+  return displayAnnouncementRoleName(
+    announcement.author.roleLabel,
+    municipalRoleDisplayName,
+  );
+}
+
+/** Maps only the stored municipal role token for selected user-facing surfaces. */
+export function displayAnnouncementRoleName(
+  roleLabel: string,
+  municipalRoleDisplayName = 'MDRRMO',
+): string {
+  return roleLabel === 'MDRRMO' ? municipalRoleDisplayName : roleLabel;
 }
 
 function roleLabelFromProfile(

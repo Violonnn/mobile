@@ -11,15 +11,17 @@ import { colors, fonts, fontSizes, radius, spacing } from '../../styles/theme';
 export default function IncidentTypeBadge({
   incidentType,
   incidentTypeOther,
+  labelFontSize = fontSizes.xs,
 }: {
   incidentType: IncidentType | null | undefined;
   incidentTypeOther?: string | null;
+  labelFontSize?: number;
 }) {
   const tone = incidentTypeTone(incidentType);
   return (
     <View style={[styles.badge, { backgroundColor: tone.softColor }]}>
       <Ionicons name={tone.icon} size={13} color={tone.color} />
-      <Text style={[styles.label, { color: tone.color }]} numberOfLines={1}>
+      <Text style={[styles.label, { fontSize: labelFontSize, color: tone.color }]} numberOfLines={1}>
         {formatIncidentType(incidentType, incidentTypeOther)}
       </Text>
     </View>

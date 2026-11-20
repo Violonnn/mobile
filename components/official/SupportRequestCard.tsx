@@ -20,6 +20,12 @@ export default function SupportRequestCard(
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const requestStatusLabel = {
+    requested: 'Awaiting response',
+    accepted: 'Accepted',
+    returned: 'Returned',
+    cancelled: 'Cancelled',
+  }[request.status];
   async function act(decision: 'accept' | 'return' | 'cancel') {
     if (busy) return;
     if (decision === 'return' && !note.trim()) {
@@ -51,13 +57,13 @@ export default function SupportRequestCard(
     <View style={styles.card}>
       <Text style={styles.sectionTitle}>
         {request.kind === 'transfer'
-          ? 'Transfer municipal lead'
-          : 'MDRRMO support'} · {request.status}
+          ? 'Lead transfer'
+          : 'MITCOM support'} · {requestStatusLabel}
       </Text>
       {request.isLegacy && (
         <Text style={styles.subtitle}>
           {request.legacyLabel ??
-            'Legacy escalation — MDRRMO acceptance not recorded'}
+            'Legacy escalation — MITCOM acceptance not recorded'}
         </Text>
       )}
       <Text style={styles.subtitle}>{request.requestNote}</Text>
@@ -67,7 +73,7 @@ export default function SupportRequestCard(
       <Text style={styles.subtitle}>
         {request.kind === 'support'
           ? 'Support does not change the lead office.'
-          : 'The barangay remains responsible until MDRRMO accepts the transfer.'}
+          : 'The barangay remains responsible until MITCOM accepts the transfer.'}
       </Text>
       {canAct && request.status === 'requested' && viewerKind !== 'Mayor' && (
         <>

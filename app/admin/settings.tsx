@@ -12,7 +12,6 @@ import { StatusBar } from 'expo-status-bar';
 import Constants from 'expo-constants';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, type Href } from 'expo-router';
-import AdminPageHeader from '../../components/admin/AdminPageHeader';
 import { AdminSettingsIdentitySkeleton } from '../../components/ui/AdminScreenSkeletons';
 import LegalModal, {
   PRIVACY_NOTICE_CONTENT,
@@ -220,40 +219,35 @@ export default function AdminSettingsScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar style="dark" />
-      <AdminPageHeader title="Settings" />
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.identityArea}>
+        <Text style={styles.settingsScreenTitle}>Settings</Text>
+        <View>
           {identityLoading && !profile && !email ? (
             <AdminSettingsIdentitySkeleton />
           ) : (
-            <>
-              <View style={styles.identityRow}>
-                <ProfileAvatar
-                  avatarPath={profile?.avatar_path}
-                  firstName={profile?.first_name}
-                  lastName={profile?.last_name}
-                  fallback={name ? undefined : 'A'}
-                  size={56}
-                  style={styles.identityAvatar}
-                  textStyle={styles.identityAvatarText}
-                  accessibilityLabel="Administrator profile"
-                />
-                <View style={styles.identityCopy}>
-                  <Text style={styles.identityName}>
-                    {name || 'Name unavailable'}
-                  </Text>
-                  <Text style={styles.identityEmail} selectable>
-                    {email || 'Email unavailable'}
-                  </Text>
-                </View>
+            <View style={styles.identityRow}>
+              <ProfileAvatar
+                avatarPath={profile?.avatar_path}
+                firstName={profile?.first_name}
+                lastName={profile?.last_name}
+                fallback={name ? undefined : 'A'}
+                size={92}
+                style={styles.identityAvatar}
+                textStyle={styles.identityAvatarText}
+                accessibilityLabel="Administrator profile"
+              />
+              <View style={styles.identityCopy}>
+                <Text style={styles.identityName}>
+                  {name || 'Name unavailable'}
+                </Text>
+                <Text style={styles.identityEmail} selectable>
+                  {email || 'Email unavailable'}
+                </Text>
               </View>
-
-              <Text style={styles.identityRole}>System administrator</Text>
-
-            </>
+            </View>
           )}
 
           {identityError ? (
@@ -275,80 +269,66 @@ export default function AdminSettingsScreen() {
             </View>
           ) : null}
         </View>
+        <View style={styles.settingsDivider} />
 
         <View style={styles.settingsGroup}>
-          <Text style={styles.settingsGroupTitle}>Account</Text>
-          <View style={styles.settingsPanel}>
-            <TouchableOpacity
-              style={styles.settingsRow}
-              onPress={() => {
-                setPasswordError(null);
-                setPasswordVisible(true);
-              }}
-              activeOpacity={0.8}
-              accessibilityRole="button"
-            >
-              <View style={styles.settingsRowIcon}>
-                <Ionicons name="lock-closed-outline" size={20} color={colors.navigationActive} />
-              </View>
-              <View style={styles.settingsRowCopy}>
-                <Text style={styles.settingsRowTitle}>Change password</Text>
-              </View>
-              <Ionicons name="chevron-forward-outline" size={20} color={colors.textMuted} />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        <View style={styles.settingsGroup}>
-          <Text style={styles.settingsGroupTitle}>Legal</Text>
-          <View style={styles.settingsPanel}>
-            <TouchableOpacity
-              style={styles.settingsRow}
-              onPress={() => setLegalDocument('privacy')}
-              activeOpacity={0.8}
-              accessibilityRole="button"
-            >
-              <View style={styles.settingsRowIcon}>
-                <Ionicons name="shield-checkmark-outline" size={20} color={colors.navigationActive} />
-              </View>
-              <View style={styles.settingsRowCopy}>
-                <Text style={styles.settingsRowTitle}>Privacy notice</Text>
-              </View>
-              <Ionicons name="chevron-forward-outline" size={20} color={colors.textMuted} />
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.settingsRow, styles.settingsRowLast]}
-              onPress={() => setLegalDocument('terms')}
-              activeOpacity={0.8}
-              accessibilityRole="button"
-            >
-              <View style={styles.settingsRowIcon}>
-                <Ionicons name="document-text-outline" size={20} color={colors.navigationActive} />
-              </View>
-              <View style={styles.settingsRowCopy}>
-                <Text style={styles.settingsRowTitle}>Terms and conditions</Text>
-              </View>
-              <Ionicons name="chevron-forward-outline" size={20} color={colors.textMuted} />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        <View style={styles.settingsGroup}>
-          <Text style={styles.settingsGroupTitle}>About</Text>
-          <View style={styles.settingsPanel}>
-            <View style={[styles.settingsRow, styles.settingsRowLast]}>
-              <View style={styles.settingsRowIcon}>
-                <Ionicons name="information-circle-outline" size={20} color={colors.navigationActive} />
-              </View>
-              <View style={styles.settingsRowCopy}>
-                <Text style={styles.settingsRowTitle}>App version</Text>
-              </View>
-              <Text style={styles.settingsVersion}>{version}</Text>
+          <Text style={styles.settingsGroupTitle}>ACCOUNT</Text>
+          <TouchableOpacity
+            style={styles.settingsRow}
+            onPress={() => {
+              setPasswordError(null);
+              setPasswordVisible(true);
+            }}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+          >
+            <View style={styles.settingsRowCopy}>
+              <Text style={styles.settingsRowTitle}>Change password</Text>
             </View>
+            <Ionicons name="chevron-forward" size={22} color={colors.textMuted} />
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.settingsDivider} />
+        <View style={styles.settingsGroup}>
+          <Text style={styles.settingsGroupTitle}>LEGAL</Text>
+          <TouchableOpacity
+            style={styles.settingsRow}
+            onPress={() => setLegalDocument('privacy')}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+          >
+            <View style={styles.settingsRowCopy}>
+              <Text style={styles.settingsRowTitle}>Privacy notice</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={22} color={colors.textMuted} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.settingsRow}
+            onPress={() => setLegalDocument('terms')}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+          >
+            <View style={styles.settingsRowCopy}>
+              <Text style={styles.settingsRowTitle}>Terms and conditions</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={22} color={colors.textMuted} />
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.settingsDivider} />
+        <View style={styles.settingsGroup}>
+          <Text style={styles.settingsGroupTitle}>ABOUT</Text>
+          <View style={styles.settingsRow}>
+            <View style={styles.settingsRowCopy}>
+              <Text style={styles.settingsRowTitle}>App version</Text>
+            </View>
+            <Text style={styles.settingsVersion}>{version}</Text>
           </View>
         </View>
 
+        <View style={styles.settingsDivider} />
         <View style={styles.logoutArea}>
           {logoutError ? <Text style={styles.logoutError}>{logoutError}</Text> : null}
           <TouchableOpacity
@@ -360,13 +340,11 @@ export default function AdminSettingsScreen() {
             accessibilityLabel="Log out of administrator account"
             accessibilityState={{ disabled: loggingOut, busy: loggingOut }}
           >
+            <Text style={styles.logoutButtonText}>Log out</Text>
             {loggingOut ? (
               <ActivityIndicator color={colors.unverified} />
             ) : (
-              <>
-                <Ionicons name="log-out-outline" size={20} color={colors.unverified} />
-                <Text style={styles.logoutButtonText}>Log out</Text>
-              </>
+              <Ionicons name="log-out-outline" size={28} color={colors.unverified} />
             )}
           </TouchableOpacity>
         </View>

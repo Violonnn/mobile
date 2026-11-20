@@ -4,13 +4,17 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import {
+  scopedLifecyclePresentation,
+  type ScopedLifecyclePresentationContext,
+} from '../../lib/reportPresentation';
+import {
   RESIDENT_STAGE_TONES,
   residentLabel,
   residentProgressSteps,
   residentStepTone,
   type LifecycleSummary,
 } from '../../lib/reportLifecycle';
-import { colors, fonts, radius } from '../../styles/theme';
+import { colors, fonts, fontSizes, radius } from '../../styles/theme';
 
 const COMPLETED_TIMELINE_COLOR = 'rgba(15, 32, 68, 0.14)';
 const PENDING_TIMELINE_COLOR = '#CBD5E1';
@@ -34,6 +38,8 @@ type ReportStatusTimelineProps = {
   useStatusProgressColors?: boolean;
   /** Public incident posts are read by neighbors, so the first step reads "Reported". */
   audience?: 'reporter' | 'public';
+  /** Uses separate public coordination metadata instead of repeating the stage label. */
+  showScopedCoordinationDetails?: boolean;
   style?: StyleProp<ViewStyle>;
 };
 
@@ -58,7 +64,11 @@ function timelineIconName(label: string): TimelineIconName {
   return 'time-outline';
 }
 
-function buildTimeline(status: string, barangayLabel: string): TimelineStep[] {
+function buildTimeline(
+  status: string,
+  barangayLabel: string,
+  useScopedOfficeNames: boolean,
+): TimelineStep[] {
   const normalizedStatus = status.trim().toLocaleLowerCase();
   const underReviewColor = residentStepTone('Under review').color;
   const confirmedColor = residentStepTone('Confirmed').color;
@@ -115,7 +125,7 @@ function buildTimeline(status: string, barangayLabel: string): TimelineStep[] {
         current: false,
       },
       {
-        label: 'Forwarded to MDRRMO',
+        label: useScopedOfficeNames ? 'Forwarded to MITCOM' : 'Forwarded to MDRRMO',
         name: 'Acceptance not recorded',
         complete: false,
         current: true,
@@ -178,10 +188,11 @@ export default function ReportStatusTimeline({
   barangayLabel = 'Barangay review',
   useStatusProgressColors = false,
   audience = 'reporter',
+  showScopedCoordinationDetails = false,
   style,
 }: ReportStatusTimelineProps) {
   const timeline = useMemo(() => {
-    if (!lifecycle) return buildTimeline(status, barangayLabel);
+    if (!lifecycle) return buildTimeline(status, barangayLabel, showScopedCoordinationDetails);
     return residentProgressSteps(lifecycle, audience).map((step) => ({
       label: step.label,
       name: step.detail,
@@ -189,8 +200,15 @@ export default function ReportStatusTimeline({
       current: step.current,
       color: residentStepTone(step.label).color,
     }));
-  }, [audience, barangayLabel, status, lifecycle]);
+  }, [audience, barangayLabel, status, lifecycle, showScopedCoordinationDetails]);
   const currentTimelineIndex = timeline.findIndex((step) => step.current);
+  const scopedLifecycleContext: ScopedLifecyclePresentationContext = {
+    audience: 'resident',
+    ...(barangayLabel !== 'Barangay review' ? { barangayName: barangayLabel } : {}),
+  };
+  const scopedLifecycle = lifecycle && showScopedCoordinationDetails
+    ? scopedLifecyclePresentation(lifecycle, scopedLifecycleContext)
+    : null;
 
   return (
     <View style={style}>
@@ -251,7 +269,6 @@ export default function ReportStatusTimeline({
             <Text
               style={[
                 styles.label,
-                lifecycle && { fontSize: timeline.length > 3 ? 12 : 14 },
                 shouldUseStageColor ? { color: step.color } : step.complete && styles.completeText,
               ]}
             >
@@ -272,7 +289,24 @@ export default function ReportStatusTimeline({
         );
       })}
     </View>
-    {lifecycle?.coordinationBadge ? <Text style={styles.coordinationNote}>{residentLabel(lifecycle, { barangayName: barangayLabel === 'Barangay review' ? null : barangayLabel })}</Text> : null}
+    {scopedLifecycle ? (
+      <View style={styles.coordinationDetails}>
+        {scopedLifecycle.coordinationLabel ? (
+          <Text style={styles.coordinationNote}>
+            Coordination: {scopedLifecycle.coordinationLabel}
+          </Text>
+        ) : null}
+        {scopedLifecycle.leadLabel ? (
+          <Text style={styles.coordinationNote}>{scopedLifecycle.leadLabel}</Text>
+        ) : null}
+      </View>
+    ) : lifecycle?.coordinationBadge ? (
+      <Text style={styles.coordinationNote}>
+        {residentLabel(lifecycle, {
+          barangayName: barangayLabel === 'Barangay review' ? null : barangayLabel,
+        })}
+      </Text>
+    ) : null}
     </View>
   );
 }
@@ -315,19 +349,26 @@ const styles = StyleSheet.create({
   },
   label: {
     fontFamily: fonts.semibold,
-    fontSize: 11,
+    fontSize: fontSizes.lg,
     color: colors.text,
     textAlign: 'center',
   },
   name: {
     fontFamily: fonts.regular,
-    fontSize: 10,
-    lineHeight: 13,
+    fontSize: fontSizes.lg,
+    lineHeight: 20,
     color: '#6D7B92',
     textAlign: 'center',
   },
   completeText: {
     opacity: 0.34,
   },
-  coordinationNote: { fontFamily: fonts.regular, fontSize: 11, lineHeight: 16, color: colors.textMuted, textAlign: 'center' },
+  coordinationDetails: { gap: 2 },
+  coordinationNote: {
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.lg,
+    lineHeight: 20,
+    color: colors.textMuted,
+    textAlign: 'center',
+  },
 });

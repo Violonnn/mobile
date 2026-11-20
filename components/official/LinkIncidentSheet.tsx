@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Alert, Text, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { Alert, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import {
   fetchIncidentLinkCandidates,
   type IncidentLinkCandidate,
@@ -11,10 +11,35 @@ import {
   type OfficialReportPublicationReview,
 } from '../../lib/reportPublication';
 import { randomUuid } from '../../lib/reportMedia';
+import { formatPublishedAt } from '../../lib/formatTime';
+import { formatIncidentType } from '../../lib/incidentTypes';
+import { getMapReportPresentation } from '../../lib/reports';
 import { officialStyles as styles } from '../../styles/screens/official.styles';
+import { mdrrmoReportsStyles as reportStyles } from '../../styles/screens/mdrrmoReports.styles';
+import { colors, fonts, fontSizes, spacing } from '../../styles/theme';
+import { reportOperationsStyles as operationStyles } from '../../styles/components/reportOperations.styles';
+import { IncidentTagRow } from '../report/ReportDetailCard';
 import ResourceFormSheet from './ResourceFormSheet';
 import { WorkflowButton, WorkflowFeedback } from './WorkflowForm';
 import ReportPublicationFields from './ReportPublicationFields';
+
+function IncidentLinkCandidateTags({ candidate }: { candidate: IncidentLinkCandidate }) {
+  const presentation = getMapReportPresentation({
+    status: candidate.status,
+    lifecycle: undefined,
+  }, 'resident');
+
+  return (
+    <IncidentTagRow
+      statusLabel={presentation.label}
+      statusColor={presentation.color}
+      statusBackgroundColor={presentation.backgroundColor}
+      incidentType={candidate.incidentType}
+      incidentTypeLabel={formatIncidentType(candidate.incidentType, candidate.incidentTypeOther)}
+      largeText
+    />
+  );
+}
 
 function LinkIncidentSheetForm(
   { visible, reportId, onClose, onLinked }: {
@@ -24,10 +49,9 @@ function LinkIncidentSheetForm(
     onLinked: () => void;
   },
 ) {
-  const router = useRouter();
   const [candidates, setCandidates] = useState<IncidentLinkCandidate[]>([]);
   const [publicationReview, setPublicationReview] = useState<OfficialReportPublicationReview | null>(null);
-  const [selectedCandidateId, setSelectedCandidateId] = useState<string | null>(null);
+  const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
   const [publicationAcknowledged, setPublicationAcknowledged] = useState(false);
   const [selectedPhotoMediaIds, setSelectedPhotoMediaIds] = useState<string[]>([]);
   const [approveReporterName, setApproveReporterName] = useState(false);
@@ -39,6 +63,8 @@ function LinkIncidentSheetForm(
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const load = useCallback(async () => {
+    setBusy(true);
+    setError(null);
     try {
       const [candidateResult, reviewResult] = await Promise.all([
         fetchIncidentLinkCandidates(reportId),
@@ -59,42 +85,17 @@ function LinkIncidentSheetForm(
       }
       setOperationId(randomUuid());
     } catch {
-      setError('Could not load incident suggestions and publication details.');
+      setError('Could not load active reports and publication details.');
     } finally {
       setBusy(false);
     }
   }, [reportId]);
   useEffect(() => {
-    let active = true;
-    Promise.all([
-      fetchIncidentLinkCandidates(reportId),
-      getOfficialReportPublicationReview(reportId),
-    ]).then(([result, reviewResult]) => {
-      if (!active) return;
-      setCandidates(result.candidates);
-      setPublicationReview(reviewResult.review);
-      setError(result.error ?? reviewResult.error);
-      if (reviewResult.review) {
-        setSelectedPhotoMediaIds(reviewResult.review.media
-          .filter((item) => item.type === 'photo' && item.isPublicApproved && Boolean(item.safeDisplayUrl || item.privateDisplayUrl))
-          .map((item) => item.mediaId));
-        setApproveReporterName(reviewResult.review.reporterNameApproved);
-        setApproveReporterAvatar(reviewResult.review.reporterAvatarApproved);
-        setApproveExactLocation(reviewResult.review.exactLocationApproved);
-        setMarkSensitive(reviewResult.review.isSensitive);
-        setSensitivityReason('');
-      }
-      setOperationId(randomUuid());
-      setBusy(false);
-    }).catch(() => {
-      if (!active) return;
-      setError('Could not load incident suggestions.');
-      setBusy(false);
-    });
-    return () => {
-      active = false;
-    };
-  }, [reportId]);
+    void load();
+  }, [load]);
+  const selectedCandidate = candidates.find(
+    (candidate) => candidate.reportId === selectedReportId,
+  ) ?? null;
   function markPublicationEdited() {
     setOperationId(randomUuid());
   }
@@ -156,17 +157,13 @@ function LinkIncidentSheetForm(
     <ResourceFormSheet
       visible={visible}
       title='Link to an incident'
-      hasUnsavedChanges={Boolean(selectedCandidateId || publicationAcknowledged)}
-      discardMessage='Your screened report copy will not be submitted.'
+      hasUnsavedChanges={Boolean(selectedReportId || publicationAcknowledged)}
+      discardMessage='Your report link and screened copy will not be submitted.'
       onClose={() => {
         if (!busy) onClose();
       }}
       stableHeight
     >
-      <Text style={styles.subtitle}>
-        Suggestions are not automatic matches. Check the location and incident
-        before linking.
-      </Text>
       <WorkflowFeedback busy={busy} error={error} />
       {error && (
         <WorkflowButton
@@ -179,103 +176,221 @@ function LinkIncidentSheetForm(
           disabled={busy}
         />
       )}
-      {!busy && !error && candidates.length === 0 && (
-        <Text style={styles.subtitle}>
-          No eligible incidents nearby. Suggestions include active cases in your
-          office’s scope, within 500 metres, created in the last 24 hours. Cases
-          may be confirmed or still being assessed. Separate pending reports are
-          not incident cases yet. Continue reviewing this report if none
-          qualify.
-        </Text>
+      {!busy && !error && !selectedCandidate && (
+        <>
+          <Text style={[reportStyles.sectionLabel, operationStyles.minimumText]}>Active reports</Text>
+          {candidates.length === 0 ? (
+            <Text style={[styles.subtitle, operationStyles.minimumText]}>No active reports are available to link.</Text>
+          ) : candidates.map((candidate, index) => {
+            const location = candidate.addressText || candidate.barangayName || 'Location unavailable';
+            return (
+              <Pressable
+                key={candidate.reportId}
+                style={({ pressed }) => [
+                  reportStyles.queueCard,
+                  index === 0 && reportStyles.queueCardFirst,
+                  pressed && reportStyles.queueCardPressed,
+                ]}
+                onPress={() => {
+                  setSelectedReportId(candidate.reportId);
+                  setOperationId(randomUuid());
+                }}
+                accessibilityRole='button'
+                accessibilityLabel={`View report ${candidate.title || 'Untitled report'}`}
+              >
+                <View style={reportStyles.mediaFrame}>
+                  {candidate.thumbnailUrl ? (
+                    <Image
+                      source={{ uri: candidate.thumbnailUrl }}
+                      style={reportStyles.media}
+                      resizeMode='cover'
+                    />
+                  ) : (
+                    <View style={reportStyles.mediaPlaceholder}>
+                      <Ionicons name='document-text-outline' size={24} color={colors.textMuted} />
+                      <Text style={[reportStyles.mediaPlaceholderText, operationStyles.minimumText]}>No photo</Text>
+                    </View>
+                  )}
+                </View>
+                <View style={reportStyles.reportCopy}>
+                  <View style={linkIncidentStyles.reportHeading}>
+                    <Text style={linkIncidentStyles.reportTitle} numberOfLines={2}>
+                      {candidate.title.trim() || 'Untitled report'}
+                    </Text>
+                    <Text style={linkIncidentStyles.reportDate} numberOfLines={2}>
+                      {formatPublishedAt(candidate.createdAt)}
+                    </Text>
+                  </View>
+                  <Text style={[reportStyles.reportLocation, operationStyles.minimumText]} numberOfLines={1}>{location}</Text>
+                  <View style={reportStyles.cardFooter}>
+                    <IncidentLinkCandidateTags candidate={candidate} />
+                    <View style={[reportStyles.reviewAction, linkIncidentStyles.detailsAction]}>
+                      <Text style={[reportStyles.reviewActionText, operationStyles.minimumText]}>Details</Text>
+                      <Ionicons name='chevron-forward' size={21} color={colors.navigationActive} />
+                    </View>
+                  </View>
+                </View>
+              </Pressable>
+            );
+          })}
+        </>
       )}
-      {candidates.map((candidate) => (
-        <View key={candidate.incidentCaseId} style={styles.card}>
-          <Text style={styles.subtitle}>
-            {candidate.incidentType ?? 'Incident'} · {candidate.verification} ·
-            {' '}
-            {candidate.distanceMeters == null
-              ? 'Distance unavailable'
-              : `${Math.round(candidate.distanceMeters)} m`} ·{' '}
-            {candidate.linkedReportCount} reports
-          </Text>
-          <WorkflowButton
-            label='View source report'
-            disabled={busy}
-            onPress={() => {
-              onClose();
-              router.push({
-                pathname: '/official/[id]',
-                params: { id: candidate.sourceReportId },
-              });
-            }}
-          />
-          <WorkflowButton
-            disabled={busy}
-            label={selectedCandidateId === candidate.incidentCaseId ? 'Selected incident' : 'Select this incident'}
-            onPress={() => {
-              setSelectedCandidateId(candidate.incidentCaseId);
-              setOperationId(randomUuid());
-            }}
-          />
-        </View>
-      ))}
-      {selectedCandidateId && publicationReview ? (
-        <View style={styles.card}>
-          {publicationReview.canPublish ? null : (
-            <Text style={styles.subtitle}>
-              Your report can be linked in this office’s scope. The incident lead will review any public post, so photos stay unselected here.
+      {!busy && !error && selectedCandidate ? (
+        <>
+          <View style={[styles.card, linkIncidentStyles.selectedReportCard]}>
+            <WorkflowButton
+              label='Back to active reports'
+              secondary
+              disabled={busy}
+              onPress={() => setSelectedReportId(null)}
+            />
+            {selectedCandidate.thumbnailUrl ? (
+              <Image
+                source={{ uri: selectedCandidate.thumbnailUrl }}
+                style={{ width: '100%', aspectRatio: 16 / 9, borderRadius: 14 }}
+                resizeMode='cover'
+              />
+            ) : null}
+            <View style={linkIncidentStyles.selectedReportHeading}>
+              <Text style={linkIncidentStyles.selectedReportTitle} numberOfLines={2}>
+                {selectedCandidate.title.trim() || 'Untitled report'}
+              </Text>
+              <Text style={linkIncidentStyles.selectedReportDate} numberOfLines={2}>
+                {formatPublishedAt(selectedCandidate.createdAt)}
+              </Text>
+            </View>
+            <Text style={linkIncidentStyles.selectedReportDescription}>
+              {selectedCandidate.description || 'No description provided.'}
             </Text>
-          )}
-          <ReportPublicationFields
-            sourceTitle={publicationReview.sourceTitle}
-            sourceDescription={publicationReview.sourceDescription}
-            acknowledged={publicationAcknowledged}
-            onAcknowledgedChange={(value) => { setPublicationAcknowledged(value); markPublicationEdited(); }}
-            photos={publicationReview.canPublish
-              ? publicationReview.media.filter((item) => item.type === 'photo').map((item) => ({
-                mediaId: item.mediaId,
-                previewUrl: item.safeThumbnailUrl ?? item.privateThumbnailUrl ?? item.safeDisplayUrl ?? item.privateDisplayUrl,
-                fullSizeUrl: item.safeDisplayUrl ?? item.privateDisplayUrl,
-                verified: item.safeCopyVerified,
-                publicApproved: item.isPublicApproved,
-              }))
-              : []}
-            photoError={publicationReview.photoError}
-            selectedPhotoMediaIds={selectedPhotoMediaIds}
-            onPhotoSelectionChange={(mediaIds) => { setSelectedPhotoMediaIds(mediaIds); markPublicationEdited(); }}
-            reporterNameAllowed={publicationReview.showReporterName}
-            approveReporterName={approveReporterName}
-            onApproveReporterNameChange={(value) => { setApproveReporterName(value); markPublicationEdited(); }}
-            reporterAvatarAllowed={publicationReview.showReporterAvatar}
-            approveReporterAvatar={approveReporterAvatar}
-            onApproveReporterAvatarChange={(value) => { setApproveReporterAvatar(value); markPublicationEdited(); }}
-            exactLocationAllowed={publicationReview.allowExactLocation}
-            approveExactLocation={approveExactLocation}
-            onApproveExactLocationChange={(value) => { setApproveExactLocation(value); markPublicationEdited(); }}
-            sensitive={markSensitive}
-            onSensitiveChange={(value) => { setMarkSensitive(value); markPublicationEdited(); }}
-            sensitivityReason={sensitivityReason}
-            onSensitivityReasonChange={(value) => { setSensitivityReason(value); markPublicationEdited(); }}
-            disabled={busy}
-          />
-          <WorkflowButton
-            disabled={busy || !publicationReview || (!markSensitive && !publicationAcknowledged) || (markSensitive && !sensitivityReason.trim())}
-            label='Link report'
-            onPress={() =>
-              Alert.alert(
-                'Link this report?',
-                'The report becomes part of the selected incident. Public sharing follows the incident lead’s review authority.',
-                [{ text: 'Cancel', style: 'cancel' }, {
-                  text: 'Link report',
-                  onPress: () => void link(selectedCandidateId),
-                }],
+            <Text style={[reportStyles.reportLocation, operationStyles.minimumText]}>
+              {selectedCandidate.addressText || selectedCandidate.barangayName || 'Location unavailable'}
+            </Text>
+            <IncidentLinkCandidateTags candidate={selectedCandidate} />
+          </View>
+          {publicationReview ? (
+            <View style={[styles.card, linkIncidentStyles.publicationCard]}>
+              <Text style={[reportStyles.sectionLabel, operationStyles.minimumText]}>Link this report to the active incident</Text>
+              {publicationReview.canPublish ? null : (
+                <Text style={[styles.subtitle, operationStyles.minimumText]}>
+                  The incident lead will review any public post, so photos stay unselected here.
+                </Text>
               )}
-          />
-        </View>
+              <ReportPublicationFields
+                sourceTitle={publicationReview.sourceTitle}
+                sourceDescription={publicationReview.sourceDescription}
+                acknowledged={publicationAcknowledged}
+                onAcknowledgedChange={(value) => { setPublicationAcknowledged(value); markPublicationEdited(); }}
+                photos={publicationReview.canPublish
+                  ? publicationReview.media.filter((item) => item.type === 'photo').map((item) => ({
+                    mediaId: item.mediaId,
+                    previewUrl: item.safeThumbnailUrl ?? item.privateThumbnailUrl ?? item.safeDisplayUrl ?? item.privateDisplayUrl,
+                    fullSizeUrl: item.safeDisplayUrl ?? item.privateDisplayUrl,
+                    verified: item.safeCopyVerified,
+                    publicApproved: item.isPublicApproved,
+                  }))
+                  : []}
+                showSourceText={false}
+                showPhotoGuidance={false}
+                photoError={publicationReview.photoError}
+                selectedPhotoMediaIds={selectedPhotoMediaIds}
+                onPhotoSelectionChange={(mediaIds) => { setSelectedPhotoMediaIds(mediaIds); markPublicationEdited(); }}
+                reporterNameAllowed={publicationReview.showReporterName}
+                approveReporterName={approveReporterName}
+                onApproveReporterNameChange={(value) => { setApproveReporterName(value); markPublicationEdited(); }}
+                reporterAvatarAllowed={publicationReview.showReporterAvatar}
+                approveReporterAvatar={approveReporterAvatar}
+                onApproveReporterAvatarChange={(value) => { setApproveReporterAvatar(value); markPublicationEdited(); }}
+                exactLocationAllowed={publicationReview.allowExactLocation}
+                approveExactLocation={approveExactLocation}
+                onApproveExactLocationChange={(value) => { setApproveExactLocation(value); markPublicationEdited(); }}
+                sensitive={markSensitive}
+                onSensitiveChange={(value) => { setMarkSensitive(value); markPublicationEdited(); }}
+                sensitivityReason={sensitivityReason}
+                onSensitivityReasonChange={(value) => { setSensitivityReason(value); markPublicationEdited(); }}
+                disabled={busy}
+              />
+              <WorkflowButton
+                disabled={busy || !publicationReview || (!markSensitive && !publicationAcknowledged) || (markSensitive && !sensitivityReason.trim())}
+                label='Link report'
+                onPress={() =>
+                  Alert.alert(
+                    'Link this report?',
+                    'The report becomes part of the selected incident. Public sharing follows the incident lead’s review authority.',
+                    [{ text: 'Cancel', style: 'cancel' }, {
+                      text: 'Link report',
+                      onPress: () => void link(selectedCandidate.incidentCaseId),
+                    }],
+                  )}
+              />
+            </View>
+          ) : null}
+        </>
       ) : null}
     </ResourceFormSheet>
   );
 }
+
+const linkIncidentStyles = StyleSheet.create({
+  reportHeading: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.xs,
+  },
+  reportTitle: {
+    flex: 1,
+    color: colors.text,
+    fontFamily: fonts.bold,
+    fontSize: fontSizes.lg,
+    lineHeight: 22,
+  },
+  reportDate: {
+    maxWidth: '45%',
+    color: colors.textMuted,
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.lg,
+    lineHeight: 22,
+    textAlign: 'right',
+  },
+  detailsAction: {
+    alignSelf: 'flex-end',
+    flexShrink: 0,
+    marginLeft: 'auto',
+  },
+  selectedReportCard: {
+    gap: spacing.xs,
+    padding: spacing.sm,
+  },
+  selectedReportHeading: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+  },
+  selectedReportTitle: {
+    flex: 1,
+    color: colors.text,
+    fontFamily: fonts.bold,
+    fontSize: fontSizes.lg,
+    lineHeight: 22,
+  },
+  selectedReportDate: {
+    maxWidth: '42%',
+    color: colors.textMuted,
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.lg,
+    lineHeight: 22,
+    textAlign: 'right',
+  },
+  selectedReportDescription: {
+    color: colors.text,
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.lg,
+    lineHeight: 22,
+  },
+  publicationCard: {
+    gap: spacing.sm,
+    padding: spacing.sm,
+  },
+});
 
 export default function LinkIncidentSheet(
   props: React.ComponentProps<typeof LinkIncidentSheetForm>,

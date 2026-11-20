@@ -8,6 +8,7 @@ import {
 import { logIncidentEvent } from '../../lib/incidentCases';
 import {
   createActivitySubmissionId,
+  RESPONSE_EVENT_LABELS,
   type ReportActivityResult,
   type ResponseEventDetails,
   type ResponseServiceEntry,
@@ -25,17 +26,6 @@ import {
   WorkflowNote,
 } from './WorkflowForm';
 
-const eventLabels: Record<ResponseEventType, string> = {
-  reporter_call: 'Reporter call',
-  hotline_contacted: 'Hotline contacted',
-  assistance_requested: 'Assistance requested',
-  dispatch_confirmed: 'Dispatch confirmed',
-  responders_on_site: 'Responders on site',
-  assistance_given: 'Assistance given',
-  work_done: 'Work done',
-  external_info: 'External information',
-  internal_note: 'Internal note',
-};
 const eventAppearance: Record<ResponseEventType, {
   icon: React.ComponentProps<typeof Ionicons>['name'];
   tint: string;
@@ -163,6 +153,7 @@ function ResponseEventSheetForm({
   target,
   initialType = null,
   initialDetails = {},
+  municipalOfficeDisplayName = 'MDRRMO',
   onClose,
   onLogged,
   saveActivity,
@@ -171,6 +162,7 @@ function ResponseEventSheetForm({
   target: { reportId: string } | { incidentCaseId: string };
   initialType?: ResponseEventType | null;
   initialDetails?: Record<string, string>;
+  municipalOfficeDisplayName?: string;
   onClose: () => void;
   saveActivity?: (
     input: {
@@ -191,6 +183,7 @@ function ResponseEventSheetForm({
     Boolean(initialDetails.service_name),
   );
   const [choosingType, setChoosingType] = useState(!initialType);
+  const [choosingActivityGroup, setChoosingActivityGroup] = useState(!initialType);
   const [activityGroup, setActivityGroup] = useState(
     activityGroupFor(initialType),
   );
@@ -308,7 +301,7 @@ function ResponseEventSheetForm({
     ) return;
     Alert.alert(
       'Remove service draft?',
-      'Remove ' + serviceLabel(activity.details) +
+      'Remove ' + serviceLabel(activity.details, municipalOfficeDisplayName) +
         ' from this form? Saved history will remain unchanged.',
       [
         { text: 'Keep draft', style: 'cancel' },
@@ -352,7 +345,7 @@ function ResponseEventSheetForm({
   }
 
   const reportTarget = 'reportId' in target;
-  const types = (Object.keys(eventLabels) as ResponseEventType[]).filter((
+  const types = (Object.keys(RESPONSE_EVENT_LABELS) as ResponseEventType[]).filter((
     value,
   ) =>
     (initialType === 'reporter_call' || initialType === 'hotline_contacted')
@@ -365,6 +358,9 @@ function ResponseEventSheetForm({
           'dispatch_confirmed',
           'external_info',
         ].includes(value)
+  );
+  const availableActivityGroups = activityGroups.filter((group) =>
+    group.types.some((value) => types.includes(value as ResponseEventType))
   );
   function fieldValue(key: string, value: string) {
     if (value.trim() || key === 'service_name') clearFieldError(key);
@@ -505,62 +501,73 @@ function ResponseEventSheetForm({
       {choosingType
         ? (
           <>
-            <Text style={operationStyles.eyebrow}>
-              {type ? 'CHANGE ACTIVITY' : 'CHOOSE ACTIVITY'}
-            </Text>
-            {type && (
-              <WorkflowActionRow
-                title='Keep current activity'
-                icon='arrow-back-outline'
-                showChevron={false}
-                onPress={() => setChoosingType(false)}
-                disabled={busy}
-              />
+            {choosingActivityGroup ? (
+              <>
+                {type && (
+                  <WorkflowActionRow
+                    title='Keep current activity'
+                    icon='arrow-back-outline'
+                    showChevron={false}
+                    boxed
+                    onPress={() => setChoosingType(false)}
+                    disabled={busy}
+                  />
+                )}
+                {availableActivityGroups.map((group) => (
+                  <WorkflowActionRow
+                    key={group.value}
+                    title={group.label}
+                    icon={group.icon}
+                    boxed
+                    disabled={busy}
+                    onPress={() => {
+                      setActivityGroup(group.value);
+                      setChoosingActivityGroup(false);
+                    }}
+                  />
+                ))}
+              </>
+            ) : (
+              <>
+                <WorkflowActionRow
+                  title='Back to choices'
+                  icon='arrow-back-outline'
+                  showChevron={false}
+                  boxed
+                  onPress={() => setChoosingActivityGroup(true)}
+                  disabled={busy}
+                />
+                {types.filter((value) =>
+                  activityGroups.find((group) => group.value === activityGroup)
+                    ?.types.includes(value)
+                ).map((value) => (
+                  <WorkflowActionRow
+                    key={value}
+                    title={RESPONSE_EVENT_LABELS[value]}
+                    description={value === type ? 'Current activity' : undefined}
+                    icon={eventAppearance[value].icon}
+                    tint={eventAppearance[value].tint}
+                    boxed
+                    disabled={busy}
+                    onPress={() => {
+                      if (value === type) {
+                        setChoosingType(false);
+                        return;
+                      }
+                      setType(value);
+                      setDetails({});
+                      setNote('');
+                      setNoteOpen(false);
+                      setUnitNameOpen(false);
+                      setChoosingType(false);
+                      setChoosingService(true);
+                      setFieldErrors({});
+                      setError(null);
+                    }}
+                  />
+                ))}
+              </>
             )}
-            <WorkflowChoices
-              compact
-              label='Activity group'
-              selected={activityGroup}
-              disabled={busy}
-              onSelect={setActivityGroup}
-              values={activityGroups.filter((group) =>
-                group.types.some((value) =>
-                  types.includes(value as ResponseEventType)
-                )
-              ).map((group) => ({
-                value: group.value,
-                label: group.label,
-                icon: group.icon,
-              }))}
-            />
-            {types.filter((value) =>
-              activityGroups.find((group) => group.value === activityGroup)
-                ?.types.includes(value)
-            ).map((value) => (
-              <WorkflowActionRow
-                key={value}
-                title={eventLabels[value]}
-                description={value === type ? 'Current activity' : undefined}
-                icon={eventAppearance[value].icon}
-                tint={eventAppearance[value].tint}
-                disabled={busy}
-                onPress={() => {
-                  if (value === type) {
-                    setChoosingType(false);
-                    return;
-                  }
-                  setType(value);
-                  setDetails({});
-                  setNote('');
-                  setNoteOpen(false);
-                  setUnitNameOpen(false);
-                  setChoosingType(false);
-                  setChoosingService(true);
-                  setFieldErrors({});
-                  setError(null);
-                }}
-              />
-            ))}
           </>
         )
         : type && (
@@ -571,7 +578,7 @@ function ResponseEventSheetForm({
                 size={24}
                 color={eventAppearance[type].tint}
               />
-              <Text style={operationStyles.rowTitle}>{eventLabels[type]}</Text>
+              <Text style={operationStyles.rowTitle}>{RESPONSE_EVENT_LABELS[type]}</Text>
             </View>
             {initialType === 'reporter_call' && (
               <Text style={operationStyles.caption}>
@@ -586,9 +593,11 @@ function ResponseEventSheetForm({
                 title='Change activity'
                 icon='swap-horizontal-outline'
                 showChevron={false}
+                boxed
                 disabled={busy}
                 onPress={() => {
                   setActivityGroup(activityGroupFor(type));
+                  setChoosingActivityGroup(false);
                   setChoosingType(true);
                 }}
               />
@@ -611,7 +620,7 @@ function ResponseEventSheetForm({
                     <WorkflowActionRow
                       title={(editingService?.id === activity.id
                         ? 'Editing '
-                        : 'Edit ') + serviceLabel(activity.details)}
+                        : 'Edit ') + serviceLabel(activity.details, municipalOfficeDisplayName)}
                       description={serviceSummary(activity) || undefined}
                       icon='create-outline'
                       tint={colors.primary}
@@ -623,7 +632,7 @@ function ResponseEventSheetForm({
                     style={operationStyles.serviceRemove}
                     accessibilityRole='button'
                     accessibilityLabel={'Remove ' +
-                      serviceLabel(activity.details) + ' draft'}
+                      serviceLabel(activity.details, municipalOfficeDisplayName) + ' draft'}
                     disabled={busy ||
                       (editingService !== null &&
                         editingService.id !== activity.id)}
@@ -653,6 +662,7 @@ function ResponseEventSheetForm({
                     serviceActivities.find((activity) =>
                       activity.id === editingService.id
                     )?.details ?? details,
+                    municipalOfficeDisplayName,
                   )}
                 </Text>
               </View>
@@ -666,7 +676,7 @@ function ResponseEventSheetForm({
           )}
           {fields[type].includes('service') && !choosingService && (
             <WorkflowActionRow
-              title={serviceLabel(details)}
+              title={serviceLabel(details, municipalOfficeDisplayName)}
               description='Service contacted - tap to change'
               icon='call-outline'
               showChevron={false}
@@ -678,6 +688,8 @@ function ResponseEventSheetForm({
           {fields[type].includes('service') && choosingService && (
             <WorkflowChoices
               compact
+              stacked
+              tightPadding
               label='Service'
               error={fieldErrors.service}
               selected={details.service ?? null}
@@ -687,7 +699,7 @@ function ResponseEventSheetForm({
                 { value: 'bfp', label: 'BFP' },
                 { value: 'pnp', label: 'PNP' },
                 { value: 'rhu_ambulance', label: 'RHU / ambulance' },
-                { value: 'mdrrmo_rescue', label: 'MDRRMO rescue' },
+                { value: 'mdrrmo_rescue', label: `${municipalOfficeDisplayName} rescue` },
                 { value: 'bdrrmo_team', label: 'BDRRMO team' },
                 { value: 'other', label: 'Other / road service' },
               ]}
@@ -739,6 +751,8 @@ function ResponseEventSheetForm({
           {fields[type].includes('outcome') && (
             <WorkflowChoices
               compact
+              stacked
+              tightPadding
               label='Did you reach them?'
               error={fieldErrors.outcome}
               selected={details.outcome ?? null}
@@ -753,6 +767,8 @@ function ResponseEventSheetForm({
           {fields[type].includes('method') && (
             <WorkflowChoices
               compact
+              stacked
+              tightPadding
               label='How was dispatch confirmed?'
               error={fieldErrors.method}
               selected={details.method ?? null}

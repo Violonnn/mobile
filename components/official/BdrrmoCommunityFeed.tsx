@@ -35,7 +35,7 @@ import {
 import type { OfficialReportQueueItem } from '../../lib/officialReports';
 import type { OfficialPublicProfile } from '../../lib/profile';
 import { mdrrmoCommunityStyles as styles } from '../../styles/screens/mdrrmoCommunity.styles';
-import { colors } from '../../styles/theme';
+import { colors, screenEdgeInset } from '../../styles/theme';
 
 type FeedTab = 'official' | 'community';
 type AnnouncementSort = 'newest' | 'oldest';
@@ -243,7 +243,7 @@ export default function BdrrmoCommunityFeed({
 
   return (
     <View style={styles.screen}>
-      <View style={[styles.fixedHeaderArea, styles.mdrrmoFixedHeaderArea]}>
+      <View style={[styles.fixedHeaderArea, styles.mdrrmoFixedHeaderArea, { paddingHorizontal: screenEdgeInset }]}>
         <MdrrmoHeader
           title="Community"
           right={
@@ -264,23 +264,6 @@ export default function BdrrmoCommunityFeed({
               >
                 <Ionicons name="options-outline" size={25} color={colors.text} />
               </TouchableOpacity>
-              {!compactHeader ? (
-                <TouchableOpacity
-                  onPress={() => router.push('/official/settings' as Href)}
-                  accessibilityRole="button"
-                  accessibilityLabel="Open settings"
-                >
-                  <ProfileAvatar
-                    avatarPath={officialProfile?.avatar_path}
-                    firstName={officialProfile?.first_name}
-                    lastName={officialProfile?.last_name}
-                    fallback={initials}
-                    size={42}
-                    style={styles.avatar}
-                    textStyle={styles.avatarText}
-                  />
-                </TouchableOpacity>
-              ) : null}
             </>
           }
         />
@@ -375,6 +358,8 @@ export default function BdrrmoCommunityFeed({
                     key={report.id}
                     report={report}
                     variant="residentFeed"
+                    audience="bdrrmo"
+                    openPostDetails
                     isLast={index === visibleReports.length - 1}
                     onPress={() => openReport(report.id)}
                     onCommentPress={() => openReport(report.id, true)}
@@ -468,7 +453,8 @@ export default function BdrrmoCommunityFeed({
                     announcement={announcement}
                     moderationMode="scoped"
                     variant="residentFeedPost"
-                    officeLabel={formatAnnouncementOfficeLabel(announcement)}
+                    officeLabel={formatAnnouncementOfficeLabel(announcement, undefined, 'MITCOM')}
+                    useScopedOfficeLabels
                     cardStyle={
                       index === filteredAnnouncements.length - 1
                         ? styles.feedPostLast

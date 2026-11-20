@@ -1,5 +1,6 @@
 import { StyleSheet } from 'react-native';
-import { colors, fonts, fontSizes, radius, spacing } from '../theme';
+import { colors, fonts, fontSizes, radius, screenEdgeInset, spacing } from '../theme';
+import { residentTypography } from '../residentTypography';
 
 export const profileStyles = StyleSheet.create({
   container: {
@@ -11,7 +12,7 @@ export const profileStyles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: screenEdgeInset,
     paddingTop: spacing.md,
     paddingBottom: 130,
   },
@@ -109,9 +110,7 @@ export const profileStyles = StyleSheet.create({
   },
   rowSubtitle: {
     marginTop: 1,
-    fontFamily: fonts.regular,
-    fontSize: fontSizes.sm,
-    lineHeight: 16,
+    ...residentTypography.mutedBody,
     color: '#62708A',
   },
   rowValue: {

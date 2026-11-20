@@ -26,11 +26,12 @@ import ResidentReportProgress from '../report/ResidentReportProgress';
 type ResidentReportPreviewContentProps = {
   report: MapReportMarker;
   onOpenFullReport: () => void;
-  primaryActionLabel?: string;
+  primaryActionLabel?: string | null;
+  unavailableActionMessage?: string;
   showActivity?: boolean;
 };
 
-function formatReportCode(reportId: string): string {
+export function formatReportCode(reportId: string): string {
   return `DL-${reportId.replaceAll('-', '').slice(-6).toLocaleUpperCase()}`;
 }
 
@@ -93,10 +94,11 @@ export function ResidentReportPreviewContent({
   report,
   onOpenFullReport,
   primaryActionLabel = 'Open full report',
+  unavailableActionMessage,
   showActivity = false,
 }: ResidentReportPreviewContentProps) {
   const { isLargeText } = useAccessibilityLayout();
-  const status = getMapReportPresentation(report);
+  const status = getMapReportPresentation(report, 'resident');
 
   return (
     <>
@@ -106,7 +108,6 @@ export function ResidentReportPreviewContent({
         showsVerticalScrollIndicator={false}
         bounces
       >
-        <Text style={styles.reportCode}>{`REPORT #${formatReportCode(report.id)}`}</Text>
         <View style={[styles.titleRow, isLargeText && styles.titleRowLargeText]}>
           <Text style={[styles.title, isLargeText && styles.titleLargeText]}>
             {report.title || 'Untitled report'}
@@ -130,35 +131,49 @@ export function ResidentReportPreviewContent({
 
         <View style={[styles.metadataGrid, isLargeText && styles.metadataGridLargeText]}>
           <View style={[styles.metadataItem, isLargeText && styles.metadataItemLargeText]}>
-            <Ionicons name="location-outline" size={18} color={colors.navigationActive} />
-            <Text style={styles.metadataText}>
+            <Ionicons name="location-outline" size={22} color={colors.navigationActive} />
+            <Text style={[styles.metadataText, styles.metadataTextCentered]}>
               {formatReportLocation(report)}
             </Text>
           </View>
           <View style={[styles.metadataItem, isLargeText && styles.metadataItemLargeText]}>
-            <Ionicons name="calendar-outline" size={18} color={colors.navigationActive} />
-            <Text style={styles.metadataText}>{formatMapDateTime(report.created_at)}</Text>
+            <Ionicons name="calendar-outline" size={22} color={colors.navigationActive} />
+            <Text style={[styles.metadataText, styles.metadataTextCentered]}>{formatMapDateTime(report.created_at)}</Text>
           </View>
           <View style={[styles.metadataItem, isLargeText && styles.metadataItemLargeText]}>
-            <Ionicons name="warning-outline" size={18} color={colors.navigationActive} />
-            <Text style={styles.metadataText}>
+            <Ionicons name="warning-outline" size={22} color={colors.navigationActive} />
+            <Text style={[styles.metadataText, styles.metadataTextCentered]}>
               {formatIncidentType(report.incidentType, report.incidentTypeOther)}
             </Text>
           </View>
           <View style={[styles.metadataItem, isLargeText && styles.metadataItemLargeText]}>
-            <Ionicons name="person-outline" size={18} color={colors.navigationActive} />
-            <Text style={styles.metadataText}>Private submission</Text>
+            <Ionicons name="person-outline" size={22} color={colors.navigationActive} />
+            <Text style={[styles.metadataText, styles.metadataTextCentered]}>Private submission</Text>
           </View>
         </View>
 
         {showActivity ? (
-          <ResidentReportProgress report={report} />
+          <ResidentReportProgress
+            report={report}
+            useScopedPresentation
+            beforeActivity={primaryActionLabel ? (
+              <TouchableOpacity
+                style={styles.timelineActionButton}
+                onPress={onOpenFullReport}
+                accessibilityRole="button"
+                accessibilityLabel={primaryActionLabel}
+              >
+                <Text style={styles.timelineActionButtonText}>{primaryActionLabel}</Text>
+              </TouchableOpacity>
+            ) : null}
+          />
         ) : (
           <>
             <ReportStatusTimeline
               lifecycle={report.lifecycle}
               status={report.status}
               useStatusProgressColors
+              showScopedCoordinationDetails
               style={styles.timeline}
             />
 
@@ -176,23 +191,39 @@ export function ResidentReportPreviewContent({
                 color={colors.navigationActive}
               />
               <Text style={styles.infoText}>
-                Your barangay remains responsible while a transfer is awaiting MDRRMO acceptance. Support requests keep the current lead office.
+                Your barangay remains responsible while a transfer is awaiting MITCOM acceptance. Support requests keep the current lead office.
               </Text>
             </View>
           </>
         )}
+
+        {showActivity && !primaryActionLabel && unavailableActionMessage ? (
+          <View style={styles.unavailableAction}>
+            <Ionicons name="location-outline" size={16} color={colors.textMuted} />
+            <Text style={styles.unavailableActionText}>{unavailableActionMessage}</Text>
+          </View>
+        ) : null}
       </ScrollView>
 
-      <View style={styles.footer}>
-        <TouchableOpacity
-          style={styles.fullReportButton}
-          onPress={onOpenFullReport}
-          accessibilityRole="button"
-          accessibilityLabel={primaryActionLabel}
-        >
-          <Text style={styles.fullReportButtonText}>{primaryActionLabel}</Text>
-        </TouchableOpacity>
-      </View>
+      {!showActivity ? (
+        <View style={styles.footer}>
+          {primaryActionLabel ? (
+            <TouchableOpacity
+              style={styles.fullReportButton}
+              onPress={onOpenFullReport}
+              accessibilityRole="button"
+              accessibilityLabel={primaryActionLabel}
+            >
+              <Text style={styles.fullReportButtonText}>{primaryActionLabel}</Text>
+            </TouchableOpacity>
+          ) : unavailableActionMessage ? (
+            <View style={styles.unavailableAction}>
+              <Ionicons name="location-outline" size={16} color={colors.textMuted} />
+              <Text style={styles.unavailableActionText}>{unavailableActionMessage}</Text>
+            </View>
+          ) : null}
+        </View>
+      ) : null}
     </>
   );
 }
@@ -203,18 +234,11 @@ const styles = StyleSheet.create({
     minHeight: 0,
   },
   content: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 12,
     paddingBottom: spacing.md,
   },
-  reportCode: {
-    marginTop: spacing.xs,
-    fontFamily: fonts.medium,
-    fontSize: fontSizes.xs,
-    letterSpacing: 0.45,
-    color: colors.textMuted,
-  },
   titleRow: {
-    minHeight: 42,
+    minHeight: 28,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
@@ -274,7 +298,7 @@ const styles = StyleSheet.create({
   },
   emptyMediaText: {
     fontFamily: fonts.regular,
-    fontSize: 11,
+    fontSize: fontSizes.md,
     color: colors.textMuted,
   },
   videoBadge: {
@@ -306,29 +330,34 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     rowGap: 12,
-    marginTop: spacing.md,
+    marginTop: spacing.sm,
   },
   metadataGridLargeText: {
     flexDirection: 'column',
   },
   metadataItem: {
     width: '50%',
-    minHeight: 24,
-    flexDirection: 'row',
+    minHeight: 58,
+    flexDirection: 'column',
     alignItems: 'center',
-    gap: spacing.sm,
-    paddingRight: spacing.sm,
+    justifyContent: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.xs,
   },
   metadataItemLargeText: {
     width: '100%',
-    alignItems: 'flex-start',
   },
   metadataText: {
-    flex: 1,
+    flexShrink: 1,
+    minWidth: 0,
     fontFamily: fonts.regular,
-    fontSize: 11,
-    lineHeight: 16,
+    fontSize: fontSizes.md,
+    lineHeight: 20,
     color: colors.text,
+  },
+  metadataTextCentered: {
+    width: '100%',
+    textAlign: 'center',
   },
   timeline: {
     marginTop: 22,
@@ -336,7 +365,7 @@ const styles = StyleSheet.create({
   },
   updatedText: {
     fontFamily: fonts.regular,
-    fontSize: 11,
+    fontSize: fontSizes.md,
     color: colors.textMuted,
   },
   nextActionCard: {
@@ -397,5 +426,33 @@ const styles = StyleSheet.create({
     fontFamily: fonts.semibold,
     fontSize: 12,
     color: colors.white,
+  },
+  timelineActionButton: {
+    minHeight: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: -spacing.xs,
+    borderRadius: 4,
+    backgroundColor: colors.navigationActive,
+  },
+  timelineActionButtonText: {
+    fontFamily: fonts.semibold,
+    fontSize: fontSizes.md,
+    color: colors.white,
+  },
+  unavailableAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+  },
+  unavailableActionText: {
+    fontFamily: fonts.medium,
+    fontSize: fontSizes.md,
+    lineHeight: 18,
+    color: colors.textMuted,
+    textAlign: 'center',
   },
 });

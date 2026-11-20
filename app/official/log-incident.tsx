@@ -351,7 +351,7 @@ export function OfficialReportForm({
           <View style={styles.stateBox}>
             <Text style={styles.stateTitle}>Not available</Text>
             <Text style={styles.stateBody}>
-              Only active BDRRMO and MDRRMO officers can record incidents.
+              Only active BDRRMO and MITCOM officers can record incidents.
             </Text>
             <TouchableOpacity
               style={styles.retryButton}

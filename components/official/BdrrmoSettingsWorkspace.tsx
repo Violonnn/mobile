@@ -24,10 +24,16 @@ import { SettingsScreenSkeleton } from '../ui/OfficialScreenSkeletons';
 import { logout } from '../../lib/auth';
 import { changeOfficialPassword } from '../../lib/officialPassword';
 import type { OfficialPublicProfile } from '../../lib/profile';
+import { normalizeName } from '../../lib/validation/name';
 import { mdrrmoSettingsStyles as styles } from '../../styles/screens/mdrrmoSettings.styles';
-import { colors } from '../../styles/theme';
+import { residentTypography } from '../../styles/residentTypography';
+import { colors, screenEdgeInset } from '../../styles/theme';
 
 type LegalDocument = 'privacy' | 'terms' | null;
+const residentSettingsSubtitleText = {
+  ...residentTypography.mutedBody,
+  color: '#62708A',
+};
 
 type Props = {
   profile: OfficialPublicProfile | null;
@@ -53,7 +59,11 @@ function SettingsRow({
     <>
       <View style={styles.rowCopy}>
         <Text style={styles.rowTitle}>{title}</Text>
-        {subtitle ? <Text style={styles.rowSubtitle}>{subtitle}</Text> : null}
+        {subtitle ? (
+          <Text style={[styles.rowSubtitle, residentSettingsSubtitleText]}>
+            {subtitle}
+          </Text>
+        ) : null}
       </View>
       {value ? <Text style={styles.rowValue}>{value}</Text> : null}
       {onPress ? <Ionicons name="chevron-forward" size={22} color={colors.textMuted} /> : null}
@@ -78,6 +88,7 @@ function profileName(profile: OfficialPublicProfile | null): string {
   if (!profile) return 'BDRRMO account';
   return [profile.first_name, profile.middle_name, profile.last_name]
     .filter((part) => part?.trim())
+    .map((part) => normalizeName(part ?? ''))
     .join(' ')
     .trim() || 'BDRRMO account';
 }
@@ -153,13 +164,18 @@ export default function BdrrmoSettingsWorkspace({
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <StatusBar style="dark" />
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={[styles.scrollContent, { paddingHorizontal: screenEdgeInset }]}
+        showsVerticalScrollIndicator={false}
+      >
         <Text style={styles.screenTitle}>Settings</Text>
         {profileLoading && !profile ? (
           <SettingsScreenSkeleton />
         ) : profileError && !profile ? (
           <View style={styles.stateBox}>
-            <Text style={styles.stateText}>{profileError}</Text>
+            <Text style={[styles.stateText, residentTypography.mutedBody]}>
+              {profileError}
+            </Text>
             <TouchableOpacity onPress={onRetryProfile}><Text style={styles.retryText}>Try again</Text></TouchableOpacity>
           </View>
         ) : (
@@ -207,7 +223,9 @@ export default function BdrrmoSettingsWorkspace({
           <TouchableOpacity style={styles.logoutRow} onPress={confirmLogout} disabled={loggingOut}>
             <View style={styles.rowCopy}>
               <Text style={styles.logoutTitle}>Log out</Text>
-              <Text style={styles.rowSubtitle}>Sign out of this official account</Text>
+              <Text style={[styles.rowSubtitle, residentSettingsSubtitleText]}>
+                Sign out of this official account
+              </Text>
             </View>
             {loggingOut ? <ActivityIndicator color={colors.unverified} /> : <Ionicons name="log-out-outline" size={28} color={colors.unverified} />}
           </TouchableOpacity>

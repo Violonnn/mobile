@@ -4,17 +4,17 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { useAccessibilityLayout } from '../../hooks/useAccessibilityLayout';
 import { formatPublishedAt } from '../../lib/formatTime';
-import { incidentTypeTone } from '../../lib/incidentTypes';
 import type { GpsPosition } from '../../lib/location';
 import {
+  publicIncidentHasMapLocation,
   publicIncidentLifecycle,
   publicIncidentBarangayLabel,
-  publicIncidentStatusLabel,
   publicIncidentTone,
   type PublicIncident,
 } from '../../lib/publicIncidents';
+import { PublicIncidentTags } from '../report/PublicIncidentPost';
 import { homeStyles as styles } from '../../styles/screens/home.styles';
-import { colors, fonts, fontSizes, radius, spacing } from '../../styles/theme';
+import { colors, fonts, fontSizes, spacing } from '../../styles/theme';
 import InteractiveMap from '../map/InteractiveMap';
 import {
   publicIncidentCaption,
@@ -30,71 +30,96 @@ type NearbyReportsPanelProps = {
   userLocation: GpsPosition | null;
   onOpenIncident: (incidentCaseId: string, reportId?: string) => void;
   onRetry: () => void;
-  onGestureActiveChange: (active: boolean) => void;
 };
 
-export default function NearbyReportsPanel({ incidents, loading, error, userLocation, onOpenIncident, onRetry, onGestureActiveChange }: NearbyReportsPanelProps) {
+function publicIncidentSelectionKey(incident: PublicIncident): string {
+  return incident.reportId ?? incident.incidentCaseId;
+}
+
+export default function NearbyReportsPanel({ incidents, loading, error, userLocation, onOpenIncident, onRetry }: NearbyReportsPanelProps) {
   const { isLargeText } = useAccessibilityLayout();
-  const [activeIndex, setActiveIndex] = useState(0);
-  const [referenceTime, setReferenceTime] = useState(() => Date.now());
-  const safeActiveIndex = Math.min(activeIndex, Math.max(0, incidents.length - 1));
-  const activeIncident = incidents[safeActiveIndex] ?? null;
+  const [selectedIncidentKey, setSelectedIncidentKey] = useState<string | null>(null);
+  // Report posts need reporter and official exact-location approval. Legacy
+  // incidents can also use their separately approved safety location mode.
+  const mapIncidents = incidents.filter((incident) =>
+    publicIncidentHasMapLocation(incident),
+  );
+  const selectedIncidentIndex = selectedIncidentKey
+    ? mapIncidents.findIndex((incident) => publicIncidentSelectionKey(incident) === selectedIncidentKey)
+    : -1;
+  const safeActiveIndex = selectedIncidentIndex >= 0 ? selectedIncidentIndex : 0;
+  const activeIncident = mapIncidents[safeActiveIndex] ?? null;
+  const selectedIncident = mapIncidents[safeActiveIndex] ?? null;
   const lifecycle = activeIncident ? publicIncidentLifecycle(activeIncident.publicStatus) : null;
   const activeTone = activeIncident ? publicIncidentTone(activeIncident.publicStatus) : null;
   const activeColor = activeTone?.color ?? colors.primary;
-  const typeTone = incidentTypeTone(activeIncident?.incidentType);
   // The report caption is the highlight. Official text stays on the secondary row.
   const latestUpdate = activeIncident ? publicIncidentLatestUpdate(activeIncident) : null;
-  const activeLocation = activeIncident?.exactLocation ?? activeIncident?.approximateArea;
-  const focusTarget = activeLocation ?? userLocation;
+  const selectedIncidentLocation = selectedIncident?.exactLocation ?? selectedIncident?.approximateArea;
+  const focusTarget = selectedIncident && selectedIncidentLocation
+    ? {
+        reportId: publicIncidentSelectionKey(selectedIncident),
+        latitude: selectedIncidentLocation.latitude,
+        longitude: selectedIncidentLocation.longitude,
+      }
+    : userLocation;
 
   useEffect(() => {
-    const timer = setInterval(() => setReferenceTime(Date.now()), 60_000);
-    return () => clearInterval(timer);
-  }, []);
+    if (!selectedIncidentKey || selectedIncidentIndex >= 0) return;
+    setSelectedIncidentKey(null);
+  }, [selectedIncidentIndex, selectedIncidentKey]);
 
   function move(direction: -1 | 1) {
-    if (incidents.length < 2) return;
-    setActiveIndex((current) => (current + direction + incidents.length) % incidents.length);
+    if (mapIncidents.length < 2) return;
+    const nextIndex = (safeActiveIndex + direction + mapIncidents.length) % mapIncidents.length;
+    setSelectedIncidentKey(publicIncidentSelectionKey(mapIncidents[nextIndex]));
+  }
+
+  function openActiveIncident() {
+    if (!activeIncident) return;
+    setSelectedIncidentKey(publicIncidentSelectionKey(activeIncident));
+    onOpenIncident(activeIncident.incidentCaseId, activeIncident.reportId);
   }
 
   const updatedAt = activeIncident?.lastPublicUpdateAt ?? activeIncident?.confirmedAt;
-  const ageMinutes = updatedAt ? Math.max(1, Math.floor((referenceTime - Date.parse(updatedAt)) / 60_000)) : null;
-  const elapsed = ageMinutes == null || !Number.isFinite(ageMinutes) ? ''
-    : ageMinutes < 60 ? `${ageMinutes} MIN` : ageMinutes < 1440 ? `${Math.floor(ageMinutes / 60)} HR` : `${Math.floor(ageMinutes / 1440)} DAY`;
 
   return (
     <View style={styles.nearbyReportsPanel}>
       <View style={styles.nearbyMapHero}>
         <View collapsable={false} style={styles.nearbyMapFill}>
           <InteractiveMap
-            publicIncidents={incidents}
-            highlightedPublicIncidentId={activeIncident?.reportId ?? activeIncident?.incidentCaseId}
+            publicIncidents={mapIncidents}
+            highlightedPublicIncidentId={selectedIncident ? publicIncidentSelectionKey(selectedIncident) : undefined}
             userLocation={userLocation}
+            showUserLocationMarker={false}
+            mapGesturesEnabled={false}
             showZoomControls={false}
             focusZoomLevel={15}
             stickyFocus
             focusTarget={focusTarget}
-            onGestureActiveChange={onGestureActiveChange}
             onPublicIncidentPress={(incidentCaseId: string, _groupIds: string[], reportId?: string) => {
-              const selectedIndex = incidents.findIndex((incident) => reportId
+              const selectedIndex = mapIncidents.findIndex((incident) => reportId
                 ? incident.reportId === reportId
                 : incident.incidentCaseId === incidentCaseId);
-              if (selectedIndex >= 0) setActiveIndex(selectedIndex);
+              if (selectedIndex >= 0) {
+                setSelectedIncidentKey(publicIncidentSelectionKey(mapIncidents[selectedIndex]));
+              }
             }}
           />
         </View>
-        <View style={styles.nearbyMapCountBadge} accessibilityLabel={`${incidents.length} nearby community reports`}>
-          <View style={[styles.nearbyMapCountDot, { backgroundColor: activeColor }]} />
-          <Text style={[styles.nearbyMapCountText, { color: activeColor }]}>{incidents.length} NEARBY</Text>
-        </View>
-        {incidents.length > 0 ? (
+        {mapIncidents.length > 0 ? (
+          <View style={styles.nearbyMapCountBadge} accessibilityLabel={`${mapIncidents.length} nearby community reports`}>
+            <View style={[styles.nearbyMapCountDot, { backgroundColor: activeColor }]} />
+            <Text style={[styles.nearbyMapCountText, { color: activeColor }]}>{mapIncidents.length} NEARBY</Text>
+          </View>
+        ) : null}
+        {mapIncidents.length > 0 ? (
           <View style={styles.nearbyMapPager}>
-            <TouchableOpacity style={styles.nearbyMapPagerButton} onPress={() => move(-1)} disabled={incidents.length < 2} accessibilityRole="button" accessibilityLabel="Previous nearby report">
+            <TouchableOpacity style={styles.nearbyMapPagerButton} onPress={() => move(-1)} disabled={mapIncidents.length < 2} accessibilityRole="button" accessibilityLabel="Previous nearby report">
               <Ionicons name="chevron-back" size={17} color={colors.text} />
             </TouchableOpacity>
-            <Text style={styles.nearbyMapPagerText}>{safeActiveIndex + 1} of {incidents.length}</Text>
-            <TouchableOpacity style={styles.nearbyMapPagerButton} onPress={() => move(1)} disabled={incidents.length < 2} accessibilityRole="button" accessibilityLabel="Next nearby report">
+            <Text style={styles.nearbyMapPagerText}>{safeActiveIndex + 1} of {mapIncidents.length}</Text>
+            <TouchableOpacity style={styles.nearbyMapPagerButton} onPress={() => move(1)} disabled={mapIncidents.length < 2} accessibilityRole="button" accessibilityLabel="Next nearby report">
               <Ionicons name="chevron-forward" size={17} color={colors.text} />
             </TouchableOpacity>
           </View>
@@ -104,19 +129,15 @@ export default function NearbyReportsPanel({ incidents, loading, error, userLoca
         <View style={styles.nearbyActiveReportCard}>
           <View style={[styles.nearbyActiveReportTopRow, isLargeText && styles.nearbyActiveReportTopRowLargeText]}>
             <View style={styles.nearbyActiveReportCopy}>
-              <Text style={[styles.nearbyActiveReportEyebrow, { color: activeColor }]}>
-                {publicIncidentStatusLabel(activeIncident.publicStatus).toLocaleUpperCase()}{elapsed ? ` · ${elapsed}` : ''}
+              <Text style={styles.nearbyActiveReportTitle}>
+                {publicIncidentTitle(activeIncident)}
+                <Text style={styles.nearbyActiveReportMeta}>
+                  {' · '}{publicIncidentBarangayLabel(activeIncident)}
+                </Text>
               </Text>
-              <Text style={styles.nearbyActiveReportTitle} numberOfLines={2}>{publicIncidentTitle(activeIncident)}</Text>
-              <View style={panelStyles.metaRow}>
-                <View style={[panelStyles.typeChip, { backgroundColor: typeTone.softColor }]}>
-                  <Ionicons name={typeTone.icon} size={12} color={typeTone.color} />
-                  <Text numberOfLines={2} ellipsizeMode="tail" style={[panelStyles.typeChipText, { color: typeTone.color }]}>{activeIncident.publicTypeLabel}</Text>
-                </View>
-                <Text style={[styles.nearbyActiveReportMeta, panelStyles.metaText]} numberOfLines={1}>{publicIncidentBarangayLabel(activeIncident)}</Text>
-              </View>
+              <PublicIncidentTags incident={activeIncident} />
             </View>
-            <TouchableOpacity style={styles.nearbyOpenReportAction} onPress={() => onOpenIncident(activeIncident.incidentCaseId, activeIncident.reportId)} accessibilityRole="button" accessibilityLabel={`Open ${publicIncidentTitle(activeIncident)} report`}>
+            <TouchableOpacity style={styles.nearbyOpenReportAction} onPress={openActiveIncident} accessibilityRole="button" accessibilityLabel={`Open ${publicIncidentTitle(activeIncident)} report`}>
               <Ionicons name="arrow-forward" size={22} color={colors.text} />
             </TouchableOpacity>
           </View>
@@ -133,7 +154,7 @@ export default function NearbyReportsPanel({ incidents, loading, error, userLoca
               <Text style={styles.nearbyActiveReportQuoteSource}>
                 {activeIncident.reportId
                   ? activeIncident.reporterName ?? 'Anonymous resident'
-                  : 'Official incident summary'} · Brgy. {activeIncident.barangayName}
+                  : 'Official incident summary'}
                 {updatedAt ? ` · ${formatPublishedAt(activeIncident.confirmedAt ?? updatedAt)}` : ''}
               </Text>
             </View>
@@ -152,9 +173,9 @@ export default function NearbyReportsPanel({ incidents, loading, error, userLoca
         </View>
       ) : (
         <View style={styles.nearbyReportsState}>
-          {loading ? <ActivityIndicator color={colors.primary} /> : <Ionicons name={error ? 'location-outline' : 'checkmark-circle-outline'} size={28} color={colors.primary} />}
+          {loading ? <ActivityIndicator color={colors.primary} /> : <Ionicons name="map-outline" size={28} color={colors.textMuted} />}
           <Text style={styles.nearbyReportsStateTitle}>{loading ? 'Finding nearby reports' : error ? 'Nearby reports unavailable' : 'No nearby reports'}</Text>
-          <Text style={styles.nearbyReportsStateText}>{error ?? 'Active community reports near your location appear here. Open report details to check whether its public location is exact or approximate.'}</Text>
+          <Text style={styles.nearbyReportsStateText}>{error ?? 'Active community reports near your location appear here.'}</Text>
           {error ? <TouchableOpacity style={styles.nearbyReportsRetryButton} onPress={onRetry} accessibilityRole="button"><Text style={styles.nearbyReportsRetryText}>Try again</Text></TouchableOpacity> : null}
         </View>
       )}
@@ -163,32 +184,6 @@ export default function NearbyReportsPanel({ incidents, loading, error, userLoca
 }
 
 const panelStyles = StyleSheet.create({
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginTop: 4,
-  },
-  metaText: {
-    flexShrink: 1,
-  },
-  typeChip: {
-    maxWidth: '100%',
-    flexShrink: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 3,
-    borderRadius: radius.full,
-  },
-  typeChipText: {
-    minWidth: 0,
-    flexShrink: 1,
-    fontFamily: fonts.semibold,
-    fontSize: fontSizes.xs,
-  },
   updateRow: {
     flexDirection: 'row',
     alignItems: 'center',

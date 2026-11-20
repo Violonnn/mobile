@@ -11,7 +11,8 @@ import {
   Platform,
   RefreshControl,
   ScrollView,
-  Text,
+  StyleSheet,
+  Text as NativeText,
   TextInput,
   TouchableOpacity,
   View,
@@ -21,7 +22,8 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { officialStyles as styles } from '../../styles/screens/official.styles';
-import { colors } from '../../styles/theme';
+import { colors, fontSizes, screenEdgeInset } from '../../styles/theme';
+import { residentTypography } from '../../styles/residentTypography';
 import { type BarangayOption, fetchBarangays } from '../../lib/barangays';
 import {
   getReportLocationAdjustmentLimit,
@@ -31,10 +33,12 @@ import { mayorReportStatusLabel } from '../../lib/mayorStatusLabels';
 import { goBackOrReplace } from '../../lib/navigation';
 import { ReportOperationsSkeleton } from '../../components/ui/OfficialScreenSkeletons';
 import { useOfficialPortal } from '../../context/OfficialPortalContext';
+import { scopedLifecyclePresentation } from '../../lib/reportPresentation';
+import { formatIncidentOfficeLabel } from '../../lib/incidentCases';
 import { useOfficialReportDetail } from '../../hooks/useOfficialReports';
 import {
-  CommunityReportTags,
   MediaCollage,
+  CommunityReportTags,
   ReportMediaPreviewModal,
   statusLabel,
 } from '../../components/report/ReportDetailCard';
@@ -54,10 +58,13 @@ import {
 import { useReportCallFlow } from '../../hooks/useReportCallFlow';
 import {
   callOutcomeFeedback,
+  formatIncidentEventTitle,
   hotlineEventDetails,
 } from '../../lib/reportContactFlow';
-import { reportOperationsStyles as operationStyles } from '../../styles/components/reportOperations.styles';
-import { lifecycleColor, officialLabel } from '../../lib/reportLifecycle';
+import {
+  reportOperationsStyles as operationStyles,
+  REPORT_OPERATIONS_MIN_FONT_SIZE,
+} from '../../styles/components/reportOperations.styles';
 import {
   WorkflowActionRow,
   WorkflowButton,
@@ -76,10 +83,27 @@ import ResponseEventSheet from '../../components/official/ResponseEventSheet';
 import UrgentDangerCard from '../../components/official/UrgentDangerCard';
 import WorkflowToast from '../../components/official/WorkflowToast';
 import IncidentCasePanel from '../../components/official/IncidentCasePanel';
+import IncidentPublicationPanel from '../../components/official/IncidentPublicationPanel';
+import ReportStatusSummary from '../../components/official/ReportStatusSummary';
 import IncidentTypeBadge from '../../components/report/IncidentTypeBadge';
 import { ReporterAvatar } from '../../components/report/ReporterAvatar';
 import ReportBarangayPicker from '../../components/report/ReportBarangayPicker';
 import ReportLocationPicker from '../../components/report/ReportLocationPicker';
+import LocationStep from '../../components/report/LocationStep';
+
+// Keep every label on the report operations screen at least as large as its Review heading.
+const Text = ({ style, ...props }: React.ComponentProps<typeof NativeText>) => {
+  const flattenedStyle = StyleSheet.flatten(style);
+  const requestedFontSize = typeof flattenedStyle?.fontSize === 'number'
+    ? flattenedStyle.fontSize
+    : REPORT_OPERATIONS_MIN_FONT_SIZE;
+  return (
+    <NativeText
+      {...props}
+      style={[style, { fontSize: Math.max(requestedFontSize, REPORT_OPERATIONS_MIN_FONT_SIZE) }]}
+    />
+  );
+};
 
 function statusPillStyle(status: ReportStatus) {
   if (status === 'verified') return styles.statusVerified;
@@ -168,10 +192,15 @@ export default function OfficialReportDetailScreen() {
   const [verificationOpen, setVerificationOpen] = useState(false);
   const [timelineOpen, setTimelineOpen] = useState(false);
   const [reportHistoryVisible, setReportHistoryVisible] = useState(false);
+  const [reportHistorySection, setReportHistorySection] = useState<
+    'report' | 'incident' | 'visibility'
+  >('report');
   const [mediaPreview, setMediaPreview] = useState<
     ReportMediaAttachment | null
   >(null);
   const [locationPickerVisible, setLocationPickerVisible] = useState(false);
+  const [locationEditorVisible, setLocationEditorVisible] = useState(false);
+  const [adjustingCorrectionPin, setAdjustingCorrectionPin] = useState(false);
   const [barangayPickerVisible, setBarangayPickerVisible] = useState(false);
   const [correctedPosition, setCorrectedPosition] = useState<
     GpsPosition | null
@@ -191,6 +220,15 @@ export default function OfficialReportDetailScreen() {
 
   const { detail, error, loading, refreshing, refresh, reload } =
     useOfficialReportDetail(reportId, scope);
+  const bdrrmoStatusPresentation = detail && kind === 'BDRRMO'
+    ? scopedLifecyclePresentation(detail.lifecycle, {
+        audience: 'bdrrmo',
+        barangayName: detail.barangayName,
+        leadOffice: detail.lifecycleFacts.leadOffice,
+        claimedByName: detail.lifecycleFacts.reviewClaimedByName,
+        claimedAt: detail.lifecycleFacts.reviewClaimedAt,
+      })
+    : null;
   const canLogResponse = detail != null && (
     detail.allowedIncidentActions.includes('log_event') ||
     (!detail.incidentCase && detail.canReviewReport &&
@@ -208,11 +246,6 @@ export default function OfficialReportDetailScreen() {
   const canCorrectTimelineLocation = isResponseOfficial &&
     detail?.canCorrectLocation === true &&
     detail.status === 'unverified';
-  const correctionBarangayOptions = kind === 'BDRRMO' && scope?.barangay_id
-    ? correctionBarangays.filter((barangay) =>
-      barangay.id === scope.barangay_id
-    )
-    : correctionBarangays;
   const locationWasUpdated = detail?.timeline.some(
     (event) =>
       event.eventType === 'location_change' ||
@@ -227,12 +260,30 @@ export default function OfficialReportDetailScreen() {
       detail.longitude.toFixed(5)
     })`
     : currentLocation;
+  const selectedCorrectionBarangay = correctionBarangays.find(
+    (barangay) => barangay.id === selectedCorrectionBarangayId,
+  );
+  const correctionAddress = selectedCorrectionBarangayId && detail
+    ? {
+        barangayId: selectedCorrectionBarangayId,
+        barangay: selectedCorrectionBarangay?.name ?? detail.barangayName ?? 'Choose a barangay',
+        municipality: 'Minglanilla',
+        label: `${selectedCorrectionBarangay?.name ?? detail.barangayName ?? 'Choose a barangay'}, Minglanilla, Cebu`,
+      }
+    : null;
 
   const sortedReportEvents = [...(detail?.timeline ?? [])].sort((
     first,
     second,
   ) =>
     (Date.parse(second.createdAt) || 0) - (Date.parse(first.createdAt) || 0)
+  );
+  const sortedIncidentEvents = [...(detail?.incidentCase?.events ?? [])].sort((
+    first,
+    second,
+  ) =>
+    (Date.parse(second.occurredAt || second.createdAt) || 0) -
+      (Date.parse(first.occurredAt || first.createdAt) || 0)
   );
   const ownsPendingReview = Boolean(
     detail &&
@@ -256,6 +307,7 @@ export default function OfficialReportDetailScreen() {
       : null;
 
   const reviewOutcome = detail?.lifecycleFacts.reviewOutcome;
+  const reportHasReviewOutcome = reviewOutcome != null && reviewOutcome !== 'pending';
   // Match the decision panel's visibility so a historical summary never opens an empty body.
   const canReopenReview = detail?.canReviewReport &&
     ['rejected', 'could_not_confirm'].includes(detail.lifecycle.primaryStage);
@@ -285,6 +337,11 @@ export default function OfficialReportDetailScreen() {
       'Report operations help',
       'Take the report for review, check evidence, and record a review decision. Calling is optional. Record response actions separately.',
     );
+  }
+
+  function openReportHistoryMenu() {
+    setReportHistorySection('report');
+    setReportHistoryVisible(true);
   }
 
   function handleCallReporter() {
@@ -360,6 +417,30 @@ export default function OfficialReportDetailScreen() {
     void loadCorrectionBarangays();
   }
 
+  function openBdrrmoLocationEditor() {
+    if (!detail || !canCorrectTimelineLocation || locationCorrectionBusy) {
+      return;
+    }
+
+    setCorrectedPosition({
+      latitude: detail.latitude,
+      longitude: detail.longitude,
+      accuracyMeters: detail.gpsAccuracyMeters,
+    });
+    setSelectedCorrectionBarangayId(detail.barangayId);
+    setAdjustingCorrectionPin(false);
+    setLocationEditorVisible(true);
+    void loadCorrectionBarangays();
+  }
+
+  function confirmBdrrmoLocationEditor() {
+    if (!selectedCorrectionBarangayId) {
+      Alert.alert('Choose a barangay', 'Select the incident barangay before saving the location.');
+      return;
+    }
+    void saveTimelineLocationCorrection(selectedCorrectionBarangayId);
+  }
+
   function confirmCorrectedPin(position: GpsPosition) {
     setCorrectedPosition(position);
     setLocationPickerVisible(false);
@@ -388,6 +469,8 @@ export default function OfficialReportDetailScreen() {
       return;
     }
 
+    setLocationEditorVisible(false);
+    setAdjustingCorrectionPin(false);
     setCorrectedPosition(null);
     await reload();
   }
@@ -450,7 +533,11 @@ export default function OfficialReportDetailScreen() {
       <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
         <StatusBar style='dark' />
         <View
-          style={[styles.scrollContent, { flex: 1, justifyContent: 'center' }]}
+          style={[
+            styles.scrollContent,
+            { flex: 1, justifyContent: 'center' },
+            kind === 'BDRRMO' && { paddingHorizontal: screenEdgeInset },
+          ]}
         >
           <View style={styles.stateBox}>
             <Text style={styles.stateTitle}>Official access unavailable</Text>
@@ -520,7 +607,10 @@ export default function OfficialReportDetailScreen() {
       >
         {isResponseOfficial && !reroutedTo && ownsPendingReview && (
           <View
-            style={operationStyles.claimReminder}
+            style={[
+              operationStyles.claimReminder,
+              kind === 'BDRRMO' && { paddingHorizontal: screenEdgeInset },
+            ]}
             onLayout={(event) =>
               setClaimReminderHeight(event.nativeEvent.layout.height)}
           >
@@ -540,7 +630,10 @@ export default function OfficialReportDetailScreen() {
           </View>
         )}
         <ScrollView
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[
+            styles.scrollContent,
+            kind === 'BDRRMO' && { paddingHorizontal: screenEdgeInset },
+          ]}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={refresh} />
           }
@@ -557,11 +650,13 @@ export default function OfficialReportDetailScreen() {
               <Ionicons name='arrow-back' size={22} color={colors.text} />
             </TouchableOpacity>
             <View style={styles.headerTextGroup}>
-              <Text style={styles.incidentDetailLabel}>Incident detail</Text>
+              {kind !== 'BDRRMO' ? (
+                <Text style={styles.incidentDetailLabel}>Incident detail</Text>
+              ) : null}
               <Text style={styles.screenTitle} numberOfLines={1}>
                 Report operations
               </Text>
-              {isResponseOfficial
+              {isResponseOfficial && kind !== 'BDRRMO'
                 ? (
                   <Text style={styles.reportOperationsInstruction}>
                     Review. Verify. Respond.
@@ -571,12 +666,16 @@ export default function OfficialReportDetailScreen() {
             </View>
             <TouchableOpacity
               style={[styles.backButton, styles.reportOperationsHeaderButton]}
-              onPress={openReportOperationsHelp}
+              onPress={kind === 'BDRRMO'
+                ? openReportHistoryMenu
+                : openReportOperationsHelp}
               accessibilityRole='button'
-              accessibilityLabel='Report operations help'
+              accessibilityLabel={kind === 'BDRRMO'
+                ? 'View report history'
+                : 'Report operations help'}
             >
               <Ionicons
-                name='help-circle-outline'
+                name={kind === 'BDRRMO' ? 'ellipsis-horizontal' : 'help-circle-outline'}
                 size={23}
                 color={colors.navigationActive}
               />
@@ -628,15 +727,33 @@ export default function OfficialReportDetailScreen() {
                     <View style={styles.reporterIdentity}>
                       <ReporterAvatar reporter={detail.reporter} size={48} />
                       <View style={styles.reporterIdentityCopy}>
-                        <Text
-                          style={styles.reporterIdentityName}
-                          numberOfLines={1}
-                        >
-                          {detail.reporterName}
-                        </Text>
-                        <Text style={styles.reporterIdentityRole}>
-                          Reporter
-                        </Text>
+                        {kind === 'BDRRMO' ? (
+                          <>
+                            <View style={styles.reporterIdentityNameRow}>
+                              <Text
+                                style={[styles.reporterIdentityName, styles.reporterIdentityNameInline]}
+                                numberOfLines={1}
+                              >
+                                {detail.reporterName}
+                              </Text>
+                              <Text style={styles.reporterIdentityRoleInline} numberOfLines={1}>
+                                Reporter
+                              </Text>
+                            </View>
+                            <Text style={styles.reporterIdentityDate} numberOfLines={1}>
+                              {formatPublishedAt(detail.createdAt)}
+                            </Text>
+                          </>
+                        ) : (
+                          <Text style={styles.reporterIdentityName} numberOfLines={1}>
+                            {detail.reporterName}
+                          </Text>
+                        )}
+                        {kind !== 'BDRRMO' ? (
+                          <Text style={styles.reporterIdentityRole}>
+                            Reporter
+                          </Text>
+                        ) : null}
                       </View>
                     </View>
                   )
@@ -645,19 +762,38 @@ export default function OfficialReportDetailScreen() {
                 {isResponseOfficial
                   ? (
                     <View style={styles.reportSummary}>
-                      <CommunityReportTags
-                        report={detail}
-                        statusPresentation={{
-                          label: ownsPendingReview
-                            ? 'Under review'
-                            : officialLabel(detail.lifecycle, {
+                      {kind === 'BDRRMO' && bdrrmoStatusPresentation ? (
+                        <CommunityReportTags
+                          report={detail}
+                          statusPresentation={{
+                            label: bdrrmoStatusPresentation.stageLabel,
+                            color: bdrrmoStatusPresentation.tone.color,
+                            backgroundColor: bdrrmoStatusPresentation.tone.softColor,
+                          }}
+                          largeText
+                          compactWrap
+                        />
+                      ) : (
+                        <>
+                          <ReportStatusSummary
+                            summary={detail.lifecycle}
+                            operationMode
+                            context={{
+                              audience: kind === 'BDRRMO' ? 'bdrrmo' : 'mitcom',
+                              barangayName: detail.barangayName,
+                              leadOffice: detail.lifecycleFacts.leadOffice,
                               claimedByName:
                                 detail.lifecycleFacts.reviewClaimedByName,
                               claimedAt: detail.lifecycleFacts.reviewClaimedAt,
-                            }),
-                          color: lifecycleColor(detail.lifecycle),
-                        }}
-                      />
+                            }}
+                          />
+                          <IncidentTypeBadge
+                            incidentType={detail.incidentType}
+                            incidentTypeOther={detail.incidentTypeOther}
+                            labelFontSize={fontSizes.lg}
+                          />
+                        </>
+                      )}
                       {canLogResponse && (
                         <UrgentDangerCard
                           barangayId={scope?.barangay_id}
@@ -703,10 +839,15 @@ export default function OfficialReportDetailScreen() {
                       />
                       <View style={styles.reportMetaTimeline}>
                         <OperationTimelineStep
-                          title='Review & routing'
-                          summary={detail.barangayName
+                          title={kind === 'BDRRMO' ? 'Review' : 'Review & routing'}
+                          compactCurrentStep={kind === 'BDRRMO'}
+                          mediumSummary={kind === 'BDRRMO'}
+                          summary={kind === 'BDRRMO'
+                            ? 'Location Confirmation'
+                            : detail.barangayName
                             ? 'Assigned to ' + detail.barangayName
                             : 'Check the receiving office'}
+                          showSummary
                           icon='location'
                           current={operationStep === 'review'}
                         >
@@ -727,13 +868,14 @@ export default function OfficialReportDetailScreen() {
                                 key={detail.id}
                                 detail={detail}
                                 currentUserId={detail.currentUserId}
+                                hideClaimInstruction={kind === 'BDRRMO'}
                                 onChanged={() => void reload()}
                                 onSuccess={showSuccess}
                                 onOpenLinkSheet={() => setLinkVisible(true)}
                               />
                             )}
 
-                          {!detail.canReroute &&
+                          {kind !== 'BDRRMO' && !detail.canReroute &&
                             !detail.allowedReviewActions.some((action) =>
                               action === 'claim' || action === 'take_over'
                             ) &&
@@ -744,14 +886,25 @@ export default function OfficialReportDetailScreen() {
                                 Routing is set.
                               </Text>
                             )}
-                          {detail.canReroute && (
+                          {kind !== 'BDRRMO' && detail.canReroute && (
                             <ReportRoutingPanel
                               reportId={detail.id}
                               barangayName={detail.barangayName}
                               onDone={handleReportRouted}
                             />
                           )}
-                          {operationStep === 'review' && canLogResponse &&
+                          {kind === 'BDRRMO' && canCorrectTimelineLocation && (
+                            <WorkflowActionRow
+                              title='Location'
+                              description='View or Edit if wrong'
+                              descriptionMatchesTitle
+                              icon='location-outline'
+                              onPress={openBdrrmoLocationEditor}
+                              disabled={locationCorrectionBusy}
+                            />
+                          )}
+                          {operationStep === 'review' && reportHasReviewOutcome &&
+                            canLogResponse &&
                             !detail.incidentCase && (
                             <WorkflowActionRow
                               title='Record activity'
@@ -762,21 +915,21 @@ export default function OfficialReportDetailScreen() {
                         </OperationTimelineStep>
                         <OperationTimelineStep
                           title='Evidence & contact'
+                          compactCurrentStep={kind === 'BDRRMO'}
+                          compactHeading={kind === 'BDRRMO'}
                           key={'evidence-' + detail.id + '-' +
                             (operationStep ?? 'completed')}
-                          defaultExpanded={operationStep !== null}
+                          defaultExpanded={kind !== 'BDRRMO' && operationStep !== null}
                           last={!showReviewDecision && !detail.incidentCase}
-                          summary='Report details and optional contact'
+                          summary={`Received ${formatOperationTimestamp(detail.createdAt)}`}
                           icon='document-text'
                         >
                           <View style={operationStyles.section}>
-                            <Text style={styles.detailBody}>
+                            <Text style={kind === 'BDRRMO'
+                              ? residentTypography.body
+                              : styles.detailBody}>
                               {detail.description.trim() ||
                                 'No description provided.'}
-                            </Text>
-                            <Text style={operationStyles.caption}>
-                              Received{' '}
-                              {formatOperationTimestamp(detail.createdAt)}
                             </Text>
                             {detail.media.length > 0 && (
                               <MediaCollage
@@ -791,7 +944,7 @@ export default function OfficialReportDetailScreen() {
                                 Updated location: {currentLocationWithPin}
                               </Text>
                             )}
-                            {canCorrectTimelineLocation && (
+                            {kind !== 'BDRRMO' && canCorrectTimelineLocation && (
                               <WorkflowActionRow
                                 title='Correct incident location'
                                 icon='location-outline'
@@ -801,8 +954,7 @@ export default function OfficialReportDetailScreen() {
                             )}
                             {detail.canContactReporter && (
                               <WorkflowActionRow
-                                title='Call reporter'
-                                description='Optional - a call is not required to verify'
+                                title='Call Reporter (Optional)'
                                 icon='call-outline'
                                 onPress={handleCallReporter}
                                 disabled={contactBusy ||
@@ -814,6 +966,7 @@ export default function OfficialReportDetailScreen() {
                         {showReviewDecision && (
                           <OperationTimelineStep
                             title='Review decision'
+                            compactCurrentStep={kind === 'BDRRMO'}
                             collapsible={hasReviewDecisionControls}
                             summary={reviewDecisionSummary}
                             icon='checkmark-circle'
@@ -829,7 +982,8 @@ export default function OfficialReportDetailScreen() {
                               onSuccess={showSuccess}
                               onOpenLinkSheet={() => setLinkVisible(true)}
                             />
-                            {operationStep === 'decision' && canLogResponse &&
+                            {operationStep === 'decision' && reportHasReviewOutcome &&
+                              canLogResponse &&
                               !detail.incidentCase && (
                               <WorkflowActionRow
                                 title='Record activity'
@@ -845,6 +999,8 @@ export default function OfficialReportDetailScreen() {
                             currentReportId={detail.id}
                             incident={detail.incidentCase}
                             viewerKind={kind}
+                            useScopedOfficeLabels
+                            historyAndVisibilityInOverflow={kind === 'BDRRMO'}
                             allowedActions={detail.allowedIncidentActions}
                             onChanged={() =>
                               operationSaved('Incident updated.')}
@@ -856,37 +1012,40 @@ export default function OfficialReportDetailScreen() {
                       </View>
 
 
-                      <OperationTimelineStep
-                        title='Report history'
-                        collapsible={false}
-                        summary='Review decisions and routing changes'
-                        icon='chatbubbles'
-                        utility
-                      >
-                        {sortedReportEvents.length === 0 && (
-                          <Text style={operationStyles.caption}>
-                            No review activity recorded yet.
-                          </Text>
-                        )}
-                        {sortedReportEvents.slice(0, 3).map((event) => (
-                          <WorkflowHistoryRow
-                            key={event.id}
-                            title={timelineLabel(event)}
-                            eventType={event.eventType}
-                            timestamp={event.createdAt}
-                            actorName={event.changedByName}
-                            details={event.detail}
-                            note={event.note}
-                          />
-                        ))}
-                        {sortedReportEvents.length > 0 && (
-                          <WorkflowActionRow
-                            title='View all report history'
-                            icon='time-outline'
-                            onPress={() => setReportHistoryVisible(true)}
-                          />
-                        )}
-                      </OperationTimelineStep>
+                      {kind !== 'BDRRMO' ? (
+                        <OperationTimelineStep
+                          title='Report history'
+                          collapsible={false}
+                          summary='Review decisions and routing changes'
+                          icon='chatbubbles'
+                          utility
+                        >
+                          {sortedReportEvents.length === 0 && (
+                            <Text style={operationStyles.caption}>
+                              No review activity recorded yet.
+                            </Text>
+                          )}
+                          {sortedReportEvents.slice(0, 3).map((event) => (
+                            <WorkflowHistoryRow
+                              key={event.id}
+                              title={timelineLabel(event)}
+                              eventType={event.eventType}
+                              timestamp={event.createdAt}
+                              actorName={event.changedByName}
+                              municipalOfficeDisplayName={isResponseOfficial ? 'MITCOM' : 'MDRRMO'}
+                              details={event.detail}
+                              note={event.note}
+                            />
+                          ))}
+                          {sortedReportEvents.length > 0 && (
+                            <WorkflowActionRow
+                              title='View all report history'
+                              icon='time-outline'
+                              onPress={() => setReportHistoryVisible(true)}
+                            />
+                          )}
+                        </OperationTimelineStep>
+                      ) : null}
 
                       {detail.mediaError
                         ? (
@@ -944,6 +1103,7 @@ export default function OfficialReportDetailScreen() {
                           <IncidentTypeBadge
                             incidentType={detail.incidentType}
                             incidentTypeOther={detail.incidentTypeOther}
+                            labelFontSize={fontSizes.lg}
                           />
                         )
                         : null}
@@ -1106,7 +1266,7 @@ export default function OfficialReportDetailScreen() {
                                     Title (optional)
                                   </Text>
                                   <TextInput
-                                    style={styles.formInput}
+                                    style={[styles.formInput, operationStyles.minimumText]}
                                     value={editTitle}
                                     onChangeText={setEditTitle}
                                     maxLength={120}
@@ -1119,6 +1279,7 @@ export default function OfficialReportDetailScreen() {
                                     style={[
                                       styles.formInput,
                                       styles.formTextArea,
+                                      operationStyles.minimumText,
                                     ]}
                                     value={editDescription}
                                     onChangeText={setEditDescription}
@@ -1131,7 +1292,7 @@ export default function OfficialReportDetailScreen() {
                               : null}
                             <Text style={styles.formLabel}>Address</Text>
                             <TextInput
-                              style={styles.formInput}
+                              style={[styles.formInput, operationStyles.minimumText]}
                               value={editAddress}
                               onChangeText={setEditAddress}
                               maxLength={300}
@@ -1147,6 +1308,7 @@ export default function OfficialReportDetailScreen() {
                                     style={[
                                       styles.formInput,
                                       styles.formTextArea,
+                                      operationStyles.minimumText,
                                     ]}
                                     value={editCorrectionNote}
                                     onChangeText={setEditCorrectionNote}
@@ -1161,7 +1323,7 @@ export default function OfficialReportDetailScreen() {
                               : null}
                             <Text style={styles.formLabel}>Coordinates</Text>
                             <TextInput
-                              style={styles.formInput}
+                              style={[styles.formInput, operationStyles.minimumText]}
                               value={editLatitude}
                               onChangeText={setEditLatitude}
                               placeholder='Latitude'
@@ -1170,7 +1332,7 @@ export default function OfficialReportDetailScreen() {
                               editable={!editBusy}
                             />
                             <TextInput
-                              style={styles.formInput}
+                              style={[styles.formInput, operationStyles.minimumText]}
                               value={editLongitude}
                               onChangeText={setEditLongitude}
                               placeholder='Longitude'
@@ -1441,6 +1603,7 @@ export default function OfficialReportDetailScreen() {
             initialDetails={responseForCall && callFlow.pendingCall?.hotline
               ? hotlineEventDetails(callFlow.pendingCall.hotline)
               : undefined}
+            municipalOfficeDisplayName={isResponseOfficial ? 'MITCOM' : 'MDRRMO'}
             onClose={() => setResponseVisible(false)}
             onLogged={(result) => {
               if (responseForCall) callFlow.clearPendingCall();
@@ -1451,26 +1614,155 @@ export default function OfficialReportDetailScreen() {
       )}
       <ResourceFormSheet
         visible={reportHistoryVisible}
-        title='Report history'
+        title={reportHistorySection === 'incident'
+          ? 'Incident history'
+          : reportHistorySection === 'visibility'
+          ? 'Public visibility'
+          : 'Report history'}
         hasUnsavedChanges={false}
-        onClose={() => setReportHistoryVisible(false)}
+        onClose={() => {
+          setReportHistoryVisible(false);
+          setReportHistorySection('report');
+        }}
+        stableHeight
       >
-        {sortedReportEvents.map((event) => (
-          <WorkflowHistoryRow
-            key={event.id}
-            title={timelineLabel(event)}
-            eventType={event.eventType}
-            timestamp={event.createdAt}
-            actorName={event.changedByName}
-            details={event.detail}
-            note={event.note}
-          />
-        ))}
+        {reportHistorySection === 'report' ? (
+          <>
+            {detail?.incidentCase ? (
+              <>
+                <WorkflowActionRow
+                  title='Incident history'
+                  icon='time-outline'
+                  onPress={() => setReportHistorySection('incident')}
+                />
+                {detail.allowedIncidentActions.includes('publish_photo') && (
+                  <WorkflowActionRow
+                    title='Public visibility'
+                    icon='eye-outline'
+                    onPress={() => setReportHistorySection('visibility')}
+                  />
+                )}
+              </>
+            ) : null}
+            {sortedReportEvents.length === 0 ? (
+              <Text style={operationStyles.caption}>
+                No report history recorded yet.
+              </Text>
+            ) : sortedReportEvents.map((event) => (
+              <WorkflowHistoryRow
+                key={event.id}
+                title={timelineLabel(event)}
+                eventType={event.eventType}
+                timestamp={event.createdAt}
+                actorName={event.changedByName}
+                municipalOfficeDisplayName={isResponseOfficial ? 'MITCOM' : 'MDRRMO'}
+                details={event.detail}
+                note={event.note}
+              />
+            ))}
+          </>
+        ) : null}
+        {reportHistorySection === 'incident' && detail?.incidentCase ? (
+          <>
+            <WorkflowActionRow
+              title='Back to options'
+              icon='arrow-back-outline'
+              showChevron={false}
+              onPress={() => setReportHistorySection('report')}
+            />
+            {sortedIncidentEvents.length === 0 ? (
+              <Text style={operationStyles.caption}>
+                No incident activity recorded yet.
+              </Text>
+            ) : sortedIncidentEvents.map((event) => (
+              <WorkflowHistoryRow
+                key={event.id}
+                title={formatIncidentEventTitle(event.eventType)}
+                eventType={event.eventType}
+                timestamp={event.occurredAt || event.createdAt}
+                actorName={event.actorName}
+                officeLabel={formatIncidentOfficeLabel(
+                  event.officeLabel,
+                  isResponseOfficial ? 'MITCOM' : 'MDRRMO',
+                )}
+                details={event.details}
+                publicText={event.publicText}
+                note={event.note}
+                municipalOfficeDisplayName={isResponseOfficial ? 'MITCOM' : 'MDRRMO'}
+              />
+            ))}
+          </>
+        ) : null}
+        {reportHistorySection === 'visibility' && detail?.incidentCase ? (
+          <>
+            <WorkflowActionRow
+              title='Back to options'
+              icon='arrow-back-outline'
+              showChevron={false}
+              onPress={() => setReportHistorySection('report')}
+            />
+            <IncidentPublicationPanel
+              incident={detail.incidentCase}
+              currentReportId={detail.id}
+              onChanged={() => operationSaved('Incident updated.')}
+            />
+          </>
+        ) : null}
       </ResourceFormSheet>
       <ReportMediaPreviewModal
         preview={mediaPreview}
         onClose={() => setMediaPreview(null)}
       />
+      <ResourceFormSheet
+        visible={locationEditorVisible}
+        title='Location'
+        hasUnsavedChanges={false}
+        onClose={() => {
+          setLocationEditorVisible(false);
+          setAdjustingCorrectionPin(false);
+          setCorrectedPosition(null);
+        }}
+        stableHeight
+      >
+        {locationEditorVisible && correctedPosition ? (
+          barangayPickerVisible ? (
+            <ReportBarangayPicker
+              visible
+              embedded
+              barangays={correctionBarangays}
+              selectedBarangayId={selectedCorrectionBarangayId}
+              loading={correctionBarangaysLoading || locationCorrectionBusy}
+              error={correctionBarangaysError}
+              onSelect={(barangayId) => setSelectedCorrectionBarangayId(barangayId)}
+              onRetry={() => void loadCorrectionBarangays()}
+              onClose={() => setBarangayPickerVisible(false)}
+            />
+          ) : (
+            <LocationStep
+              loading={false}
+              error={null}
+              position={correctedPosition}
+              devicePosition={correctionDevicePosition}
+              address={correctionAddress}
+              accuracyMeters={correctedPosition.accuracyMeters}
+              maximumDistanceMeters={getReportLocationAdjustmentLimit(
+                detail?.gpsAccuracyMeters ?? null,
+              )}
+              adjustingPin={adjustingCorrectionPin}
+              onRetry={() => void loadCorrectionBarangays()}
+              onConfirmOnMap={() => setAdjustingCorrectionPin(true)}
+              onCancelPinAdjustment={() => setAdjustingCorrectionPin(false)}
+              onConfirmPinAdjustment={(position) => {
+                setCorrectedPosition(position);
+                setAdjustingCorrectionPin(false);
+              }}
+              onOpenBarangayPicker={() => setBarangayPickerVisible(true)}
+              onContinue={confirmBdrrmoLocationEditor}
+              residentLayout
+            />
+          )
+        ) : null}
+      </ResourceFormSheet>
       {detail && correctedPosition
         ? (
           <ReportLocationPicker
@@ -1491,15 +1783,17 @@ export default function OfficialReportDetailScreen() {
         )
         : null}
       <ReportBarangayPicker
-        visible={barangayPickerVisible}
-        barangays={correctionBarangayOptions}
+        visible={barangayPickerVisible && !locationEditorVisible}
+        barangays={correctionBarangays}
         selectedBarangayId={selectedCorrectionBarangayId}
         loading={correctionBarangaysLoading || locationCorrectionBusy}
         error={correctionBarangaysError}
         onSelect={(barangayId) => {
           setSelectedCorrectionBarangayId(barangayId);
           setBarangayPickerVisible(false);
-          void saveTimelineLocationCorrection(barangayId);
+          if (!locationEditorVisible) {
+            void saveTimelineLocationCorrection(barangayId);
+          }
         }}
         onRetry={() => void loadCorrectionBarangays()}
         onClose={() => setBarangayPickerVisible(false)}

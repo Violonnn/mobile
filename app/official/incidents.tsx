@@ -109,14 +109,20 @@ export default function OfficialIncidentsScreen() {
   const requestedStatus = routeStatus(status);
   const openedFromCommand = (Array.isArray(from) ? from[0] : from) === 'command';
   const [statusFilter, setStatusFilter] = useState<StatusFilter | null>(requestedStatus);
-  const validQueues: OfficialWorkflowQueue[] = ['all', 'needs_review', 'under_review', 'mine', 'being_assessed', 'awaiting_mdrrmo', 'jurisdiction_check', 'incoming_requests', 'legacy_escalations', 'municipal_review', 'municipal_lead', 'mayor_requests'];
+  const validQueues: OfficialWorkflowQueue[] = ['all', 'needs_review', 'under_review', 'mine', 'being_assessed', 'awaiting_mdrrmo', 'jurisdiction_check', 'incoming_requests', 'municipal_active', 'legacy_escalations', 'municipal_review', 'municipal_lead', 'mayor_requests'];
   const [workflowQueue, setWorkflowQueue] = useState<OfficialWorkflowQueue>(validQueues.includes(queue as OfficialWorkflowQueue) ? queue as OfficialWorkflowQueue : 'all');
+  const [previousRequestedQueue, setPreviousRequestedQueue] = useState(queue);
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState<OfficialReportSort>('recent');
   const [statusOpen, setStatusOpen] = useState(false);
   const [sortOpen, setSortOpen] = useState(false);
   const [previousRequestedStatus, setPreviousRequestedStatus] =
     useState(requestedStatus);
+
+  if (queue !== previousRequestedQueue) {
+    setPreviousRequestedQueue(queue);
+    setWorkflowQueue(validQueues.includes(queue as OfficialWorkflowQueue) ? queue as OfficialWorkflowQueue : 'all');
+  }
 
   if (requestedStatus !== previousRequestedStatus) {
     setPreviousRequestedStatus(requestedStatus);

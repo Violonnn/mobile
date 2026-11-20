@@ -174,13 +174,13 @@ export function residentProgressSteps(
         step(firstLabel, '', true),
         step('Confirmed', '', true),
         step('Response ongoing', '', true),
-        step('Resolved', 'Outcome posted', true, true),
+        step('Resolved', '', true, true),
       ];
     }
     return [
       step(firstLabel, '', true),
       step('Confirmed', '', true),
-      step('Resolved', 'Outcome posted', true, true),
+      step('Resolved', '', true, true),
     ];
   }
   if (stage === 'confirmed' || stage === 'response_ongoing') {
@@ -188,7 +188,7 @@ export function residentProgressSteps(
     return [
       step(firstLabel, '', true),
       step('Confirmed', '', true, !responding),
-      step('Response ongoing', responding ? 'Action recorded' : 'Awaiting action', responding, responding),
+      step('Response ongoing', '', responding, responding),
       step('Resolved'),
     ];
   }

@@ -35,6 +35,66 @@ type RoleTool = {
   registered: number;
 };
 
+const ROLE_CHART_COLORS = ['#17324D', '#B45309', '#0F766E'] as const;
+const ROLE_CHART_MARK_COUNT = 48;
+const ROLE_CHART_SIZE = 176;
+const ROLE_CHART_CENTER = ROLE_CHART_SIZE / 2;
+const ROLE_CHART_RADIUS = 72;
+const ROLE_CHART_MARK_SIZE = 7;
+
+function RoleDistributionChart({ roles }: { roles: RoleTool[] }) {
+  const roleTotals = roles.map((role) => role.pending + role.registered);
+  const totalInvites = roleTotals.reduce((total, roleCount) => total + roleCount, 0);
+  const markers = Array.from({ length: ROLE_CHART_MARK_COUNT }, (_, markerIndex) => {
+    const cumulativePosition = ((markerIndex + 0.5) / ROLE_CHART_MARK_COUNT) * totalInvites;
+    let roleIndex = 0;
+    let accumulatedCount = roleTotals[0] ?? 0;
+
+    while (roleIndex < roleTotals.length - 1 && cumulativePosition >= accumulatedCount) {
+      roleIndex += 1;
+      accumulatedCount += roleTotals[roleIndex] ?? 0;
+    }
+
+    const angle = (markerIndex / ROLE_CHART_MARK_COUNT) * Math.PI * 2 - Math.PI / 2;
+    const left = ROLE_CHART_CENTER + Math.cos(angle) * ROLE_CHART_RADIUS - ROLE_CHART_MARK_SIZE / 2;
+    const top = ROLE_CHART_CENTER + Math.sin(angle) * ROLE_CHART_RADIUS - ROLE_CHART_MARK_SIZE / 2;
+
+    return {
+      key: markerIndex,
+      color: totalInvites > 0 ? ROLE_CHART_COLORS[roleIndex] : '#CBD5E1',
+      left,
+      top,
+    };
+  });
+  const chartDescription = roles
+    .map((role) => `${role.label}: ${role.pending + role.registered}`)
+    .join(', ');
+
+  return (
+    <View
+      style={styles.roleChart}
+      accessibilityRole="image"
+      accessibilityLabel={`Invitation counts by role. ${chartDescription}. ${totalInvites} total invitations.`}
+    >
+      <View style={styles.roleChartRing} accessibilityElementsHidden importantForAccessibility="no">
+        {markers.map((marker) => (
+          <View
+            key={marker.key}
+            style={[
+              styles.roleChartMark,
+              { backgroundColor: marker.color, left: marker.left, top: marker.top },
+            ]}
+          />
+        ))}
+        <View style={styles.roleChartCenter}>
+          <Text style={styles.roleChartTotal}>{totalInvites}</Text>
+          <Text style={styles.roleChartCaption}>Total invites</Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
 export default function AdminDashboardScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
@@ -278,9 +338,8 @@ export default function AdminDashboardScreen() {
 
             <View style={styles.roleSection}>
               <Text style={styles.roleSectionTitle}>By role</Text>
-              {!compactLayout ? (
-                <Text style={styles.roleLegend}>Pending / Registered</Text>
-              ) : null}
+              <Text style={styles.roleLegend}>Share of all invitations · Pending / registered</Text>
+              <RoleDistributionChart roles={roleTools} />
               <View style={[styles.roleTools, compactLayout ? styles.roleToolsStacked : null]}>
                 {roleTools.map((role, index) => (
                   <React.Fragment key={role.key}>
@@ -304,7 +363,7 @@ export default function AdminDashboardScreen() {
                           compactLayout ? styles.roleToolIdentityStacked : null,
                         ]}
                       >
-                        <Ionicons name={role.icon} size={22} color={colors.navigationActive} />
+                        <Ionicons name={role.icon} size={22} color={ROLE_CHART_COLORS[index]} />
                         <Text style={styles.roleToolLabel}>{role.label}</Text>
                       </View>
                       {compactLayout ? (

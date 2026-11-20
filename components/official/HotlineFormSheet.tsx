@@ -125,7 +125,7 @@ export default function HotlineFormSheet({
       return;
     }
     if (!canEditNational) {
-      setError('Only MDRRMO may modify the seeded national emergency hotline.');
+      setError('Only MITCOM may modify the seeded national emergency hotline.');
       return;
     }
     Alert.alert(
@@ -150,7 +150,7 @@ export default function HotlineFormSheet({
         style={localStyles.input}
         value={name}
         onChangeText={setName}
-        placeholder="e.g. MDRRMO Operations"
+        placeholder="e.g. MITCOM Operations"
         placeholderTextColor={colors.textMuted}
         maxLength={120}
         editable={!saving}

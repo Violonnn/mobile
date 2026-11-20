@@ -28,14 +28,16 @@ export default function OutsideCoverageNotice({ onClose }: { onClose: () => void
     const result = await openHotlineDialer(number);
     if (result.error) setError(result.error);
   }
+  // Keep recognizing existing directory names while accepting the new display name.
+  const hasMunicipalHotline = hotlines.some((hotline) => /mdrrmo|mitcom/i.test(hotline.name));
   return <View style={styles.card}>
     <Text style={styles.title}>Outside coverage</Text>
     <Text style={styles.body}>This location appears to be outside DisasterLink&apos;s coverage area. It was not sent to any office.</Text>
-    <Text style={styles.body}>For urgent assistance, call an emergency hotline. If you believe the coverage check is wrong, contact MDRRMO.</Text>
+    <Text style={styles.body}>For urgent assistance, call an emergency hotline. If you believe the coverage check is wrong, contact MITCOM.</Text>
     <TouchableOpacity accessibilityRole='button' onPress={() => void dial('911')} style={styles.button}><Text style={styles.link}>National emergency hotline · 911</Text></TouchableOpacity>
     {loading && <ActivityIndicator color={colors.primary} accessibilityLabel='Loading local emergency contacts' />}
     {hotlines.filter((hotline) => hotline.number !== '911').map((hotline) => <TouchableOpacity key={hotline.id} accessibilityRole='button' onPress={() => void dial(hotline.number)} style={styles.button}><Text style={styles.link}>{hotline.name} · {hotline.number}</Text></TouchableOpacity>)}
-    {!loading && !hotlines.some((hotline) => /mdrrmo/i.test(hotline.name)) && <Text style={styles.body}>An MDRRMO number is not available here. Check the municipality&apos;s official contact directory.</Text>}
+    {!loading && !hasMunicipalHotline && <Text style={styles.body}>A MITCOM number is not available here. Check the municipality&apos;s official contact directory.</Text>}
     {error && <><Text accessibilityRole='alert' style={styles.body}>{error}</Text><TouchableOpacity accessibilityRole='button' onPress={() => setRetry((value) => value + 1)} style={styles.button}><Text style={styles.link}>Reload contacts</Text></TouchableOpacity></>}
     <TouchableOpacity accessibilityRole='button' onPress={onClose} style={styles.button}><Text style={styles.link}>Close</Text></TouchableOpacity>
   </View>;

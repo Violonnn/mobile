@@ -1,6 +1,7 @@
 import { StyleSheet } from 'react-native';
 
-import { colors, fontSizes, radius, spacing } from '../theme';
+import { colors, fontSizes, radius, screenEdgeInset, spacing } from '../theme';
+import { residentTypography } from '../residentTypography';
 
 // Keep the resident Home experience self-contained while experimenting with Inter.
 const homeFonts = {
@@ -52,7 +53,7 @@ export const homeStyles = StyleSheet.create({
     width: '100%',
     maxWidth: 560,
     alignSelf: 'center',
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: screenEdgeInset,
     paddingTop: spacing.sm,
     paddingBottom: spacing.sm,
   },
@@ -218,7 +219,7 @@ export const homeStyles = StyleSheet.create({
   },
   nearbyActiveReportCard: {
     gap: 10,
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: screenEdgeInset,
     paddingTop: 12,
     paddingBottom: 0,
     backgroundColor: colors.white,
@@ -237,11 +238,6 @@ export const homeStyles = StyleSheet.create({
     minWidth: 0,
     gap: 0,
   },
-  nearbyActiveReportEyebrow: {
-    fontFamily: homeFonts.bold,
-    fontSize: fontSizes.sm,
-    lineHeight: 16,
-  },
   nearbyActiveReportTitle: {
     fontFamily: homeFonts.bold,
     fontSize: 24,
@@ -250,8 +246,8 @@ export const homeStyles = StyleSheet.create({
   },
   nearbyActiveReportMeta: {
     fontFamily: homeFonts.regular,
-    fontSize: fontSizes.sm,
-    lineHeight: 18,
+    fontSize: fontSizes.lg,
+    lineHeight: 22,
     color: '#6D7B92',
   },
   nearbyOpenReportAction: {
@@ -290,23 +286,18 @@ export const homeStyles = StyleSheet.create({
     gap: spacing.xs,
   },
   nearbyActiveReportQuoteText: {
-    fontFamily: homeFonts.regular,
-    fontSize: fontSizes.sm,
-    lineHeight: 20,
-    color: homeColors.ink,
+    ...residentTypography.body,
   },
   nearbyActiveReportQuoteSource: {
-    fontFamily: homeFonts.regular,
-    fontSize: fontSizes.xs,
+    ...residentTypography.mutedBody,
     color: '#6D7B92',
   },
   nearbyReportsState: {
-    minHeight: 172,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.sm,
+    gap: spacing.xs,
     paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.xl,
+    paddingVertical: spacing.md,
   },
   nearbyReportsStateTitle: {
     fontFamily: homeFonts.semibold,
@@ -325,7 +316,7 @@ export const homeStyles = StyleSheet.create({
     minHeight: 38,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: 12,
     borderRadius: radius.sm,
     backgroundColor: colors.primary,
   },
@@ -342,7 +333,7 @@ export const homeStyles = StyleSheet.create({
   quickAccessSection: {
     width: '100%',
     gap: 6,
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: screenEdgeInset,
     paddingTop: 0,
   },
   quickAccessContent: {
@@ -404,15 +395,15 @@ export const homeStyles = StyleSheet.create({
   },
   quickAccessText: {
     fontFamily: homeFonts.semibold,
-    fontSize: 10,
-    lineHeight: 15,
+    fontSize: fontSizes.lg,
+    lineHeight: 22,
     color: homeColors.ink,
     textAlign: 'center',
   },
   quickAccessTextLargeText: {
     flex: 1,
-    fontSize: fontSizes.md,
-    lineHeight: 20,
+    fontSize: fontSizes.xl,
+    lineHeight: 26,
     textAlign: 'left',
   },
 
@@ -421,7 +412,7 @@ export const homeStyles = StyleSheet.create({
     width: '100%',
     maxWidth: 560,
     alignSelf: 'center',
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,
   },
   reminderBanner: {
@@ -471,7 +462,7 @@ export const homeStyles = StyleSheet.create({
     width: '100%',
     maxWidth: 560,
     alignSelf: 'center',
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.md,
   },
   sectionBlock: {
     marginTop: spacing.xs,
@@ -512,11 +503,17 @@ export const homeStyles = StyleSheet.create({
     alignSelf: 'center',
   },
   officialUpdatesCarouselContent: {
+    alignItems: 'stretch',
     gap: 4,
+  },
+  officialUpdatesNoMediaItem: {
+    alignSelf: 'stretch',
+    justifyContent: 'center',
   },
   officialUpdateCardWrap: {
     position: 'relative',
-    paddingVertical: spacing.sm,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.sm,
   },
   officialUpdateCardEmphasis: {
     width: '100%',
@@ -637,106 +634,101 @@ export const homeStyles = StyleSheet.create({
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: '#E1E8F2',
-    borderRadius: radius.sm,
+    borderRadius: 4,
     backgroundColor: colors.white,
     shadowColor: homeColors.ink,
     shadowOffset: { width: 0, height: 7 },
-    shadowOpacity: 0.08,
+    shadowOpacity: 0,
     shadowRadius: 15,
-    elevation: 3,
+    elevation: 0,
+  },
+  officialUpdatePostContent: {
+    gap: spacing.sm,
+    padding: spacing.md,
+    paddingBottom: spacing.xs,
+  },
+  officialUpdatePostMain: {
+    width: '100%',
+  },
+  officialUpdatePostAuthorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  officialUpdatePostAuthorCopy: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
+  },
+  officialUpdatePostAuthorLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  officialUpdatePostAuthorName: {
+    flexShrink: 1,
+    fontFamily: homeFonts.semibold,
+    fontSize: fontSizes.md,
+    color: homeColors.ink,
+  },
+  officialUpdatePostAuthorNameLargeText: {
+    fontSize: fontSizes.lg,
+  },
+  officialUpdatePostOffice: {
+    flexShrink: 1,
+    minWidth: 0,
+    fontFamily: homeFonts.regular,
+    fontSize: fontSizes.sm,
+    color: colors.textMuted,
+  },
+  officialUpdatePostMetaLargeText: {
+    fontSize: fontSizes.md,
+  },
+  officialUpdatePostDate: {
+    fontFamily: homeFonts.regular,
+    fontSize: fontSizes.sm,
+    color: colors.textMuted,
+  },
+  officialUpdatePostCopy: {
+    gap: spacing.xs,
+  },
+  officialUpdatePostTitle: {
+    fontFamily: homeFonts.semibold,
+    fontSize: fontSizes.md,
+    lineHeight: 20,
+    color: homeColors.ink,
+  },
+  officialUpdatePostTitleLargeText: {
+    fontSize: fontSizes.lg,
+    lineHeight: 23,
+  },
+  officialUpdatePostBody: {
+    fontFamily: homeFonts.regular,
+    fontSize: fontSizes.md,
+    lineHeight: 21,
+    color: homeColors.ink,
+  },
+  officialUpdatePostBodyLargeText: {
+    fontSize: fontSizes.lg,
+    lineHeight: 24,
+  },
+  officialUpdatePostActions: {
+    minHeight: 42,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: '#E8EDF4',
   },
   officialUpdateMediaFrame: {
-    width: '100%',
-    height: 190,
+    aspectRatio: 1.9,
+    marginHorizontal: spacing.md,
     overflow: 'hidden',
+    borderRadius: radius.sm,
     backgroundColor: '#EAF0F7',
   },
   officialUpdateMedia: {
     ...StyleSheet.absoluteFill,
   },
-  officialUpdateMediaPlaceholder: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    backgroundColor: '#EAF0F7',
-  },
-  officialUpdateMediaPlaceholderText: {
-    fontFamily: homeFonts.medium,
-    fontSize: fontSizes.sm,
-    color: colors.textMuted,
-  },
-  officialUpdateMediaLabel: {
-    position: 'absolute',
-    top: spacing.sm,
-    left: spacing.md,
-    maxWidth: '78%',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 7,
-    borderRadius: radius.sm,
-    backgroundColor: 'rgba(7, 24, 42, 0.82)',
-  },
-  officialUpdateMediaLabelText: {
-    fontFamily: homeFonts.semibold,
-    fontSize: fontSizes.xs,
-    color: colors.white,
-    textTransform: 'uppercase',
-  },
-  officialUpdateMediaCount: {
-    position: 'absolute',
-    right: spacing.md,
-    bottom: spacing.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 6,
-    borderRadius: radius.sm,
-    backgroundColor: 'rgba(7, 24, 42, 0.82)',
-  },
-  officialUpdateMediaCountText: {
-    fontFamily: homeFonts.semibold,
-    fontSize: fontSizes.xs,
-    color: colors.white,
-  },
-  officialUpdateCardCopy: {
-    minHeight: 164,
-    justifyContent: 'space-between',
-    paddingTop: spacing.sm,
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.xs,
-  },
-  officialUpdateCardCopyLargeText: {
-    minHeight: 0,
-    gap: spacing.xs,
-    justifyContent: 'flex-start',
-  },
-  officialUpdateTitle: {
-    fontFamily: homeFonts.semibold,
-    fontSize: fontSizes.lg,
-    lineHeight: 23,
-    color: homeColors.ink,
-  },
-  officialUpdateBody: {
-    fontFamily: homeFonts.regular,
-    fontSize: fontSizes.sm,
-    lineHeight: 19,
-    color: '#526078',
-  },
-  officialUpdateAction: {
-    minHeight: 28,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    // Preserve its separation from the announcement text while tightening the card bottom.
-    marginTop: spacing.xs,
-  },
-  officialUpdateActionText: {
-    fontFamily: homeFonts.semibold,
-    fontSize: fontSizes.sm,
-    color: homeColors.ink,
-  },
-
   // Compact, freely scrollable preparedness cards beneath official updates.
   reminderForYouCarousel: {
     width: '100%',

@@ -94,11 +94,16 @@ export default function AdminInviteRow({
         }
       >
         <ProfileAvatar
+          avatarPath={isRegistered ? invite.avatar_path : null}
           fallback={inviteInitials(invite.invited_email)}
           size={40}
           style={styles.inviteAvatar}
           textStyle={styles.inviteAvatarText}
-          accessibilityLabel="Invite recipient initials"
+          accessibilityLabel={
+            isRegistered && invite.avatar_path
+              ? 'Registered account profile picture'
+              : 'Invite recipient initials'
+          }
         />
         <View style={styles.inviteMainCopy}>
           <View style={styles.inviteHeaderTop}>

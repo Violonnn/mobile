@@ -4,15 +4,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter, type Href } from 'expo-router';
 
 import { officialReportMapMarker } from '../map/officialMapReports';
-import { officialLabel } from '../../lib/reportLifecycle';
 import InteractiveMap from '../map/InteractiveMap';
 import { formatIncidentType } from '../../lib/incidentTypes';
 import type { OfficialReportQueueItem } from '../../lib/officialReports';
 import {
-  getMapReportPresentation,
   getReportStatusPresentation,
   type MapReportMarker,
 } from '../../lib/reports';
+import { scopedLifecyclePresentation } from '../../lib/reportPresentation';
 import { colors } from '../../styles/theme';
 import { mdrrmoCommandStyles as styles } from '../../styles/screens/mdrrmoCommand.styles';
 
@@ -47,14 +46,7 @@ function formatTimelineTime(value: string | null): string {
 }
 
 function incidentTypeLabel(report: OfficialReportQueueItem): string {
-  if (!report.incidentType) return 'Report';
-
-  // Custom "Other" reports use the resident's entered incident name directly.
-  if (report.incidentType === 'other') {
-    return report.incidentTypeOther?.trim() || 'Other';
-  }
-
-  return formatIncidentType(report.incidentType);
+  return formatIncidentType(report.incidentType, report.incidentTypeOther);
 }
 
 function reportedPlaceLabel(report: OfficialReportQueueItem): string {
@@ -67,28 +59,55 @@ function reportedPlaceLabel(report: OfficialReportQueueItem): string {
 
 export default function CommandEscalationMap({
   reports,
+  selectedLane,
+  onLaneChange,
+  requestCount,
+  activeCount,
+  laneLoading,
+  laneError,
+  onRetry,
   onGestureActiveChange,
 }: {
   reports: OfficialReportQueueItem[];
+  selectedLane: 'requests' | 'active';
+  onLaneChange: (lane: 'requests' | 'active') => void;
+  requestCount: number;
+  activeCount: number;
+  laneLoading: boolean;
+  laneError: string | null;
+  onRetry: () => Promise<void>;
   onGestureActiveChange?: (active: boolean) => void;
 }) {
   const router = useRouter();
-  const escalations = useMemo(
-    () => reports.filter((report) => ['support_requested', 'transfer_requested'].includes(report.lifecycleFacts.coordination ?? '')),
-    [reports],
-  );
+  const laneReports = reports;
+  const queue = selectedLane === 'requests' ? 'incoming_requests' : 'municipal_active';
+  const laneTitle = selectedLane === 'requests' ? 'Requests' : 'Active response';
+  const totalCount = selectedLane === 'requests' ? requestCount : activeCount;
   const markers = useMemo(
-    () => escalations
+    () => laneReports
       .map(officialReportMapMarker)
       .filter((marker): marker is MapReportMarker => marker !== null),
-    [escalations],
+    [laneReports],
   );
   const [activeIndex, setActiveIndex] = useState(0);
   const [referenceTime, setReferenceTime] = useState(() => Date.now());
-  const maximumActiveIndex = Math.max(0, escalations.length - 1);
+  const [previousSelectedLane, setPreviousSelectedLane] = useState(selectedLane);
+  if (selectedLane !== previousSelectedLane) {
+    setPreviousSelectedLane(selectedLane);
+    setActiveIndex(0);
+  }
+  const maximumActiveIndex = Math.max(0, laneReports.length - 1);
   const safeActiveIndex = Math.min(activeIndex, maximumActiveIndex);
-  const activeReport = escalations[safeActiveIndex] ?? null;
-  const activeReportPresentation = activeReport ? getMapReportPresentation(activeReport) : null;
+  const activeReport = laneReports[safeActiveIndex] ?? null;
+  const activeReportPresentation = activeReport
+    ? scopedLifecyclePresentation(activeReport.lifecycle, {
+        audience: 'mitcom',
+        barangayName: activeReport.barangayName,
+        leadOffice: activeReport.lifecycleFacts.leadOffice,
+        claimedByName: activeReport.lifecycleFacts.reviewClaimedByName,
+        claimedAt: activeReport.lifecycleFacts.reviewClaimedAt,
+      })
+    : null;
   const activeIncidentType = activeReport ? incidentTypeLabel(activeReport) : 'Report';
   const activeIncidentPlace = activeReport
     ? reportedPlaceLabel(activeReport)
@@ -108,10 +127,10 @@ export default function CommandEscalationMap({
     : null;
 
   function move(direction: -1 | 1) {
-    if (escalations.length < 2) return;
+    if (laneReports.length < 2) return;
     setActiveIndex(
-      (currentIndex) =>
-        (currentIndex + direction + escalations.length) % escalations.length,
+        (currentIndex) =>
+        (currentIndex + direction + laneReports.length) % laneReports.length,
     );
   }
 
@@ -130,7 +149,7 @@ export default function CommandEscalationMap({
             highlightedReportId={activeReport?.id ?? null}
             onGestureActiveChange={onGestureActiveChange}
             onReportSelection={(reportIds) => {
-              const selectedIndex = escalations.findIndex((report) =>
+              const selectedIndex = laneReports.findIndex((report) =>
                 reportIds.includes(report.id),
               );
               if (selectedIndex >= 0) setActiveIndex(selectedIndex);
@@ -138,45 +157,61 @@ export default function CommandEscalationMap({
           />
         </View>
 
+        <View style={[styles.mapQueueTabs, styles.commandMapQueueTabs]} accessibilityRole="tablist">
+          {[
+            { lane: 'requests' as const, label: 'Requests', count: requestCount, color: REQUESTS_STATUS_COLOR },
+            { lane: 'active' as const, label: 'Active response', count: activeCount, color: getReportStatusPresentation('verified').color },
+          ].map((tab) => {
+            const selected = selectedLane === tab.lane;
+            return (
+              <TouchableOpacity
+                key={tab.lane}
+                style={[styles.mapQueueTab, styles.commandMapQueueTab, selected && { backgroundColor: tab.color }]}
+                onPress={() => {
+                  onLaneChange(tab.lane);
+                  setActiveIndex(0);
+                }}
+                accessibilityRole="tab"
+                accessibilityLabel={`${tab.label}, ${tab.count}`}
+                accessibilityState={{ selected }}
+              >
+                <Text style={[styles.mapQueueTabText, selected && { color: colors.white }]} numberOfLines={1} adjustsFontSizeToFit>{tab.count} {tab.label.toUpperCase()}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
         <TouchableOpacity
-          style={styles.mapEscalationBadge}
-          onPress={() => router.push('/official/incidents?queue=incoming_requests' as Href)}
+          style={[styles.mapEscalationBadge, styles.mapQueueViewBadge]}
+          onPress={() => router.push(`/official/incidents?queue=${queue}&from=command` as Href)}
           accessibilityRole="button"
-          accessibilityLabel={`View ${escalations.length} incoming requests`}
+          accessibilityLabel={`View ${totalCount} ${laneTitle.toLowerCase()}`}
         >
-          <View
-            style={[
-              styles.mapEscalationDot,
-              { backgroundColor: REQUESTS_STATUS_COLOR },
-            ]}
-          />
-          <Text
-            style={[
-              styles.mapEscalationBadgeText,
-              { color: REQUESTS_STATUS_COLOR },
-            ]}
-          >
-            {escalations.length} REQUESTS
-          </Text>
+          <View style={[styles.mapEscalationDot, { backgroundColor: selectedLane === 'requests' ? REQUESTS_STATUS_COLOR : getReportStatusPresentation('verified').color }]} />
+          <Text style={[styles.mapEscalationBadgeText, { color: selectedLane === 'requests' ? REQUESTS_STATUS_COLOR : getReportStatusPresentation('verified').color }]}>VIEW QUEUE</Text>
           <Ionicons name="chevron-forward" size={15} color={colors.text} />
         </TouchableOpacity>
 
-        {escalations.length > 0 ? (
+        {laneReports.length > 0 ? (
           <View style={styles.mapPager}>
             <TouchableOpacity
               style={styles.mapPagerButton}
               onPress={() => move(-1)}
-              disabled={escalations.length < 2}
-              accessibilityLabel="Previous request"
+              disabled={laneReports.length < 2}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: laneReports.length < 2 }}
+              accessibilityLabel={`Previous ${selectedLane === 'requests' ? 'request' : 'active response'}`}
             >
               <Ionicons name="chevron-back" size={17} color={colors.text} />
             </TouchableOpacity>
-            <Text style={styles.mapPagerText}>{safeActiveIndex + 1} of {escalations.length}</Text>
+            <Text style={styles.mapPagerText} accessibilityRole="text" accessibilityLabel={`${safeActiveIndex + 1} of ${laneReports.length} ${laneTitle.toLowerCase()}`}>{safeActiveIndex + 1} of {laneReports.length}</Text>
             <TouchableOpacity
               style={styles.mapPagerButton}
               onPress={() => move(1)}
-              disabled={escalations.length < 2}
-              accessibilityLabel="Next request"
+              disabled={laneReports.length < 2}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: laneReports.length < 2 }}
+              accessibilityLabel={`Next ${selectedLane === 'requests' ? 'request' : 'active response'}`}
             >
               <Ionicons name="chevron-forward" size={17} color={colors.text} />
             </TouchableOpacity>
@@ -184,21 +219,42 @@ export default function CommandEscalationMap({
         ) : null}
       </View>
 
-      {activeReport ? (
+      {laneError && !activeReport ? (
+        <View style={[styles.activeIncidentEmpty, styles.commandActiveIncidentEmpty]}>
+          <Text style={styles.activeIncidentEmptyTitle}>Could not load {laneTitle.toLowerCase()}</Text>
+          <Text style={styles.activeIncidentEmptyBody}>{laneError}</Text>
+          <TouchableOpacity
+            onPress={() => void onRetry()}
+            accessibilityRole="button"
+            accessibilityLabel={`Retry ${laneTitle.toLowerCase()}`}
+          >
+            <Text style={styles.activeIncidentEmptyTitle}>Try again</Text>
+          </TouchableOpacity>
+        </View>
+      ) : laneLoading && !activeReport ? (
+        <View style={[styles.activeIncidentEmpty, styles.commandActiveIncidentEmpty]}>
+          <Text style={styles.activeIncidentEmptyTitle}>Loading {laneTitle.toLowerCase()}…</Text>
+        </View>
+      ) : activeReport ? (
         <View style={styles.activeIncidentCard}>
+          {laneError ? (
+            <View>
+              <Text style={styles.activeIncidentEmptyBody}>{laneError}</Text>
+              <TouchableOpacity onPress={() => void onRetry()} accessibilityRole="button">
+                <Text style={styles.activeIncidentEmptyTitle}>Try again</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
           <View style={styles.activeIncidentTopRow}>
             <View style={styles.activeIncidentCopy}>
-              <Text style={[styles.activeIncidentEyebrow, { color: activeReportPresentation?.color }]}>
-                REQUESTS · {formatElapsedLabel(
+              <Text style={[styles.activeIncidentEyebrow, { color: activeReportPresentation?.tone.color }]}>
+                {activeReportPresentation?.stageLabel.toUpperCase()} · {formatElapsedLabel(
                   activeReport.escalatedAt || activeReport.createdAt,
                   referenceTime,
                 )}
               </Text>
               <Text style={styles.activeIncidentTitle}>
                 {activeIncidentType} • {activeIncidentPlace}
-              </Text>
-              <Text style={styles.activeIncidentMeta}>
-                Minglanilla • {activeReport.mediaCount} media
               </Text>
             </View>
             <TouchableOpacity
@@ -213,13 +269,13 @@ export default function CommandEscalationMap({
             </TouchableOpacity>
           </View>
 
-          <View style={[styles.activeIncidentQuote, { backgroundColor: activeReportPresentation?.backgroundColor }]}>
-            <View style={[styles.activeIncidentQuoteAccent, { backgroundColor: activeReportPresentation?.color }]} />
-            <Text style={[styles.activeIncidentQuoteMark, { color: activeReportPresentation?.color }]}>“</Text>
+          <View style={[styles.activeIncidentQuote, { backgroundColor: activeReportPresentation?.tone.softColor }]}>
+            <View style={[styles.activeIncidentQuoteAccent, { backgroundColor: activeReportPresentation?.tone.color }]} />
+            <Text style={[styles.activeIncidentQuoteMark, { color: activeReportPresentation?.tone.color }]}>“</Text>
             <View style={styles.activeIncidentQuoteCopy}>
               <Text style={styles.activeIncidentQuoteText}>
                 {activeReport.escalationNote?.trim() ||
-                  'Open the incident to review the request and current lead office.'}
+                  activeReport.description.trim() || 'No description provided.'}
               </Text>
               <Text style={styles.activeIncidentQuoteSource} numberOfLines={1}>
                 {activeReport.barangayName
@@ -230,21 +286,16 @@ export default function CommandEscalationMap({
               </Text>
             </View>
           </View>
-
-          <Text style={styles.activeIncidentMeta}>
-            {officialLabel(activeReport.lifecycle, { claimedByName: activeReport.lifecycleFacts.reviewClaimedByName, claimedAt: activeReport.lifecycleFacts.reviewClaimedAt })}
-          </Text>
-          <Text style={styles.activeIncidentMeta}>The barangay keeps the lead until a transfer is accepted.</Text>
+          {[activeReportPresentation?.coordinationLabel, activeReportPresentation?.leadLabel, activeReportPresentation?.reviewLabel, activeReportPresentation?.note]
+            .filter((label): label is string => Boolean(label))
+            .map((label) => <Text key={label} style={styles.activeIncidentMeta}>{label}</Text>)}
         </View>
       ) : (
-        <View style={styles.activeIncidentEmpty}>
+        <View style={[styles.activeIncidentEmpty, styles.commandActiveIncidentEmpty]}>
           <View style={styles.activeIncidentEmptyIcon}>
             <Ionicons name="checkmark-circle-outline" size={31} color={colors.navigationActive} />
           </View>
-          <Text style={styles.activeIncidentEmptyTitle}>No incoming requests</Text>
-          <Text style={styles.activeIncidentEmptyBody}>
-            Support and transfer requests will appear here.
-          </Text>
+          <Text style={styles.activeIncidentEmptyTitle}>{selectedLane === 'requests' ? 'No incoming requests' : 'No active response'}</Text>
         </View>
       )}
     </View>

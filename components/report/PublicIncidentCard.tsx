@@ -68,32 +68,17 @@ export default function PublicIncidentCard({
       style={[reportDetailStyles.feedCard, isLast && reportDetailStyles.feedCardLast]}
     >
       <View style={residentFeedStyles.reportContent}>
-        <PublicIncidentHeader
-          incident={incident}
-          trailing={
-            <TouchableOpacity
-              style={residentFeedStyles.moreButton}
-              onPress={(event) => {
-                event.stopPropagation?.();
-                onPress();
-              }}
-              accessibilityRole="button"
-              accessibilityLabel="Open report details"
-            >
-              <Ionicons name="ellipsis-horizontal" size={21} color={colors.textMuted} />
-            </TouchableOpacity>
-          }
-        />
+        <PublicIncidentHeader incident={incident} />
 
         <PublicIncidentCopy incident={incident} captionLines={3} />
         <PublicIncidentHero incident={incident} />
         <PublicIncidentTags incident={incident} />
         <PublicIncidentLatestUpdate incident={incident} numberOfLines={2} />
 
-        <View style={residentFeedStyles.actionRow}>
-          <View style={residentFeedStyles.engagementActions}>
+        <View style={styles.actionRow}>
+          <View style={styles.engagementActions}>
             <TouchableOpacity
-              style={residentFeedStyles.iconAction}
+              style={styles.iconAction}
               onPress={(event) => {
                 event.stopPropagation?.();
                 onToggleSupport?.();
@@ -104,18 +89,18 @@ export default function PublicIncidentCard({
               accessibilityState={{ selected: hasUpvoted, disabled: isWithdrawn || supportBusy }}
             >
               <Ionicons
-                name={hasUpvoted ? 'arrow-up-circle' : 'arrow-up-outline'}
-                size={21}
+                name={hasUpvoted ? 'arrow-up-circle' : 'arrow-up-circle-outline'}
+                size={24}
                 color={isWithdrawn ? colors.border : hasUpvoted ? colors.primary : colors.text}
               />
               {upvoteCount > 0 ? (
-                <Text style={[residentFeedStyles.actionText, hasUpvoted && residentFeedStyles.actionTextActive]}>
+                <Text style={[styles.actionCount, hasUpvoted && styles.actionCountActive]}>
                   {upvoteCount}
                 </Text>
               ) : null}
             </TouchableOpacity>
             <TouchableOpacity
-              style={residentFeedStyles.iconAction}
+              style={styles.iconAction}
               onPress={(event) => {
                 event.stopPropagation?.();
                 (onRequestComments ?? onPress)();
@@ -123,11 +108,11 @@ export default function PublicIncidentCard({
               accessibilityRole="button"
               accessibilityLabel={`View discussion, ${commentCount} comments`}
             >
-              <Ionicons name="chatbubble-outline" size={21} color={colors.text} />
-              {commentCount > 0 ? <Text style={residentFeedStyles.actionText}>{commentCount}</Text> : null}
+              <Ionicons name="chatbubble-outline" size={22} color={colors.text} />
+              <Text style={styles.actionCount}>{commentCount}</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={residentFeedStyles.iconAction}
+              style={styles.iconAction}
               onPress={(event) => {
                 event.stopPropagation?.();
                 shareIncident();
@@ -135,7 +120,7 @@ export default function PublicIncidentCard({
               accessibilityRole="button"
               accessibilityLabel="Share report"
             >
-              <Ionicons name="arrow-redo-outline" size={23} color={colors.text} />
+              <Ionicons name="arrow-redo-outline" size={24} color={colors.text} />
             </TouchableOpacity>
           </View>
 
@@ -160,6 +145,34 @@ export default function PublicIncidentCard({
 }
 
 const styles = StyleSheet.create({
+  actionRow: {
+    minHeight: 40,
+    marginBottom: -spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  engagementActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  iconAction: {
+    minWidth: 34,
+    minHeight: 40,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  actionCount: {
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.sm,
+    color: colors.text,
+  },
+  actionCountActive: {
+    color: colors.primary,
+  },
   mapChip: {
     marginLeft: 'auto',
     minHeight: 36,

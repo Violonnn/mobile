@@ -13,7 +13,7 @@ export const barangayWorkflowQueues: {
   { value: 'under_review', label: 'Under review · office' },
   { value: 'mine', label: 'Under review · mine' },
   { value: 'being_assessed', label: 'Being assessed' },
-  { value: 'awaiting_mdrrmo', label: 'Awaiting MDRRMO' },
+  { value: 'awaiting_mdrrmo', label: 'Awaiting MITCOM' },
   { value: 'mayor_requests', label: 'Mayor requests' },
 ];
 
@@ -22,13 +22,22 @@ export const municipalWorkflowQueues: {
   label: string;
 }[] = [
   { value: 'all', label: 'All reports' },
-  { value: 'jurisdiction_check', label: 'Jurisdiction check' },
+  { value: 'jurisdiction_check', label: 'Coverage check' },
   { value: 'incoming_requests', label: 'Incoming requests' },
+  { value: 'municipal_active', label: 'Active response' },
   { value: 'legacy_escalations', label: 'Legacy escalations' },
-  { value: 'municipal_review', label: 'Municipal review' },
-  { value: 'municipal_lead', label: 'Municipal lead' },
+  { value: 'municipal_review', label: 'MITCOM review' },
+  { value: 'municipal_lead', label: 'MITCOM lead' },
   { value: 'mayor_requests', label: 'Mayor requests' },
 ];
+
+export function workflowQueueLabel(
+  queue: OfficialWorkflowQueue,
+  municipal: boolean,
+): string {
+  const options = municipal ? municipalWorkflowQueues : barangayWorkflowQueues;
+  return options.find((option) => option.value === queue)?.label ?? 'Reports';
+}
 
 export default function WorkflowQueuePicker(
   { municipal, selected, onSelect }: {

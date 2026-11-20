@@ -1,13 +1,27 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, type ReactNode } from 'react';
 import { ActivityIndicator, Text, TouchableOpacity, View } from 'react-native';
 import { fetchResidentReportTimeline, type MapReportMarker, type ResidentTimelineEntry } from '../../lib/reports';
+import { RESIDENT_STAGE_TONES, residentStageTone, type StageTone } from '../../lib/reportLifecycle';
 import { colors, spacing } from '../../styles/theme';
 import ReportStatusTimeline from './ReportStatusTimeline';
 import ReportOutcomeNotice from './ReportOutcomeNotice';
 import ResidentReportTimeline from './ResidentReportTimeline';
 
 /** Mount only for the resident's own report; the RPC independently enforces ownership. */
-export default function ResidentReportProgress({ report, refreshSignal = 0, onSendNewReport }: { report: MapReportMarker; refreshSignal?: number; onSendNewReport?: () => void }) {
+export default function ResidentReportProgress({
+  report,
+  refreshSignal = 0,
+  onSendNewReport,
+  useScopedPresentation = false,
+  beforeActivity,
+}: {
+  report: MapReportMarker;
+  refreshSignal?: number;
+  onSendNewReport?: () => void;
+  useScopedPresentation?: boolean;
+  beforeActivity?: ReactNode;
+}) {
+  const currentStatusTone = getCurrentStatusTone(report);
   const [entries, setEntries] = useState<ResidentTimelineEntry[]>([]);
   const [loading, setLoading] = useState(!report.isPending);
   const [error, setError] = useState<string | null>(null);
@@ -36,10 +50,27 @@ export default function ResidentReportProgress({ report, refreshSignal = 0, onSe
       lifecycle={report.lifecycle}
       status={report.status}
       useStatusProgressColors
+      showScopedCoordinationDetails={useScopedPresentation}
     />
-    {report.lifecycle && <ReportOutcomeNotice summary={report.lifecycle} reasonCode={report.reviewReasonCode ?? null} publicSummary={report.publicSummary ?? null} publicCorrection={report.publicCorrection ?? null} onSendNewReport={onSendNewReport} />}
+    {report.lifecycle && <ReportOutcomeNotice summary={report.lifecycle} reasonCode={report.reviewReasonCode ?? null} publicSummary={report.publicSummary ?? null} publicCorrection={report.publicCorrection ?? null} onSendNewReport={onSendNewReport} useScopedPresentation={useScopedPresentation} />}
+    {beforeActivity}
     {loading ? <ActivityIndicator color={colors.primary} accessibilityLabel='Loading report activity' />
       : error ? <View><Text accessibilityRole='alert' style={{ color: colors.text }}>{error}</Text><TouchableOpacity accessibilityRole='button' onPress={() => setRetry((value) => value + 1)} style={{ paddingVertical: spacing.md }}><Text style={{ color: colors.primary }}>Retry activity</Text></TouchableOpacity></View>
-      : !report.isPending && <ResidentReportTimeline entries={entries} />}
+      : !report.isPending && <ResidentReportTimeline entries={entries} currentStatusTone={currentStatusTone} />}
   </View>;
+}
+
+function getCurrentStatusTone(report: MapReportMarker): StageTone {
+  if (report.lifecycle) return residentStageTone(report.lifecycle);
+
+  switch (report.status.trim().toLocaleLowerCase()) {
+    case 'verified':
+      return RESIDENT_STAGE_TONES.confirmed;
+    case 'escalated':
+      return RESIDENT_STAGE_TONES.correction;
+    case 'resolved':
+      return RESIDENT_STAGE_TONES.resolved;
+    default:
+      return RESIDENT_STAGE_TONES.received;
+  }
 }

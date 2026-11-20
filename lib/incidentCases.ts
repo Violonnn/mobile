@@ -37,6 +37,15 @@ export type IncidentEvent = {
   officeLabel: string;
   isPublic: boolean;
 };
+
+/** Change a municipal office display name without rewriting stored event text. */
+export function formatIncidentOfficeLabel(
+  officeLabel: string,
+  municipalOfficeDisplayName = 'MDRRMO',
+): string {
+  return officeLabel.replace(/\bMDRRMO\b/g, municipalOfficeDisplayName);
+}
+
 export type SupportRequest = {
   id: string;
   incidentCaseId: string;

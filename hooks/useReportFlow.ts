@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  createLocationRequestTracker,
   distanceBetweenCoordinates,
-  getCurrentGpsWithAddress,
+  getCurrentGpsWithTimeout,
   getReportLocationAdjustmentLimit,
+  hasForegroundLocationPermission,
   isLowConfidenceLocation,
-  resolveReadableAddress,
+  resolveReadableAddressWithTimeout,
   type GpsPosition,
   type ReadableAddress,
 } from '../lib/location';
@@ -42,10 +44,10 @@ export type DetailsValidationField =
 
 // Progress checkpoints (deliberate jumps, not linear).
 const PROGRESS = {
-  locationDone: 25,
-  firstAttachment: 38,
-  bothAttachments: 50,
-  detailsFilled: 75,
+  firstAttachment: 25,
+  bothAttachments: 38,
+  detailsFilled: 65,
+  locationConfirmed: 85,
   review: 100,
   submitted: 100,
 } as const;
@@ -57,7 +59,7 @@ function attachmentsProgress(media: CapturedMedia[]): number {
   const hasVideo = media.some((m) => m.type === 'video');
   if (hasPhoto && hasVideo) return PROGRESS.bothAttachments;
   if (hasPhoto || hasVideo) return PROGRESS.firstAttachment;
-  return PROGRESS.locationDone;
+  return 0;
 }
 
 function buildAddressFromBarangay(
@@ -73,7 +75,7 @@ function buildAddressFromBarangay(
 }
 
 export function useReportFlow(active: boolean) {
-  const [step, setStep] = useState<ReportStep>('location');
+  const [step, setStep] = useState<ReportStep>('attachments');
   const [progress, setProgress] = useState(0);
 
   const [position, setPosition] = useState<GpsPosition | null>(null);
@@ -96,9 +98,9 @@ export function useReportFlow(active: boolean) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [locationNote, setLocationNote] = useState('');
-  const [showReporterName, setShowReporterName] = useState(false);
-  const [showReporterAvatar, setShowReporterAvatar] = useState(false);
-  const [allowExactLocation, setAllowExactLocation] = useState(false);
+  const [showReporterName, setShowReporterName] = useState(true);
+  const [showReporterAvatar, setShowReporterAvatar] = useState(true);
+  const [allowExactLocation, setAllowExactLocation] = useState(true);
   const [incidentType, setIncidentTypeState] = useState<IncidentType | null>(null);
   const [incidentTypeOther, setIncidentTypeOther] = useState('');
   const [media, setMedia] = useState<CapturedMedia[]>([]);
@@ -114,6 +116,11 @@ export function useReportFlow(active: boolean) {
   const [outsideCoverage, setOutsideCoverage] = useState(false);
 
   const submitLock = useRef(false);
+  const locationRequests = useRef(createLocationRequestTracker()).current;
+  const addressRequests = useRef(createLocationRequestTracker()).current;
+  const locationPermissionCheck = useRef<Promise<boolean> | null>(null);
+  const locationFetchStarted = useRef(false);
+  const locationStepEntry = useRef(0);
   // Keep a resident's manual barangay pick across GPS retries / pin moves.
   const barangayManuallySelected = useRef(false);
   const barangaysRef = useRef<BarangayOption[]>([]);
@@ -164,16 +171,29 @@ export function useReportFlow(active: boolean) {
   );
 
   const fetchLocation = useCallback(
-    async () => {
+    async (forceFresh = false) => {
+      // Background startup and step navigation can race; allow only one initial fix.
+      if (locationFetchStarted.current && !forceFresh) return;
+      locationFetchStarted.current = true;
+
+      const requestGeneration = locationRequests.start();
+      addressRequests.invalidate();
       setLocationLoading(true);
       setLocationError(null);
       setLocationNeedsConfirmation(false);
       setLocationConfirmed(false);
       setLocationPickerVisible(false);
-      setProgress(0);
+      if (!barangayManuallySelected.current) {
+        setSelectedBarangayIdState(null);
+        setAddress(null);
+      }
 
-      const { position: gps, address: place, error: gpsError } =
-        await getCurrentGpsWithAddress();
+      const { position: gps, error: gpsError } =
+        await getCurrentGpsWithTimeout(20_000, {
+          reuseRecentFix: !forceFresh,
+        });
+
+      if (!locationRequests.isCurrent(requestGeneration)) return;
 
       setLocationLoading(false);
 
@@ -187,25 +207,47 @@ export function useReportFlow(active: boolean) {
       setPosition(gps);
       // Device position stays separate and immutable for this report draft.
       setDevicePosition(gps);
-      applySuggestedBarangay(place);
 
       const needsConfirm = isLowConfidenceLocation(gps);
       setLocationNeedsConfirmation(needsConfirm);
+      setLocationError(null);
+
+      if (barangayManuallySelected.current) return;
+
+      const addressRequest = addressRequests.start();
+      const { address: place, error: addressError } =
+        await resolveReadableAddressWithTimeout(gps);
+      if (
+        !locationRequests.isCurrent(requestGeneration) ||
+        !addressRequests.isCurrent(addressRequest)
+      ) {
+        return;
+      }
+
+      applySuggestedBarangay(place);
       // Address resolution is only a suggestion; low-confidence UX owns the step.
       setLocationError(
         needsConfirm
           ? null
           : place || barangayManuallySelected.current
             ? null
-            : gpsError,
+            : addressError ?? gpsError,
       );
-      setProgress(PROGRESS.locationDone);
     },
-    [applySuggestedBarangay],
+    [
+      addressRequests,
+      applySuggestedBarangay,
+      locationRequests,
+    ],
   );
 
   const reset = useCallback(() => {
-    setStep('location');
+    locationRequests.invalidate();
+    addressRequests.invalidate();
+    locationPermissionCheck.current = null;
+    locationFetchStarted.current = false;
+    locationStepEntry.current += 1;
+    setStep('attachments');
     setProgress(0);
     setPosition(null);
     setDevicePosition(null);
@@ -220,9 +262,9 @@ export function useReportFlow(active: boolean) {
     setTitle('');
     setDescription('');
     setLocationNote('');
-    setShowReporterName(false);
-    setShowReporterAvatar(false);
-    setAllowExactLocation(false);
+    setShowReporterName(true);
+    setShowReporterAvatar(true);
+    setAllowExactLocation(true);
     setIncidentTypeState(null);
     setIncidentTypeOther('');
     setMedia([]);
@@ -235,29 +277,47 @@ export function useReportFlow(active: boolean) {
     setSyncCanRetry(true);
     setOutsideCoverage(false);
     submitLock.current = false;
-  }, []);
+  }, [addressRequests, locationRequests]);
 
   useEffect(() => {
     if (!active) return;
+    let cancelled = false;
     const initializationTimer = setTimeout(() => {
       reset();
       void loadBarangays();
-      void fetchLocation();
+      const permissionCheck = hasForegroundLocationPermission();
+      locationPermissionCheck.current = permissionCheck;
+      void permissionCheck.then((permissionGranted) => {
+        if (!cancelled && permissionGranted) void fetchLocation();
+      });
     }, 0);
     return () => {
+      cancelled = true;
       clearTimeout(initializationTimer);
+      locationPermissionCheck.current = null;
+      locationStepEntry.current += 1;
+      locationRequests.invalidate();
+      addressRequests.invalidate();
+      barangayManuallySelected.current = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active]);
+  }, [
+    active,
+    addressRequests,
+    fetchLocation,
+    loadBarangays,
+    locationRequests,
+    reset,
+  ]);
 
   const retryLocation = useCallback(() => {
-    void fetchLocation();
+    void fetchLocation(true);
   }, [fetchLocation]);
 
   const openLocationPicker = useCallback(() => {
     if (!position || !devicePosition) return;
+    addressRequests.invalidate();
     setLocationPickerVisible(true);
-  }, [devicePosition, position]);
+  }, [addressRequests, devicePosition, position]);
 
   const closeLocationPicker = useCallback(() => {
     setLocationPickerVisible(false);
@@ -288,18 +348,31 @@ export function useReportFlow(active: boolean) {
       setPosition(confirmed);
       setLocationConfirmed(false);
       setLocationPickerVisible(false);
+      setLocationLoading(false);
       setLocationError(null);
-      setProgress(PROGRESS.locationDone);
+      setProgress(PROGRESS.detailsFilled);
 
+      const locationGeneration = locationRequests.start();
       if (!barangayManuallySelected.current) {
-        const { address: place } = await resolveReadableAddress(confirmed);
+        setSelectedBarangayIdState(null);
+        setAddress(null);
+        const addressRequest = addressRequests.start();
+        const { address: place } = await resolveReadableAddressWithTimeout(confirmed);
+        if (
+          !locationRequests.isCurrent(locationGeneration) ||
+          !addressRequests.isCurrent(addressRequest)
+        ) {
+          return;
+        }
         applySuggestedBarangay(place);
       }
 
     },
     [
       applySuggestedBarangay,
+      addressRequests,
       devicePosition,
+      locationRequests,
       maximumAdjustmentMeters,
     ],
   );
@@ -319,13 +392,15 @@ export function useReportFlow(active: boolean) {
 
     setLocationConfirmed(true);
     setLocationError(null);
-    setStep('attachments');
+    setProgress(PROGRESS.locationConfirmed);
+    setStep('review');
   }, [devicePosition, maximumAdjustmentMeters, movedDistanceMeters, position]);
 
   const setSelectedBarangayId = useCallback((id: string) => {
     const match = barangaysRef.current.find((item) => item.id === id);
     if (!match) return;
 
+    addressRequests.invalidate();
     barangayManuallySelected.current = true;
     setSelectedBarangayIdState(id);
     setAddress((prev) =>
@@ -333,7 +408,7 @@ export function useReportFlow(active: boolean) {
     );
     setDetailsValidationField(null);
     setError(null);
-  }, []);
+  }, [addressRequests]);
 
   const retryBarangays = useCallback(() => {
     void loadBarangays();
@@ -512,27 +587,46 @@ export function useReportFlow(active: boolean) {
     title,
   ]);
 
-  const goToReview = useCallback(() => {
+  const goToLocation = useCallback(() => {
     setError(null);
     if (!validateDetails()) return;
-    setProgress(PROGRESS.review);
-    setStep('review');
-  }, [validateDetails]);
+    setProgress(PROGRESS.detailsFilled);
+    setStep('location');
+    setLocationPickerVisible(false);
+    const locationStepEntryId = locationStepEntry.current + 1;
+    locationStepEntry.current = locationStepEntryId;
+    if (!locationFetchStarted.current) setLocationLoading(true);
+
+    // If permission was already granted, GPS is already loading in the background.
+    // Otherwise, request it only when the resident reaches this step.
+    void (async () => {
+      const permissionCheck =
+        locationPermissionCheck.current ?? hasForegroundLocationPermission();
+      locationPermissionCheck.current = permissionCheck;
+      await permissionCheck;
+      if (locationStepEntry.current !== locationStepEntryId) return;
+      if (!locationFetchStarted.current) void fetchLocation();
+    })();
+  }, [fetchLocation, validateDetails]);
 
   const goBack = useCallback(() => {
     setError(null);
     if (step === 'review') {
+      setStep('location');
+      setProgress(PROGRESS.locationConfirmed);
+      return;
+    }
+    if (step === 'location') {
+      locationStepEntry.current += 1;
+      if (!locationFetchStarted.current) setLocationLoading(false);
+      setLocationPickerVisible(false);
       setStep('details');
+      setProgress(PROGRESS.detailsFilled);
       return;
     }
     if (step === 'details') {
       setStep('attachments');
       setProgress(attachmentsProgress(media));
-      return;
-    }
-    if (step === 'attachments') {
-      setStep('location');
-      setProgress(PROGRESS.locationDone);
     }
   }, [step, media]);
 
@@ -540,7 +634,7 @@ export function useReportFlow(active: boolean) {
     setError(null);
     setLocationConfirmed(false);
     setStep('location');
-    setProgress(PROGRESS.locationDone);
+    setProgress(PROGRESS.detailsFilled);
   }, []);
 
   const editEvidence = useCallback(() => {
@@ -568,6 +662,11 @@ export function useReportFlow(active: boolean) {
     if (submitLock.current) return;
     if (!position || !devicePosition) {
       setError('Capture and confirm a GPS location before sending.');
+      return;
+    }
+    if (!locationConfirmed) {
+      setLocationError('Confirm the incident location before sending.');
+      setStep('location');
       return;
     }
     if (movedDistanceMeters > maximumAdjustmentMeters) {
@@ -617,6 +716,7 @@ export function useReportFlow(active: boolean) {
     description,
     position,
     devicePosition,
+    locationConfirmed,
     address,
     locationNote,
     showReporterName,
@@ -749,7 +849,7 @@ export function useReportFlow(active: boolean) {
     incidentTypeOther,
     setIncidentTypeOther: updateIncidentTypeOther,
     detailsValidationField,
-    goToReview,
+    goToLocation,
     editDetails,
     editLocation,
     // shared

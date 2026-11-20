@@ -16,6 +16,7 @@ export type InviteListItem = {
   expires_at: string;
   used_at: string | null;
   reserved_at: string | null;
+  avatar_path: string | null;
 };
 
 export type ValidatedInvite = {

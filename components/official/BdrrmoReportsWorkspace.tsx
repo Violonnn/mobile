@@ -1,7 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Image,
   Modal,
   Pressable,
   RefreshControl,
@@ -16,13 +15,11 @@ import { StatusBar } from 'expo-status-bar';
 import { useFocusEffect, useRouter, type Href } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import WorkflowQueuePicker from './WorkflowQueuePicker';
-import { officialLabel, lifecycleColor } from '../../lib/reportLifecycle';
+import WorkflowQueuePicker, { workflowQueueLabel } from './WorkflowQueuePicker';
+import OfficialReportQueueRow from './OfficialReportQueueRow';
 import MdrrmoHeader from './MdrrmoHeader';
 import { statusLabel } from '../report/ReportDetailCard';
 import { ReportsScreenSkeleton } from '../ui/OfficialScreenSkeletons';
-import { formatPublishedAt } from '../../lib/formatTime';
-import { formatIncidentType } from '../../lib/incidentTypes';
 import type { OfficialWorkflowQueue, OfficialReportQueueItem, ReportStatus } from '../../lib/officialReports';
 import { mdrrmoReportsStyles as styles } from '../../styles/screens/mdrrmoReports.styles';
 import { colors } from '../../styles/theme';
@@ -62,7 +59,7 @@ const SORT_OPTIONS: { value: QueueSort; label: string }[] = [
 
 function filterLabel(filter: BdrrmoStatusFilter): string {
   if (filter === 'all') return 'All available reports';
-  return `${statusLabel(filter)} reports`;
+  return `Recorded status: ${statusLabel(filter)}`;
 }
 
 export default function BdrrmoReportsWorkspace({
@@ -214,7 +211,7 @@ export default function BdrrmoReportsWorkspace({
         <View style={styles.queueSection}>
           <View style={[styles.sectionHeader, styles.queueHeader]}>
             <View style={styles.sectionTitleGroup}>
-              <Text style={styles.sectionLabel}>{(workflowQueue === 'all' ? filterLabel(statusFilter) : workflowQueue.replace(/_/g, ' ')).toUpperCase()}</Text>
+              <Text style={styles.sectionLabel}>{(workflowQueue === 'all' ? filterLabel(statusFilter) : workflowQueueLabel(workflowQueue, false)).toUpperCase()}</Text>
               <Text style={styles.sectionSubtitle}>
                 {assignedBarangay ? `${assignedBarangay} · ` : 'Assigned barangay · '}
                 {visibleReports.length} {visibleReports.length === 1 ? 'result' : 'results'}
@@ -248,66 +245,17 @@ export default function BdrrmoReportsWorkspace({
             </View>
           ) : null}
 
-          {!error ? visibleReports.map((report, index) => {
-            const accentColor = lifecycleColor(report.lifecycle);
-            return (
-              <TouchableOpacity
-                key={report.id}
-                style={[
-                  styles.queueCard,
-                  index === 0 && styles.queueCardFirst,
-                  index % 2 === 0 && styles.queueCardOdd,
-                ]}
-                onPress={() => router.push(`/official/${report.id}` as Href)}
-                activeOpacity={0.82}
-                accessibilityRole="button"
-                accessibilityLabel={`Review report ${report.title || 'untitled'}`}
-              >
-                <View style={styles.mediaFrame}>
-                  {report.firstPhotoUrl ? (
-                    <Image source={{ uri: report.firstPhotoUrl }} style={styles.media} resizeMode="cover" />
-                  ) : (
-                    <View style={styles.mediaPlaceholder}>
-                      <Ionicons name="document-text-outline" size={24} color={colors.textMuted} />
-                      <Text style={styles.mediaPlaceholderText}>No photo</Text>
-                    </View>
-                  )}
-                </View>
-                <View style={styles.reportCopy}>
-                  <View style={styles.statusRow}>
-                    <View style={[styles.statusDot, { backgroundColor: accentColor }]} />
-                    <Text style={[styles.statusText, { color: accentColor }]}>
-                      {officialLabel(report.lifecycle, { claimedByName: report.lifecycleFacts.reviewClaimedByName, claimedAt: report.lifecycleFacts.reviewClaimedAt }).toUpperCase()}
-                    </Text>
-                    <Text style={styles.statusSeparator}>·</Text>
-                    <Text style={styles.timeText}>{formatPublishedAt(report.createdAt)}</Text>
-                  </View>
-                  <Text style={styles.reportTitle} numberOfLines={2}>
-                    {report.title.trim() || 'Untitled report'}
-                  </Text>
-                  <Text style={styles.reportLocation} numberOfLines={1}>
-                    {report.addressText || assignedBarangay || 'Location unavailable'}
-                  </Text>
-                  <View style={styles.cardFooter}>
-                    <View style={styles.attachmentMeta}>
-                      <View style={styles.attachmentCount}>
-                        <Ionicons name="images-outline" size={16} color={colors.navigationActive} />
-                        <Text style={styles.attachmentCountText}>{report.mediaCount}</Text>
-                      </View>
-                      <View style={styles.attachmentDivider} />
-                      <Text style={styles.incidentTypeText} numberOfLines={1}>
-                        {formatIncidentType(report.incidentType, report.incidentTypeOther)}
-                      </Text>
-                    </View>
-                    <View style={styles.reviewAction}>
-                      <Text style={styles.reviewActionText}>Review</Text>
-                      <Ionicons name="chevron-forward" size={21} color={colors.navigationActive} />
-                    </View>
-                  </View>
-                </View>
-              </TouchableOpacity>
-            );
-          }) : null}
+          {!error ? visibleReports.map((report, index) => (
+            <OfficialReportQueueRow
+              key={report.id}
+              report={report}
+              audience="bdrrmo"
+              locationFallback={assignedBarangay}
+              actionLabel="Review"
+              onPress={() => router.push(('/official/' + report.id) as Href)}
+              first={index === 0}
+            />
+          )) : null}
         </View>
         {hasMore && <TouchableOpacity style={styles.applyButton} onPress={() => void onLoadMore()} disabled={loadingMore} accessibilityRole="button"><Text style={styles.applyButtonText}>{loadingMore ? 'Loading more reports...' : 'Load more reports'}</Text></TouchableOpacity>}
       </ScrollView>
@@ -323,7 +271,7 @@ export default function BdrrmoReportsWorkspace({
               </TouchableOpacity>
             </View>
             <View style={styles.filterGroup}>
-              <Text style={styles.filterLabel}>Status</Text>
+              <Text style={styles.filterLabel}>Recorded status</Text>
               <View style={styles.filterChoices}>
                 {STATUS_OPTIONS.map((option) => (
                   <TouchableOpacity
@@ -338,6 +286,11 @@ export default function BdrrmoReportsWorkspace({
                   </TouchableOpacity>
                 ))}
               </View>
+              {workflowQueue !== 'all' ? (
+                <Text style={styles.filterHint}>
+                  This status filter applies when All reports is selected. The workflow queue determines results otherwise.
+                </Text>
+              ) : null}
             </View>
             <View style={styles.filterGroup}>
               <Text style={styles.filterLabel}>Order</Text>

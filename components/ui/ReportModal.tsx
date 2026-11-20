@@ -44,15 +44,18 @@ const PROGRESS_LABELS: Record<Exclude<ReportStep, 'success'>, string> = {
 };
 
 const STEP_NUMBERS: Record<Exclude<ReportStep, 'success'>, number> = {
-  location: 1,
-  attachments: 2,
-  details: 3,
+  attachments: 1,
+  details: 2,
+  location: 3,
   review: 4,
 };
 
 export default function ReportModal({ visible, onClose, onSubmitted }: Props) {
   const flow = useReportFlow(visible);
   const { height, fontScale } = useWindowDimensions();
+  const destinationBarangayName = flow.barangays.find(
+    (barangay) => barangay.id === flow.selectedBarangayId,
+  )?.name ?? null;
 
   // Keep the larger, readable text usable on shorter screens and when the
   // resident has selected a larger system text size.
@@ -224,6 +227,7 @@ export default function ReportModal({ visible, onClose, onSubmitted }: Props) {
                       onCancelPinAdjustment={flow.closeLocationPicker}
                       onConfirmPinAdjustment={flow.confirmManualPosition}
                       onOpenBarangayPicker={() => setBarangayPickerVisible(true)}
+                      onBack={flow.goBack}
                       onContinue={flow.confirmLocation}
                       residentLayout
                     />
@@ -241,7 +245,6 @@ export default function ReportModal({ visible, onClose, onSubmitted }: Props) {
                       onAddPhoto={flow.addPhoto}
                       onAddVideo={flow.addVideo}
                       onRemove={flow.removeMedia}
-                      onBack={flow.goBack}
                       onNext={flow.goToDetails}
                       residentLayout
                     />
@@ -265,13 +268,15 @@ export default function ReportModal({ visible, onClose, onSubmitted }: Props) {
                       barangaysError={flow.barangaysError}
                       selectedBarangayId={flow.selectedBarangayId}
                       onSelectBarangay={flow.setSelectedBarangayId}
+                      onOpenBarangayPicker={() => setBarangayPickerVisible(true)}
                       onRetryBarangays={flow.retryBarangays}
                       locationConfirmed={flow.locationConfirmed}
                       error={flow.error}
                       validationField={flow.detailsValidationField}
                       submitting={flow.submitting}
                       onBack={flow.goBack}
-                      onSubmit={flow.goToReview}
+                      onSubmit={flow.goToLocation}
+                      submitLabel="Continue to location"
                       residentLayout
                     />
                   )}
@@ -307,6 +312,7 @@ export default function ReportModal({ visible, onClose, onSubmitted }: Props) {
                     <SuccessStep
                       address={flow.address}
                       position={flow.position}
+                      destinationBarangayName={destinationBarangayName}
                       syncStatus={flow.syncStatus}
                       syncError={flow.syncError}
                       canRetry={flow.syncCanRetry}

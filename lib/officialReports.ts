@@ -23,13 +23,24 @@ import { deriveLifecycle, hasCurrentResponseAction, type LifecycleFacts, type Li
 import { allowedIncidentActions, callReportFlowRpc, fetchIncidentCaseDetail, validateFlowText, type IncidentAction, type IncidentCaseDetail } from './incidentCases';
 
 export type ReviewDecision = 'verify' | 'link' | 'needs_assessment' | 'could_not_confirm' | 'reject';
-export type OfficialWorkflowQueue = 'all' | 'needs_review' | 'under_review' | 'mine' | 'being_assessed' | 'awaiting_mdrrmo' | 'jurisdiction_check' | 'incoming_requests' | 'legacy_escalations' | 'municipal_review' | 'municipal_lead' | 'mayor_requests';
+export type OfficialWorkflowQueue = 'all' | 'needs_review' | 'under_review' | 'mine' | 'being_assessed' | 'awaiting_mdrrmo' | 'jurisdiction_check' | 'incoming_requests' | 'municipal_active' | 'legacy_escalations' | 'municipal_review' | 'municipal_lead' | 'mayor_requests';
 export type ReviewAction = 'claim' | 'take_over' | 'release' | ReviewDecision;
 export type RejectReasonCode = 'test_or_spam' | 'not_an_emergency_incident' | 'outside_approved_type' | 'abusive_content' | 'insufficient_location' | 'other';
 export type ResponseEventType = 'reporter_call' | 'hotline_contacted' | 'assistance_requested' | 'dispatch_confirmed' | 'responders_on_site' | 'assistance_given' | 'work_done' | 'external_info' | 'internal_note';
 export type IncidentLinkCandidate = {
-  id: string; incidentCaseId: string; sourceReportId: string; incidentType: string | null;
-  verification: string; coordination: string; distanceMeters: number; linkedReportCount: number; createdAt: string;
+  incidentCaseId: string;
+  reportId: string;
+  title: string;
+  description: string;
+  status: ReportStatus;
+  incidentType: IncidentType | null;
+  incidentTypeOther: string | null;
+  addressText: string | null;
+  barangayName: string | null;
+  verification: string;
+  linkedReportCount: number;
+  createdAt: string;
+  thumbnailUrl: string | null;
 };
 
 const OFFICIAL_REPORT_QUEUE_LEGACY_SELECT =
@@ -336,13 +347,93 @@ export function logReportContact(input: { reportId: string; eventType: ResponseE
 
 export async function fetchIncidentLinkCandidates(reportId: string): Promise<{ candidates: IncidentLinkCandidate[]; error: string | null }> {
   if (!isValidReportId(reportId)) return { candidates: [], error: 'Invalid report id.' };
-  const { data, error } = await supabase.rpc('list_incident_link_candidates', { p_report_id: reportId });
-  if (error) return { candidates: [], error: error.message };
-  return { candidates: (data ?? []).map((row: Record<string, unknown>) => ({
-    id: String(row.incident_case_id), incidentCaseId: String(row.incident_case_id), sourceReportId: String(row.source_report_id),
-    incidentType: row.incident_type ? String(row.incident_type) : null, verification: String(row.verification),
-    coordination: String(row.coordination), distanceMeters: Number(row.distance_meters), linkedReportCount: Number(row.linked_report_count), createdAt: String(row.created_at),
-  })), error: null };
+
+  const [incidentResult, currentReportResult] = await Promise.all([
+    supabase.from('incident_cases')
+      .select('id, verification')
+      .eq('state', 'active')
+      .neq('verification', 'not_confirmed'),
+    supabase.from('reports')
+      .select('id, incident_case_id')
+      .eq('id', reportId)
+      .maybeSingle(),
+  ]);
+  if (incidentResult.error || currentReportResult.error) {
+    return {
+      candidates: [],
+      error: incidentResult.error?.message ?? currentReportResult.error?.message ?? 'Could not load active incidents.',
+    };
+  }
+  if (!currentReportResult.data) {
+    return { candidates: [], error: 'Report not found in your scope.' };
+  }
+
+  const incidents = (incidentResult.data ?? []) as unknown as Record<string, unknown>[];
+  const currentIncidentCaseId = currentReportResult.data?.incident_case_id
+    ? String(currentReportResult.data.incident_case_id)
+    : null;
+  const visibleIncidents = incidents.filter((incident) =>
+    String(incident.id) !== currentIncidentCaseId,
+  );
+  const incidentIds = visibleIncidents.map((incident) => String(incident.id));
+  if (incidentIds.length === 0) return { candidates: [], error: null };
+
+  const { data: reportRows, error: reportsError } = await supabase.from('reports')
+    .select('id, title, description, status, incident_type, incident_type_other, address_text, created_at, barangay_id, incident_case_id')
+    .in('incident_case_id', incidentIds)
+    .neq('id', reportId)
+    .order('created_at', { ascending: false })
+    .order('id', { ascending: true });
+  if (reportsError) return { candidates: [], error: reportsError.message };
+
+  const rows = (reportRows ?? []) as unknown as Record<string, unknown>[];
+  if (rows.length === 0) return { candidates: [], error: null };
+
+  const barangayIds = [...new Set(rows.flatMap((row) =>
+    row.barangay_id ? [String(row.barangay_id)] : [],
+  ))];
+  const barangayResult = barangayIds.length > 0
+    ? await supabase.from('barangays').select('id, name').in('id', barangayIds)
+    : { data: [], error: null };
+  if (barangayResult.error) return { candidates: [], error: barangayResult.error.message };
+  const barangayNames = new Map((barangayResult.data ?? []).map((row) => [
+    String(row.id), String(row.name),
+  ]));
+
+  const incidentById = new Map(visibleIncidents.map((incident) => [
+    String(incident.id), incident,
+  ]));
+  const reportCounts = new Map<string, number>();
+  for (const row of rows) {
+    const incidentCaseId = String(row.incident_case_id ?? '');
+    reportCounts.set(incidentCaseId, (reportCounts.get(incidentCaseId) ?? 0) + 1);
+  }
+  const reportIds = rows.map((row) => String(row.id));
+  const thumbnails = await signFirstQueueThumbnails(reportIds);
+  return {
+    candidates: rows.map((row) => {
+      const candidateReportId = String(row.id);
+      const incidentCaseId = String(row.incident_case_id ?? '');
+      const thumbnail = thumbnails.get(candidateReportId);
+      const incident = incidentById.get(incidentCaseId);
+      return {
+        incidentCaseId,
+        reportId: candidateReportId,
+        title: String(row.title ?? ''),
+        description: String(row.description ?? ''),
+        status: asReportStatus(row.status),
+        incidentType: isIncidentType(row.incident_type) ? row.incident_type : null,
+        incidentTypeOther: row.incident_type_other ? String(row.incident_type_other) : null,
+        addressText: row.address_text ? String(row.address_text) : null,
+        barangayName: row.barangay_id ? barangayNames.get(String(row.barangay_id)) ?? null : null,
+        verification: String(incident?.verification ?? 'pending'),
+        linkedReportCount: reportCounts.get(incidentCaseId) ?? 0,
+        createdAt: String(row.created_at ?? ''),
+        thumbnailUrl: thumbnail?.thumbnailUrl ?? thumbnail?.url ?? null,
+      };
+    }),
+    error: null,
+  };
 }
 
 export async function fetchJurisdictionQueue(): Promise<{ reports: OfficialReportQueueItem[]; error: string | null }> {

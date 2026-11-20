@@ -107,48 +107,38 @@ export const mdrrmoReportsStyles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   queueCard: {
+    position: 'relative',
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: spacing.sm,
     paddingLeft: 12,
     paddingVertical: spacing.sm,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
+  queueCardPressed: {
+    opacity: 0.82,
+  },
+  queueCardFocusRing: {
+    position: 'absolute',
+    top: 1,
+    right: 1,
+    bottom: 1,
+    left: 1,
+    zIndex: 1,
+    borderWidth: 2,
+    borderColor: colors.navigationActive,
+    borderRadius: radius.md,
+  },
   queueCardFirst: {
     borderTopWidth: 1,
     borderTopColor: colors.border,
   },
-  queueCardOdd: {
-    paddingLeft: 8,
-    borderLeftWidth: 4,
-    borderLeftColor: colors.navigationActive,
-  },
-  statusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-  statusDot: {
-    width: 7,
-    height: 7,
-    borderRadius: radius.full,
-  },
-  statusText: {
-    fontFamily: fonts.semibold,
-    fontSize: fontSizes.xs,
-    letterSpacing: 0.2,
-  },
-  statusSeparator: {
-    fontFamily: fonts.regular,
-    fontSize: fontSizes.xs,
-    color: colors.textMuted,
-  },
   timeText: {
     fontFamily: fonts.regular,
-    fontSize: fontSizes.xs,
+    fontSize: fontSizes.sm,
     color: colors.textMuted,
-    textTransform: 'uppercase',
+    lineHeight: 18,
   },
   mediaFrame: {
     width: 76,
@@ -175,7 +165,7 @@ export const mdrrmoReportsStyles = StyleSheet.create({
   reportCopy: {
     flex: 1,
     minWidth: 0,
-    gap: 1,
+    gap: spacing.xs,
   },
   reportTitle: {
     fontFamily: fonts.bold,
@@ -191,16 +181,26 @@ export const mdrrmoReportsStyles = StyleSheet.create({
   },
   cardFooter: {
     flexDirection: 'row',
-    alignItems: 'center',
+    flexWrap: 'wrap',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
-    gap: spacing.sm,
+    gap: spacing.xs,
   },
   attachmentMeta: {
     flex: 1,
-    minWidth: 0,
+    minWidth: 120,
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     gap: 6,
+  },
+  categoryMeta: {
+    flex: 1,
+    minWidth: 70,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: spacing.xs,
   },
   attachmentCount: {
     flexDirection: 'row',
@@ -221,7 +221,8 @@ export const mdrrmoReportsStyles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
     fontFamily: fonts.medium,
-    fontSize: fontSizes.xs,
+    fontSize: fontSizes.sm,
+    lineHeight: 18,
     color: colors.textMuted,
   },
   reviewAction: {
@@ -292,6 +293,12 @@ export const mdrrmoReportsStyles = StyleSheet.create({
     fontFamily: fonts.semibold,
     fontSize: fontSizes.sm,
     color: colors.text,
+  },
+  filterHint: {
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.sm,
+    lineHeight: 18,
+    color: colors.textMuted,
   },
   filterChoices: {
     flexDirection: 'row',

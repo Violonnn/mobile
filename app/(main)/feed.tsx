@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   RefreshControl,
   FlatList,
   Text,
@@ -61,14 +60,14 @@ function getOfficialSectionCopy(
   if (scope === 'all') {
     return {
       title: `Across ${municipality}`,
-      subtitle: `Official updates from the Mayor, MDRRMO, and every barangay in ${municipality}`,
+      subtitle: `Official updates from the Mayor, MITCOM, and every barangay in ${municipality}`,
     };
   }
 
   const localOffice = barangay === 'your area' ? 'your barangay' : `Brgy. ${barangay}`;
   return {
     title: 'Priority updates',
-    subtitle: `Mayor, MDRRMO, then ${localOffice}. Newest updates appear first within each office.`,
+    subtitle: `Mayor, MITCOM, then ${localOffice}. Newest updates appear first within each office.`,
   };
 }
 
@@ -117,7 +116,7 @@ export default function FeedScreen() {
   const [searchVisible, setSearchVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterVisible, setFilterVisible] = useState(false);
-  const [communityScope, setCommunityScope] = useState<CommunityReportScope>('barangay');
+  const [communityScope, setCommunityScope] = useState<CommunityReportScope>('municipality');
   const [communityOrder, setCommunityOrder] = useState<CommunityReportSort>('activity');
   const [statusFilter, setStatusFilter] = useState<PublicReportStatusFilter>('all');
   const [draftCommunityOrder, setDraftCommunityOrder] = useState<CommunityReportSort>('activity');
@@ -235,28 +234,9 @@ export default function FeedScreen() {
     setFilterVisible(false);
   };
 
-  const confirmOfficialScopeChange = () => {
-    const switchingToAllUpdates = officialScope === 'priority';
-    const destination = switchingToAllUpdates
-      ? `all barangays in ${municipality}`
-      : 'your priority updates';
-
-    Alert.alert(
-      `Switch to ${destination}?`,
-      switchingToAllUpdates
-        ? `Your feed will show official updates from every barangay in ${municipality}.`
-        : 'Your feed will prioritize Mayor, MDRRMO, then updates from your barangay.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Switch feed',
-          onPress: () => {
-            setOfficialScope(switchingToAllUpdates ? 'all' : 'priority');
-            setVisibleOfficialLimit(OFFICIAL_PAGE_SIZE);
-          },
-        },
-      ],
-    );
+  const toggleOfficialScope = () => {
+    setOfficialScope((scope) => scope === 'priority' ? 'all' : 'priority');
+    setVisibleOfficialLimit(OFFICIAL_PAGE_SIZE);
   };
 
   const initialLoading = profileInitialLoading || (announcementsLoading && announcements.length === 0);
@@ -415,7 +395,7 @@ export default function FeedScreen() {
                       </Text>
                       <TouchableOpacity
                         style={styles.feedScopeSwitch}
-                        onPress={confirmOfficialScopeChange}
+                        onPress={toggleOfficialScope}
                         accessibilityRole="button"
                         accessibilityLabel={`Switch official updates to ${
                           officialScope === 'priority'
@@ -436,7 +416,8 @@ export default function FeedScreen() {
                 <OfficialAnnouncementPostCard
                   announcement={announcement}
                   variant="residentFeedPost"
-                  officeLabel={formatAnnouncementOfficeLabel(announcement, municipality)}
+                  officeLabel={formatAnnouncementOfficeLabel(announcement, municipality, 'MITCOM')}
+                  useScopedOfficeLabels
                   detailCacheScope={profile?.id}
                   cardStyle={
                     index === displayedOfficialAnnouncements.length - 1

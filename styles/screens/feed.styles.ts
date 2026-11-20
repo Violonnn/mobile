@@ -1,6 +1,7 @@
 import { StyleSheet } from 'react-native';
 
-import { colors, fonts, fontSizes, radius, spacing } from '../theme';
+import { colors, fonts, fontSizes, radius, screenEdgeInset, spacing } from '../theme';
+import { residentTypography } from '../residentTypography';
 
 export const feedStyles = StyleSheet.create({
   screen: {
@@ -19,7 +20,7 @@ export const feedStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
+    paddingHorizontal: screenEdgeInset,
     paddingBottom: spacing.xs,
   },
   title: {
@@ -30,10 +31,7 @@ export const feedStyles = StyleSheet.create({
     color: colors.text,
   },
   communityEyebrow: {
-    fontFamily: fonts.regular,
-    fontSize: fontSizes.md,
-    lineHeight: 18,
-    color: colors.textMuted,
+    ...residentTypography.mutedBody,
   },
   communityLocationRow: {
     marginTop: 1,
@@ -80,7 +78,7 @@ export const feedStyles = StyleSheet.create({
     maxWidth: 760,
     alignSelf: 'center',
     flexDirection: 'row',
-    paddingHorizontal: 16,
+    paddingHorizontal: screenEdgeInset,
   },
   tabButton: {
     flex: 1,
@@ -118,14 +116,14 @@ export const feedStyles = StyleSheet.create({
     width: '100%',
     maxWidth: 760,
     alignSelf: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: screenEdgeInset,
     paddingTop: spacing.md,
   },
   communityListContent: {
     width: '100%',
     maxWidth: 760,
     alignSelf: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: screenEdgeInset,
     paddingTop: spacing.md,
   },
   officialContentInner: {
@@ -158,10 +156,7 @@ export const feedStyles = StyleSheet.create({
   },
   reportSectionSubtitle: {
     marginTop: 3,
-    fontFamily: fonts.regular,
-    fontSize: fontSizes.sm,
-    lineHeight: 18,
-    color: colors.textMuted,
+    ...residentTypography.mutedBody,
   },
   seeMoreButton: {
     width: 38,

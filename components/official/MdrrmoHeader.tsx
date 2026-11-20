@@ -78,10 +78,13 @@ export default function MdrrmoHeader({
   );
 
   const name = fullNameFromProfile(profile);
+  const officialRoleLabel = officialKind === 'MDRRMO'
+    ? 'MITCOM'
+    : officialKind || 'MITCOM';
   const roleLabel =
     officialKind === 'BDRRMO' && scope?.barangay_name
       ? `BDRRMO — ${scope.barangay_name}`
-      : officialKind || 'MDRRMO';
+      : officialRoleLabel;
   const isMdrrmoCommand = title === 'Command' && officialKind === 'MDRRMO';
   const isMdrrmoCommunity = title === 'Community' && officialKind === 'MDRRMO';
   const isBdrrmoCommand = title === 'Command' && officialKind === 'BDRRMO';
@@ -201,7 +204,7 @@ export default function MdrrmoHeader({
               isOverlay && styles.commandControlTextOverlay,
             ]}
           >
-            {officialKind || 'MDRRMO'}
+            {officialRoleLabel}
           </Text>
         )}
       </TouchableOpacity>
@@ -233,7 +236,7 @@ export default function MdrrmoHeader({
               >
                 {officialKind === 'BDRRMO'
                   ? `BDRRMO · ${scope?.barangay_name || 'Assigned barangay'}`
-                  : 'MDRRMO Minglanilla'}
+                  : 'MITCOM Minglanilla'}
               </Text>
             </View>
           </View>

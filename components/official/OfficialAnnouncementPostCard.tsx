@@ -26,6 +26,7 @@ import {
 import { formatPublishedAt } from '../../lib/formatTime';
 import type { ReportMediaAttachment } from '../../lib/reports';
 import { colors, fonts, fontSizes, radius, spacing } from '../../styles/theme';
+import { residentTypography } from '../../styles/residentTypography';
 import CommentsSection from '../report/CommentsSection';
 import {
     CollageCellContent,
@@ -61,8 +62,10 @@ function toReportMedia(item: AnnouncementMediaAttachment): ReportMediaAttachment
 
 function AnnouncementMetaHeader({
   announcement,
+  officeLabel,
 }: {
   announcement: AnnouncementRecord;
+  officeLabel?: string;
 }) {
   const displayName = formatAnnouncementAuthorName(announcement.author);
 
@@ -80,32 +83,46 @@ function AnnouncementMetaHeader({
           size={40}
         />
         <View style={reportDetailStyles.reporterTextWrap}>
-          <View style={reportDetailStyles.nameDateRow}>
+          <View style={announcementDetailStyles.authorLine}>
             <Text style={reportDetailStyles.reporterName} numberOfLines={1}>
               {displayName}
-              <Text style={reportDetailStyles.publishedDate}>
-                {' '}· {announcement.author.roleLabel}
-              </Text>
             </Text>
-            {announcement.createdAt ? (
-              <Text style={reportDetailStyles.publishedDate}>
-                {formatPublishedAt(announcement.createdAt)}
-              </Text>
+            {officeLabel ? (
+              <Ionicons name="checkmark-circle" size={15} color={colors.primary} />
             ) : null}
+            <Text style={announcementDetailStyles.officeLabel} numberOfLines={1}>
+              {officeLabel ? officeLabel.split(' ')[0] : announcement.author.roleLabel}
+            </Text>
           </View>
+          {announcement.createdAt ? (
+            <Text style={announcementDetailStyles.date}>
+              {formatPublishedAt(announcement.createdAt)}
+            </Text>
+          ) : null}
         </View>
       </View>
     </View>
   );
 }
 
+function isGenericOfficialAnnouncementTitle(title: string): boolean {
+  const normalizedTitle = title.trim().toLocaleLowerCase();
+  return normalizedTitle === 'mdrrmo announcement' || normalizedTitle === 'bdrrmo announcement';
+}
+
 function AnnouncementDetailContent({
   announcement,
+  officeLabel,
+  hideGenericTitle = false,
+  onShare,
   showingAllMedia = false,
   onRequestExpand,
   onRequestComments,
 }: {
   announcement: AnnouncementRecord;
+  officeLabel?: string;
+  hideGenericTitle?: boolean;
+  onShare?: () => void;
   showingAllMedia?: boolean;
   onRequestExpand?: () => void;
   onRequestComments?: () => void;
@@ -116,8 +133,17 @@ function AnnouncementDetailContent({
   const media = announcement.media.map(toReportMedia);
 
   return (
-    <View style={reportDetailStyles.detailBody}>
-      <AnnouncementMetaHeader announcement={announcement} />
+    <View style={[reportDetailStyles.detailBody, announcementDetailStyles.contentBody]}>
+      <AnnouncementMetaHeader announcement={announcement} officeLabel={officeLabel} />
+
+      <View style={[reportDetailStyles.detailCard, announcementDetailStyles.descriptionCard]}>
+        {announcement.title.trim() && !(hideGenericTitle && isGenericOfficialAnnouncementTitle(announcement.title)) ? (
+          <Text style={reportDetailStyles.detailTitle}>{announcement.title.trim()}</Text>
+        ) : null}
+        <Text style={reportDetailStyles.detailDescription}>
+          {announcement.body || 'No description provided.'}
+        </Text>
+      </View>
 
       {media.length > 0 ? (
         showingAllMedia ? (
@@ -138,21 +164,16 @@ function AnnouncementDetailContent({
         )
       ) : null}
 
-      <EngagementActionsRow
-        upvoteCount={upvoteCount}
-        commentCount={commentCount}
-        hasUpvoted={hasUpvoted}
-        onToggleUpvote={() => toggleUpvote(announcement)}
-        onCommentPress={onRequestComments}
-      />
-
-      <View style={reportDetailStyles.detailCard}>
-        {announcement.title.trim() ? (
-          <Text style={reportDetailStyles.detailTitle}>{announcement.title.trim()}</Text>
-        ) : null}
-        <Text style={reportDetailStyles.detailDescription}>
-          {announcement.body || 'No description provided.'}
-        </Text>
+      <View style={announcementDetailStyles.actionsRight}>
+        <EngagementActionsRow
+          upvoteCount={upvoteCount}
+          commentCount={commentCount}
+          hasUpvoted={hasUpvoted}
+          tightVerticalSpacing
+          onToggleUpvote={() => toggleUpvote(announcement)}
+          onCommentPress={onRequestComments}
+          onShare={onShare}
+        />
       </View>
 
       <ReportMediaPreviewModal preview={preview} onClose={() => setPreview(null)} />
@@ -296,26 +317,30 @@ function ResidentFeedAnnouncementContent({
 function ResidentFeedOfficialPostContent({
   announcement,
   officeLabel,
-  onRequestExpand,
   onRequestComments,
   onShareAnnouncement,
 }: {
   announcement: AnnouncementRecord;
   officeLabel: string;
-  onRequestExpand: () => void;
   onRequestComments: () => void;
   onShareAnnouncement: () => void;
 }) {
+  const [descriptionPreviewLength, setDescriptionPreviewLength] = useState(120);
+  const [descriptionExpanded, setDescriptionExpanded] = useState(false);
   const { getState, toggleUpvote } = useAnnouncementEngagement();
   const { upvoteCount, commentCount, hasUpvoted } = getState(announcement);
   const firstMedia = announcement.media[0]
     ? toReportMedia(announcement.media[0])
     : null;
   const displayName = formatAnnouncementAuthorName(announcement.author);
-  const updateLabel =
-    announcement.scope === 'municipal' ? 'MUNICIPAL ADVISORY' : 'BARANGAY UPDATE';
-  const title = announcement.title.trim() || announcement.body.trim() || 'Official update';
+  const announcementTitle = announcement.title.trim();
+  const title = isGenericOfficialAnnouncementTitle(announcementTitle)
+    ? ''
+    : announcementTitle;
   const body = announcement.body.trim();
+  const displayOfficeLabel = announcement.author.roleLabel === 'MDRRMO'
+    ? officeLabel.split(' ')[0]
+    : officeLabel;
 
   return (
     <View style={residentFeedOfficialStyles.content}>
@@ -332,41 +357,66 @@ function ResidentFeedOfficialPostContent({
         />
 
         <View style={residentFeedOfficialStyles.authorCopy}>
-          <View style={residentFeedOfficialStyles.nameDateRow}>
+          <View style={announcementDetailStyles.authorLine}>
             <View style={residentFeedOfficialStyles.posterNameRow}>
               <Text style={residentFeedOfficialStyles.posterName} numberOfLines={1}>
                 {displayName}
               </Text>
               <Ionicons name="checkmark-circle" size={15} color={colors.primary} />
             </View>
-            <Text style={residentFeedOfficialStyles.date} numberOfLines={1}>
-              {formatPublishedAt(announcement.createdAt)}
+            <Text style={residentFeedOfficialStyles.officeLabel} numberOfLines={1}>
+              {displayOfficeLabel}
             </Text>
           </View>
-          <Text style={residentFeedOfficialStyles.officeLabel} numberOfLines={1}>
-            {officeLabel}
+          <Text style={residentFeedOfficialStyles.date} numberOfLines={1}>
+            {formatPublishedAt(announcement.createdAt)}
           </Text>
         </View>
 
-        <TouchableOpacity
-          style={residentFeedOfficialStyles.moreButton}
-          onPress={(event) => {
-            event.stopPropagation?.();
-            onRequestExpand();
-          }}
-          accessibilityRole="button"
-          accessibilityLabel="Open announcement details"
-        >
-          <Ionicons name="ellipsis-horizontal" size={20} color={colors.textMuted} />
-        </TouchableOpacity>
       </View>
 
       <View style={residentFeedOfficialStyles.copyBlock}>
-        <Text style={residentFeedOfficialStyles.updateLabel}>{updateLabel}</Text>
-        <Text style={residentFeedOfficialStyles.title}>{title}</Text>
+        {title ? <Text style={residentFeedOfficialStyles.title}>{title}</Text> : null}
         {body && body !== title ? (
-          <Text style={residentFeedOfficialStyles.body} numberOfLines={3}>
-            {body}
+          <Text
+            style={residentFeedOfficialStyles.body}
+            numberOfLines={descriptionExpanded ? undefined : 3}
+            ellipsizeMode="tail"
+            onLayout={({ nativeEvent }) => {
+              const averageCharacterWidth = fontSizes.md * 0.62;
+              const estimatedCharactersPerLine = Math.floor(nativeEvent.layout.width / averageCharacterWidth);
+              const nextPreviewLength = Math.max(70, estimatedCharactersPerLine * 3 - 12);
+              setDescriptionPreviewLength((current) => current === nextPreviewLength ? current : nextPreviewLength);
+            }}
+          >
+            {descriptionExpanded ? body : body.length > descriptionPreviewLength
+              ? `${body.slice(0, descriptionPreviewLength).trimEnd()}… `
+              : body}
+            {descriptionExpanded ? (
+              <Text
+                style={residentFeedOfficialStyles.bodyMore}
+                onPress={(event) => {
+                  event.stopPropagation?.();
+                  setDescriptionExpanded(false);
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Show less announcement text"
+              >
+                {' '}less
+              </Text>
+            ) : body.length > descriptionPreviewLength ? (
+              <Text
+                style={residentFeedOfficialStyles.bodyMore}
+                onPress={(event) => {
+                  event.stopPropagation?.();
+                  setDescriptionExpanded(true);
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Show full announcement text"
+              >
+                more
+              </Text>
+            ) : null}
           </Text>
         ) : null}
       </View>
@@ -385,17 +435,6 @@ function ResidentFeedOfficialPostContent({
       ) : null}
 
       <View style={residentFeedOfficialStyles.actionRow}>
-        <TouchableOpacity
-          style={residentFeedOfficialStyles.readAction}
-          onPress={(event) => {
-            event.stopPropagation?.();
-            onRequestExpand();
-          }}
-        >
-          <Text style={residentFeedOfficialStyles.readActionText}>Read advisory</Text>
-          <Ionicons name="chevron-forward" size={18} color={colors.text} />
-        </TouchableOpacity>
-
         <View style={residentFeedOfficialStyles.engagementActions}>
           <TouchableOpacity
             style={residentFeedOfficialStyles.iconAction}
@@ -572,6 +611,7 @@ export default function OfficialAnnouncementPostCard({
   variant = 'default',
   isUnread = false,
   officeLabel = '',
+  useScopedOfficeLabels = false,
   onOpened,
   detailCacheScope,
 }: {
@@ -584,6 +624,8 @@ export default function OfficialAnnouncementPostCard({
   variant?: 'default' | 'residentCompact' | 'residentFeedFeatured' | 'residentFeedCompact' | 'residentFeedPost' | 'officialCommunity';
   isUnread?: boolean;
   officeLabel?: string;
+  /** Maps municipal role metadata only on explicitly selected role surfaces. */
+  useScopedOfficeLabels?: boolean;
   onOpened?: (announcementId: string) => void;
   /** Scopes short-lived full-media caching to one signed-in resident. */
   detailCacheScope?: string | null;
@@ -694,7 +736,6 @@ export default function OfficialAnnouncementPostCard({
           <ResidentFeedOfficialPostContent
             announcement={announcement}
             officeLabel={officeLabel || announcement.author.roleLabel}
-            onRequestExpand={() => openExpanded(false)}
             onRequestComments={() => openExpanded(true)}
             onShareAnnouncement={() => shareAnnouncement(announcement)}
           />
@@ -708,6 +749,9 @@ export default function OfficialAnnouncementPostCard({
         ) : (
           <AnnouncementDetailContent
             announcement={announcement}
+            officeLabel={useScopedOfficeLabels ? officeLabel || announcement.author.roleLabel : undefined}
+            hideGenericTitle={useScopedOfficeLabels}
+            onShare={() => shareAnnouncement(announcement)}
             onRequestExpand={() => openExpanded(false)}
             onRequestComments={() => openExpanded(true)}
           />
@@ -729,7 +773,10 @@ export default function OfficialAnnouncementPostCard({
             <ScrollView
               ref={modalScrollRef}
               style={reportDetailStyles.postModalScroll}
-              contentContainerStyle={reportDetailStyles.postModalScrollContent}
+              contentContainerStyle={[
+                reportDetailStyles.postModalScrollContent,
+                announcementDetailStyles.sheetEdges,
+              ]}
               showsVerticalScrollIndicator={false}
               bounces
               alwaysBounceVertical
@@ -758,6 +805,9 @@ export default function OfficialAnnouncementPostCard({
                 <>
                   <AnnouncementDetailContent
                     announcement={detailAnnouncement}
+                    officeLabel={useScopedOfficeLabels ? officeLabel || detailAnnouncement.author.roleLabel : undefined}
+                    hideGenericTitle={useScopedOfficeLabels}
+                    onShare={() => shareAnnouncement(detailAnnouncement)}
                     showingAllMedia
                     onRequestComments={jumpToComments}
                   />
@@ -787,6 +837,37 @@ export default function OfficialAnnouncementPostCard({
     </>
   );
 }
+
+const announcementDetailStyles = StyleSheet.create({
+  contentBody: {
+    gap: spacing.sm,
+  },
+  sheetEdges: {
+    paddingHorizontal: 12,
+  },
+  authorLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  officeLabel: {
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.md,
+    color: colors.textMuted,
+  },
+  date: {
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.md,
+    color: colors.textMuted,
+  },
+  actionsRight: {
+    alignSelf: 'flex-start',
+    marginVertical: -spacing.sm,
+  },
+  descriptionCard: {
+    marginTop: -spacing.sm,
+  },
+});
 
 const residentStyles = StyleSheet.create({
   content: {
@@ -905,7 +986,7 @@ const residentFeedOfficialStyles = StyleSheet.create({
     flexShrink: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 2,
   },
   posterName: {
     flexShrink: 1,
@@ -916,28 +997,16 @@ const residentFeedOfficialStyles = StyleSheet.create({
   date: {
     flexShrink: 0,
     fontFamily: fonts.regular,
-    fontSize: fontSizes.xs,
+    fontSize: fontSizes.md,
     color: colors.textMuted,
   },
   officeLabel: {
     fontFamily: fonts.regular,
-    fontSize: fontSizes.xs,
+    fontSize: fontSizes.md,
     color: colors.textMuted,
-  },
-  moreButton: {
-    width: 32,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   copyBlock: {
     gap: 3,
-  },
-  updateLabel: {
-    fontFamily: fonts.medium,
-    fontSize: fontSizes.xs,
-    letterSpacing: 0.65,
-    color: colors.textMuted,
   },
   title: {
     fontFamily: fonts.bold,
@@ -946,10 +1015,14 @@ const residentFeedOfficialStyles = StyleSheet.create({
     color: colors.text,
   },
   body: {
-    fontFamily: fonts.regular,
+    ...residentTypography.body,
+  },
+  bodyMore: {
+    width: 36,
+    flexShrink: 0,
+    fontFamily: fonts.semibold,
     fontSize: fontSizes.md,
-    lineHeight: 20,
-    color: colors.text,
+    color: colors.textMuted,
   },
   mediaFrame: {
     width: '100%',
@@ -974,21 +1047,11 @@ const residentFeedOfficialStyles = StyleSheet.create({
     color: colors.white,
   },
   actionRow: {
-    minHeight: 42,
+    minHeight: 40,
+    marginBottom: -spacing.sm,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-  },
-  readAction: {
-    minHeight: 40,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  readActionText: {
-    fontFamily: fonts.semibold,
-    fontSize: 13,
-    color: colors.text,
   },
   engagementActions: {
     flexDirection: 'row',

@@ -2,24 +2,28 @@ import React from 'react';
 import { Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-import { CollageCellContent } from '../report/ReportDetailCard';
-import type { AnnouncementRecord } from '../../lib/announcements';
+import {
+  EngagementActionsRow,
+  CollageCellContent,
+} from '../report/ReportDetailCard';
+import {
+  formatAnnouncementAuthorName,
+  formatAnnouncementOfficeLabel,
+  type AnnouncementRecord,
+} from '../../lib/announcements';
 import { formatPublishedAt } from '../../lib/formatTime';
 import type { ReportMediaAttachment } from '../../lib/reports';
 import { useAccessibilityLayout } from '../../hooks/useAccessibilityLayout';
-import { homeColors, homeStyles as styles } from '../../styles/screens/home.styles';
+import { useShareSheetGuard } from '../../hooks/useShareSheetGuard';
+import { homeStyles as styles } from '../../styles/screens/home.styles';
 import { colors } from '../../styles/theme';
+import { ReporterAvatar } from '../report/ReporterAvatar';
+import { useAnnouncementEngagement } from '../official/AnnouncementEngagementProvider';
 
 type HomeUpdateCardProps = {
   announcement: AnnouncementRecord;
-  label: string;
   onPress: () => void;
 };
-
-function announcementAgeLabel(createdAt: string): string {
-  const formatted = formatPublishedAt(createdAt);
-  return /^\d+(s|m|hr)$/.test(formatted) ? `${formatted} ago` : formatted;
-}
 
 function toReportMedia(item: AnnouncementRecord['media'][number]): ReportMediaAttachment {
   return {
@@ -38,92 +42,133 @@ function toReportMedia(item: AnnouncementRecord['media'][number]): ReportMediaAt
   };
 }
 
-function announcementSourceLabel(announcement: AnnouncementRecord, fallbackLabel: string): string {
-  if (announcement.scope === 'barangay' && announcement.barangayName?.trim()) {
-    return `Brgy. ${announcement.barangayName.trim()}`;
-  }
-
-  return announcement.author.roleLabel.trim() || fallbackLabel;
-}
-
 export default function HomeUpdateCard({
   announcement,
-  label,
   onPress,
 }: HomeUpdateCardProps) {
   const { isLargeText } = useAccessibilityLayout();
-  const title = announcement.title.trim() || 'Official update';
+  const { getState, toggleUpvote } = useAnnouncementEngagement();
+  const { shareSafely } = useShareSheetGuard();
+  const rawTitle = announcement.title.trim();
+  const actualBarangayName = announcement.barangayName?.trim();
+  const barangayDisplayName = actualBarangayName
+    ? `Barangay ${actualBarangayName.replace(/^barangay\s+/i, '')}`
+    : null;
+  const isGenericBarangayAnnouncement =
+    announcement.scope === 'barangay' &&
+    /^(?:BDRRMO|BDRMMO|BARANGAY)\s+ANNOUNCEMENT$/i.test(rawTitle);
+  const title = isGenericBarangayAnnouncement && barangayDisplayName
+    ? barangayDisplayName
+    : rawTitle || 'Official update';
   const body = announcement.body.trim() || 'No announcement details provided.';
-  const sourceLabel = announcementSourceLabel(announcement, label);
   const firstMedia = announcement.media[0] ? toReportMedia(announcement.media[0]) : null;
+  const displayName = formatAnnouncementAuthorName(announcement.author);
+  const officeLabel = formatAnnouncementOfficeLabel(announcement, undefined, 'MITCOM');
+  const { upvoteCount, commentCount, hasUpvoted } = getState(announcement);
+  const showTitle =
+    title !== 'Official update' &&
+    !/^(?:MDRRMO|MDRMMO|BDRRMO|BDRMMO|BARANGAY)\s+ANNOUNCEMENT$/i.test(rawTitle);
 
   return (
     <View style={styles.officialUpdateCard}>
       <TouchableOpacity
+        style={styles.officialUpdatePostMain}
         activeOpacity={0.88}
         onPress={onPress}
         accessibilityRole="button"
         accessibilityLabel={`Open ${title}`}
       >
-        <View style={styles.officialUpdateMediaFrame}>
-          {firstMedia ? (
+        <View style={styles.officialUpdatePostContent}>
+          <View style={styles.officialUpdatePostAuthorRow}>
+            <ReporterAvatar
+              reporter={{
+                id: announcement.author.id,
+                firstName: announcement.author.firstName,
+                lastName: announcement.author.lastName,
+                middleName: announcement.author.middleName,
+                avatarPath: announcement.author.avatarPath,
+              }}
+              size={40}
+            />
+            <View style={styles.officialUpdatePostAuthorCopy}>
+              <View style={styles.officialUpdatePostAuthorLine}>
+                <Text
+                  style={[
+                    styles.officialUpdatePostAuthorName,
+                    isLargeText && styles.officialUpdatePostAuthorNameLargeText,
+                  ]}
+                  numberOfLines={1}
+                >
+                  {displayName}
+                </Text>
+                <Ionicons name="checkmark-circle" size={16} color={colors.primary} />
+                <Text
+                  style={[
+                    styles.officialUpdatePostOffice,
+                    isLargeText && styles.officialUpdatePostMetaLargeText,
+                  ]}
+                  numberOfLines={1}
+                >
+                  {officeLabel}
+                </Text>
+              </View>
+              <Text
+                style={[
+                  styles.officialUpdatePostDate,
+                  isLargeText && styles.officialUpdatePostMetaLargeText,
+                ]}
+                numberOfLines={1}
+              >
+                {formatPublishedAt(announcement.createdAt)}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.officialUpdatePostCopy}>
+            {showTitle ? (
+              <Text
+                style={[
+                  styles.officialUpdatePostTitle,
+                  isLargeText && styles.officialUpdatePostTitleLargeText,
+                ]}
+              >
+                {title}
+              </Text>
+            ) : null}
+            <Text
+              style={[
+                styles.officialUpdatePostBody,
+                isLargeText && styles.officialUpdatePostBodyLargeText,
+              ]}
+              numberOfLines={2}
+              ellipsizeMode="tail"
+            >
+              {body}
+            </Text>
+          </View>
+        </View>
+
+        {firstMedia ? (
+          <View style={styles.officialUpdateMediaFrame}>
             <View style={styles.officialUpdateMedia}>
               <CollageCellContent item={firstMedia} />
             </View>
-          ) : (
-            <View style={styles.officialUpdateMediaPlaceholder}>
-              <Ionicons name="megaphone-outline" size={34} color={homeColors.ink} />
-              <Text style={styles.officialUpdateMediaPlaceholderText}>No media attached</Text>
-            </View>
-          )}
-
-          <View style={styles.officialUpdateMediaLabel}>
-            <Text style={styles.officialUpdateMediaLabelText} numberOfLines={1}>
-              {sourceLabel} · {announcementAgeLabel(announcement.createdAt)}
-            </Text>
           </View>
-
-          {announcement.mediaCount > 0 ? (
-            <View style={styles.officialUpdateMediaCount}>
-              <Ionicons name="images-outline" size={15} color={colors.white} />
-              <Text style={styles.officialUpdateMediaCountText}>
-                {announcement.mediaCount} media
-              </Text>
-            </View>
-          ) : null}
-        </View>
+        ) : null}
       </TouchableOpacity>
 
-      <View
-        style={[
-          styles.officialUpdateCardCopy,
-          isLargeText && styles.officialUpdateCardCopyLargeText,
-        ]}
-      >
-        <Text
-          style={styles.officialUpdateTitle}
-          numberOfLines={isLargeText ? 3 : 2}
-          ellipsizeMode="tail"
-        >
-          {title}
-        </Text>
-        <Text
-          style={styles.officialUpdateBody}
-          numberOfLines={isLargeText ? 5 : 4}
-          ellipsizeMode="tail"
-        >
-          {body}
-        </Text>
-        <TouchableOpacity
-          style={styles.officialUpdateAction}
-          hitSlop={8}
-          onPress={onPress}
-          accessibilityRole="button"
-          accessibilityLabel={`View ${title} in official updates`}
-        >
-          <Text style={styles.officialUpdateActionText}>View announcement</Text>
-          <Ionicons name="arrow-forward" size={20} color={homeColors.ink} />
-        </TouchableOpacity>
+      <View style={styles.officialUpdatePostActions}>
+        <EngagementActionsRow
+          upvoteCount={upvoteCount}
+          commentCount={commentCount}
+          hasUpvoted={hasUpvoted}
+          tightVerticalSpacing
+          onToggleUpvote={() => toggleUpvote(announcement)}
+          onCommentPress={onPress}
+          onShare={() => {
+            void shareSafely({ message: `${title}\n${body}`, title });
+          }}
+        />
       </View>
     </View>
   );

@@ -13,23 +13,31 @@ import {
   View,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Inter_500Medium } from '@expo-google-fonts/inter/500Medium';
+import { Asset } from 'expo-asset';
+import { File } from 'expo-file-system';
 import {
   CompatibleWebView,
   type CompatibleWebViewHandle,
   type WebViewMessageEvent,
 } from './CompatibleWebView';
 import { colors, fonts, fontSizes, radius, spacing } from '../../styles/theme';
+import { residentTypography } from '../../styles/residentTypography';
 import {
   getMapReportPresentation,
   type MapReportMarker,
 } from '../../lib/reports';
-import { PUBLIC_INCIDENT_STATUS_OPTIONS, publicIncidentTone, type PublicIncident, type PublicIncidentStatusFilter } from '../../lib/publicIncidents';
+import {
+  REPORT_STAGE_LEGEND_ITEMS,
+  type ScopedOfficialAudience,
+} from '../../lib/reportPresentation';
+import { PUBLIC_INCIDENT_STATUS_OPTIONS, publicIncidentHasMapLocation, publicIncidentTone, type PublicIncident, type PublicIncidentStatusFilter } from '../../lib/publicIncidents';
 import { MAP_RESOURCE_TONES } from '../../lib/mapResourceTones';
 
 const CENTER = { lat: 10.2447, lng: 123.7967 };
 const ZOOM = 14;
 // Bump this when embedded marker HTML changes so Fast Refresh rebuilds the WebView document.
-const MAP_HTML_VERSION = 'public-incident-markers-v12';
+const MAP_HTML_VERSION = 'public-incident-markers-v19';
 
 export type MapResourceMarker = {
   id: string;
@@ -83,8 +91,6 @@ type Props = {
     onVisibilityChange: (visible: boolean) => void;
     status: PublicIncidentStatusFilter;
     onStatusChange: (status: PublicIncidentStatusFilter) => void;
-    unlocatedCount: number;
-    onOpenUnlocated: () => void;
   };
   publicIncidents?: PublicIncident[];
   /** groupIds lists every incident drawn at the same rounded public point. */
@@ -105,6 +111,8 @@ type Props = {
   dismissSearchSignal?: number;
   /** Adds resident-facing workflow statuses beneath the Reports layer. */
   showReportStatusFilters?: boolean;
+  /** Shows recorded-status filters and actual stage colors for BDRRMO/MITCOM maps. */
+  reportLegendAudience?: ScopedOfficialAudience;
   /** Limits report-status chips to statuses the current role can access. */
   reportStatusOptions?: readonly ReportStatusFilter[];
   /** Keeps resident layer controls clear of the device status bar. */
@@ -121,6 +129,16 @@ type Props = {
   showSearchClearButton?: boolean;
   searchBarTopInset?: number;
   userLocation?: MapUserLocation | null;
+  /** Hides the current-device pin while retaining coordinates for map focus. */
+  showUserLocationMarker?: boolean;
+  /** Disables map gestures while preserving marker taps in embedded map cards. */
+  mapGesturesEnabled?: boolean;
+  /** Lets an interactive map's parent coordinate its own scrolling with map touches. */
+  onGestureActiveChange?: (active: boolean) => void;
+  /** Enables resident-only label restore behavior when the location pin is tapped. */
+  residentUserLocationLabelBehavior?: boolean;
+  /** Increments when a parent control selects a resident report outside the WebView. */
+  userLocationLabelSelectionSignal?: number;
   onLayerVisibilityChange?: (next: MapLayerVisibility) => void;
   onReportSelection?: (reportIds: string[]) => void;
   /** Opens a marker popup with a separate report-details action when requested. */
@@ -141,8 +159,6 @@ type Props = {
   tone?: 'light' | 'dark';
   /** Keeps this framed portion crisp while a synchronized map behind it is blurred. */
   unblurredViewportFrame?: MapViewportFrame;
-  /** Lets a parent ScrollView freeze while the user is panning or zooming the map. */
-  onGestureActiveChange?: (active: boolean) => void;
   /** Controls how close the camera moves when a report is focused. */
   focusZoomLevel?: number;
   /**
@@ -183,6 +199,9 @@ function buildMapHtml(
   unblurredViewportLeft: number,
   unblurredViewportRadius: number,
   htmlVersion: string = MAP_HTML_VERSION,
+  residentUserLocationLabelBehavior = false,
+  mapGesturesEnabled = true,
+  reportGesturesToParent = false,
 ): string {
   const isDark = tone === 'dark';
   const hasUnblurredViewport = unblurredViewportTop > 0;
@@ -203,7 +222,7 @@ function buildMapHtml(
     <style>
       html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; background: ${isDark ? '#343B44' : '#F0F4FF'}; }
       #map, #map-background { position: absolute; inset: 0; height: 100%; }
-      #map { z-index: 1; ${hasUnblurredViewport ? `-webkit-clip-path: ${framedMapClip}; clip-path: ${framedMapClip};` : ''} }
+      #map { z-index: 1; touch-action: ${mapGesturesEnabled ? 'auto' : 'pan-y'}; ${hasUnblurredViewport ? `-webkit-clip-path: ${framedMapClip}; clip-path: ${framedMapClip};` : ''} }
       #map-background { z-index: 0; pointer-events: none; }
       .leaflet-tile-pane {
         ${darkMapFilter ? `filter: ${darkMapFilter};` : ''}
@@ -211,7 +230,7 @@ function buildMapHtml(
       #map-background .leaflet-tile-pane { filter: ${blurredMapFilter}; }
       .leaflet-control-attribution { display: none; }
 
-      .report-pin-wrap, .resource-pin-wrap {
+      .report-pin-wrap, .resource-pin-wrap, .user-location-wrap {
         background: transparent;
         border: none;
       }
@@ -385,19 +404,6 @@ function buildMapHtml(
         height: 44px;
       }
 
-      .public-pin-stack {
-        position: absolute;
-        z-index: 3;
-        top: 0;
-        right: 0;
-        width: 13px;
-        height: 13px;
-        border: 2px solid #FFFFFF;
-        border-radius: 4px;
-        background: #0F2044;
-        box-shadow: -3px 3px 0 -1px #FFFFFF, -4px 4px 0 0 #0F2044;
-      }
-
       .report-details-popup-button {
         border: 0;
         border-radius: 999px;
@@ -426,23 +432,39 @@ function buildMapHtml(
       }
 
       .user-location-marker {
-        width: 30px;
-        height: 30px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border-radius: 50%;
-        background: rgba(47, 103, 171, 0.13);
+        position: relative;
+        width: 36px;
+        height: 44px;
+        pointer-events: ${residentUserLocationLabelBehavior ? 'auto' : 'none'};
       }
 
-      .user-location-marker::after {
-        content: '';
-        width: 11px;
-        height: 11px;
-        border-radius: 50%;
-        background: #2F67AB;
-        border: 2.5px solid #FFFFFF;
-        box-shadow: 0 2px 7px rgba(32, 72, 125, 0.4);
+      .user-location-marker svg {
+        display: block;
+        width: 36px;
+        height: 44px;
+        filter: drop-shadow(0 2px 4px rgba(15, 32, 68, 0.22));
+      }
+
+      .user-location-label {
+        position: absolute;
+        bottom: calc(100% + ${spacing.xs}px);
+        left: 50%;
+        transform: translateX(-50%);
+        width: max-content;
+        padding: ${spacing.xs}px ${spacing.sm}px;
+        border-radius: ${radius.sm / 2}px;
+        background: ${colors.white};
+        color: ${colors.navigationActive};
+        font-family: '${fonts.medium}', sans-serif;
+        font-size: ${fontSizes.sm}px;
+        font-weight: 500;
+        line-height: 16px;
+        white-space: nowrap;
+        box-shadow: 0 2px 6px rgba(15, 32, 68, 0.12);
+      }
+
+      .user-location-marker-label-hidden .user-location-label {
+        display: none;
       }
     </style>
   </head>
@@ -468,39 +490,40 @@ function buildMapHtml(
         center: [${CENTER.lat}, ${CENTER.lng}],
         zoom: ${ZOOM},
         zoomControl: ${showZoomControls ? 'true' : 'false'},
-        attributionControl: false
+        attributionControl: false,
+        dragging: ${mapGesturesEnabled ? 'true' : 'false'},
+        touchZoom: ${mapGesturesEnabled ? 'true' : 'false'},
+        doubleClickZoom: ${mapGesturesEnabled ? 'true' : 'false'},
+        scrollWheelZoom: ${mapGesturesEnabled ? 'true' : 'false'},
+        boxZoom: ${mapGesturesEnabled ? 'true' : 'false'},
+        keyboard: ${mapGesturesEnabled ? 'true' : 'false'}
       });
-
-      function postMapGesture(active) {
-        if (!window.ReactNativeWebView) return;
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'mapGesture',
-          active: active
-        }));
-      }
 
       var pointerCount = 0;
       var lastFocusSignature = null;
       var stickyFocus = ${stickyFocus ? 'true' : 'false'};
+      ${reportGesturesToParent ? `function postMapGesture(active) {
+        if (!window.ReactNativeWebView) return;
+        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'mapGesture', active: active }));
+      }` : ''}
+
+      ${mapGesturesEnabled ? `document.addEventListener('touchstart', function(event) {
+        pointerCount = event.touches.length;
+        ${reportGesturesToParent ? 'postMapGesture(true);' : ''}
+      }, { capture: true, passive: true });
+      document.addEventListener('touchend', function(event) {
+        pointerCount = event.touches.length;
+        ${reportGesturesToParent ? 'if (pointerCount === 0) postMapGesture(false);' : ''}
+      }, { capture: true, passive: true });
+      document.addEventListener('touchcancel', function(event) {
+        pointerCount = event.touches.length;
+        ${reportGesturesToParent ? 'if (pointerCount === 0) postMapGesture(false);' : ''}
+      }, { capture: true, passive: true });` : ''}
 
       function focusSignature(target) {
         return String(target.reportId || '') + '|' + String(target.resourceId || '') + '|' + target.latitude + '|' + target.longitude;
       }
 
-      // Tell React Native as soon as a finger is on the map so a parent
-      // ScrollView cannot steal the pan on Android.
-      document.addEventListener('touchstart', function(event) {
-        pointerCount = event.touches.length;
-        postMapGesture(true);
-      }, { capture: true, passive: true });
-      document.addEventListener('touchend', function(event) {
-        pointerCount = event.touches.length;
-        if (pointerCount === 0) postMapGesture(false);
-      }, { capture: true, passive: true });
-      document.addEventListener('touchcancel', function(event) {
-        pointerCount = event.touches.length;
-        if (pointerCount === 0) postMapGesture(false);
-      }, { capture: true, passive: true });
 
       var detailedTileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 19
@@ -649,10 +672,17 @@ function buildMapHtml(
       }
 
       var userLocationIcon = L.divIcon({
-        className: 'resource-pin-wrap',
-        html: '<div class="user-location-marker"></div>',
-        iconSize: [30, 30],
-        iconAnchor: [15, 15]
+        className: 'user-location-wrap',
+        html: '<div class="user-location-marker">' +
+          '<span class="user-location-label">You are here</span>' +
+          '<svg viewBox="0 0 36 44" aria-hidden="true">' +
+            '<path d="M18 2C9.7 2 3 8.7 3 17c0 11 15 25 15 25s15-14 15-25C33 8.7 26.3 2 18 2Z" fill="${colors.navigationActive}" stroke="${colors.white}" stroke-width="2.5" stroke-linejoin="round"/>' +
+            '<circle cx="18" cy="17" r="5.5" fill="${colors.white}"/>' +
+          '</svg>' +
+        '</div>',
+        iconSize: [36, 44],
+        // The pin tip stays on the device coordinates; the label floats above it.
+        iconAnchor: [18, 42]
       });
 
       // Animations stay off: leaflet.markercluster throws internally when
@@ -660,13 +690,37 @@ function buildMapHtml(
       // silently aborts marker loading on iOS WKWebView (only 1 pin shows).
       var clusterGroup = L.markerClusterGroup({
         showCoverageOnHover: false,
-        zoomToBoundsOnClick: false,
-        spiderfyOnMaxZoom: false,
+        zoomToBoundsOnClick: true,
+        spiderfyOnMaxZoom: true,
         animate: false,
         animateAddingMarkers: false,
         maxClusterRadius: 52,
         iconCreateFunction: function(cluster) {
-          var count = cluster.getChildCount();
+          // Count each linked report and official incident once in mixed clusters.
+          var seenItems = {};
+          var childMarkers = cluster.getAllChildMarkers();
+          childMarkers.forEach(function(marker) {
+            var reportMeta = marker.options.reportMeta;
+            if (reportMeta && reportMeta.id) {
+              seenItems['report:' + reportMeta.id] = true;
+            }
+            var publicItems = marker.options.publicIncidentItems || [];
+            publicItems.forEach(function(item) {
+              var itemKey = item.reportId
+                ? 'report:' + item.reportId
+                : 'incident:' + item.incidentCaseId;
+              seenItems[itemKey] = true;
+            });
+          });
+          var count = Object.keys(seenItems).length || cluster.getChildCount();
+          if (count === 1 && childMarkers.length) {
+            // A linked report may have both resident and official pins; show one real pin, not a "1" badge.
+            var officialMarker = childMarkers.filter(function(marker) {
+              return (marker.options.publicIncidentItems || []).length > 0;
+            })[0];
+            var singleItemMarker = officialMarker || childMarkers[0];
+            if (singleItemMarker.options.icon) return singleItemMarker.options.icon;
+          }
           var depthClass = count >= 20
             ? 'cluster-critical'
             : count >= 10
@@ -759,30 +813,14 @@ function buildMapHtml(
         }));
       }
 
-      function sortByCreatedAtDesc(markers) {
-        return markers.slice().sort(function(a, b) {
-          var aTime = a.createdAt ? Date.parse(a.createdAt) : 0;
-          var bTime = b.createdAt ? Date.parse(b.createdAt) : 0;
-          return bTime - aTime;
-        });
-      }
-
-      clusterGroup.on('clusterclick', function(event) {
-        var childMarkers = event.layer.getAllChildMarkers();
-        var sorted = sortByCreatedAtDesc(childMarkers.map(function(marker) {
-          return marker.options.reportMeta || { id: marker.options.reportId, createdAt: '' };
-        }));
-        postSelection(sorted.map(function(item) { return item.id; }));
-      });
-
       // Fit the view to the pins only on the first load — refitting on every
       // refresh would yank the viewport away from where the user panned, and
       // the animated refit is what raced with clearLayers on iOS.
       var initialViewFitted = false;
 
-      var publicIncidentGroup = L.layerGroup().addTo(map);
+      var publicIncidentMarkers = [];
 
-      function publicIncidentIcon(lead, count, highlighted) {
+      function publicIncidentIcon(lead, highlighted) {
         var size = highlighted ? 50 : 44;
         var triangleClass = highlighted
           ? 'public-pin-triangle public-pin-triangle-highlighted'
@@ -793,39 +831,58 @@ function buildMapHtml(
             '<path d="M26 3 49 44H3L26 3Z" fill="' + lead.color + '" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round"/>' +
             incidentGlyph(lead.incidentType) +
           '</svg>' +
-          (count > 1 ? '<span class="public-pin-stack" aria-hidden="true"></span>' : '') +
         '</div>';
         return L.divIcon({ className: 'public-pin-wrap', html: html, iconSize: [size, size], iconAnchor: [size / 2, size / 2] });
       }
 
       window.setPublicIncidents = function(incidents) {
-        publicIncidentGroup.clearLayers();
-        // Several incidents can share one rounded public point, so use a stack mark.
+        publicIncidentMarkers.forEach(function(marker) {
+          clusterGroup.removeLayer(marker);
+        });
+        publicIncidentMarkers = [];
+        // Reports sharing a public point use one pin, styled for the selected report.
         var groups = {};
         var order = [];
         (incidents || []).forEach(function(incident) {
           var point = incident.exactLocation || incident.approximateArea;
           if (!point) return;
-          var key = point.latitude.toFixed(5) + ',' + point.longitude.toFixed(5);
+          // Group only reports that share the identical approved coordinate.
+          var key = String(point.latitude) + ',' + String(point.longitude);
           if (!groups[key]) {
             groups[key] = { point: point, items: [] };
             order.push(key);
           }
-          groups[key].items.push(incident);
+          var incidentKey = incident.reportId
+            ? 'report:' + incident.reportId
+            : 'incident:' + incident.incidentCaseId;
+          var isDuplicateIncident = groups[key].items.some(function(item) {
+            var existingKey = item.reportId
+              ? 'report:' + item.reportId
+              : 'incident:' + item.incidentCaseId;
+            return existingKey === incidentKey;
+          });
+          if (!isDuplicateIncident) groups[key].items.push(incident);
         });
         order.forEach(function(key) {
           var group = groups[key];
           var highlightedItem = group.items.filter(function(item) { return item.highlighted; })[0];
           var lead = highlightedItem || group.items[0];
-          var marker = L.marker([group.point.latitude, group.point.longitude], {
-            icon: publicIncidentIcon(lead, group.items.length, Boolean(highlightedItem)),
+          var pinPoint = highlightedItem
+            ? (highlightedItem.exactLocation || highlightedItem.approximateArea)
+            : group.point;
+          var marker = L.marker([pinPoint.latitude, pinPoint.longitude], {
+            icon: publicIncidentIcon(lead, Boolean(highlightedItem)),
             zIndexOffset: highlightedItem ? 900 : 300,
-            keyboard: false
+            keyboard: false,
+            publicIncidentItems: group.items.map(function(item) {
+              return {
+                incidentCaseId: item.incidentCaseId,
+                reportId: item.reportId || null
+              };
+            })
           });
           var tooltip = document.createElement('span');
-          tooltip.textContent = group.items.length > 1
-            ? group.items.length + ' community reports near this spot · Brgy. ' + lead.barangayName
-            : lead.publicLocationMode === 'exact_shared'
+          tooltip.textContent = lead.publicLocationMode === 'exact_shared'
               ? 'Exact submitted location shared by the reporter · Brgy. ' + lead.barangayName
             : lead.exactLocation
               ? 'Exact location for safety: ' + lead.exactLocation.reason
@@ -841,13 +898,17 @@ function buildMapHtml(
               reportIds: group.items.map(function(item) { return item.reportId || item.incidentCaseId; })
             }));
           });
-          publicIncidentGroup.addLayer(marker);
+          publicIncidentMarkers.push(marker);
+          clusterGroup.addLayer(marker);
         });
       };
 
       window.setReportMarkers = function(markers) {
         var requestedHighlight = highlightedReportId;
         clusterGroup.clearLayers();
+        publicIncidentMarkers.forEach(function(marker) {
+          clusterGroup.addLayer(marker);
+        });
         highlightedReportGroup.clearLayers();
         reportMarkersById = {};
         highlightedReportId = null;
@@ -935,11 +996,29 @@ function buildMapHtml(
       window.setUserLocation = function(location) {
         userLocationGroup.clearLayers();
         if (!location || typeof location.latitude !== 'number' || typeof location.longitude !== 'number') return;
-        L.marker([location.latitude, location.longitude], {
+        var userLocationMarker = L.marker([location.latitude, location.longitude], {
           icon: userLocationIcon,
-          interactive: false,
+          interactive: ${residentUserLocationLabelBehavior ? 'true' : 'false'},
           zIndexOffset: 900
-        }).addTo(userLocationGroup);
+        });
+        ${residentUserLocationLabelBehavior ? `userLocationMarker.on('click', function(event) {
+          L.DomEvent.stopPropagation(event);
+          if (window.ReactNativeWebView) {
+            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'userLocationTap' }));
+          }
+        });` : ''}
+        userLocationMarker.addTo(userLocationGroup);
+        document.querySelectorAll('.user-location-marker').forEach(function(marker) {
+          marker.classList.toggle('user-location-marker-label-hidden', !userLocationLabelVisible);
+        });
+      };
+
+      var userLocationLabelVisible = true;
+      window.setUserLocationLabelVisible = function(visible) {
+        userLocationLabelVisible = visible === true;
+        document.querySelectorAll('.user-location-marker').forEach(function(marker) {
+          marker.classList.toggle('user-location-marker-label-hidden', !userLocationLabelVisible);
+        });
       };
 
       window.focusReport = function(target) {
@@ -997,7 +1076,7 @@ function publicIncidentsToInjectScript(
   incidents: PublicIncident[],
   highlightedIncidentId?: string,
 ): string {
-  const payload = incidents.map((incident) => {
+  const payload = incidents.filter(publicIncidentHasMapLocation).map((incident) => {
     const tone = publicIncidentTone(incident.publicStatus);
     return {
       incidentCaseId: incident.incidentCaseId,
@@ -1070,9 +1149,22 @@ function resourcesToInjectScript(resources: MapResourceMarker[]): string {
   })(); true;`;
 }
 
-function userLocationToInjectScript(location: MapUserLocation | null): string {
+function userLocationToInjectScript(
+  location: MapUserLocation | null,
+  fontDataUrl: string | null,
+): string {
   const json = JSON.stringify(location).replace(/</g, '\\u003c');
+  const fontCss = fontDataUrl
+    ? `@font-face { font-family: '${fonts.medium}'; src: url('${fontDataUrl}') format('truetype'); font-weight: 500; font-style: normal; font-display: swap; }`
+    : '';
   return `(function() {
+    var fontCss = ${JSON.stringify(fontCss)};
+    if (fontCss && !document.getElementById('user-location-font')) {
+      var fontStyle = document.createElement('style');
+      fontStyle.id = 'user-location-font';
+      fontStyle.textContent = fontCss;
+      document.head.appendChild(fontStyle);
+    }
     var location = ${json};
     if (window.setUserLocation) {
       window.setUserLocation(location);
@@ -1131,6 +1223,14 @@ function mapDetailsToInjectScript(showMapDetails: boolean): string {
   })(); true;`;
 }
 
+function userLocationLabelToInjectScript(visible: boolean): string {
+  return `(function() {
+    if (window.setUserLocationLabelVisible) {
+      window.setUserLocationLabelVisible(${visible ? 'true' : 'false'});
+    }
+  })(); true;`;
+}
+
 export default function InteractiveMap({
   highlightedPublicIncidentId,
   publicIncidentFilters,
@@ -1148,6 +1248,7 @@ export default function InteractiveMap({
   onLayerPanelVisibilityChange,
   dismissSearchSignal = 0,
   showReportStatusFilters = false,
+  reportLegendAudience,
   reportStatusOptions = ALL_REPORT_STATUS_FILTERS,
   layerFiltersTopInset = spacing.md,
   compactLayerFilters = false,
@@ -1157,6 +1258,11 @@ export default function InteractiveMap({
   showSearchClearButton = true,
   searchBarTopInset = spacing.md,
   userLocation = null,
+  showUserLocationMarker = true,
+  mapGesturesEnabled = true,
+  onGestureActiveChange,
+  residentUserLocationLabelBehavior = false,
+  userLocationLabelSelectionSignal = 0,
   onLayerVisibilityChange,
   onReportSelection,
   showReportDetailsPopup = false,
@@ -1169,7 +1275,6 @@ export default function InteractiveMap({
   showMapDetails = true,
   tone = 'light',
   unblurredViewportFrame,
-  onGestureActiveChange,
   focusZoomLevel = 16,
   stickyFocus = false,
 }: Props) {
@@ -1184,6 +1289,7 @@ export default function InteractiveMap({
   const safeViewportBottom = Math.min(300, Math.max(0, Math.round(unblurredViewportFrame?.bottom ?? 0)));
   const safeViewportLeft = Math.min(200, Math.max(0, Math.round(unblurredViewportFrame?.left ?? 0)));
   const safeViewportRadius = Math.min(80, Math.max(0, Math.round(unblurredViewportFrame?.borderRadius ?? 0)));
+  const reportGesturesToParent = Boolean(onGestureActiveChange);
   const mapHtmlVersion = MAP_HTML_VERSION;
   const html = useMemo(
     () =>
@@ -1199,9 +1305,15 @@ export default function InteractiveMap({
         safeViewportLeft,
         safeViewportRadius,
         mapHtmlVersion,
+        residentUserLocationLabelBehavior,
+        mapGesturesEnabled,
+        reportGesturesToParent,
       ),
     [
       mapHtmlVersion,
+      mapGesturesEnabled,
+      reportGesturesToParent,
+      residentUserLocationLabelBehavior,
       initialShowMapDetails,
       safeFocusZoomLevel,
       safeViewportBottom,
@@ -1215,6 +1327,11 @@ export default function InteractiveMap({
     ],
   );
   const readyRef = useRef(false);
+  const [userLocationFontDataUrl, setUserLocationFontDataUrl] = useState<string | null>(null);
+  const [userLocationLabelVisible, setUserLocationLabelVisible] = useState(true);
+  const userLocationLabelTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const previousUserLocationLabelSelectionSignalRef = useRef(userLocationLabelSelectionSignal);
+  const hasUserLocation = showUserLocationMarker && userLocation !== null;
   const [searchQuery, setSearchQuery] = useState('');
   const [searchFocused, setSearchFocused] = useState(false);
   const [uncontrolledLayerPanelVisible, setUncontrolledLayerPanelVisible] =
@@ -1222,6 +1339,33 @@ export default function InteractiveMap({
   const [reportStatusFilter, setReportStatusFilter] =
     useState<ReportStatusFilter>('all');
   const isLayerPanelVisible = layerPanelVisible ?? uncontrolledLayerPanelVisible;
+
+  const hideUserLocationLabelForSelection = useCallback(() => {
+    if (!residentUserLocationLabelBehavior) return;
+    if (userLocationLabelTimerRef.current) clearTimeout(userLocationLabelTimerRef.current);
+    setUserLocationLabelVisible(false);
+    userLocationLabelTimerRef.current = setTimeout(() => {
+      userLocationLabelTimerRef.current = null;
+      setUserLocationLabelVisible(true);
+    }, 13_000);
+  }, [residentUserLocationLabelBehavior]);
+
+  const restoreUserLocationLabel = useCallback(() => {
+    if (!residentUserLocationLabelBehavior) return;
+    if (userLocationLabelTimerRef.current) clearTimeout(userLocationLabelTimerRef.current);
+    userLocationLabelTimerRef.current = null;
+    setUserLocationLabelVisible(true);
+  }, [residentUserLocationLabelBehavior]);
+
+  useEffect(() => {
+    if (previousUserLocationLabelSelectionSignalRef.current === userLocationLabelSelectionSignal) return;
+    previousUserLocationLabelSelectionSignalRef.current = userLocationLabelSelectionSignal;
+    hideUserLocationLabelForSelection();
+  }, [hideUserLocationLabelForSelection, userLocationLabelSelectionSignal]);
+
+  useEffect(() => () => {
+    if (userLocationLabelTimerRef.current) clearTimeout(userLocationLabelTimerRef.current);
+  }, []);
 
   const effectiveReportStatusFilter = reportStatusOptions.includes(reportStatusFilter)
     ? reportStatusFilter
@@ -1293,9 +1437,41 @@ export default function InteractiveMap({
   ]);
 
   useEffect(() => {
+    if (!hasUserLocation || userLocationFontDataUrl) return;
+    let cancelled = false;
+
+    // Native app fonts are separate from WebView fonts, so embed the bundled Inter asset.
+    async function loadLocationLabelFont() {
+      try {
+        const fontAsset = Asset.fromModule(Inter_500Medium);
+        await fontAsset.downloadAsync();
+        if (!fontAsset.localUri || cancelled) return;
+        const fontBase64 = await new File(fontAsset.localUri).base64();
+        if (!cancelled) setUserLocationFontDataUrl(`data:font/ttf;base64,${fontBase64}`);
+      } catch (error) {
+        // Keep the map and location usable with the fallback font if the asset cannot load.
+        console.warn('Could not load Inter for the current-location label.', error);
+      }
+    }
+
+    void loadLocationLabelFont();
+    return () => { cancelled = true; };
+  }, [hasUserLocation, userLocationFontDataUrl]);
+
+  useEffect(() => {
     if (!readyRef.current || !webRef.current) return;
-    webRef.current.injectJavaScript(userLocationToInjectScript(userLocation));
-  }, [userLocation]);
+    webRef.current.injectJavaScript(
+      userLocationToInjectScript(
+        showUserLocationMarker ? userLocation : null,
+        userLocationFontDataUrl,
+      ),
+    );
+  }, [showUserLocationMarker, userLocation, userLocationFontDataUrl]);
+
+  useEffect(() => {
+    if (!residentUserLocationLabelBehavior || !readyRef.current || !webRef.current) return;
+    webRef.current.injectJavaScript(userLocationLabelToInjectScript(userLocationLabelVisible));
+  }, [residentUserLocationLabelBehavior, userLocationLabelVisible]);
 
   useEffect(() => {
     if (!readyRef.current || !webRef.current) return;
@@ -1336,22 +1512,29 @@ export default function InteractiveMap({
           incidentCaseId?: string;
           resource?: MapResourceMarker;
         };
+        if (data.type === 'mapGesture' && typeof data.active === 'boolean') {
+          onGestureActiveChange?.(data.active);
+          return;
+        }
+        if (data.type === 'userLocationTap') {
+          restoreUserLocationLabel();
+          return;
+        }
         if (data.type === 'publicIncident' && data.incidentCaseId) {
+          hideUserLocationLabelForSelection();
           const groupIds = Array.isArray(data.reportIds)
             ? data.reportIds.filter((id): id is string => typeof id === 'string')
             : [data.reportId || data.incidentCaseId];
           onPublicIncidentPress?.(data.incidentCaseId, groupIds, data.reportId ?? undefined);
           return;
         }
-        if (data.type === 'mapGesture' && typeof data.active === 'boolean') {
-          onGestureActiveChange?.(data.active);
-          return;
-        }
         if (data.type === 'reportSelection' && Array.isArray(data.reportIds)) {
+          hideUserLocationLabelForSelection();
           onReportSelection?.(data.reportIds.filter(Boolean));
           return;
         }
         if (data.type === 'reportDetails' && data.reportId) {
+          hideUserLocationLabelForSelection();
           onReportDetailsRequest?.(data.reportId);
           return;
         }
@@ -1362,7 +1545,7 @@ export default function InteractiveMap({
         // Ignore malformed WebView messages.
       }
     },
-    [onGestureActiveChange, onReportSelection, onReportDetailsRequest, onResourceSelection, onPublicIncidentPress],
+    [hideUserLocationLabelForSelection, onGestureActiveChange, onReportSelection, onReportDetailsRequest, onResourceSelection, onPublicIncidentPress, restoreUserLocationLabel],
   );
 
   function toggleLayer(key: keyof MapLayerVisibility) {
@@ -1434,6 +1617,7 @@ export default function InteractiveMap({
     setSearchFocused(false);
     setSearchQuery(result.title);
     if (result.kind === 'incident') {
+      hideUserLocationLabelForSelection();
       onPublicIncidentPress?.(result.id, [result.id]);
       if (result.latitude != null && result.longitude != null) {
         webRef.current?.injectJavaScript(focusToInjectScript({ latitude: result.latitude, longitude: result.longitude }));
@@ -1441,6 +1625,7 @@ export default function InteractiveMap({
       return;
     }
     if (result.kind === 'report') {
+      hideUserLocationLabelForSelection();
       onReportSelection?.([result.id]);
       webRef.current?.injectJavaScript(
         focusToInjectScript({
@@ -1467,14 +1652,15 @@ export default function InteractiveMap({
     <View
       style={mapStyles.container}
       collapsable={false}
-      onTouchStart={onGestureActiveChange ? () => onGestureActiveChange(true) : undefined}
-      onTouchEnd={onGestureActiveChange ? () => onGestureActiveChange(false) : undefined}
-      onTouchCancel={onGestureActiveChange ? () => onGestureActiveChange(false) : undefined}
+      onTouchStart={mapGesturesEnabled && onGestureActiveChange ? () => onGestureActiveChange(true) : undefined}
+      onTouchEnd={mapGesturesEnabled && onGestureActiveChange ? () => onGestureActiveChange(false) : undefined}
+      onTouchCancel={mapGesturesEnabled && onGestureActiveChange ? () => onGestureActiveChange(false) : undefined}
     >
       <CompatibleWebView
         key={MAP_HTML_VERSION}
         ref={webRef}
         style={mapStyles.webview}
+        scrollEnabled={mapGesturesEnabled}
         originWhitelist={['*']}
         source={{ html }}
         androidLayerType="hardware"
@@ -1492,7 +1678,15 @@ export default function InteractiveMap({
           );
           webRef.current?.injectJavaScript(resourcesToInjectScript(visibleResources));
           webRef.current?.injectJavaScript(publicIncidentsScript);
-          webRef.current?.injectJavaScript(userLocationToInjectScript(userLocation));
+          webRef.current?.injectJavaScript(
+            userLocationToInjectScript(
+              showUserLocationMarker ? userLocation : null,
+              userLocationFontDataUrl,
+            ),
+          );
+          if (residentUserLocationLabelBehavior) {
+            webRef.current?.injectJavaScript(userLocationLabelToInjectScript(userLocationLabelVisible));
+          }
           webRef.current?.injectJavaScript(mapDetailsToInjectScript(showMapDetails));
           webRef.current?.injectJavaScript(
             highlightedReportToInjectScript(highlightedReportId),
@@ -1667,7 +1861,9 @@ export default function InteractiveMap({
           </Pressable>
           {layerVisibility.reports && showReportStatusFilters ? (
             <View style={mapStyles.statusFilterWrap}>
-              <Text style={mapStyles.statusFilterLabel}>Report status</Text>
+              <Text style={mapStyles.statusFilterLabel}>
+                {reportLegendAudience ? 'Recorded status' : 'Report status'}
+              </Text>
               <View style={mapStyles.statusFilterGrid}>
             {REPORT_STATUS_OPTIONS.filter((option) =>
               reportStatusOptions.includes(option.value),
@@ -1685,7 +1881,7 @@ export default function InteractiveMap({
                       accessibilityState={{ selected }}
                       accessibilityLabel={`Show ${option.label.toLocaleLowerCase()} reports`}
                     >
-                      {option.value !== 'all' ? (
+                      {option.value !== 'all' && !reportLegendAudience ? (
                         <View
                           style={[
                             mapStyles.statusFilterDot,
@@ -1705,6 +1901,26 @@ export default function InteractiveMap({
                   );
                 })}
               </View>
+              {reportLegendAudience ? (
+                <View style={mapStyles.scopedStageLegend}>
+                  <Text style={mapStyles.statusFilterLabel}>Map pin stage</Text>
+                  <View style={mapStyles.scopedStageLegendGrid}>
+                    {REPORT_STAGE_LEGEND_ITEMS.map((item) => (
+                      <View key={item.label} style={mapStyles.scopedStageLegendItem}>
+                        <View
+                          style={[
+                            mapStyles.scopedStageLegendDot,
+                            { backgroundColor: item.tone.color },
+                          ]}
+                        />
+                        <Text style={mapStyles.scopedStageLegendText}>
+                          {item.label}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              ) : null}
             </View>
           ) : null}
           <Pressable
@@ -1762,11 +1978,8 @@ export default function InteractiveMap({
               tone === 'dark' && !showSearchBar && mapStyles.legendHintDark,
             ]}
           >
-            {publicIncidentFilters ? 'Pins follow report status. Approximate pins mark an area, not the exact location.' : 'Tap a layer to show or hide'}
+            {publicIncidentFilters ? 'Pins show approved exact report locations.' : 'Tap a layer to show or hide'}
           </Text>
-          {publicIncidentFilters && publicIncidentFilters.unlocatedCount > 0 ? <Pressable onPress={publicIncidentFilters.onOpenUnlocated} accessibilityRole="button" style={mapStyles.legendUnlocated}>
-            <Ionicons name="list-outline" size={16} color={colors.navigationActive} /><Text style={mapStyles.legendHint}>{publicIncidentFilters.unlocatedCount} without public map pins</Text>
-          </Pressable> : null}
           </ScrollView>
         </View>
       ) : null}
@@ -1844,8 +2057,8 @@ const mapStyles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   legendTitle: {
+    ...residentTypography.body,
     fontFamily: fonts.semibold,
-    fontSize: fontSizes.sm,
     color: colors.navigationActive,
   },
   legendCollapseButton: {
@@ -1895,9 +2108,8 @@ const mapStyles = StyleSheet.create({
     borderBottomColor: colors.border,
   },
   statusFilterLabel: {
+    ...residentTypography.mutedBody,
     fontFamily: fonts.medium,
-    fontSize: 10,
-    color: colors.textMuted,
     textTransform: 'uppercase',
     letterSpacing: 0.35,
   },
@@ -1907,7 +2119,7 @@ const mapStyles = StyleSheet.create({
     gap: spacing.xs,
   },
   statusFilterChip: {
-    minHeight: 28,
+    minHeight: 34,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1923,9 +2135,8 @@ const mapStyles = StyleSheet.create({
     backgroundColor: colors.navigationActive,
   },
   statusFilterChipText: {
+    ...residentTypography.body,
     fontFamily: fonts.medium,
-    fontSize: 10,
-    color: colors.text,
   },
   statusFilterChipTextSelected: {
     color: colors.white,
@@ -1936,6 +2147,34 @@ const mapStyles = StyleSheet.create({
     borderRadius: 4,
     borderWidth: 1,
     borderColor: colors.white,
+  },
+  scopedStageLegend: {
+    gap: spacing.xs,
+    paddingTop: spacing.xs,
+  },
+  scopedStageLegendGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+  },
+  scopedStageLegendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    minWidth: '46%',
+    flexGrow: 1,
+  },
+  scopedStageLegendDot: {
+    width: 8,
+    height: 8,
+    borderRadius: radius.full,
+  },
+  scopedStageLegendText: {
+    flexShrink: 1,
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.sm,
+    lineHeight: 16,
+    color: colors.textMuted,
   },
   legendDot: {
     width: 10,
@@ -1949,27 +2188,22 @@ const mapStyles = StyleSheet.create({
   },
   legendText: {
     flex: 1,
+    ...residentTypography.body,
     fontFamily: fonts.medium,
-    fontSize: 14,
-    color: colors.text,
   },
   legendTextCompact: {
-    fontSize: 10,
-    lineHeight: 13,
+    lineHeight: 22,
   },
   legendTextDark: {
     color: colors.white,
   },
   legendHint: {
     marginTop: 2,
-    fontFamily: fonts.regular,
-    fontSize: 11,
-    color: colors.textMuted,
+    ...residentTypography.mutedBody,
   },
   legendHintCompact: {
     marginTop: 3,
-    fontSize: 9,
-    lineHeight: 11,
+    lineHeight: 22,
   },
   legendHintDark: {
     color: '#FCA5A5',

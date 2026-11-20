@@ -36,6 +36,20 @@ export function publicIncidentLocationLabel(incident: PublicIncident): string {
   return `Brgy. ${incident.barangayName} · Location kept private`;
 }
 
+/** Only reporter-consented and officially approved exact report locations may become resident map pins. */
+export function publicIncidentHasMapLocation(incident: PublicIncident): boolean {
+  if (!incident.exactLocation
+      || !Number.isFinite(incident.exactLocation.latitude)
+      || !Number.isFinite(incident.exactLocation.longitude)) return false;
+  if (incident.publicLocationMode === 'exact_shared') return true;
+  // Legacy official incident records have a separate safety exception that
+  // requires an explicit reason; resident report posts never use this mode.
+  return incident.publicLocationMode === 'exact_for_safety'
+    && !incident.reportId
+    && typeof incident.exactLocation.reason === 'string'
+    && Boolean(incident.exactLocation.reason.trim());
+}
+
 /** Short label for compact rows; location precision stays in the detail view. */
 export function publicIncidentBarangayLabel(incident: PublicIncident): string {
   return `Brgy. ${incident.barangayName}`;

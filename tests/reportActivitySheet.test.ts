@@ -5,6 +5,7 @@ import { runInNewContext } from 'node:vm';
 import ts from 'typescript';
 import {
   createActivitySubmissionId,
+  RESPONSE_EVENT_LABELS,
   responseServiceIdentity,
   responseServiceLabel,
 } from '../lib/reportContactFlow.ts';
@@ -95,6 +96,7 @@ function loadActivitySheet(options: {
     },
     '../../lib/reportContactFlow': {
       createActivitySubmissionId,
+      RESPONSE_EVENT_LABELS,
       responseServiceIdentity,
       responseServiceLabel,
     },

@@ -38,12 +38,9 @@ export default function ProgressUpdateComposer(
   }
   return (
     <View style={styles.actionColumn}>
-      <Text style={styles.subtitle}>
-        Share a brief factual update.
-      </Text>
       {disabledReason && <Text style={styles.subtitle}>{disabledReason}</Text>}
       <WorkflowNote
-        label='Update (280 characters)'
+        label='Share a brief factual update'
         value={text}
         onChange={setText}
         maxLength={280}

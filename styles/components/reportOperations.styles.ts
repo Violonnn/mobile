@@ -1,8 +1,19 @@
 import { StyleSheet } from 'react-native';
-import { colors, fonts, fontSizes, radius, spacing } from '../theme';
+import { colors, fonts, fontSizes, radius, screenEdgeInset, spacing } from '../theme';
+
+export const REPORT_OPERATIONS_MIN_FONT_SIZE = fontSizes.lg;
 
 export const reportOperationsStyles = StyleSheet.create({
-  singleLineInput: { minHeight: 48, textAlignVertical: 'center' },
+  minimumText: {
+    fontSize: REPORT_OPERATIONS_MIN_FONT_SIZE,
+    lineHeight: 22,
+  },
+  singleLineInput: {
+    minHeight: 48,
+    textAlignVertical: 'center',
+    fontSize: REPORT_OPERATIONS_MIN_FONT_SIZE,
+    lineHeight: 22,
+  },
   groupedService: {
     gap: spacing.xs,
     paddingTop: spacing.sm,
@@ -14,22 +25,19 @@ export const reportOperationsStyles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.themeSoft,
     borderRadius: radius.md,
-    paddingHorizontal: spacing.sm,
-    paddingBottom: spacing.xs,
-    gap: spacing.xs,
+    paddingLeft: spacing.sm,
+    paddingRight: spacing.xs,
+    paddingBottom: 0,
+    gap: 0,
   },
   urgentHelpTrigger: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    minHeight: 48,
-    paddingVertical: spacing.sm,
+    minHeight: 44,
+    paddingVertical: spacing.xs,
   },
-  urgentHelpMarker: {
-    backgroundColor: colors.primaryLight,
-    padding: spacing.sm,
-    borderRadius: radius.sm,
-  },
+  urgentHelpContent: { gap: 2 },
   serviceEntry: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   serviceEntryCopy: { flex: 1, minWidth: 0 },
   serviceRemove: {
@@ -61,36 +69,41 @@ export const reportOperationsStyles = StyleSheet.create({
   historyTitle: {
     flex: 1,
     fontFamily: fonts.semibold,
-    fontSize: fontSizes.md,
-    lineHeight: 20,
+    fontSize: fontSizes.lg,
+    lineHeight: 22,
     color: colors.text,
   },
   historyMetadata: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.xs },
   historyMetaText: {
     flex: 1,
     fontFamily: fonts.regular,
-    fontSize: fontSizes.md,
-    lineHeight: 20,
+    fontSize: fontSizes.lg,
+    lineHeight: 22,
     color: colors.textMuted,
   },
   historyDetails: { gap: spacing.xs, marginTop: spacing.xs },
   historyDetail: {
     fontFamily: fonts.regular,
-    fontSize: fontSizes.md,
-    lineHeight: 20,
+    fontSize: fontSizes.lg,
+    lineHeight: 22,
     color: colors.text,
   },
   historyDetailLabel: { fontFamily: fonts.semibold },
   historyNote: {
     fontFamily: fonts.regular,
-    fontSize: fontSizes.md,
-    lineHeight: 20,
+    fontSize: fontSizes.lg,
+    lineHeight: 22,
     color: colors.text,
   },
   currentStepContent: {
     backgroundColor: colors.primaryLight,
     borderRadius: radius.lg,
     padding: spacing.md,
+  },
+  currentStepContentCompact: {
+    paddingHorizontal: screenEdgeInset,
+    paddingTop: spacing.xs,
+    paddingBottom: spacing.xs,
   },
   currentStepMarker: {
     backgroundColor: colors.primaryLight,
@@ -103,11 +116,28 @@ export const reportOperationsStyles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
   },
+  quietAction: {
+    alignSelf: 'flex-start',
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.sm,
+    backgroundColor: colors.white,
+  },
+  quietActionText: {
+    fontFamily: fonts.medium,
+    fontSize: fontSizes.lg,
+    lineHeight: 22,
+    color: colors.textMuted,
+  },
   invalidField: { borderWidth: 1, borderColor: colors.unverified },
   fieldError: {
     fontFamily: fonts.medium,
-    fontSize: fontSizes.sm,
-    lineHeight: 20,
+    fontSize: fontSizes.lg,
+    lineHeight: 22,
     color: colors.unverified,
     marginTop: spacing.xs,
   },
@@ -122,7 +152,7 @@ export const reportOperationsStyles = StyleSheet.create({
   editingTitle: {
     flex: 1,
     fontFamily: fonts.semibold,
-    fontSize: fontSizes.md,
+    fontSize: fontSizes.lg,
     color: colors.navigationActive,
   },
   toastLayer: {
@@ -162,12 +192,14 @@ export const reportOperationsStyles = StyleSheet.create({
     paddingTop: spacing.md,
   },
   stepContent: { flex: 1, paddingBottom: spacing.lg, gap: spacing.sm },
+  stepContentCompact: { gap: spacing.xs },
   stepHeading: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
     minHeight: 48,
   },
+  stepHeadingCompact: { minHeight: 44 },
   collapsedStep: { display: 'none' },
   claimReminder: {
     justifyContent: 'center',
@@ -186,24 +218,76 @@ export const reportOperationsStyles = StyleSheet.create({
     gap: spacing.sm,
     paddingVertical: spacing.sm,
   },
+  boxyActionRow: {
+    paddingHorizontal: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.sm,
+    backgroundColor: colors.white,
+  },
   rowCopy: { flex: 1, gap: spacing.xs },
+  rowCopyCompact: { gap: 2 },
+  actionRowCopyEmphasized: { gap: 2 },
   rowTitle: {
     fontFamily: fonts.semibold,
-    fontSize: fontSizes.md,
+    fontSize: fontSizes.lg,
     color: colors.text,
+  },
+  actionRowTextEmphasized: {
+    fontSize: fontSizes.lg,
+    lineHeight: 22,
   },
   caption: {
     fontFamily: fonts.regular,
-    fontSize: fontSizes.sm,
+    fontSize: fontSizes.lg,
     color: colors.textMuted,
-    lineHeight: 20,
+    lineHeight: 22,
+  },
+  urgentHelpSubtitle: {
+    fontSize: fontSizes.lg,
+    lineHeight: 22,
+  },
+  urgentHelpPrompt: {
+    flex: 1,
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.lg,
+    lineHeight: 22,
+    color: colors.text,
+  },
+  urgentHelpTitle: { fontFamily: fonts.semibold },
+  urgentHelpLink: {
+    fontFamily: fonts.semibold,
+    fontSize: fontSizes.lg,
+    color: colors.text,
+  },
+  actionRowDescriptionEmphasized: {
+    fontSize: fontSizes.lg,
+    lineHeight: 22,
+  },
+  actionRowDescriptionMatchesTitle: {
+    fontSize: fontSizes.lg,
+    lineHeight: 22,
+  },
+  summaryTitle: {
+    fontSize: fontSizes.lg,
+    lineHeight: 22,
+  },
+  summaryMedium: {
+    fontSize: fontSizes.lg,
+    lineHeight: 22,
   },
   eyebrow: {
     fontFamily: fonts.semibold,
-    fontSize: fontSizes.sm,
+    fontSize: fontSizes.lg,
     color: colors.navigationActive,
   },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  decisionChoicesGroup: { gap: spacing.xs },
+  chipsStacked: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    gap: spacing.xs,
+  },
   chip: {
     minHeight: 44,
     justifyContent: 'center',
@@ -214,13 +298,24 @@ export const reportOperationsStyles = StyleSheet.create({
     paddingVertical: spacing.sm,
     backgroundColor: colors.white,
   },
+  chipStacked: {
+    width: '100%',
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
+    borderRadius: radius.sm,
+  },
+  chipTightPadding: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  chipTextStacked: { flex: 1 },
   chipSelected: {
     borderColor: colors.navigationActive,
     backgroundColor: colors.background,
   },
   chipText: {
     fontFamily: fonts.medium,
-    fontSize: fontSizes.sm,
+    fontSize: fontSizes.lg,
     color: colors.text,
   },
   chipTextSelected: {
@@ -238,15 +333,27 @@ export const reportOperationsStyles = StyleSheet.create({
   bannerText: {
     flex: 1,
     fontFamily: fonts.medium,
-    fontSize: fontSizes.sm,
+    fontSize: fontSizes.lg,
     color: colors.text,
-    lineHeight: 20,
+    lineHeight: 22,
   },
   divider: { height: 1, backgroundColor: colors.border },
-  quietAction: { paddingVertical: spacing.sm, alignSelf: 'flex-start' },
-  quietActionText: {
-    fontFamily: fonts.semibold,
-    fontSize: fontSizes.sm,
-    color: colors.navigationActive,
+  decisionReleaseOption: {
+    minHeight: 44,
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.sm,
+    backgroundColor: colors.white,
+  },
+  decisionReleaseOptionText: {
+    flex: 1,
+    fontFamily: fonts.medium,
+    fontSize: fontSizes.lg,
+    color: colors.text,
   },
 });

@@ -19,6 +19,7 @@ import { useAnnouncements } from '../../hooks/useAnnouncements';
 import type { OfficialReportQueueItem } from '../../lib/officialReports';
 import { mdrrmoCommandStyles as styles } from '../../styles/screens/mdrrmoCommand.styles';
 import { officialStyles } from '../../styles/screens/official.styles';
+import { screenEdgeInset } from '../../styles/theme';
 
 type Props = {
   reports: OfficialReportQueueItem[];
@@ -52,10 +53,7 @@ export default function BdrrmoCommandDashboard({
     error: announcementsError,
     loading: announcementsLoading,
     refreshing: announcementsRefreshing,
-    loadingMore: announcementsLoadingMore,
-    hasMore: hasMoreAnnouncements,
     reload: reloadAnnouncements,
-    loadMore: loadMoreAnnouncements,
     refresh: refreshAnnouncements,
   } = useAnnouncements({ limit: 20 });
   const scrollRef = useRef<ScrollViewInstance>(null);
@@ -92,7 +90,7 @@ export default function BdrrmoCommandDashboard({
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <StatusBar style="dark" />
-      <View style={styles.commandStickyHeader}>
+      <View style={[styles.commandStickyHeader, { paddingHorizontal: screenEdgeInset }]}>
         <MdrrmoHeader title="Command" showDefaultControls />
       </View>
       <ScrollView
@@ -112,7 +110,7 @@ export default function BdrrmoCommandDashboard({
         {reportsLoading && reports.length === 0 ? (
           <CommandScreenSkeleton />
         ) : reportsError ? (
-          <View style={[officialStyles.stateBox, styles.padded]}>
+          <View style={[officialStyles.stateBox, styles.padded, { paddingHorizontal: screenEdgeInset }]}>
             <Text style={officialStyles.stateTitle}>Could not load command updates</Text>
             <Text style={officialStyles.stateBody}>{reportsError}</Text>
             <TouchableOpacity style={officialStyles.retryButton} onPress={() => void reloadReports()}>
@@ -146,12 +144,8 @@ export default function BdrrmoCommandDashboard({
         <BdrrmoLocalUpdates
           announcements={announcements}
           assignedBarangayId={assignedBarangayId}
-          assignedBarangay={assignedBarangay}
           error={announcementsError}
           loading={announcementsLoading}
-          loadingMore={announcementsLoadingMore}
-          hasMore={hasMoreAnnouncements}
-          onLoadMore={loadMoreAnnouncements}
           onReload={reloadAnnouncements}
         />
       </ScrollView>

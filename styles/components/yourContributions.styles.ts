@@ -1,6 +1,6 @@
 import { StyleSheet } from 'react-native';
 
-import { colors, fonts, fontSizes, radius, spacing } from '../theme';
+import { colors, fonts, fontSizes, radius, screenEdgeInset, spacing } from '../theme';
 
 export const contributionStyles = StyleSheet.create({
   panel: {
@@ -42,7 +42,7 @@ export const contributionStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: spacing.md,
-    paddingHorizontal: 20,
+    paddingHorizontal: screenEdgeInset,
     paddingTop: spacing.sm,
     paddingBottom: spacing.sm,
   },
@@ -70,6 +70,10 @@ export const contributionStyles = StyleSheet.create({
     fontSize: fontSizes.sm,
     color: colors.textMuted,
   },
+  localResponseHeaderSubtitle: {
+    fontSize: fontSizes.md,
+    lineHeight: 19,
+  },
   countPill: {
     minWidth: 38,
     height: 32,
@@ -88,7 +92,7 @@ export const contributionStyles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: 20,
+    paddingHorizontal: screenEdgeInset,
   },
   detailContent: {
     flex: 1,
@@ -149,29 +153,19 @@ export const contributionStyles = StyleSheet.create({
     fontSize: fontSizes.sm,
     color: colors.white,
   },
-  dateGroup: {
-    marginTop: spacing.sm,
+  titleDateRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: spacing.xs,
   },
-  dateStatusRow: {
-    minHeight: 20,
+  reportTagRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-  },
-  dateGroupTitle: {
-    fontFamily: fonts.medium,
-    fontSize: fontSizes.sm,
-    lineHeight: 16,
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-  },
-  dateSeparator: {
-    fontFamily: fonts.medium,
-    fontSize: fontSizes.sm,
-    color: colors.textMuted,
+    flexWrap: 'wrap',
+    gap: spacing.xs,
   },
   reportCard: {
-    gap: spacing.sm,
+    gap: spacing.xs,
     paddingVertical: spacing.md,
     borderTopWidth: 1,
     borderTopColor: colors.border,
@@ -188,7 +182,7 @@ export const contributionStyles = StyleSheet.create({
   cardCopy: {
     flex: 1,
     minWidth: 0,
-    gap: spacing.sm,
+    gap: spacing.xs,
   },
   mediaThumb: {
     width: 76,
@@ -214,8 +208,8 @@ export const contributionStyles = StyleSheet.create({
   },
   statusText: {
     fontFamily: fonts.medium,
-    fontSize: fontSizes.xs,
-    lineHeight: 15,
+    fontSize: fontSizes.md,
+    lineHeight: 18,
   },
   statusPill: {
     flexDirection: 'row',
@@ -226,6 +220,32 @@ export const contributionStyles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: radius.full,
   },
+  dateStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  localResponseTitleDateRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: spacing.sm,
+  },
+  localResponseDateText: {
+    flexShrink: 0,
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.sm,
+    lineHeight: 18,
+    color: colors.textMuted,
+  },
+  localResponseTagRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  localResponseTags: {
+    flex: 1,
+    minWidth: 0,
+  },
   latestBadge: {
     fontFamily: fonts.semibold,
     fontSize: fontSizes.xs,
@@ -233,20 +253,21 @@ export const contributionStyles = StyleSheet.create({
     color: colors.primary,
   },
   reportTitle: {
+    flexShrink: 1,
     fontFamily: fonts.bold,
     fontSize: fontSizes.lg,
     lineHeight: 23,
     color: colors.text,
   },
   latestReportTitle: {
-    fontSize: 22,
-    lineHeight: 29,
+    fontSize: fontSizes.lg,
+    lineHeight: 23,
   },
   metadataText: {
     flex: 1,
     minWidth: 0,
     fontFamily: fonts.regular,
-    fontSize: fontSizes.sm,
+    fontSize: fontSizes.md,
     color: colors.textMuted,
   },
   metadataRow: {
@@ -255,8 +276,9 @@ export const contributionStyles = StyleSheet.create({
     gap: 5,
   },
   dateText: {
+    flexShrink: 0,
     fontFamily: fonts.regular,
-    fontSize: fontSizes.sm,
+    fontSize: fontSizes.lg,
     color: colors.textMuted,
   },
   locationRow: {
@@ -271,14 +293,18 @@ export const contributionStyles = StyleSheet.create({
     fontSize: fontSizes.sm,
     color: colors.textMuted,
   },
-  description: {
-    fontFamily: fonts.regular,
+  localResponseLocationText: {
     fontSize: fontSizes.md,
     lineHeight: 21,
+  },
+  description: {
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.lg,
+    lineHeight: 22,
     color: colors.textMuted,
   },
   cardFooter: {
-    minHeight: 38,
+    minHeight: 32,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',

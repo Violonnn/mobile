@@ -19,6 +19,7 @@ import { CollageCellContent, IncidentTagRow } from '../report/ReportDetailCard';
 
 type CalloutContent = {
   statusLabel: string;
+  statusDetail?: string | null;
   tone: StageTone;
   incidentType: string | null;
   incidentTypeLabel: string;
@@ -39,16 +40,23 @@ type Props = {
   /** Steps through incidents that share one rounded public map point. */
   pager?: { index: number; total: number; onPrevious: () => void; onNext: () => void };
   /** Preserves an official map's workflow label while keeping the resident map tone. */
-  statusPresentation?: Pick<ReportStatusPresentation, 'label' | 'color' | 'backgroundColor'>;
+  statusPresentation?: Pick<ReportStatusPresentation, 'label' | 'color' | 'backgroundColor' | 'coordinationLabel'>;
+  /** Uses the selected resident map's scoped office display name. */
+  useScopedPresentation?: boolean;
 };
 
 function ownReportContent(
   report: MapReportMarker,
   statusPresentation?: Props['statusPresentation'],
+  useScopedPresentation = false,
 ): CalloutContent {
-  const presentation = statusPresentation ?? getMapReportPresentation(report);
+  const presentation = statusPresentation ?? getMapReportPresentation(
+    report,
+    useScopedPresentation ? 'resident' : undefined,
+  );
   return {
     statusLabel: presentation.label,
+    statusDetail: presentation.coordinationLabel ?? null,
     tone: { color: presentation.color, softColor: presentation.backgroundColor },
     incidentType: report.incidentType,
     incidentTypeLabel: formatIncidentType(report.incidentType, report.incidentTypeOther),
@@ -81,9 +89,9 @@ function publicIncidentContent(incident: PublicIncident): CalloutContent {
  * Floating summary paired with the selected marker on the resident map. Colors
  * follow the report's stage; a thumbnail appears only when a real photo exists.
  */
-export default function ResidentMapCallout({ report, incident, bottomOffset, onClose, onOpenDetails, pager, statusPresentation }: Props) {
+export default function ResidentMapCallout({ report, incident, bottomOffset, onClose, onOpenDetails, pager, statusPresentation, useScopedPresentation = false }: Props) {
   const { isLargeText } = useAccessibilityLayout();
-  const content = incident ? publicIncidentContent(incident) : report ? ownReportContent(report, statusPresentation) : null;
+  const content = incident ? publicIncidentContent(incident) : report ? ownReportContent(report, statusPresentation, useScopedPresentation) : null;
   if (!content) return null;
 
   return (
@@ -111,6 +119,10 @@ export default function ResidentMapCallout({ report, incident, bottomOffset, onC
             <Ionicons name="close" size={19} color={colors.textMuted} />
           </TouchableOpacity>
         </View>
+
+        {content.statusDetail ? (
+          <Text style={styles.statusDetail}>Coordination: {content.statusDetail}</Text>
+        ) : null}
 
         <View style={[styles.body, isLargeText && styles.bodyLargeText]}>
           <View style={styles.copy}>
@@ -145,7 +157,7 @@ export default function ResidentMapCallout({ report, incident, bottomOffset, onC
               <Ionicons name="chevron-back" size={16} color={colors.navigationActive} />
             </TouchableOpacity>
             <Text style={styles.pagerText}>
-              {pager.index + 1} of {pager.total} reports near this spot
+              {pager.index + 1} of {pager.total}
             </Text>
             <TouchableOpacity
               style={styles.pagerButton}
@@ -254,6 +266,12 @@ const styles = StyleSheet.create({
   },
   updateLabel: {
     fontFamily: fonts.semibold,
+  },
+  statusDetail: {
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.xs,
+    lineHeight: 16,
+    color: colors.textMuted,
   },
   metaRow: {
     flexDirection: 'row',

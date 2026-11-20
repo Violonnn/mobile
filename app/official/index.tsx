@@ -227,6 +227,7 @@ export default function OfficialCommandScreen() {
     return (
       <MdrrmoCommandDashboard
         reports={reports}
+        reportsCount={counts.total}
         reportsError={error}
         reportsLoading={loading}
         reportsRefreshing={refreshing}

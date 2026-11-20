@@ -7,7 +7,7 @@ import * as reportLifecycle from '../lib/reportLifecycle.ts';
 import { mapPublicPhotoUrlPairs } from '../lib/publicPhotoPairs.ts';
 import { MAP_RESOURCE_TONES } from '../lib/mapResourceTones.ts';
 import type { MapReportMarker } from '../lib/reports.ts';
-import { colors } from '../styles/theme.ts';
+import { colors, fonts, fontSizes, radius, spacing } from '../styles/theme.ts';
 
 function loadModule(path: string, dependencies: Record<string, unknown>): Record<string, unknown> {
   const compiled = ts.transpileModule(readFileSync(new URL(path, import.meta.url), 'utf8'), {
@@ -67,6 +67,18 @@ test('public community list uses the bounded combined projection and signs only 
   assert.equal(result.incidents[0].publicPhotoDisplays[0], 'signed:approved/display.jpg');
   assert.equal(result.incidents[0].reportId, undefined, 'legacy incident summaries have no resident post identity');
   assert.equal(result.incidents[0].reporterName, undefined, 'legacy incident summaries do not impersonate anonymous residents');
+});
+
+test('resident map eligibility requires a finite reporter-consented exact public location', () => {
+  const { runtime } = loadPublicRuntime();
+  const canShowOnMap = runtime.publicIncidentHasMapLocation as (incident: Record<string, unknown>) => boolean;
+  assert.equal(canShowOnMap({ publicLocationMode: 'exact_shared', exactLocation: { latitude: 10.2, longitude: 123.8 } }), true);
+  assert.equal(canShowOnMap({ publicLocationMode: 'approximate_area', exactLocation: null, approximateArea: { latitude: 10.2, longitude: 123.8 } }), false);
+  assert.equal(canShowOnMap({ publicLocationMode: 'barangay_only', exactLocation: { latitude: 10.2, longitude: 123.8 } }), false);
+  assert.equal(canShowOnMap({ publicLocationMode: 'exact_shared', exactLocation: { latitude: Number.NaN, longitude: 123.8 } }), false);
+  assert.equal(canShowOnMap({ publicLocationMode: 'exact_for_safety', exactLocation: { latitude: 10.2, longitude: 123.8, reason: 'Road closure' } }), true);
+  assert.equal(canShowOnMap({ reportId: 'resident-report', publicLocationMode: 'exact_for_safety', exactLocation: { latitude: 10.2, longitude: 123.8, reason: 'Road closure' } }), false);
+  assert.equal(canShowOnMap({ publicLocationMode: 'exact_for_safety', exactLocation: { latitude: 10.2, longitude: 123.8, reason: '' } }), false);
 });
 
 test('individual public posts keep report IDs while engagement stays on their incident case', async () => {
@@ -194,8 +206,13 @@ test('public map buffers early iOS data and draws status pins without private pi
   runInNewContext(compiled.outputText, {
     exports: mapRuntime,
     colors,
+    fonts,
+    fontSizes,
+    radius,
+    spacing,
     MAP_RESOURCE_TONES,
     publicIncidentTone: runtime.publicIncidentTone,
+    publicIncidentHasMapLocation: runtime.publicIncidentHasMapLocation,
   });
   const buildHtml = mapRuntime.buildMapHtml as (...parameters: unknown[]) => string;
   const injection = mapRuntime.publicIncidentsToInjectScript as (items: typeof incidents, highlightedId?: string) => string;
@@ -206,9 +223,13 @@ test('public map buffers early iOS data and draws status pins without private pi
   const window: Record<string, unknown> = {};
   const messages: string[] = [];
   window.ReactNativeWebView = { postMessage: (message: string) => messages.push(message) };
+  const exactIncident = {
+    ...incidents[0], publicLocationMode: 'exact_shared' as const, approximateArea: null,
+    exactLocation: { latitude: 10.251234, longitude: 123.801234, reason: '' },
+  };
   const noPin = { ...incidents[0], incidentCaseId: 'no-pin', approximateArea: null, exactLocation: null };
-  runInNewContext(injection([...incidents, noPin]), { window });
-  assert.equal((window.__pendingPublicIncidents as unknown[]).length, 2);
+  runInNewContext(injection([incidents[0], exactIncident, noPin]), { window });
+  assert.equal((window.__pendingPublicIncidents as unknown[]).length, 1, 'Only explicitly approved exact reports are queued for map pins');
 
   type Shape = {
     kind: string;
@@ -219,6 +240,7 @@ test('public map buffers early iOS data and draws status pins without private pi
   };
   const drawn: Shape[] = [];
   const markerClickHandlers: ((event: unknown) => void)[] = [];
+  const userLocationClickHandlers: ((event: unknown) => void)[] = [];
   function layer(shape?: Shape): unknown {
     return new Proxy({}, { get: (_target, method) => {
       if (method === 'getZoom') return () => 13;
@@ -227,7 +249,10 @@ test('public map buffers early iOS data and draws status pins without private pi
       if (method === 'bindTooltip') return (tooltip: Shape['tooltip']) => { if (shape) shape.tooltip = tooltip; };
       if (method === 'setIcon') return (icon: Shape['icon']) => { if (shape) shape.icon = icon; return layer(shape); };
       if (method === 'on') return (_eventName: string, handler: (event: unknown) => void) => {
-        if (shape?.kind === 'marker') markerClickHandlers.push(handler);
+        if (shape?.kind === 'marker') {
+          markerClickHandlers.push(handler);
+          if (shape.options?.zIndexOffset === 900) userLocationClickHandlers.push(handler);
+        }
         return layer(shape);
       };
       if (method === 'kind') return shape?.kind;
@@ -250,27 +275,46 @@ test('public map buffers early iOS data and draws status pins without private pi
       return layer(method === 'rectangle' ? { kind: String(method), bounds: parameters[0] } : undefined);
     };
   } });
-  const html = buildHtml(false, 'light', false, false, 15, 0, 0, 0, 0, 0);
+  const html = buildHtml(false, 'light', false, false, 15, 0, 0, 0, 0, 0, 'public-incident-markers-v16', true);
+  const interactiveMapOptions = html.match(/var map = L\.map\('map', \{([\s\S]*?)\n      \}\);/)?.[1] ?? '';
+  assert.match(interactiveMapOptions, /dragging: true/);
+  assert.match(interactiveMapOptions, /touchZoom: true/);
+  const fixedHomeHtml = buildHtml(false, 'light', false, true, 15, 0, 0, 0, 0, 0, 'home-fixed-map-v1', true, false);
+  const fixedMapOptions = fixedHomeHtml.match(/var map = L\.map\('map', \{([\s\S]*?)\n      \}\);/)?.[1] ?? '';
+  assert.match(fixedMapOptions, /dragging: false/);
+  assert.match(fixedMapOptions, /touchZoom: false/);
+  assert.match(fixedMapOptions, /doubleClickZoom: false/);
+  assert.match(fixedMapOptions, /scrollWheelZoom: false/);
+  assert.match(fixedMapOptions, /boxZoom: false/);
+  assert.match(fixedMapOptions, /keyboard: false/);
+  assert.match(fixedHomeHtml, /touch-action: pan-y/);
+  assert.doesNotMatch(fixedHomeHtml, /document\.addEventListener\('touchstart'/);
+  const parentScrollMapHtml = buildHtml(false, 'light', false, false, 15, 0, 0, 0, 0, 0, 'interactive-map-v1', true, true, true);
+  assert.match(parentScrollMapHtml, /type: 'mapGesture'/);
   // External scripts have a src attribute; execute only the generated inline startup code.
   const inlineScript = html.match(/<script>([\s\S]*?)<\/script>/)?.[1];
   assert.ok(inlineScript, 'The generated Leaflet page must include its startup script');
   const environment = { window, L: leaflet,
-    document: { addEventListener() {}, createElement: () => ({ textContent: '' }) },
+    document: { addEventListener() {}, createElement: () => ({ textContent: '' }), querySelectorAll: () => [] },
   };
   runInNewContext(inlineScript, environment);
+  (window.setUserLocation as (location: { latitude: number; longitude: number }) => void)({ latitude: 10.2, longitude: 123.8 });
+  userLocationClickHandlers.at(-1)?.({});
+  assert.equal(JSON.parse(messages.at(-1) ?? '{}').type, 'userLocationTap', 'Tapping the resident location marker requests label restoration without map navigation');
+  runInNewContext(injection([exactIncident]), environment);
   assert.equal(window.__pendingPublicIncidents, null);
-  assert.equal(drawn.length, 1, 'Barangay-only records must not create a public pin');
+  assert.equal(drawn.length, 1, 'Only the approved exact report creates a public pin');
   assert.equal(drawn[0].kind, 'marker');
-  assert.deepEqual(Array.from(drawn[0].bounds as number[]), [10.25, 123.8]);
-  assert.match(drawn[0].tooltip?.textContent ?? '', /Approximate location/);
+  assert.deepEqual(Array.from(drawn[0].bounds as number[]), [10.251234, 123.801234]);
+  assert.match(drawn[0].tooltip?.textContent ?? '', /Exact submitted location shared by the reporter/);
   const firstGroupedIncident = {
-    ...incidents[0], incidentCaseId: 'first-grouped-incident', reportId: 'first-grouped-report', incidentType: 'fire' as const,
+    ...exactIncident, incidentCaseId: 'first-grouped-incident', reportId: 'first-grouped-report', incidentType: 'fire' as const,
   };
   const secondNearbyIncident = {
     ...firstGroupedIncident, incidentCaseId: 'same-area-second', reportId: 'second-grouped-report',
   };
   runInNewContext(injection([firstGroupedIncident, secondNearbyIncident], secondNearbyIncident.reportId), environment);
-  assert.equal(drawn.length, 1, 'Incidents at one rounded public point remain grouped');
+  assert.equal(drawn.length, 1, 'Incidents at one identical approved point remain grouped');
   const groupedIconHtml = drawn[0].icon?.options?.html ?? '';
   assert.match(groupedIconHtml, /public-pin-triangle/);
   assert.match(groupedIconHtml, /public-pin-highlight-pulse/);
@@ -279,21 +323,27 @@ test('public map buffers early iOS data and draws status pins without private pi
   ));
   assert.match(groupedIconHtml, /<g transform="translate\(0 3\)">/);
   assert.doesNotMatch(groupedIconHtml, /public-pin-glyph|public-pin-pulse|dashed|public-pin-alert/);
-  assert.doesNotMatch(groupedIconHtml, /public-pin-count/);
+  assert.doesNotMatch(groupedIconHtml, /public-pin-count|public-pin-stack/);
   assert.deepEqual(Array.from(drawn[0].icon?.options?.iconSize ?? []), [50, 50]);
-  assert.match(html, /disasterlink-map-version" content="public-incident-markers-v12/);
+  assert.match(html, /disasterlink-map-version" content="public-incident-markers-v\d+/);
   assert.match(html, /\.report-pin-highlight-pulse/);
   assert.match(html, /\.public-pin-highlight-pulse/);
   markerClickHandlers.at(-1)?.({});
   assert.deepEqual(JSON.parse(messages.at(-1) ?? '{}').reportIds, [firstGroupedIncident.reportId, secondNearbyIncident.reportId]);
   assert.doesNotMatch(html, /L\.rectangle/);
-  const safetyLocation = { ...incidents[0], approximateArea: null,
-    exactLocation: { latitude: 10.25123, longitude: 123.80317, reason: '<b>Road closure</b>' } };
-  runInNewContext(injection([safetyLocation]), environment);
+  const correctedExactLocation = { ...exactIncident, exactLocation: { latitude: 10.25123, longitude: 123.80317, reason: '' } };
+  runInNewContext(injection([correctedExactLocation]), environment);
   assert.equal(drawn.length, 1);
   assert.equal(drawn[0].kind, 'marker');
   assert.deepEqual(Array.from(drawn[0].bounds as number[]), [10.25123, 123.80317]);
-  assert.equal(drawn[0].tooltip?.textContent, 'Exact location for safety: <b>Road closure</b>');
+  assert.equal(drawn[0].tooltip?.textContent, 'Exact submitted location shared by the reporter · Brgy. Public Local');
+  const legacySafetyLocation = {
+    ...incidents[0], publicLocationMode: 'exact_for_safety' as const, approximateArea: null,
+    exactLocation: { latitude: 10.25123, longitude: 123.80317, reason: 'Road closure' },
+  };
+  runInNewContext(injection([legacySafetyLocation]), environment);
+  assert.equal(drawn.length, 1, 'An official safety location with a reason remains mapped for legacy incident rows');
+  assert.equal(drawn[0].tooltip?.textContent, 'Exact location for safety: Road closure');
   runInNewContext(injection([]), environment);
   assert.equal(drawn.length, 0, 'Hiding the layer must clear already drawn public areas');
 

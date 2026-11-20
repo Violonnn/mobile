@@ -35,7 +35,7 @@ type Props = {
   profileLoading: boolean;
   onRetryProfile: () => void;
   onAvatarChanged: (avatarPath: string | null) => void;
-  roleVariant?: 'mdrrmo' | 'mayor';
+  roleVariant?: 'mdrrmo' | 'mitcom' | 'mayor';
 };
 
 type SettingsRowProps = {
@@ -109,7 +109,8 @@ export default function MdrrmoSettingsWorkspace({
 
   const version = Constants.expoConfig?.version || 'Unavailable';
   const isMayor = roleVariant === 'mayor';
-  const name = profileName(profile, isMayor ? 'Mayor account' : 'MDRRMO account');
+  const officeName = roleVariant === 'mitcom' ? 'MITCOM' : 'MDRRMO';
+  const name = profileName(profile, isMayor ? 'Mayor account' : `${officeName} account`);
   const documentTitle = legalDocument === 'privacy' ? 'Privacy notice' : 'Terms and conditions';
   const documentContent =
     legalDocument === 'privacy' ? PRIVACY_NOTICE_CONTENT : TERMS_INFORMATION_CONTENT;
@@ -183,7 +184,7 @@ export default function MdrrmoSettingsWorkspace({
             </TouchableOpacity>
             <View style={styles.identityCopy}>
               <Text style={styles.identityName} numberOfLines={2}>{name}</Text>
-              <Text style={styles.identityRole}>{isMayor ? 'Mayor · Executive account' : 'MDRRMO · Official account'}</Text>
+              <Text style={styles.identityRole}>{isMayor ? 'Mayor · Executive account' : `${officeName} · Official account`}</Text>
               <TouchableOpacity style={styles.viewProfileButton} onPress={() => setProfilePhotoVisible(true)} accessibilityRole="button" accessibilityLabel="View profile picture">
                 <Text style={styles.viewProfileText}>View profile picture</Text>
               </TouchableOpacity>
@@ -202,7 +203,7 @@ export default function MdrrmoSettingsWorkspace({
         <View style={styles.divider} />
 
         <View style={styles.section}>
-          <Text style={styles.sectionLabel}>{isMayor ? 'EXECUTIVE WORKSPACE' : 'MDRRMO WORKSPACE'}</Text>
+          <Text style={styles.sectionLabel}>{isMayor ? 'EXECUTIVE WORKSPACE' : `${officeName.toUpperCase()} WORKSPACE`}</Text>
           <SettingsRow title={isMayor ? 'Executive brief alerts' : 'Command alerts'} subtitle={isMayor ? 'Municipal decisions and urgent reports' : 'Escalations and urgent reports'} value="On" />
           <SettingsRow title={isMayor ? 'Municipal updates' : 'Operations updates'} subtitle={isMayor ? 'Barangay activity and shelter readiness' : 'Assignments, comments, and center status'} value="On" />
           <SettingsRow title={isMayor ? 'Municipal map' : 'Map & location'} subtitle={isMayor ? 'All barangays · Read-only awareness' : 'Command map and incident location access'} value="Enabled" />

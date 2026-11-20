@@ -38,7 +38,8 @@ import {
   facilityTypeLabel,
 } from '../../lib/resources';
 import { getMapReportPresentation, type MapReportMarker } from '../../lib/reports';
-import { colors, fonts, fontSizes, spacing } from '../../styles/theme';
+import { scopedLifecyclePresentation } from '../../lib/reportPresentation';
+import { colors, fonts, fontSizes, screenEdgeInset, spacing } from '../../styles/theme';
 import { officialStyles } from '../../styles/screens/official.styles';
 import { residentMapStyles } from '../../styles/screens/residentMap.styles';
 import { officialNavMetrics } from '../../styles/components/officialBottomNav.styles';
@@ -76,11 +77,29 @@ export default function OfficialMapScreen() {
   const reportPresentation = useCallback((marker: MapReportMarker) => {
     const report = officialById.get(marker.id);
     if (!report) return null;
+    if (officialKind === 'BDRRMO' || officialKind === 'MDRRMO') {
+      const scoped = scopedLifecyclePresentation(
+        marker.lifecycle ?? report.lifecycle,
+        {
+          audience: officialKind === 'BDRRMO' ? 'bdrrmo' : 'mitcom',
+          barangayName: report.barangayName,
+          leadOffice: report.lifecycleFacts.leadOffice,
+          claimedByName: report.lifecycleFacts.reviewClaimedByName,
+          claimedAt: report.lifecycleFacts.reviewClaimedAt,
+        },
+      );
+      return {
+        label: scoped.stageLabel,
+        color: scoped.tone.color,
+        backgroundColor: scoped.tone.softColor,
+      };
+    }
+
     return {
       ...getMapReportPresentation(marker),
       label: officialLabel(marker.lifecycle ?? report.lifecycle, { claimedByName: report.lifecycleFacts.reviewClaimedByName, claimedAt: report.lifecycleFacts.reviewClaimedAt }),
     };
-  }, [officialById]);
+  }, [officialById, officialKind]);
 
   const { facilities } = useResources({
     mode: 'official',
@@ -553,6 +572,7 @@ export default function OfficialMapScreen() {
               onLayerPanelVisibilityChange={setLayerPanelVisible}
               dismissSearchSignal={dismissMapSearchSignal}
               showReportStatusFilters
+              reportLegendAudience="mitcom"
               showSearchBar
               compactLayerFilters
               searchBarTopInset={insets.top + 12}
@@ -638,6 +658,7 @@ export default function OfficialMapScreen() {
             visible={selectedReports.length > 0}
             reports={selectedReports}
             statusPresentation={reportPresentation}
+            useScopedPresentation
             onClose={() => setSelectedReportIds([])}
           />
         </View>
@@ -650,7 +671,7 @@ export default function OfficialMapScreen() {
       <ReportEngagementProvider reports={scopedMarkers}>
         <SafeAreaView style={officialStyles.container} edges={['top']}>
           <StatusBar style="dark" />
-          <View style={localStyles.header}>
+          <View style={[localStyles.header, { paddingHorizontal: screenEdgeInset }]}>
             <MdrrmoHeader
               title="Map"
               subtitleOverride={null}
@@ -701,6 +722,7 @@ export default function OfficialMapScreen() {
               dismissSearchSignal={dismissMapSearchSignal}
               showReportStatusFilters
               reportStatusOptions={BDRRMO_MAP_REPORT_STATUS_OPTIONS}
+              reportLegendAudience="bdrrmo"
               showSearchBar={mapSearchVisible}
               showLayerPanelToggle={false}
               layerPanelAlign="right"
@@ -768,6 +790,7 @@ export default function OfficialMapScreen() {
                 loadingLabel="Loading local reports…"
                 reviewActionLabel="Manage report"
                 reviewAccessibilityVerb="Manage"
+                localResponseQueue
                 summaryText={(count) => `${count} awaiting BDRRMO action`}
                 summaryColor={colors.unverified}
               />
@@ -788,6 +811,7 @@ export default function OfficialMapScreen() {
             visible={selectedReports.length > 0}
             reports={selectedReports}
             statusPresentation={reportPresentation}
+            useScopedPresentation
             onClose={() => setSelectedReportIds([])}
           />
         </SafeAreaView>

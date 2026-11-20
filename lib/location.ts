@@ -1,15 +1,24 @@
 import * as Location from 'expo-location';
 import { supabase } from './supabase';
 import { promptOpenSettings } from './permissions';
+import {
+  getCachedOrFreshReportGpsPosition,
+  REPORT_GPS_CACHE_MAX_AGE_MS,
+  REPORT_LOCATION_MAX_ACCURACY_METERS,
+} from './reportLocation';
 export {
+  createLocationRequestTracker,
   distanceBetweenCoordinates,
+  getCachedOrFreshReportGpsPosition,
+  getRecentAccurateReportGpsPosition,
   getReportLocationAdjustmentLimit,
+  REPORT_GPS_CACHE_MAX_AGE_MS,
   REPORT_LOCATION_BASE_ADJUSTMENT_METERS,
   REPORT_LOCATION_MAX_ADJUSTMENT_METERS,
 } from './reportLocation';
 
 /** Max horizontal accuracy (meters) before the resident must confirm the pin. */
-export const REPORT_LOCATION_MAX_ACCURACY_METERS = 100;
+export { REPORT_LOCATION_MAX_ACCURACY_METERS };
 
 export type GpsPosition = {
   latitude: number;
@@ -62,8 +71,18 @@ async function ensureLocationPermission(): Promise<string | null> {
   return 'Location permission is required to submit a report.';
 }
 
+/** Check foreground location access without opening the operating-system prompt. */
+export async function hasForegroundLocationPermission(): Promise<boolean> {
+  try {
+    const permission = await Location.getForegroundPermissionsAsync();
+    return permission.granted;
+  } catch {
+    return false;
+  }
+}
+
 /** Request foreground permission and read a high-accuracy GPS fix once. */
-export async function getCurrentGps(): Promise<{
+export async function getCurrentGps(options?: { reuseRecentFix?: boolean }): Promise<{
   position: GpsPosition | null;
   error: string | null;
 }> {
@@ -73,26 +92,55 @@ export async function getCurrentGps(): Promise<{
   }
 
   try {
-    const current = await Location.getCurrentPositionAsync({
-      accuracy: Location.Accuracy.Highest,
-    });
+    let lastKnownCandidate = null;
+    if (options?.reuseRecentFix) {
+      let lastKnown: Location.LocationObject | null = null;
+      try {
+        lastKnown = await Location.getLastKnownPositionAsync({
+          maxAge: REPORT_GPS_CACHE_MAX_AGE_MS,
+          requiredAccuracy: REPORT_LOCATION_MAX_ACCURACY_METERS,
+        });
+      } catch {
+        // A cache read is optional; continue to a fresh GPS fix if it fails.
+      }
 
-    const latitude = current.coords.latitude;
-    const longitude = current.coords.longitude;
-    const rawAccuracy = current.coords.accuracy;
-    const accuracyMeters =
-      typeof rawAccuracy === 'number' && Number.isFinite(rawAccuracy)
-        ? rawAccuracy
+      lastKnownCandidate = lastKnown
+        ? {
+              latitude: lastKnown.coords.latitude,
+              longitude: lastKnown.coords.longitude,
+              accuracyMeters: lastKnown.coords.accuracy,
+              timestamp: lastKnown.timestamp,
+          }
         : null;
+    }
 
-    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+    const position = await getCachedOrFreshReportGpsPosition(
+      lastKnownCandidate,
+      async () => {
+        const current = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Highest,
+        });
+        const rawAccuracy = current.coords.accuracy;
+        return {
+          latitude: current.coords.latitude,
+          longitude: current.coords.longitude,
+          accuracyMeters:
+            typeof rawAccuracy === 'number' && Number.isFinite(rawAccuracy)
+              ? rawAccuracy
+              : null,
+          timestamp: current.timestamp,
+        };
+      },
+    );
+
+    if (
+      !Number.isFinite(position.latitude) ||
+      !Number.isFinite(position.longitude)
+    ) {
       return { position: null, error: 'Could not read a valid GPS position.' };
     }
 
-    return {
-      position: { latitude, longitude, accuracyMeters },
-      error: null,
-    };
+    return { position, error: null };
   } catch {
     return {
       position: null,
@@ -257,11 +305,14 @@ function withTimeout<T>(
 }
 
 /** Fresh GPS position with a bounded wait for location-dependent screens. */
-export function getCurrentGpsWithTimeout(timeoutMs = 20_000): Promise<{
+export function getCurrentGpsWithTimeout(
+  timeoutMs = 20_000,
+  options?: { reuseRecentFix?: boolean },
+): Promise<{
   position: GpsPosition | null;
   error: string | null;
 }> {
-  return withTimeout(getCurrentGps(), timeoutMs, {
+  return withTimeout(getCurrentGps(options), timeoutMs, {
     position: null,
     error: 'Getting your location took too long. Try again.',
   });
@@ -279,12 +330,18 @@ export function getNearbyReportsGpsWithTimeout(timeoutMs = 8_000): Promise<{
 }
 
 /** GPS + suggested barangay/municipality for the report modal. */
-export async function getCurrentGpsWithAddress(timeoutMs = 20000): Promise<{
+export async function getCurrentGpsWithAddress(
+  timeoutMs = 20_000,
+  options?: { reuseRecentFix?: boolean },
+): Promise<{
   position: GpsPosition | null;
   address: ReadableAddress | null;
   error: string | null;
 }> {
-  const { position, error: gpsError } = await getCurrentGpsWithTimeout(timeoutMs);
+  const { position, error: gpsError } = await getCurrentGpsWithTimeout(
+    timeoutMs,
+    options,
+  );
   if (!position) {
     return { position: null, address: null, error: gpsError };
   }
@@ -299,4 +356,15 @@ export async function getCurrentGpsWithAddress(timeoutMs = 20000): Promise<{
   }
 
   return { position, address, error: null };
+}
+
+/** Bound optional reverse lookup so the report pin can render without waiting on the network. */
+export function resolveReadableAddressWithTimeout(
+  position: Pick<GpsPosition, 'latitude' | 'longitude'>,
+  timeoutMs = 5_000,
+): Promise<{ address: ReadableAddress | null; error: string | null }> {
+  return withTimeout(resolveReadableAddress(position), timeoutMs, {
+    address: null,
+    error: 'Could not resolve barangay for this location.',
+  });
 }

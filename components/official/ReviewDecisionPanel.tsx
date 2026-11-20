@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Alert, Text, TouchableOpacity, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import {
   claimReportReview,
   type OfficialReportDetail,
@@ -16,6 +17,7 @@ import {
 import { randomUuid } from '../../lib/reportMedia';
 import ResourceFormSheet from './ResourceFormSheet';
 import { formatOperationTimestamp } from '../../lib/formatTime';
+import { colors } from '../../styles/theme';
 import { reportOperationsStyles as operationStyles } from '../../styles/components/reportOperations.styles';
 import {
   WorkflowActionRow,
@@ -39,13 +41,14 @@ const decisions: { value: DecisionChoice; label: string }[] = [
 ];
 
 export default function ReviewDecisionPanel(
-  { detail, currentUserId, onChanged, onOpenLinkSheet, onSuccess, stage }: {
+  { detail, currentUserId, onChanged, onOpenLinkSheet, onSuccess, stage, hideClaimInstruction = false }: {
     onSuccess?: (message: string) => void;
     stage?: 'claim' | 'decision';
     detail: OfficialReportDetail;
     currentUserId: string;
     onChanged: () => void;
     onOpenLinkSheet: () => void;
+    hideClaimInstruction?: boolean;
   },
 ) {
   const [open, setOpen] = useState(false);
@@ -239,10 +242,12 @@ export default function ReviewDecisionPanel(
       {actions.includes('claim')
         ? (
           <>
-            <Text style={operationStyles.caption}>
-              Take responsibility for this review. This does not confirm the
-              incident.
-            </Text>
+            {!hideClaimInstruction ? (
+              <Text style={operationStyles.caption}>
+                Take responsibility for this review. This does not confirm the
+                incident.
+              </Text>
+            ) : null}
             <WorkflowButton
               label='Take for review'
               disabled={busy}
@@ -324,30 +329,56 @@ export default function ReviewDecisionPanel(
         }}
         stableHeight
       >
-        {!canReopen && (
-          <WorkflowChoices
-            compact
-            label='What did you find?'
-            values={decisions.filter((option) =>
-              actions.includes(option.value)
-            )}
-            selected={decision}
-            disabled={busy}
-            onSelect={(value) => {
-              if (value === decision) return;
-              setDecision(value);
-              if (value === 'verify') {
-                setPublicationReview(null);
-                setPublicationLoading(true);
-                setPublicationError(null);
-              }
-              setReason(null);
-              setFieldErrors({});
-              setError(null);
-              setPublicationOperationId(randomUuid());
-            }}
-          />
-        )}
+        <View style={operationStyles.decisionChoicesGroup}>
+          {!canReopen && (
+            <WorkflowChoices
+              compact
+              stacked
+              hideLabel
+              label='What did you find?'
+              values={decisions.filter((option) =>
+                actions.includes(option.value)
+              )}
+              selected={decision}
+              disabled={busy}
+              onSelect={(value) => {
+                if (value === decision) return;
+                setDecision(value);
+                if (value === 'verify') {
+                  setPublicationReview(null);
+                  setPublicationLoading(true);
+                  setPublicationError(null);
+                }
+                setReason(null);
+                setFieldErrors({});
+                setError(null);
+                setPublicationOperationId(randomUuid());
+              }}
+            />
+          )}
+          {actions.includes('release') && (
+            <TouchableOpacity
+              style={operationStyles.decisionReleaseOption}
+              accessibilityRole='button'
+              disabled={busy}
+              onPress={() =>
+                Alert.alert(
+                  'Release this review?',
+                  'Another officer in your office can claim this report.',
+                  [{ text: 'Cancel', style: 'cancel' }, {
+                    text: 'Release',
+                    onPress: () => void run('release'),
+                  }],
+                )}
+            >
+              <Ionicons name='people-outline' size={19} color={colors.navigationActive} />
+              <Text style={operationStyles.decisionReleaseOptionText}>
+                Release to another officer
+              </Text>
+              <Ionicons name='chevron-forward' size={18} color={colors.navigationActive} />
+            </TouchableOpacity>
+          )}
+        </View>
         {decision === 'verify' && !canReopen ? (
           <>
             <WorkflowFeedback busy={publicationLoading} error={publicationError} />
@@ -368,6 +399,8 @@ export default function ReviewDecisionPanel(
               <ReportPublicationFields
                 sourceTitle={publicationReview.sourceTitle}
                 sourceDescription={publicationReview.sourceDescription}
+                showSourceText={false}
+                showPhotoGuidance={false}
                 acknowledged={publicationAcknowledged}
                 onAcknowledgedChange={(value) => {
                   setPublicationAcknowledged(value);
@@ -476,25 +509,6 @@ export default function ReviewDecisionPanel(
                 }],
               )}
           />
-        )}
-        {actions.includes('release') && (
-          <TouchableOpacity
-            style={operationStyles.quietAction}
-            disabled={busy}
-            onPress={() =>
-              Alert.alert(
-                'Release this review?',
-                'Another officer in your office can claim this report.',
-                [{ text: 'Cancel', style: 'cancel' }, {
-                  text: 'Release',
-                  onPress: () => void run('release'),
-                }],
-              )}
-          >
-            <Text style={operationStyles.quietActionText}>
-              Release to another officer
-            </Text>
-          </TouchableOpacity>
         )}
       </ResourceFormSheet>
     </View>

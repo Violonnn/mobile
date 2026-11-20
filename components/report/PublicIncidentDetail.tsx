@@ -219,6 +219,7 @@ export default function PublicIncidentDetail({
   const isWithdrawn = incident?.publicStatus === 'withdrawn';
   const lifecycle = incident ? publicIncidentLifecycle(incident.publicStatus) : null;
   const photos = incident ? publicIncidentMedia(incident) : [];
+  const hasEstablishedOutcome = Boolean(incident?.publicSummary) || incident?.publicStatus === 'resolved';
   const newestFirstUpdates = [...updates].reverse();
   const visibleUpdates = context === 'community'
     ? newestFirstUpdates
@@ -240,7 +241,7 @@ export default function PublicIncidentDetail({
       <ScrollView
         ref={scrollRef}
         style={reportDetailStyles.postModalScroll}
-        contentContainerStyle={reportDetailStyles.postModalScrollContent}
+        contentContainerStyle={[reportDetailStyles.postModalScrollContent, styles.sheetEdges]}
         showsVerticalScrollIndicator={false}
         bounces
         alwaysBounceVertical
@@ -278,13 +279,23 @@ export default function PublicIncidentDetail({
 
         {!loading && incident ? (
           <>
-            <View style={reportDetailStyles.detailBody}>
+            <View style={[reportDetailStyles.detailBody, styles.detailContentBody]}>
               <PublicIncidentHeader incident={incident} />
+
+              {context === 'community' ? (
+                <Text style={reportDetailStyles.detailDescription}>
+                  {publicIncidentCaption(incident)}
+                </Text>
+              ) : null}
 
               {photos.length > 0 ? (
                 <VerticalAttachmentList media={photos} onOpenPreview={openPreview} />
               ) : null}
               {incident.photoError ? <Text style={styles.meta}>{incident.photoError}</Text> : null}
+
+              {context === 'community' ? (
+                <PublicIncidentTags incident={incident} />
+              ) : null}
 
               {context === 'community' ? (
                 <EngagementActionsRow
@@ -304,15 +315,13 @@ export default function PublicIncidentDetail({
                 />
               ) : null}
 
-              <View style={reportDetailStyles.detailCard}>
-                <PublicIncidentTags incident={incident} />
-                <PublicIncidentCopy incident={incident} />
-              </View>
+              {context !== 'community' ? (
+                <View style={reportDetailStyles.detailCard}>
+                  <PublicIncidentTags incident={incident} />
+                  <PublicIncidentCopy incident={incident} />
+                </View>
+              ) : null}
 
-              <View style={styles.factRow}>
-                <Ionicons name="location-outline" size={16} color={colors.textMuted} />
-                <Text style={styles.factText}>{publicIncidentLocationLabel(incident)}</Text>
-              </View>
               {incident.linkedReportCount > 1 ? (
                 <View style={styles.factRow}>
                   <Ionicons name="people-outline" size={16} color={colors.textMuted} />
@@ -335,7 +344,7 @@ export default function PublicIncidentDetail({
               </View>
             ) : null}
             {incident.publicSummary ? (
-              <View style={[styles.noticeCard, { backgroundColor: RESIDENT_STAGE_TONES.resolved.softColor }]}>
+              <View style={[styles.noticeCard, styles.outcomeNoticeCard, { backgroundColor: RESIDENT_STAGE_TONES.resolved.softColor }]}>
                 <Text style={[styles.noticeLabel, { color: RESIDENT_STAGE_TONES.resolved.color }]}>Outcome</Text>
                 <Text style={styles.noticeText}>{incident.publicSummary}</Text>
               </View>
@@ -345,13 +354,17 @@ export default function PublicIncidentDetail({
 
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>
-                {context === 'community' ? 'Official updates' : 'Latest updates'}
+                {context === 'community'
+                  ? hasEstablishedOutcome ? 'Previous Updates' : 'Official updates'
+                  : 'Latest updates'}
               </Text>
               {visibleUpdates.length === 0 ? (
                 <Text style={styles.meta}>No public updates have been posted yet.</Text>
               ) : (
                 visibleUpdates.map((update, index) => {
-                  const tone = updateTone(update.entryType);
+                  const tone = hasEstablishedOutcome
+                    ? RESIDENT_STAGE_TONES.responding
+                    : updateTone(update.entryType);
                   const isLast = index === visibleUpdates.length - 1;
                   return (
                     <View key={`${update.occurredAt}-${index}`} style={styles.updateRow}>
@@ -421,6 +434,12 @@ export default function PublicIncidentDetail({
 }
 
 const styles = StyleSheet.create({
+  sheetEdges: {
+    paddingHorizontal: 12,
+  },
+  detailContentBody: {
+    gap: spacing.sm,
+  },
   stateBlock: {
     alignItems: 'center',
     gap: spacing.sm,
@@ -479,8 +498,12 @@ const styles = StyleSheet.create({
   },
   noticeCard: {
     gap: 4,
-    padding: spacing.md,
-    borderRadius: radius.md,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.sm,
+  },
+  outcomeNoticeCard: {
+    marginTop: -spacing.sm,
   },
   noticeLabel: {
     fontFamily: fonts.semibold,
@@ -517,8 +540,8 @@ const styles = StyleSheet.create({
   updateCard: {
     flex: 1,
     gap: 4,
-    padding: spacing.sm + 4,
-    borderRadius: radius.md,
+    padding: spacing.sm,
+    borderRadius: radius.sm,
   },
   updateLabel: {
     fontFamily: fonts.semibold,

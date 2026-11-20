@@ -7,12 +7,24 @@ import ts from 'typescript';
 import { formatOperationTimestamp } from '../lib/formatTime.ts';
 import {
   callOutcomeFeedback,
+  formatIncidentEventTitle,
   hotlineEventDetails,
+  responseServiceLabel,
 } from '../lib/reportContactFlow.ts';
 import type { HotlineRecord } from '../lib/resources';
 import type { useReportCallFlow } from '../hooks/useReportCallFlow';
 
 const reportId = 'a1000000-0000-4000-8000-000000000001';
+
+test('incident titles and municipal service labels support scoped display names', () => {
+  assert.equal(formatIncidentEventTitle('transfer_requested'), 'Lead transfer requested');
+  assert.equal(formatIncidentEventTitle('future_event_type'), 'Future Event Type');
+  assert.equal(responseServiceLabel({ service: 'mdrrmo_rescue' }), 'MDRRMO rescue');
+  assert.equal(
+    responseServiceLabel({ service: 'mdrrmo_rescue' }, 'MITCOM'),
+    'MITCOM rescue',
+  );
+});
 const hotline: HotlineRecord = {
   id: 'a2000000-0000-4000-8000-000000000001',
   name: 'Municipal rescue desk',

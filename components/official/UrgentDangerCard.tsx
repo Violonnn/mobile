@@ -1,10 +1,8 @@
 import React, { useState } from 'react';
-import { Ionicons } from '@expo/vector-icons';
 import { Text, TouchableOpacity, View } from 'react-native';
 import { fetchOfficialHotlines, type HotlineRecord } from '../../lib/resources';
 import { officialStyles as styles } from '../../styles/screens/official.styles';
 import { reportOperationsStyles as operationStyles } from '../../styles/components/reportOperations.styles';
-import { colors } from '../../styles/theme';
 import {
   WorkflowActionRow,
   WorkflowButton,
@@ -56,13 +54,10 @@ export default function UrgentDangerCard(
           if (!open) void load();
         }}
       >
-        <View style={operationStyles.urgentHelpMarker} accessible={false}>
-          <Ionicons name='call-outline' size={20} color={colors.navigationActive} />
-        </View>
-        <View style={operationStyles.rowCopy}>
-          <Text style={operationStyles.rowTitle}>Urgent help</Text>
-          <Text style={operationStyles.caption}>Response service hotlines</Text>
-        </View>
+        <Text style={operationStyles.urgentHelpPrompt} numberOfLines={1}>
+          <Text style={operationStyles.urgentHelpTitle}>Urgent help?</Text>{' '}
+          <Text style={operationStyles.urgentHelpLink}>Click here</Text>
+        </Text>
       </TouchableOpacity>
       {!hideActivityEntry && (
         <>
@@ -76,11 +71,7 @@ export default function UrgentDangerCard(
         </>
       )}
       {open && (
-        <View style={operationStyles.section}>
-          <Text style={operationStyles.caption}>
-            Choose a service to open your phone. Record the outcome after you
-            return.
-          </Text>
+        <View style={operationStyles.urgentHelpContent}>
           <WorkflowFeedback busy={busy} error={error} />
           {error && (
             <WorkflowButton
@@ -91,7 +82,7 @@ export default function UrgentDangerCard(
             />
           )}
           {!busy && !error && hotlines.length === 0 && (
-            <Text style={styles.subtitle}>
+            <Text style={[styles.subtitle, operationStyles.urgentHelpSubtitle]}>
               No active hotlines are listed for this office.
             </Text>
           )}
@@ -101,6 +92,7 @@ export default function UrgentDangerCard(
               title={hotline.name}
               description={hotline.number}
               icon='call-outline'
+              emphasized
               disabled={calling}
               onPress={() => {
                 setOpen(false);

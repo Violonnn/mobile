@@ -29,6 +29,7 @@ import { fetchMyOfficialPublicProfile, type OfficialPublicProfile } from '../../
 import MdrrmoCommunityFeed from '../../components/official/MdrrmoCommunityFeed';
 import BdrrmoCommunityFeed from '../../components/official/BdrrmoCommunityFeed';
 import { OfficialShellSkeleton } from '../../components/ui/OfficialScreenSkeletons';
+import { screenEdgeInset } from '../../styles/theme';
 
 const PAGE_SIZE = 5;
 // How close to the bottom (px) before we reveal the next batch of reports.
@@ -252,7 +253,7 @@ export default function OfficialCommunityScreen() {
               onRetryReports={() => void reloadReports()}
               onRefresh={() => void handleRefresh()}
               onScroll={handleScroll}
-              contentContainerStyle={styles.scrollContent}
+              contentContainerStyle={[styles.scrollContent, { paddingHorizontal: screenEdgeInset }]}
             />
           ) : officialKind === 'MDRRMO' || officialKind === 'Mayor' ? (
             <MdrrmoCommunityFeed
@@ -274,7 +275,7 @@ export default function OfficialCommunityScreen() {
               onRefresh={() => void handleRefresh()}
               onScroll={handleScroll}
               contentContainerStyle={styles.scrollContent}
-              roleVariant={officialKind === 'Mayor' ? 'mayor' : 'mdrrmo'}
+              roleVariant={officialKind === 'Mayor' ? 'mayor' : 'mitcom'}
               showCommandBack={openedFromCommand && officialKind === 'MDRRMO'}
               initialTab={requestedFeed === 'official' ? 'official' : 'community'}
             />

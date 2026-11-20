@@ -67,6 +67,7 @@ type Props = {
   barangaysError: string | null;
   selectedBarangayId: string | null;
   onSelectBarangay: (id: string) => void;
+  onOpenBarangayPicker?: () => void;
   /** Officials with a barangay assignment cannot change the report scope. */
   barangaySelectionLocked?: boolean;
   barangayLockMessage?: string;
@@ -98,6 +99,7 @@ export default function DetailsStep({
   barangaysError,
   selectedBarangayId,
   onSelectBarangay,
+  onOpenBarangayPicker,
   barangaySelectionLocked = false,
   barangayLockMessage,
   onRetryBarangays,
@@ -124,9 +126,24 @@ export default function DetailsStep({
     );
   };
 
+  const selectedBarangayName = barangays.find(
+    (barangay) => barangay.id === selectedBarangayId,
+  )?.name;
+
   if (residentLayout) {
     return (
       <View style={styles.stepContent}>
+        {onBack ? (
+          <TouchableOpacity
+            style={styles.residentStepBack}
+            onPress={onBack}
+            accessibilityRole="button"
+            accessibilityLabel="Back to evidence"
+          >
+            <Ionicons name="chevron-back" size={18} color={reportColors.primary} />
+            <Text style={styles.residentStepBackText}>Back to evidence</Text>
+          </TouchableOpacity>
+        ) : null}
         <Text style={styles.residentStepTitle}>Tell responders what{`\n`}happened</Text>
         <Text style={styles.residentStepSubtitle}>
           Short, clear details are easier to act on.
@@ -258,7 +275,7 @@ export default function DetailsStep({
           maximum={RESIDENT_LANDMARK_MAX_LENGTH}
         />
 
-        {!selectedBarangayId || barangaysLoading || barangaysError ? (
+        {barangaysLoading || barangaysError ? (
           <View style={styles.residentBarangayState}>
             {barangaysLoading ? (
               <ActivityIndicator size="small" color={reportColors.primary} />
@@ -267,12 +284,34 @@ export default function DetailsStep({
             )}
             <Text style={styles.residentBarangayStateText}>
               {barangaysLoading
-                ? 'Confirming the response area…'
+                ? 'Loading barangays…'
                 : barangaysError ?? 'A response area could not be confirmed.'}
             </Text>
             {!barangaysLoading ? (
               <TouchableOpacity onPress={onRetryBarangays} accessibilityRole="button">
                 <Text style={styles.residentRetryText}>Retry</Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
+        ) : null}
+
+        {!barangaysLoading && !barangaysError ? (
+          <View style={[styles.residentBarangayState, styles.residentBarangaySelection]}>
+            <Ionicons name="location-outline" size={18} color={reportColors.primary} />
+            <Text style={styles.residentBarangayStateText}>
+              {selectedBarangayName ?? 'Select the incident barangay'}
+            </Text>
+            {onOpenBarangayPicker ? (
+              <TouchableOpacity
+                onPress={onOpenBarangayPicker}
+                disabled={submitting || barangays.length === 0}
+                accessibilityRole="button"
+                accessibilityState={{ disabled: submitting || barangays.length === 0 }}
+                accessibilityLabel={selectedBarangayName ? 'Change incident barangay' : 'Select incident barangay'}
+              >
+                <Text style={styles.residentBarangayActionText}>
+                  {selectedBarangayName ? 'Change' : 'Select'}
+                </Text>
               </TouchableOpacity>
             ) : null}
           </View>
@@ -364,7 +403,7 @@ export default function DetailsStep({
       <View style={styles.gpsRow}>
         <Ionicons name="location-sharp" size={18} color={reportColors.primary} />
         <Text style={styles.gpsText} numberOfLines={1}>
-          {address?.label ?? 'Location captured'}
+          {address?.label ?? (locationConfirmed ? 'Location captured' : 'Confirm location next')}
         </Text>
       </View>
 

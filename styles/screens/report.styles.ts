@@ -209,6 +209,19 @@ export const reportStyles = StyleSheet.create({
     lineHeight: 19,
     color: '#31558B',
   },
+  residentStepBack: {
+    alignSelf: 'flex-start',
+    minHeight: 36,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginBottom: spacing.xs,
+  },
+  residentStepBackText: {
+    fontFamily: fonts.medium,
+    fontSize: fontSizes.sm,
+    color: reportColors.primary,
+  },
   locationCenter: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -505,6 +518,21 @@ export const reportStyles = StyleSheet.create({
     shadowOffset: { width: 0, height: 10 },
     elevation: 14,
   },
+  residentBarangayPickerEmbeddedWrap: {
+    width: '100%',
+    alignItems: 'center',
+  },
+  residentBarangayPickerEmbeddedCard: {
+    width: '100%',
+    maxWidth: '100%',
+    height: 420,
+    maxHeight: 520,
+    borderWidth: 1,
+    borderColor: reportColors.border,
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  residentBarangayPickerEmbeddedList: { flex: 1 },
   residentBarangayPickerHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -881,6 +909,9 @@ export const reportStyles = StyleSheet.create({
     borderRadius: 9,
     backgroundColor: '#FFF5EF',
   },
+  residentBarangaySelection: {
+    backgroundColor: reportColors.primaryLight,
+  },
   residentBarangayStateText: {
     flex: 1,
     fontFamily: fonts.regular,
@@ -890,6 +921,11 @@ export const reportStyles = StyleSheet.create({
   residentRetryText: {
     fontFamily: fonts.semibold,
     fontSize: 11,
+    color: reportColors.primary,
+  },
+  residentBarangayActionText: {
+    fontFamily: fonts.semibold,
+    fontSize: fontSizes.sm,
     color: reportColors.primary,
   },
 
@@ -1366,6 +1402,7 @@ export const reportStyles = StyleSheet.create({
     backgroundColor: '#D15A3A',
   },
   successTitle: {
+    width: '100%',
     fontFamily: fonts.bold,
     fontSize: 22,
     color: reportColors.text,

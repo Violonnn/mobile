@@ -452,10 +452,29 @@ export const officialStyles = StyleSheet.create({
     minWidth: 0,
     gap: 2,
   },
+  reporterIdentityNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
   reporterIdentityName: {
     fontFamily: fonts.semibold,
     fontSize: fontSizes.md,
     color: colors.text,
+  },
+  reporterIdentityNameInline: {
+    flexShrink: 1,
+  },
+  reporterIdentityDate: {
+    flexShrink: 0,
+    fontFamily: fonts.regular,
+    fontSize: 11,
+    color: colors.textMuted,
+  },
+  reporterIdentityRoleInline: {
+    fontFamily: fonts.semibold,
+    fontSize: fontSizes.md,
+    color: colors.primary,
   },
   reporterIdentityRole: {
     fontFamily: fonts.regular,

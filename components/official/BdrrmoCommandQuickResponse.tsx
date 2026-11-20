@@ -1,10 +1,10 @@
 import React from 'react';
-import { Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter, type Href } from 'expo-router';
 
 import { mdrrmoCommandStyles as styles } from '../../styles/screens/mdrrmoCommand.styles';
-import { colors } from '../../styles/theme';
+import { colors, screenEdgeInset } from '../../styles/theme';
 
 const QUICK_ACTIONS = [
   {
@@ -39,17 +39,23 @@ export default function BdrrmoCommandQuickResponse() {
   const router = useRouter();
 
   return (
-    <View style={styles.quickResponseSection}>
+    <View style={[styles.quickResponseSection, { paddingHorizontal: screenEdgeInset }]}>
       <View style={styles.quickResponseHeader}>
         <Text style={styles.quickResponseTitle}>Quick tools</Text>
       </View>
 
-      <View style={styles.quickResponseActions}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.quickResponseActions}
+        contentContainerStyle={styles.quickResponseScrollableActionsContent}
+      >
         {QUICK_ACTIONS.map((action, index) => (
           <TouchableOpacity
             key={action.label}
             style={[
               styles.quickResponseAction,
+              styles.quickResponseScrollableAction,
               index < QUICK_ACTIONS.length - 1 && styles.quickResponseActionBorder,
             ]}
             onPress={() => router.push(action.route as Href)}
@@ -61,10 +67,12 @@ export default function BdrrmoCommandQuickResponse() {
             ) : (
               <Ionicons name={action.icon} size={31} color={colors.navigationActive} />
             )}
-            <Text style={styles.quickResponseActionLabel}>{action.label}</Text>
+            <Text style={styles.quickResponseBdrrmoActionLabel} numberOfLines={1}>
+              {action.label}
+            </Text>
           </TouchableOpacity>
         ))}
-      </View>
+      </ScrollView>
     </View>
   );
 }

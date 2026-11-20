@@ -34,6 +34,7 @@ import {
     type ReportMediaAttachment,
 } from '../../lib/reports';
 import { colors, fonts, fontSizes, radius, spacing } from '../../styles/theme';
+import { residentTypography } from '../../styles/residentTypography';
 import ResidentBottomSheet from '../ui/ResidentBottomSheet';
 import { ReportDetailSheetSkeleton } from '../ui/ResidentScreenSkeletons';
 import RemoteMediaImage from '../media/RemoteMediaImage';
@@ -69,21 +70,50 @@ function residentStatusLabel(status: string): string {
 export function CommunityReportTags({
   report,
   statusPresentation,
+  useScopedPresentation = false,
+  singleLine = false,
+  largeText = false,
+  compactWrap = false,
 }: {
   report: Pick<MapReportMarker, 'status' | 'incidentType' | 'incidentTypeOther' | 'lifecycle'>;
-  statusPresentation?: { label: string; color: string; backgroundColor?: string };
+  statusPresentation?: {
+    label: string;
+    color: string;
+    backgroundColor?: string;
+    coordinationLabel?: string | null;
+  };
+  useScopedPresentation?: boolean;
+  /** Keep both tags on one row when a compact queue needs it. */
+  singleLine?: boolean;
+  /** Match the larger typography used in official report operations. */
+  largeText?: boolean;
+  /** Wrap full, single-line tags onto another row with a tighter gap. */
+  compactWrap?: boolean;
 }) {
-  statusPresentation = statusPresentation ?? getMapReportPresentation(report);
+  statusPresentation = statusPresentation ?? getMapReportPresentation(
+    report,
+    useScopedPresentation ? 'resident' : undefined,
+  );
   const statusColor = statusPresentation.color;
 
   return (
-    <IncidentTagRow
-      statusLabel={statusPresentation?.label ?? residentStatusLabel(report.status)}
-      statusColor={statusColor}
-      statusBackgroundColor={statusPresentation?.backgroundColor}
-      incidentType={report.incidentType}
-      incidentTypeLabel={formatIncidentType(report.incidentType, report.incidentTypeOther)}
-    />
+    <>
+      <IncidentTagRow
+        statusLabel={statusPresentation?.label ?? residentStatusLabel(report.status)}
+        statusColor={statusColor}
+        statusBackgroundColor={statusPresentation?.backgroundColor}
+        incidentType={report.incidentType}
+        incidentTypeLabel={formatIncidentType(report.incidentType, report.incidentTypeOther)}
+        singleLine={singleLine}
+        largeText={largeText}
+        compactWrap={compactWrap}
+      />
+      {statusPresentation?.coordinationLabel ? (
+        <Text style={[residentFeedStyles.coordinationMeta, largeText && { fontSize: fontSizes.lg, lineHeight: 22 }]}>
+          {statusPresentation.coordinationLabel}
+        </Text>
+      ) : null}
+    </>
   );
 }
 
@@ -94,34 +124,48 @@ export function IncidentTagRow({
   statusBackgroundColor,
   incidentType,
   incidentTypeLabel,
+  singleLine = false,
+  largeText = false,
+  compactWrap = false,
 }: {
   statusLabel: string;
   statusColor: string;
   statusBackgroundColor?: string;
   incidentType: string | null | undefined;
   incidentTypeLabel: string;
+  singleLine?: boolean;
+  largeText?: boolean;
+  compactWrap?: boolean;
 }) {
   const typeTone = incidentTypeTone(incidentType);
 
   return (
-    <View style={residentFeedStyles.statusRow}>
+    <View
+      style={[
+        residentFeedStyles.statusRow,
+        singleLine && { flexWrap: 'nowrap' },
+        compactWrap && residentFeedStyles.compactWrappedStatusRow,
+      ]}
+    >
       <View
         style={[
           residentFeedStyles.statusPill,
+          compactWrap && residentFeedStyles.compactWrappedStatusPill,
           { borderColor: statusColor, backgroundColor: statusBackgroundColor ?? colors.card },
         ]}
       >
         <View style={[residentFeedStyles.statusDot, { backgroundColor: statusColor }]} />
-        <Text numberOfLines={2} ellipsizeMode="tail" style={[residentFeedStyles.statusText, { color: statusColor }]}>{label}</Text>
+        <Text numberOfLines={compactWrap ? 1 : 2} ellipsizeMode="tail" style={[residentFeedStyles.statusText, largeText && { fontSize: fontSizes.lg, lineHeight: 22 }, { color: statusColor }]}>{label}</Text>
       </View>
       <View
         style={[
           residentFeedStyles.statusPill,
+          compactWrap && residentFeedStyles.compactWrappedStatusPill,
           { borderColor: typeTone.color, backgroundColor: typeTone.softColor },
         ]}
       >
         <Ionicons name={typeTone.icon} size={12} color={typeTone.color} style={residentFeedStyles.statusIcon} />
-        <Text numberOfLines={2} ellipsizeMode="tail" style={[residentFeedStyles.statusText, { color: typeTone.color }]}>
+        <Text numberOfLines={compactWrap ? 1 : 2} ellipsizeMode="tail" style={[residentFeedStyles.statusText, largeText && { fontSize: fontSizes.lg, lineHeight: 22 }, { color: typeTone.color }]}>
           {incidentTypeLabel}
         </Text>
       </View>
@@ -319,6 +363,7 @@ export function EngagementActionsRow({
   disabled = false,
   compact = false,
   hideShare = false,
+  tightVerticalSpacing = false,
   onToggleUpvote,
   onCommentPress,
   onShare,
@@ -329,6 +374,7 @@ export function EngagementActionsRow({
   disabled?: boolean;
   compact?: boolean;
   hideShare?: boolean;
+  tightVerticalSpacing?: boolean;
   onToggleUpvote?: () => void;
   onCommentPress?: () => void;
   onShare?: () => void;
@@ -339,6 +385,7 @@ export function EngagementActionsRow({
         reportDetailStyles.engagementRow,
         !hideShare && reportDetailStyles.engagementRowThreeActions,
         compact && reportDetailStyles.engagementRowCompact,
+        tightVerticalSpacing && reportDetailStyles.engagementRowTight,
       ]}
     >
       <TouchableOpacity
@@ -695,7 +742,14 @@ type ReportDetailContentProps = {
   showIncidentType?: boolean;
   /** Uses the bordered status and incident tags from the resident Community feed. */
   showCommunityTags?: boolean;
-  statusPresentation?: { label: string; color: string; backgroundColor?: string };
+  statusPresentation?: {
+    label: string;
+    color: string;
+    backgroundColor?: string;
+    coordinationLabel?: string | null;
+  };
+  /** Opts resident/map surfaces into scoped office naming; Mayor keeps the default. */
+  useScopedPresentation?: boolean;
   /** Hide the report date/time and location beneath the resident name. */
   showReporterMetadata?: boolean;
   /** Vertically align a metadata-free resident name with its avatar. */
@@ -721,6 +775,7 @@ export function ReportDetailContent({
   showIncidentType = true,
   showCommunityTags = false,
   statusPresentation,
+  useScopedPresentation = false,
   showReporterMetadata = true,
   centerReporterName = false,
   showActivityDates = false,
@@ -783,7 +838,11 @@ export function ReportDetailContent({
 
       <View style={reportDetailStyles.detailCard}>
         {showCommunityTags ? (
-          <CommunityReportTags report={report} statusPresentation={statusPresentation} />
+          <CommunityReportTags
+            report={report}
+            statusPresentation={statusPresentation}
+            useScopedPresentation={useScopedPresentation}
+          />
         ) : showIncidentType ? (
           <View style={reportDetailStyles.incidentTypePill}>
             <Ionicons name="warning-outline" size={14} color={colors.navigationActive} />
@@ -811,12 +870,19 @@ export function ResidentFeedReportContent({
   onRequestComments,
   onShareReport,
   statusPresentation,
+  useScopedPresentation = false,
 }: {
   report: MapReportMarker;
   onRequestExpand?: () => void;
   onRequestComments: () => void;
   onShareReport: () => void;
-  statusPresentation?: { label: string; color: string; backgroundColor?: string };
+  statusPresentation?: {
+    label: string;
+    color: string;
+    backgroundColor?: string;
+    coordinationLabel?: string | null;
+  };
+  useScopedPresentation?: boolean;
 }) {
   const { getState, toggleUpvote } = useReportEngagement();
   const { upvoteCount, commentCount, hasUpvoted } = getState(report);
@@ -879,7 +945,11 @@ export function ResidentFeedReportContent({
         />
       )}
 
-      <CommunityReportTags report={report} statusPresentation={statusPresentation} />
+      <CommunityReportTags
+        report={report}
+        statusPresentation={statusPresentation}
+        useScopedPresentation={useScopedPresentation}
+      />
 
       <View style={residentFeedStyles.actionRow}>
         <View style={residentFeedStyles.engagementActions}>
@@ -947,6 +1017,8 @@ export function ReportDetailCard({
   report,
   isLast = false,
   variant = 'default',
+  statusPresentation,
+  showCommunityTags = false,
   detailCacheScope,
   openRequestKey,
   onViewOnMap,
@@ -954,6 +1026,13 @@ export function ReportDetailCard({
   report: MapReportMarker;
   isLast?: boolean;
   variant?: 'default' | 'residentFeed';
+  statusPresentation?: {
+    label: string;
+    color: string;
+    backgroundColor?: string;
+    coordinationLabel?: string | null;
+  };
+  showCommunityTags?: boolean;
   /** Scopes short-lived detail caching to one signed-in resident. */
   detailCacheScope?: string | null;
   openRequestKey?: string;
@@ -1051,14 +1130,19 @@ export function ReportDetailCard({
         {variant === 'residentFeed' ? (
           <ResidentFeedReportContent
             report={report}
+            statusPresentation={statusPresentation}
             onRequestComments={() => openExpanded(true)}
             onShareReport={shareReport}
+            useScopedPresentation
           />
         ) : (
           <ReportDetailContent
             report={report}
+            statusPresentation={statusPresentation}
+            showCommunityTags={showCommunityTags}
             onRequestExpand={() => openExpanded(false)}
             onRequestComments={() => openExpanded(true)}
+            useScopedPresentation
           />
         )}
       </Pressable>
@@ -1109,6 +1193,9 @@ export function ReportDetailCard({
                 <>
                   <ReportDetailContent
                     report={detailReport}
+                    statusPresentation={statusPresentation}
+                    showCommunityTags={showCommunityTags}
+                    useScopedPresentation
                     showingAllMedia
                     onShowingAllMediaChange={() => {}}
                     onRequestComments={jumpToComments}
@@ -1124,7 +1211,7 @@ export function ReportDetailCard({
                     </Text>
                   ) : null}
 
-                  {detailCacheScope === detailReport.reporter.id && <ResidentReportProgress report={detailReport} refreshSignal={refreshVersion} />}
+                  {detailCacheScope === detailReport.reporter.id && <ResidentReportProgress report={detailReport} refreshSignal={refreshVersion} useScopedPresentation />}
 
                   {onViewOnMap ? (
                     <TouchableOpacity
@@ -1211,6 +1298,17 @@ export const residentFeedStyles = StyleSheet.create({
     gap: spacing.sm,
     flexWrap: 'wrap',
   },
+  compactWrappedStatusRow: {
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+  },
+  coordinationMeta: {
+    marginTop: spacing.xs,
+    fontFamily: fonts.regular,
+    fontSize: fontSizes.sm,
+    lineHeight: 18,
+    color: colors.textMuted,
+  },
   statusPill: {
     maxWidth: '100%',
     flexShrink: 1,
@@ -1221,6 +1319,10 @@ export const residentFeedStyles = StyleSheet.create({
     paddingVertical: 4,
     borderWidth: 1,
     borderRadius: radius.full,
+  },
+  compactWrappedStatusPill: {
+    flexShrink: 0,
+    paddingVertical: 3,
   },
   statusDot: {
     width: 6,
@@ -1283,10 +1385,7 @@ export const residentFeedStyles = StyleSheet.create({
     color: colors.text,
   },
   reportDescription: {
-    fontFamily: fonts.regular,
-    fontSize: fontSizes.md,
-    lineHeight: 22,
-    color: colors.text,
+    ...residentTypography.body,
   },
   actionRow: {
     minHeight: 42,
@@ -1367,10 +1466,7 @@ export const reportDetailStyles = StyleSheet.create({
     color: colors.text,
   },
   detailDescription: {
-    fontFamily: fonts.regular,
-    fontSize: fontSizes.md,
-    color: colors.text,
-    lineHeight: 22,
+    ...residentTypography.body,
   },
   detailRefreshError: {
     fontFamily: fonts.regular,
@@ -1562,6 +1658,9 @@ export const reportDetailStyles = StyleSheet.create({
     gap: spacing.md,
     paddingVertical: 0,
     flexShrink: 0,
+  },
+  engagementRowTight: {
+    paddingVertical: 0,
   },
   engagementButton: {
     padding: spacing.xs,

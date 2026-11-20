@@ -85,7 +85,7 @@ type Props = {
   onRefresh: () => void;
   onScroll: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
   contentContainerStyle: StyleProp<ViewStyle>;
-  roleVariant?: 'mdrrmo' | 'mayor';
+  roleVariant?: 'mdrrmo' | 'mitcom' | 'mayor';
   showCommandBack?: boolean;
   initialTab?: FeedTab;
 };
@@ -424,6 +424,7 @@ export default function MdrrmoCommunityFeed({
                   key={report.id}
                   report={report}
                   variant="residentFeed"
+                  audience={roleVariant === 'mitcom' ? 'mitcom' : undefined}
                   isLast={index === visibleReports.length - 1}
                   onPress={() => openReport(report.id)}
                   onCommentPress={() => openReport(report.id, true)}
@@ -518,7 +519,12 @@ export default function MdrrmoCommunityFeed({
                   announcement={announcement}
                   moderationMode="scoped"
                   variant="residentFeedPost"
-                  officeLabel={formatAnnouncementOfficeLabel(announcement)}
+                  officeLabel={formatAnnouncementOfficeLabel(
+                    announcement,
+                    undefined,
+                    roleVariant === 'mitcom' ? 'MITCOM' : 'MDRRMO',
+                  )}
+                  useScopedOfficeLabels={roleVariant === 'mitcom'}
                   cardStyle={
                     index === filteredAnnouncements.length - 1
                       ? styles.feedPostLast
@@ -615,7 +621,7 @@ export default function MdrrmoCommunityFeed({
               <View style={styles.filterChoices}>
                 {([
                   ['all', 'All updates'],
-                  ['municipal', isMayor ? 'Municipal' : 'MDRRMO'],
+                  ['municipal', isMayor ? 'Municipal' : roleVariant === 'mitcom' ? 'MITCOM' : 'MDRRMO'],
                   ['barangay', 'Barangays'],
                 ] as const).map(([value, label]) => (
                   <TouchableOpacity

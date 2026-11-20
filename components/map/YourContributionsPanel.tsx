@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import {
   ActivityIndicator,
   type GestureResponderHandlers,
@@ -11,10 +11,10 @@ import { Ionicons } from '@expo/vector-icons';
 
 import {
   formatReportLocation,
-  getReportStatusPresentation,
-  getLifecyclePresentation,
+  getMapReportPresentation,
   type MapReportMarker,
 } from '../../lib/reports';
+import { formatPublishedAt } from '../../lib/formatTime';
 import { contributionStyles as styles } from '../../styles/components/yourContributions.styles';
 import { colors } from '../../styles/theme';
 import { useReportDetail } from '../../hooks/useReportDetail';
@@ -22,87 +22,18 @@ import { CollageCellContent } from '../report/ReportDetailCard';
 import IncidentTypeBadge from '../report/IncidentTypeBadge';
 import { residentReportStatusIconName } from '../report/ReportStatusTimeline';
 import { ContributionSkeleton } from '../ui/ResidentScreenSkeletons';
-import { ResidentReportPreviewContent } from './ResidentReportPreviewSheet';
-
-type ContributionDateGroup = {
-  key: string;
-  label: string;
-  reports: MapReportMarker[];
-};
+import {
+  formatReportCode,
+  ResidentReportPreviewContent,
+} from './ResidentReportPreviewSheet';
 
 export type ContributionPanelState = 'collapsed' | 'medium' | 'expanded';
-
-function formatContributionTime(isoDate: string): string {
-  const parsedDate = new Date(isoDate);
-  if (Number.isNaN(parsedDate.getTime())) return 'Date unavailable';
-
-  return parsedDate.toLocaleTimeString(undefined, {
-    hour: 'numeric',
-    minute: '2-digit',
-  });
-}
 
 function formatContributionTitle(title: string): string {
   const normalizedTitle = title.trim().toLocaleLowerCase();
   if (!normalizedTitle) return 'Untitled report';
 
   return `${normalizedTitle.charAt(0).toLocaleUpperCase()}${normalizedTitle.slice(1)}`;
-}
-
-function getContributionDateKey(isoDate: string): string {
-  const parsedDate = new Date(isoDate);
-  if (Number.isNaN(parsedDate.getTime())) return 'date-unavailable';
-
-  return `${parsedDate.getFullYear()}-${parsedDate.getMonth()}-${parsedDate.getDate()}`;
-}
-
-function formatContributionGroupLabel(isoDate: string, now: Date): string {
-  const parsedDate = new Date(isoDate);
-  if (Number.isNaN(parsedDate.getTime())) return 'Date unavailable';
-
-  // UTC day numbers compare local calendar dates safely across daylight-saving changes.
-  const todayDayNumber = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
-  const reportDayNumber = Date.UTC(
-    parsedDate.getFullYear(),
-    parsedDate.getMonth(),
-    parsedDate.getDate(),
-  );
-  const calendarDaysAgo = Math.round((todayDayNumber - reportDayNumber) / 86_400_000);
-
-  if (calendarDaysAgo === 0) return 'Today';
-  if (calendarDaysAgo === 1) return 'Yesterday';
-
-  return parsedDate.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-  });
-}
-
-function groupContributionsByDate(
-  reports: MapReportMarker[],
-  now: Date,
-): ContributionDateGroup[] {
-  const groups: ContributionDateGroup[] = [];
-  const groupByKey = new Map<string, ContributionDateGroup>();
-
-  reports.forEach((report) => {
-    const key = getContributionDateKey(report.created_at);
-    const existingGroup = groupByKey.get(key);
-    if (existingGroup) {
-      existingGroup.reports.push(report);
-      return;
-    }
-
-    const newGroup: ContributionDateGroup = {
-      key,
-      label: formatContributionGroupLabel(report.created_at, now),
-      reports: [report],
-    };
-    groupByKey.set(key, newGroup);
-    groups.push(newGroup);
-  });
-
-  return groups;
 }
 
 function contributionStatus(report: MapReportMarker): {
@@ -120,7 +51,7 @@ function contributionStatus(report: MapReportMarker): {
     };
   }
 
-  const presentation = report.lifecycle ? getLifecyclePresentation(report.lifecycle) : getReportStatusPresentation(report.status);
+  const presentation = getMapReportPresentation(report, 'resident');
   return {
     label: presentation.label,
     icon: residentReportStatusIconName(report.status),
@@ -159,6 +90,7 @@ export default function YourContributionsPanel({
   detailCacheScope,
   onReportPress,
   onShowReportOnMap,
+  canShowReportOnMap,
   onRetry,
   panelState,
   onToggleExpanded,
@@ -172,6 +104,7 @@ export default function YourContributionsPanel({
   detailCacheScope: string | null;
   onReportPress: () => void;
   onShowReportOnMap: (report: MapReportMarker) => void;
+  canShowReportOnMap: (report: MapReportMarker) => boolean;
   onRetry: () => void;
   panelState: ContributionPanelState;
   onToggleExpanded: () => void;
@@ -181,6 +114,7 @@ export default function YourContributionsPanel({
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
   const resolvedCount = reports.filter((report) => report.status === 'resolved').length;
   const selectedReport = reports.find((report) => report.id === selectedReportId) ?? null;
+  const selectedReportCanShowOnMap = selectedReport ? canShowReportOnMap(selectedReport) : false;
   const {
     report: selectedReportDetail,
     refreshError: detailError,
@@ -193,11 +127,6 @@ export default function YourContributionsPanel({
     !detailError &&
     !selectedReportDetail?.mediaDetailLoaded,
   );
-  const contributionGroups = useMemo(
-    () => groupContributionsByDate(reports, new Date()),
-    [reports],
-  );
-
   const openContribution = (report: MapReportMarker) => {
     setSelectedReportId(report.id);
     onReportPress();
@@ -244,7 +173,7 @@ export default function YourContributionsPanel({
             >
               <Text style={styles.eyebrow}>REPORT DETAILS</Text>
               <Text style={styles.headerSubtitle}>
-                {formatContributionTitle(selectedReport.title)}
+                #{formatReportCode(selectedReport.id)}
               </Text>
             </TouchableOpacity>
             <View style={styles.backButton} />
@@ -298,7 +227,8 @@ export default function YourContributionsPanel({
             <ResidentReportPreviewContent
               report={selectedReportDetail ?? selectedReport}
               onOpenFullReport={() => onShowReportOnMap(selectedReport)}
-              primaryActionLabel="Show on map"
+              primaryActionLabel={selectedReportCanShowOnMap ? 'Show on map' : null}
+              unavailableActionMessage={selectedReportCanShowOnMap ? undefined : 'Location is not shared on resident maps.'}
               showActivity
             />
           ) : null}
@@ -333,9 +263,7 @@ export default function YourContributionsPanel({
           </View>
         ) : (
           <>
-            {contributionGroups.map((group) => (
-              <View key={group.key} style={styles.dateGroup}>
-                {group.reports.map((report) => {
+            {reports.map((report) => {
                   const status = contributionStatus(report);
                   const isLatest = report.id === reports[0]?.id;
 
@@ -354,9 +282,15 @@ export default function YourContributionsPanel({
                     >
                       <View style={styles.cardMain}>
                         <View style={styles.cardCopy}>
-                          <View style={styles.dateStatusRow}>
-                            <Text style={styles.dateGroupTitle}>{group.label}</Text>
-                            <Text style={styles.dateSeparator}>•</Text>
+                          <View style={styles.titleDateRow}>
+                            <Text style={[styles.reportTitle, isLatest && styles.latestReportTitle]} numberOfLines={2}>
+                              {formatContributionTitle(report.title)}
+                            </Text>
+                            <Text style={styles.dateText} numberOfLines={1}>
+                              {formatPublishedAt(report.created_at)}
+                            </Text>
+                          </View>
+                          <View style={styles.reportTagRow}>
                             {isLatest ? <Text style={styles.latestBadge}>LATEST</Text> : null}
                             <View
                               style={[
@@ -372,19 +306,16 @@ export default function YourContributionsPanel({
                                 {status.label}
                               </Text>
                             </View>
+                            <IncidentTypeBadge
+                              incidentType={report.incidentType}
+                              incidentTypeOther={report.incidentTypeOther}
+                              labelFontSize={14}
+                            />
                           </View>
-
-                          <Text style={[styles.reportTitle, isLatest && styles.latestReportTitle]}>
-                            {formatContributionTitle(report.title)}
-                          </Text>
-                          <IncidentTypeBadge
-                            incidentType={report.incidentType}
-                            incidentTypeOther={report.incidentTypeOther}
-                          />
                           <View style={styles.metadataRow}>
                             <Ionicons name="location-outline" size={15} color={colors.textMuted} />
                             <Text style={styles.metadataText}>
-                              {formatContributionTime(report.created_at)} • {formatReportLocation(report)}
+                              {formatReportLocation(report)}
                             </Text>
                           </View>
                           <Text style={styles.description}>
@@ -397,9 +328,9 @@ export default function YourContributionsPanel({
 
                       <View style={styles.cardFooter}>
                         <View style={styles.engagementSummary}>
-                          <Ionicons name="arrow-up-outline" size={16} color={colors.textMuted} />
+                          <Ionicons name="arrow-up-circle-outline" size={21} color={colors.textMuted} />
                           <Text style={styles.engagementText}>{report.upvoteCount}</Text>
-                          <Ionicons name="chatbubble-outline" size={15} color={colors.textMuted} />
+                          <Ionicons name="chatbubble-outline" size={21} color={colors.textMuted} />
                           <Text style={styles.engagementText}>{report.commentCount}</Text>
                         </View>
                         <View style={styles.openAction}>
@@ -410,8 +341,6 @@ export default function YourContributionsPanel({
                     </TouchableOpacity>
                   );
                 })}
-              </View>
-            ))}
 
             <View style={styles.summaryRow}>
               <View style={styles.summaryCopy}>

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   RefreshControl,
   ScrollView,
@@ -14,6 +14,8 @@ import CommandEscalationMap from './CommandEscalationMap';
 import CommandQuickResponse from './CommandQuickResponse';
 import MdrrmoBarangayFieldUpdates from './MdrrmoBarangayFieldUpdates';
 import { useAnnouncements } from '../../hooks/useAnnouncements';
+import { useOfficialReportQueue } from '../../hooks/useOfficialReports';
+import { useOfficialPortal } from '../../context/OfficialPortalContext';
 import type { OfficialReportQueueItem } from '../../lib/officialReports';
 import { officialStyles } from '../../styles/screens/official.styles';
 import { mdrrmoCommandStyles as styles } from '../../styles/screens/mdrrmoCommand.styles';
@@ -21,6 +23,7 @@ import { CommandScreenSkeleton } from '../ui/OfficialScreenSkeletons';
 
 type MdrrmoCommandDashboardProps = {
   reports: OfficialReportQueueItem[];
+  reportsCount: number;
   reportsError: string | null;
   reportsLoading: boolean;
   reportsRefreshing: boolean;
@@ -33,6 +36,7 @@ type MdrrmoCommandDashboardProps = {
 
 export default function MdrrmoCommandDashboard({
   reports,
+  reportsCount,
   reportsError,
   reportsLoading,
   reportsRefreshing,
@@ -42,6 +46,9 @@ export default function MdrrmoCommandDashboard({
   reloadReports,
   refreshReports,
 }: MdrrmoCommandDashboardProps) {
+  const { scope, officialKind } = useOfficialPortal();
+  const activeQueue = useOfficialReportQueue(officialKind === 'MDRRMO' ? scope : null, 'municipal_active');
+  const [selectedLane, setSelectedLane] = useState<'requests' | 'active'>('requests');
   const {
     announcements,
     error: announcementsError,
@@ -55,6 +62,49 @@ export default function MdrrmoCommandDashboard({
   } = useAnnouncements({ limit: 20 });
   const scrollRef = useRef<ScrollViewInstance>(null);
   const mapUnlockTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const previousRequestsCount = useRef<number | null>(null);
+  const laneReports = selectedLane === 'requests' ? reports : activeQueue.reports;
+  const laneError = selectedLane === 'requests' ? reportsError : activeQueue.error;
+  const laneLoading = selectedLane === 'requests' ? reportsLoading : activeQueue.loading;
+  const laneHasMore = selectedLane === 'requests' ? hasMoreReports : activeQueue.hasMore;
+  const laneLoadingMore = selectedLane === 'requests' ? reportsLoadingMore : activeQueue.loadingMore;
+  const laneReload = selectedLane === 'requests' ? reloadReports : activeQueue.reload;
+  const laneLoadMore = selectedLane === 'requests' ? loadMoreReports : activeQueue.loadMore;
+
+  useEffect(() => {
+    if (
+      reportsLoading
+      || activeQueue.loading
+      || reportsError
+      || activeQueue.error
+    ) return;
+
+    const isInitialEmptyRequestLane = previousRequestsCount.current === null;
+    const requestsJustEmptied = previousRequestsCount.current !== null
+      && previousRequestsCount.current > 0
+      && reportsCount === 0;
+    previousRequestsCount.current = reportsCount;
+
+    // Automatically surface active cases only on first load or when requests drain.
+    if (
+      selectedLane !== 'requests'
+      || reports.length > 0
+      || activeQueue.counts.total === 0
+    ) return;
+    if (!isInitialEmptyRequestLane && !requestsJustEmptied) return;
+
+    const animationFrame = requestAnimationFrame(() => setSelectedLane('active'));
+    return () => cancelAnimationFrame(animationFrame);
+  }, [
+    selectedLane,
+    reportsLoading,
+    activeQueue.loading,
+    reportsError,
+    activeQueue.error,
+    reports.length,
+    reportsCount,
+    activeQueue.counts.total,
+  ]);
 
   useEffect(() => {
     return () => {
@@ -82,7 +132,7 @@ export default function MdrrmoCommandDashboard({
   }, []);
 
   async function refreshDashboard() {
-    await Promise.all([refreshReports(), refreshAnnouncements()]);
+    await Promise.all([refreshReports(), activeQueue.refresh(), refreshAnnouncements()]);
   }
 
   return (
@@ -100,38 +150,40 @@ export default function MdrrmoCommandDashboard({
         overScrollMode="never"
         refreshControl={
           <RefreshControl
-            refreshing={reportsRefreshing || announcementsRefreshing}
+            refreshing={reportsRefreshing || activeQueue.refreshing || announcementsRefreshing}
             onRefresh={() => void refreshDashboard()}
           />
         }
       >
-        {reportsLoading && reports.length === 0 ? (
+        {laneLoading
+          && laneReports.length === 0
+          && reportsLoading
+          && activeQueue.loading ? (
           <CommandScreenSkeleton />
-        ) : reportsError ? (
-          <View style={[officialStyles.stateBox, styles.padded]}>
-            <Text style={officialStyles.stateTitle}>Could not load command updates</Text>
-            <Text style={officialStyles.stateBody}>{reportsError}</Text>
-            <TouchableOpacity style={officialStyles.retryButton} onPress={() => void reloadReports()}>
-              <Text style={officialStyles.retryButtonText}>Try again</Text>
-            </TouchableOpacity>
-          </View>
         ) : (
           <CommandEscalationMap
-            reports={reports}
+            reports={laneReports}
+            selectedLane={selectedLane}
+            onLaneChange={setSelectedLane}
+            requestCount={reportsCount}
+            activeCount={activeQueue.counts.total}
+            laneLoading={laneLoading}
+            laneError={laneError}
+            onRetry={laneReload}
             onGestureActiveChange={handleMapGestureActiveChange}
           />
         )}
 
-        {hasMoreReports && !reportsError && (
+        {laneHasMore && !laneError && (
           <TouchableOpacity
             style={officialStyles.secondaryAction}
-            onPress={() => void loadMoreReports()}
-            disabled={reportsLoadingMore}
+            onPress={() => void laneLoadMore()}
+            disabled={laneLoadingMore}
             accessibilityRole="button"
-            accessibilityState={{ disabled: reportsLoadingMore }}
+            accessibilityState={{ disabled: laneLoadingMore }}
           >
             <Text style={officialStyles.secondaryActionText}>
-              {reportsLoadingMore ? 'Loading more reports...' : 'Load more reports'}
+              {laneLoadingMore ? 'Loading more reports...' : 'Load more reports'}
             </Text>
           </TouchableOpacity>
         )}
